@@ -761,14 +761,19 @@ export class BorrowerService {
         read: false,
       });
 
-      // Update conversation's last message
-      await this.firebaseService.db
-        .collection('conversations')
-        .doc(sendMessageDto.conversationId)
-        .update({
-          lastMessage: sendMessageDto.message,
-          lastMessageAt: FieldValue.serverTimestamp(),
-        });
+      // Update conversation's last message (if conversation exists)
+      try {
+        await this.firebaseService.db
+          .collection('conversations')
+          .doc(sendMessageDto.conversationId)
+          .update({
+            lastMessage: sendMessageDto.message,
+            lastMessageAt: FieldValue.serverTimestamp(),
+          });
+      } catch (error) {
+        console.warn('Could not update conversation:', error);
+        // Continue even if conversation update fails
+      }
 
       return {
         statusCode: 201,
