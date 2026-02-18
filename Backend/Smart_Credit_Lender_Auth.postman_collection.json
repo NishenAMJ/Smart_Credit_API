@@ -1,0 +1,506 @@
+{
+  "info": {
+    "name": "Smart Credit+ Lender Module with Authentication",
+    "_postman_id": "smart-credit-lender-auth-v2",
+    "description": "Complete API collection for lender module with JWT authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lenderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "offerId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "1. Register New Lender",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('accessToken', jsonData.access_token);",
+                  "    pm.environment.set('lenderId', jsonData.user.profileId);",
+                  "    pm.collectionVariables.set('accessToken', jsonData.access_token);",
+                  "    pm.collectionVariables.set('lenderId', jsonData.user.profileId);",
+                  "    console.log('Token saved: ' + jsonData.access_token.substring(0, 20) + '...');",
+                  "    console.log('Lender ID saved: ' + jsonData.user.profileId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo.lender@example.com\",\n  \"password\": \"SecurePassword123!\",\n  \"role\": \"lender\",\n  \"name\": \"Demo Lender\",\n  \"phone\": \"+1-555-9999\",\n  \"investmentCapacity\": 500000,\n  \"riskPreference\": \"medium\",\n  \"address\": \"123 Demo Street, Test City\",\n  \"panNumber\": \"DEMO12345X\",\n  \"bankAccountNumber\": \"9999888877776666\",\n  \"ifscCode\": \"TEST0001234\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Register a new lender with email and password. Returns JWT token and lender profile ID."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('accessToken', jsonData.access_token);",
+                  "    pm.environment.set('lenderId', jsonData.user.profileId);",
+                  "    pm.collectionVariables.set('accessToken', jsonData.access_token);",
+                  "    pm.collectionVariables.set('lenderId', jsonData.user.profileId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo.lender@example.com\",\n  \"password\": \"SecurePassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login with email and password. Returns JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Get My Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "profile"]
+            },
+            "description": "Get authenticated user's profile. Requires JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "4. Logout",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Logout (client-side token removal)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Authentication endpoints for user registration and login"
+    },
+    {
+      "name": "Lender Profile",
+      "item": [
+        {
+          "name": "1. Get My Lender Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/{{lenderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "{{lenderId}}"]
+            },
+            "description": "Get lender profile by ID. User can only access their own profile."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Update My Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+1-555-8888\",\n  \"investmentCapacity\": 750000,\n  \"riskPreference\": \"high\",\n  \"address\": \"456 Updated Avenue, New City\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lender/{{lenderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "{{lenderId}}"]
+            },
+            "description": "Update lender profile. Only own profile can be updated."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Get All Lenders",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender"]
+            },
+            "description": "Get list of all lenders (admin/public view)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Lender profile management endpoints"
+    },
+    {
+      "name": "Loan Offers",
+      "item": [
+        {
+          "name": "1. Create Loan Offer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('offerId', jsonData.id);",
+                  "    console.log('Offer ID saved: ' + jsonData.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 100000,\n  \"interestRate\": 12.5,\n  \"tenure\": 36,\n  \"minCreditScore\": 700,\n  \"description\": \"Business Expansion Loan\",\n  \"termsAndConditions\": \"Standard terms apply. Collateral required for amounts over $50,000.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lender/{{lenderId}}/offers",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "{{lenderId}}", "offers"]
+            },
+            "description": "Create a new loan offer. Only for authenticated lender's own profile."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Get My Loan Offers",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/{{lenderId}}/offers",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "{{lenderId}}", "offers"]
+            },
+            "description": "Get all loan offers by this lender"
+          },
+          "response": []
+        },
+        {
+          "name": "3. Update Loan Offer",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"interestRate\": 11.5,\n  \"minCreditScore\": 720,\n  \"description\": \"Updated: Business Expansion Loan - Special Rate\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lender/offers/{{offerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "offers", "{{offerId}}"]
+            },
+            "description": "Update an existing loan offer. Only owner can update."
+          },
+          "response": []
+        },
+        {
+          "name": "4. Create Home Loan Offer",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 250000,\n  \"interestRate\": 8.9,\n  \"tenure\": 240,\n  \"minCreditScore\": 750,\n  \"description\": \"Prime Home Loan - 20 Year Fixed\",\n  \"termsAndConditions\": \"Primary residence only. Property appraisal required. No prepayment penalty.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lender/{{lenderId}}/offers",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "{{lenderId}}", "offers"]
+            },
+            "description": "Example: Create a home loan offer"
+          },
+          "response": []
+        },
+        {
+          "name": "5. Create Auto Loan Offer",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 45000,\n  \"interestRate\": 7.5,\n  \"tenure\": 60,\n  \"minCreditScore\": 680,\n  \"description\": \"New Vehicle Auto Loan\",\n  \"termsAndConditions\": \"New vehicles only. Vehicle as collateral. Full insurance mandatory.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lender/{{lenderId}}/offers",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "{{lenderId}}", "offers"]
+            },
+            "description": "Example: Create an auto loan offer"
+          },
+          "response": []
+        }
+      ],
+      "description": "Loan offer management endpoints"
+    },
+    {
+      "name": "Dashboard & Analytics",
+      "item": [
+        {
+          "name": "1. Get My Dashboard",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/{{lenderId}}/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "{{lenderId}}", "dashboard"]
+            },
+            "description": "Get dashboard statistics: total offers, total amount offered, etc."
+          },
+          "response": []
+        }
+      ],
+      "description": "Dashboard and analytics endpoints"
+    },
+    {
+      "name": "Security Tests",
+      "item": [
+        {
+          "name": "Test - No Token (Should Fail 401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/{{lenderId}}/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "{{lenderId}}", "dashboard"]
+            },
+            "description": "Test unauthorized access without JWT token. Should return 401."
+          },
+          "response": []
+        },
+        {
+          "name": "Test - Access Other User's Data (Should Fail 403)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/DIFFERENT_LENDER_ID_HERE/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "DIFFERENT_LENDER_ID_HERE", "dashboard"]
+            },
+            "description": "Test accessing another user's data. Should return 403 Forbidden."
+          },
+          "response": []
+        }
+      ],
+      "description": "Security testing - verify authentication and authorization work correctly"
+    }
+  ]
+}
