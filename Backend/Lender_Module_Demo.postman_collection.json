@@ -1,0 +1,602 @@
+{
+	"info": {
+		"_postman_id": "smart-credit-lender-demo-2026",
+		"name": "Smart Credit - Lender Module Demo",
+		"description": "Complete demo of the Lender Module for Smart Credit API.\n\n## Demo Flow (Follow steps 1-12 in order)\n\n**Step 1-2:** Register a new lender & Login\n**Step 3-4:** View profile & View all lenders\n**Step 5-6:** Update lender profile\n**Step 7-8:** Create loan offers\n**Step 9-10:** View offers & Dashboard\n**Step 11:** Security test (access denied)\n**Step 12:** Logout\n\n## How to Use\n1. Import this collection into Postman\n2. Make sure server is running: `npm run start:dev`\n3. Run requests in order (Step 1, 2, 3...)\n4. Tokens and IDs are saved automatically!",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000"
+		},
+		{
+			"key": "token",
+			"value": ""
+		},
+		{
+			"key": "lenderId",
+			"value": ""
+		},
+		{
+			"key": "userId",
+			"value": ""
+		},
+		{
+			"key": "offerId",
+			"value": ""
+		},
+		{
+			"key": "token2",
+			"value": ""
+		},
+		{
+			"key": "lenderId2",
+			"value": ""
+		}
+	],
+	"item": [
+		{
+			"name": "STEP 1 - Register New Lender",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 201) {",
+							"    var json = pm.response.json();",
+							"    pm.collectionVariables.set('token', json.access_token);",
+							"    pm.collectionVariables.set('lenderId', json.user.profileId);",
+							"    pm.collectionVariables.set('userId', json.user.id);",
+							"    pm.test('Registration successful', function() {",
+							"        pm.expect(json.access_token).to.be.a('string');",
+							"        pm.expect(json.user.role).to.eql('lender');",
+							"        pm.expect(json.user.profileId).to.be.a('string');",
+							"    });",
+							"    console.log('Lender ID saved: ' + json.user.profileId);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"demo.lender@smartcredit.com\",\n    \"password\": \"Demo@12345\",\n    \"role\": \"lender\",\n    \"name\": \"Demo Lender\",\n    \"phone\": \"+94771234567\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/auth/register",
+					"host": ["{{baseUrl}}"],
+					"path": ["auth", "register"]
+				},
+				"description": "Register a brand new lender account.\n\nThis creates:\n- A user record (with hashed password)\n- A lender profile in Firestore\n- Returns a JWT token automatically\n\n**The token and lenderId are saved automatically for next requests.**"
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 2 - Login",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 200) {",
+							"    var json = pm.response.json();",
+							"    pm.collectionVariables.set('token', json.access_token);",
+							"    pm.collectionVariables.set('lenderId', json.user.profileId);",
+							"    pm.collectionVariables.set('userId', json.user.id);",
+							"    pm.test('Login successful', function() {",
+							"        pm.expect(json.access_token).to.be.a('string');",
+							"        pm.expect(json.user.email).to.eql('demo.lender@smartcredit.com');",
+							"    });",
+							"    console.log('Token saved! Lender ID: ' + json.user.profileId);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"demo.lender@smartcredit.com\",\n    \"password\": \"Demo@12345\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/auth/login",
+					"host": ["{{baseUrl}}"],
+					"path": ["auth", "login"]
+				},
+				"description": "Login with the registered lender credentials.\n\nReturns a JWT token (valid for 24 hours).\n\n**Use this if you already registered in Step 1 and need a fresh token.**"
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 3 - Get My Profile (Authenticated)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Profile retrieved', function() {",
+							"    pm.expect(pm.response.code).to.eql(200);",
+							"    var json = pm.response.json();",
+							"    pm.expect(json.email).to.eql('demo.lender@smartcredit.com');",
+							"    pm.expect(json.role).to.eql('lender');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/auth/profile",
+					"host": ["{{baseUrl}}"],
+					"path": ["auth", "profile"]
+				},
+				"description": "Get the authenticated user's profile.\n\nRequires JWT token in Authorization header.\n\n**Shows: user info + linked lender profile**"
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 4 - Get All Lenders (Public)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Lenders list returned', function() {",
+							"    pm.expect(pm.response.code).to.eql(200);",
+							"    var json = pm.response.json();",
+							"    pm.expect(json).to.be.an('array');",
+							"    pm.expect(json.length).to.be.above(0);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/lender",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender"]
+				},
+				"description": "Get all registered lenders.\n\n**Public endpoint - no token needed.**\n\nAnyone (borrowers, visitors) can browse available lenders."
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 5 - Get Lender By ID (Public)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Lender details returned', function() {",
+							"    pm.expect(pm.response.code).to.eql(200);",
+							"    var json = pm.response.json();",
+							"    pm.expect(json.name).to.be.a('string');",
+							"    pm.expect(json.investmentCapacity).to.be.a('number');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/lender/{{lenderId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender", "{{lenderId}}"]
+				},
+				"description": "Get a specific lender's profile by their ID.\n\n**Public endpoint - no token needed.**"
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 6 - Update My Profile (Authenticated)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Profile updated', function() {",
+							"    pm.expect(pm.response.code).to.eql(200);",
+							"    var json = pm.response.json();",
+							"    pm.expect(json.investmentCapacity).to.eql(500000);",
+							"    pm.expect(json.riskPreference).to.eql('medium');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"investmentCapacity\": 500000,\n    \"riskPreference\": \"medium\",\n    \"address\": \"123 Finance Street, Colombo\",\n    \"bankAccountNumber\": \"1234567890\",\n    \"ifscCode\": \"BANK0001234\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/lender/{{lenderId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender", "{{lenderId}}"]
+				},
+				"description": "Update the lender's own profile.\n\n**Requires JWT token.**\n**Authorization check:** You can only update YOUR OWN profile."
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 7 - Create Loan Offer 1 (Home Loan)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 201) {",
+							"    var json = pm.response.json();",
+							"    pm.collectionVariables.set('offerId', json.id);",
+							"    pm.test('Loan offer created', function() {",
+							"        pm.expect(json.amount).to.eql(250000);",
+							"        pm.expect(json.status).to.eql('active');",
+							"    });",
+							"    console.log('Offer ID saved: ' + json.id);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"amount\": 250000,\n    \"interestRate\": 8.5,\n    \"tenure\": 36,\n    \"minCreditScore\": 700,\n    \"description\": \"Home improvement loan with competitive rate\",\n    \"termsAndConditions\": \"Must have stable income for 2+ years\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/lender/{{lenderId}}/offers",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender", "{{lenderId}}", "offers"]
+				},
+				"description": "Create a home loan offer.\n\n**Requires JWT token.**\n**The lenderId is automatically set from the URL - cannot fake it.**"
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 8 - Create Loan Offer 2 (Business Loan)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 201) {",
+							"    var json = pm.response.json();",
+							"    pm.test('Business loan offer created', function() {",
+							"        pm.expect(json.amount).to.eql(100000);",
+							"        pm.expect(json.interestRate).to.eql(12);",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"amount\": 100000,\n    \"interestRate\": 12,\n    \"tenure\": 24,\n    \"minCreditScore\": 650,\n    \"description\": \"Small business startup loan\",\n    \"termsAndConditions\": \"Business plan required\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/lender/{{lenderId}}/offers",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender", "{{lenderId}}", "offers"]
+				},
+				"description": "Create a second loan offer (business loan) to show multiple offers."
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 9 - Get My Loan Offers (Public)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Offers returned', function() {",
+							"    pm.expect(pm.response.code).to.eql(200);",
+							"    var json = pm.response.json();",
+							"    pm.expect(json).to.be.an('array');",
+							"    pm.expect(json.length).to.be.above(0);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/lender/{{lenderId}}/offers",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender", "{{lenderId}}", "offers"]
+				},
+				"description": "View all loan offers for this lender.\n\n**Public endpoint** - borrowers can browse available loan offers."
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 10 - Update Loan Offer (Change Rate)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Offer updated', function() {",
+							"    pm.expect(pm.response.code).to.eql(200);",
+							"    var json = pm.response.json();",
+							"    pm.expect(json.interestRate).to.eql(7.9);",
+							"    pm.expect(json.description).to.include('UPDATED');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"interestRate\": 7.9,\n    \"description\": \"UPDATED - Special discounted home loan rate!\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/lender/offers/{{offerId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender", "offers", "{{offerId}}"]
+				},
+				"description": "Update a loan offer (lower the interest rate).\n\n**Requires JWT token.**\n**Authorization check:** Server verifies this offer belongs to YOU."
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 11 - Dashboard (My Statistics)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Dashboard returned', function() {",
+							"    pm.expect(pm.response.code).to.eql(200);",
+							"    var json = pm.response.json();",
+							"    pm.expect(json.totalActiveOffers).to.be.a('number');",
+							"    pm.expect(json.totalAmountOffered).to.be.a('number');",
+							"    pm.expect(json.totalActiveOffers).to.be.above(0);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/lender/{{lenderId}}/dashboard",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender", "{{lenderId}}", "dashboard"]
+				},
+				"description": "Get lender's dashboard with analytics.\n\n**Requires JWT token.**\n\nReturns:\n- Total active offers\n- Total amount offered\n- Total loans issued\n- Total returns\n- Active loans count"
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 12a - SECURITY: No Token = 401",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Unauthorized without token', function() {",
+							"    pm.expect(pm.response.code).to.eql(401);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/lender/{{lenderId}}/dashboard",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender", "{{lenderId}}", "dashboard"]
+				},
+				"description": "**SECURITY TEST:** Try accessing dashboard WITHOUT a token.\n\nExpected: 401 Unauthorized\n\n**This proves JWT authentication is working!**"
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 12b - SECURITY: Register 2nd Lender",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 201) {",
+							"    var json = pm.response.json();",
+							"    pm.collectionVariables.set('token2', json.access_token);",
+							"    pm.collectionVariables.set('lenderId2', json.user.profileId);",
+							"    pm.test('2nd lender registered', function() {",
+							"        pm.expect(json.user.profileId).to.not.eql(pm.collectionVariables.get('lenderId'));",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"another.lender@smartcredit.com\",\n    \"password\": \"Another@123\",\n    \"role\": \"lender\",\n    \"name\": \"Another Lender\",\n    \"phone\": \"+94779876543\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/auth/register",
+					"host": ["{{baseUrl}}"],
+					"path": ["auth", "register"]
+				},
+				"description": "Register a SECOND lender to test authorization.\n\n**This creates a different user with a different lenderId.**"
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 12c - SECURITY: Wrong User = 403",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Forbidden - cannot access others data', function() {",
+							"    pm.expect(pm.response.code).to.eql(403);",
+							"    var json = pm.response.json();",
+							"    pm.expect(json.message).to.include('your own');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token2}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/lender/{{lenderId}}/dashboard",
+					"host": ["{{baseUrl}}"],
+					"path": ["lender", "{{lenderId}}", "dashboard"]
+				},
+				"description": "**SECURITY TEST:** Lender 2 tries to access Lender 1's dashboard.\n\nUsing token2 (Another Lender) to access lenderId (Demo Lender).\n\nExpected: 403 Forbidden - 'You can only view your own dashboard'\n\n**This proves authorization checks are working!**"
+			},
+			"response": []
+		},
+		{
+			"name": "STEP 13 - Logout",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Logout successful', function() {",
+							"    pm.expect(pm.response.code).to.eql(200);",
+							"    var json = pm.response.json();",
+							"    pm.expect(json.message).to.include('Logout');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/auth/logout",
+					"host": ["{{baseUrl}}"],
+					"path": ["auth", "logout"]
+				},
+				"description": "Logout the user.\n\nWith JWT, the client deletes the token. Server can optionally blacklist it."
+			},
+			"response": []
+		}
+	]
+}

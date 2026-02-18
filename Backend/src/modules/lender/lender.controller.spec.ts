@@ -123,9 +123,17 @@ describe('LenderController', () => {
         updatedAt: new Date(),
       };
 
+      const mockRequest = {
+        user: {
+          id: 'user123',
+          lenderProfileId: 'lender123',
+          role: 'lender',
+        },
+      };
+
       mockLenderService.updateLender.mockResolvedValue(mockResult);
 
-      const result = await controller.updateLender('lender123', updateDto);
+      const result = await controller.updateLender('lender123', updateDto, mockRequest);
 
       expect(result).toEqual(mockResult);
       expect(service.updateLender).toHaveBeenCalledWith('lender123', updateDto);
@@ -190,9 +198,17 @@ describe('LenderController', () => {
         updatedAt: new Date(),
       };
 
+      const mockRequest = {
+        user: {
+          id: 'user123',
+          lenderProfileId: 'lender123',
+          role: 'lender',
+        },
+      };
+
       mockLenderService.createLoanOffer.mockResolvedValue(mockResult);
 
-      const result = await controller.createLoanOffer('lender123', createOfferDto);
+      const result = await controller.createLoanOffer('lender123', createOfferDto, mockRequest);
 
       expect(result).toEqual(mockResult);
       expect(createOfferDto.lenderId).toBe('lender123'); // Should be overridden
@@ -244,9 +260,17 @@ describe('LenderController', () => {
         activeLoansCount: 2,
       };
 
+      const mockRequest = {
+        user: {
+          id: 'user123',
+          lenderProfileId: 'lender123',
+          role: 'lender',
+        },
+      };
+
       mockLenderService.getDashboardStats.mockResolvedValue(mockStats);
 
-      const result = await controller.getDashboard('lender123');
+      const result = await controller.getDashboard('lender123', mockRequest);
 
       expect(result).toEqual(mockStats);
       expect(service.getDashboardStats).toHaveBeenCalledWith('lender123');
