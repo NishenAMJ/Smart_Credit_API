@@ -1,0 +1,245 @@
+{
+  "info": {
+    "name": "Lender Module Demo",
+    "_postman_id": "lender-demo-collection",
+    "description": "Smart Credit+ Lender Module API Demo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Register New Lender",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-api-key",
+            "value": "dev-api-key"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Sarah Johnson\",\n  \"email\": \"sarah.johnson@example.com\",\n  \"phone\": \"+1-555-0123\",\n  \"investmentCapacity\": 250000,\n  \"riskPreference\": \"medium\",\n  \"address\": \"123 Finance Street, New York, NY\",\n  \"panNumber\": \"ABCDE1234F\",\n  \"bankAccountNumber\": \"9876543210\",\n  \"ifscCode\": \"HDFC0001234\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/lender",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Get Lender Profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "dev-api-key"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/lender/{{lenderId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender", "{{lenderId}}"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Get All Lenders",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "dev-api-key"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/lender",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. Update Lender Profile",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-api-key",
+            "value": "dev-api-key"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"investmentCapacity\": 350000,\n  \"riskPreference\": \"high\",\n  \"phone\": \"+1-555-9999\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/lender/{{lenderId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender", "{{lenderId}}"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "5. Create Loan Offer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-api-key",
+            "value": "dev-api-key"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 100000,\n  \"interestRate\": 12.5,\n  \"tenure\": 24,\n  \"minCreditScore\": 700,\n  \"description\": \"Home renovation loan for verified professionals\",\n  \"termsAndConditions\": \"Standard interest rate with monthly EMI payments\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/lender/{{lenderId}}/offers",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender", "{{lenderId}}", "offers"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "6. Create Another Loan Offer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-api-key",
+            "value": "dev-api-key"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 50000,\n  \"interestRate\": 10.5,\n  \"tenure\": 12,\n  \"minCreditScore\": 650,\n  \"description\": \"Personal loan for emergency expenses\",\n  \"termsAndConditions\": \"Quick approval for urgent needs\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/lender/{{lenderId}}/offers",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender", "{{lenderId}}", "offers"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "7. Get All Lender Offers",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "dev-api-key"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/lender/{{lenderId}}/offers",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender", "{{lenderId}}", "offers"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "8. Update Loan Offer",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-api-key",
+            "value": "dev-api-key"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"interestRate\": 11.5,\n  \"status\": \"active\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/lender/offers/{{offerId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender", "offers", "{{offerId}}"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "9. Get Dashboard Statistics",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "dev-api-key"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/lender/{{lenderId}}/dashboard",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender", "{{lenderId}}", "dashboard"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "10. Test Auth - No API Key (Should Fail)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/lender",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["lender"]
+        }
+      },
+      "response": []
+    }
+  ]
+}
