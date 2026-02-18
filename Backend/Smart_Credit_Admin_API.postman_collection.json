@@ -149,6 +149,89 @@
       ]
     },
     {
+      "name": "KYC Verification",
+      "item": [
+        {
+          "name": "Get Pending KYC Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/admin/kyc/pending",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "kyc", "pending"]
+            },
+            "description": "Retrieve all pending KYC documents that need admin review. Returns documents with status='pending'."
+          }
+        },
+        {
+          "name": "Get User KYC Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/admin/kyc/sENbwBesC03DXcqkQEzz/documents",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "kyc", "sENbwBesC03DXcqkQEzz", "documents"]
+            },
+            "description": "Get all KYC documents for a specific user. Replace the userId in the path with actual user ID."
+          }
+        },
+        {
+          "name": "Approve KYC Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Document verified successfully. All details are clear and valid.\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/admin/kyc/kyc-doc-003/approve",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "kyc", "kyc-doc-003", "approve"]
+            },
+            "description": "Approve a pending KYC document. Sets status to 'approved', adds notes and reviewedAt timestamp. Replace documentId in path."
+          }
+        },
+        {
+          "name": "Reject KYC Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Document quality is poor. Please submit a clearer scan with all corners visible.\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/admin/kyc/kyc-doc-010/reject",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "kyc", "kyc-doc-010", "reject"]
+            },
+            "description": "Reject a pending KYC document. Sets status to 'rejected', adds rejection reason and reviewedAt timestamp. Replace documentId in path."
+          }
+        }
+      ]
+    },
+    {
       "name": "Error Scenarios",
       "item": [
         {
