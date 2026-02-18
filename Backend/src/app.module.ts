@@ -11,6 +11,8 @@ import { LegalModule } from './modules/legal/legal.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { KycModule } from './modules/kyc/kyc.module';
+import { AdsModule } from './modules/ads/ads.module';
+import { DisputesModule } from './modules/disputes/disputes.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { KycModule } from './modules/kyc/kyc.module';
     TransactionsModule,
     ChatModule,
     KycModule,
+    AdsModule,
+    DisputesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

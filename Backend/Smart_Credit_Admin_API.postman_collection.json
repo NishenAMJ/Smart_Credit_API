@@ -232,6 +232,187 @@
       ]
     },
     {
+      "name": "Ad Moderation",
+      "item": [
+        {
+          "name": "Get Pending Ads",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/admin/ads/pending",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "ads", "pending"]
+            },
+            "description": "Retrieve all pending ads that need admin review. Returns ads with status='pending'."
+          }
+        },
+        {
+          "name": "Get Ad by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/admin/ads/ad-002",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "ads", "ad-002"]
+            },
+            "description": "Get specific ad details by ID. Replace the adId in the path with actual ad ID."
+          }
+        },
+        {
+          "name": "Approve Ad",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Ad verified and approved for posting. All details are accurate.\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/admin/ads/ad-001/approve",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "ads", "ad-001", "approve"]
+            },
+            "description": "Approve a pending ad. Sets status to 'approved', adds optional notes and reviewedAt timestamp. Replace adId in path."
+          }
+        },
+        {
+          "name": "Reject Ad",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Insufficient information provided. Please add more details about the loan terms.\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/admin/ads/ad-002/reject",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "ads", "ad-002", "reject"]
+            },
+            "description": "Reject a pending ad. Sets status to 'rejected', adds rejection reason (required) and reviewedAt timestamp. Replace adId in path."
+          }
+        },
+        {
+          "name": "Delete Ad",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/admin/ads/ad-005",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "ads", "ad-005"]
+            },
+            "description": "Permanently delete an ad from the system. Replace the adId in the path with actual ad ID."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dispute Resolution",
+      "item": [
+        {
+          "name": "Get All Disputes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/admin/disputes",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "disputes"]
+            },
+            "description": "Retrieve all disputes in the system. Returns disputes with all statuses (open, in-progress, resolved, escalated)."
+          }
+        },
+        {
+          "name": "Get Dispute by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/admin/disputes/dispute-001",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "disputes", "dispute-001"]
+            },
+            "description": "Get specific dispute details by ID. Replace the disputeId in the path with actual dispute ID."
+          }
+        },
+        {
+          "name": "Resolve Dispute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resolution\": \"Issue resolved. Full payment disbursed and both parties satisfied.\",\n  \"notes\": \"Dispute closed amicably after mediation\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/admin/disputes/dispute-001/resolve",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "disputes", "dispute-001", "resolve"]
+            },
+            "description": "Resolve a dispute. Sets status to 'resolved', adds resolution text (required), optional notes, and resolvedAt timestamp. Replace disputeId in path."
+          }
+        },
+        {
+          "name": "Escalate Dispute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Critical fraud case requiring legal team intervention and investigation.\",\n  \"notes\": \"Escalating to senior management for immediate review\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/admin/disputes/dispute-002/escalate",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["admin", "disputes", "dispute-002", "escalate"]
+            },
+            "description": "Escalate a dispute to higher authority. Sets status to 'escalated', adds escalation reason (required), optional notes, and escalatedAt timestamp. Replace disputeId in path."
+          }
+        }
+      ]
+    },
+    {
       "name": "Error Scenarios",
       "item": [
         {
