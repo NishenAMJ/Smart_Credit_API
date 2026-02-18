@@ -30,6 +30,7 @@ export class AppController {
         timestamp: new Date(),
         status: 'connected',
       };
+      };.
 
       return {
         status: 'ok',
