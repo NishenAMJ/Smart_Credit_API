@@ -11,12 +11,14 @@ import { LegalModule } from './modules/legal/legal.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { KycModule } from './modules/kyc/kyc.module';
+import { LoansModule } from './modules/loans/loans.module';
 
 @Module({
   imports: [
     // 1. Load environment variables globally
     ConfigModule.forRoot({
       isGlobal: true,
+      
     }),
     // 2. Import your custom Firebase module
     FirebaseModule,
@@ -29,6 +31,7 @@ import { KycModule } from './modules/kyc/kyc.module';
     TransactionsModule,
     ChatModule,
     KycModule,
+    LoansModule,
   ],
   controllers: [AppController],
   providers: [AppService],
