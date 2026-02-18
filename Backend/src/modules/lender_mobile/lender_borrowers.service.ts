@@ -62,3 +62,5 @@ export class LenderBorrowersService {
     return this.histories[borrowerId];
   }
 }
+
+// This service provides methods to retrieve borrower information, credit scores, and borrowing history. In a real application, these would likely involve database queries or calls to external services. Here, we use in-memory data for demonstration purposes.
