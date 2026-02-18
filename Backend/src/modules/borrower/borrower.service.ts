@@ -350,10 +350,17 @@ export class BorrowerService {
         };
       }
 
+      const data: any = doc.data();
+
       return {
         statusCode: 200,
         message: 'Credit score retrieved successfully',
-        data: { borrowerId, ...doc.data() },
+        data: {
+          borrowerId,
+          score: data.score,
+          rating: data.rating,
+          lastUpdated: data.lastUpdated,
+        },
       };
     } catch (error) {
       console.error('Get credit score error:', error);
@@ -367,20 +374,25 @@ export class BorrowerService {
       const snapshot = await this.firebaseService.db
         .collection('creditScoreHistory')
         .where('borrowerId', '==', borrowerId)
-        .orderBy('timestamp', 'desc')
-        .limit(50)
         .get();
 
-      const history = snapshot.docs.map((doc) => ({
+      let history = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+
+      // Sort in memory instead of Firestore
+      history = history.sort((a: any, b: any) => {
+        const aTime = a.timestamp?._seconds || 0;
+        const bTime = b.timestamp?._seconds || 0;
+        return bTime - aTime; // descending order
+      });
 
       return {
         statusCode: 200,
         message: 'Credit score history retrieved successfully',
         total: history.length,
-        data: history,
+        data: history.slice(0, 50), // limit to 50
       };
     } catch (error) {
       console.error('Get credit score history error:', error);
