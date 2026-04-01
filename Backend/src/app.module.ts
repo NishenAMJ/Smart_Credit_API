@@ -10,9 +10,11 @@ import { AdminModule } from './modules/admin/admin.module';
 import { LegalModule } from './modules/legal/legal.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { ChatModule } from './modules/chat/chat.module';
+
 import { KycModule } from './modules/kyc/kyc.module';
 import { LoansModule } from './modules/loans/loans.module';
 
+import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module';
 
 @Module({
   imports: [
@@ -33,6 +35,7 @@ import { LoansModule } from './modules/loans/loans.module';
     ChatModule,
     KycModule,
     LoansModule,
+    LenderMobileModule,
   ],
   controllers: [AppController],
   providers: [AppService],
