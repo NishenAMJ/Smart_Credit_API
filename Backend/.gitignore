@@ -36,6 +36,12 @@ logs
 coverage
 .nyc_output
 
+# Firebase
+serviceAccountKey.json
+firebase-service-account.json
+*firebase-adminsdk*
+smart-credit-b0f6d-firebase-adminsdk-fbsvc-3ffa5833f5
+
 # Misc
 *.pid
 *.seed
