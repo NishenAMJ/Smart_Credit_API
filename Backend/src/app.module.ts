@@ -12,6 +12,8 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
 import { ChatModule } from './modules/chat/chat.module';
 
 import { KycModule } from './modules/kyc/kyc.module';
+import { LoansModule } from './modules/loans/loans.module';
+
 import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module';
 
 @Module({
@@ -19,6 +21,7 @@ import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module
     // 1. Load environment variables globally
     ConfigModule.forRoot({
       isGlobal: true,
+      
     }),
     // 2. Import your custom Firebase module
     FirebaseModule,
@@ -31,6 +34,7 @@ import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module
     TransactionsModule,
     ChatModule,
     KycModule,
+    LoansModule,
     LenderMobileModule,
   ],
   controllers: [AppController],
