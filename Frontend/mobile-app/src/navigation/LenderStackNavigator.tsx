@@ -7,6 +7,7 @@ import PaymentREmindersScreen from '../screens/lender/PaymentRemindersScreen';
 import MyOffersScreen from '../screens/lender/MyOffersScreen';
 import ApplicationsReceivedScreen from '../screens/lender/ApplicationsReceivedScreen';
 import ActiveLoansScreen from '../screens/lender/ActiveLoansScreen';
+import ApproveRejectScreen from '../screens/lender/ApproveRejectScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -22,6 +23,7 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="MyOffers" component={MyOffersScreen} />
       <Stack.Screen name="ApplicationsReceived" component={ApplicationsReceivedScreen} />
       <Stack.Screen name="ActiveLoans" component={ActiveLoansScreen} />
+      <Stack.Screen name="ApproveReject" component={ApproveRejectScreen} />
     </Stack.Navigator>
   );
 }
