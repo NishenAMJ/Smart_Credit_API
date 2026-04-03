@@ -20,7 +20,6 @@ export class LenderApplicationsService {
   getAllApplications() {
     return this.applications;
   }
-  // This method returns only the applications that are currently pending, which is typically what a lender would want to review and take action on.
 
   getPendingApplications() {
     return this.applications.filter(app => app.status === 'pending');
@@ -37,7 +36,6 @@ export class LenderApplicationsService {
     delete app.reason;
     return { success: true, message: 'Application approved', application: app };
   }
-  // This method changes the status of the specified application to "approved". It also removes any existing reason for rejection, as the application is now approved.
 
   rejectApplication(id: string, reason: string) {
     const app = this.getApplicationById(id);

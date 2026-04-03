@@ -30,8 +30,7 @@ export class AppController {
         timestamp: new Date(),
         status: 'connected',
       };
-      // Optionally, you might want to actually set or get the document here
-      // await testRef.set(testData, { merge: true });
+      };.
 
       return {
         status: 'ok',
