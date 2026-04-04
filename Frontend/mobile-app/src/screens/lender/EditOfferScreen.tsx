@@ -35,29 +35,52 @@ const LOAN_TYPES = [
 
 // ── Repayment options ────────────────────────────────
 const REPAYMENT_OPTIONS = [
-  { id: 'weekly',   label: 'Weekly'   },
-  { id: 'monthly',  label: 'Monthly'  },
+  { id: 'weekly',  label: 'Weekly'  },
+  { id: 'monthly', label: 'Monthly' },
 ];
 
 // ── Main Component ────────────────────────────────────
-export default function CreateLoanOfferScreen({ navigation }: any) {
+// KEY DIFFERENCE from CreateLoanOffer:
+// This screen receives existing offer data via route.params
+// and pre-fills all form fields with that data
+export default function EditOfferScreen({ route, navigation }: any) {
 
-  // ── Form state ───────────────────────────────────
-  // Each field in the form has its own state
-  const [loanType,     setLoanType]     = useState('personal');
-  const [title,        setTitle]        = useState('');
-  const [minAmount,    setMinAmount]    = useState('');
-  const [maxAmount,    setMaxAmount]    = useState('');
-  const [interestRate, setInterestRate] = useState('');
-  const [tenure,       setTenure]       = useState('');
+  // ── Get existing offer from previous screen ──────
+  // MyOffersScreen passes the offer object when navigating here
+  const existingOffer = route?.params?.offer || {
+    id: '1',
+    title: 'Quick Personal Loan',
+    type: 'personal',
+    rate: '12',
+    min: '10,000',
+    max: '100,000',
+    applications: 8,
+    active: true,
+  };
+
+  // ── Form state PRE-FILLED with existing data ─────
+  // Notice how we use existingOffer values as defaults
+  // This is the key difference from CreateLoanOfferScreen
+  const [loanType,     setLoanType]     = useState(existingOffer.type      || 'personal');
+  const [title,        setTitle]        = useState(existingOffer.title      || '');
+  const [minAmount,    setMinAmount]    = useState(existingOffer.min?.replace(',', '') || '');
+  const [maxAmount,    setMaxAmount]    = useState(existingOffer.max?.replace(',', '') || '');
+  const [interestRate, setInterestRate] = useState(existingOffer.rate       || '');
+  const [tenure,       setTenure]       = useState('12');
   const [repayment,    setRepayment]    = useState('monthly');
   const [description,  setDescription]  = useState('');
-  const [isActive,     setIsActive]     = useState(true);
+  const [isActive,     setIsActive]     = useState(existingOffer.active ?? true);
   const [isLoading,    setIsLoading]    = useState(false);
-  const [isPublished,  setIsPublished]  = useState(false);
+  const [isSaved,      setIsSaved]      = useState(false);
+
+  // ── Track if anything changed ────────────────────
+  // Compare current values to original
+  const hasChanges =
+    title        !== existingOffer.title ||
+    interestRate !== existingOffer.rate  ||
+    isActive     !== existingOffer.active;
 
   // ── Validation ───────────────────────────────────
-  // Check all required fields are filled
   const validate = () => {
     if (!title.trim()) {
       Alert.alert('Missing Field', 'Please enter an offer title');
@@ -71,35 +94,64 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
       Alert.alert('Missing Field', 'Please enter maximum amount');
       return false;
     }
-    if (parseInt(minAmount) >= parseInt(maxAmount)) {
-      Alert.alert('Invalid Amount', 'Maximum amount must be greater than minimum');
-      return false;
-    }
     if (!interestRate.trim()) {
       Alert.alert('Missing Field', 'Please enter interest rate');
       return false;
     }
     if (!tenure.trim()) {
-      Alert.alert('Missing Field', 'Please enter tenure in months');
+      Alert.alert('Missing Field', 'Please enter tenure');
       return false;
     }
     return true;
   };
 
-  // ── Publish offer ────────────────────────────────
-  const handlePublish = () => {
+  // ── Save changes ─────────────────────────────────
+  const handleSave = () => {
     if (!validate()) return;
-
     setIsLoading(true);
-    // Simulate API call
     setTimeout(() => {
       setIsLoading(false);
-      setIsPublished(true);
+      setIsSaved(true);
     }, 1500);
   };
 
+  // ── Delete offer ─────────────────────────────────
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Offer',
+      `Are you sure you want to delete "${existingOffer.title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            // In real app call delete API here
+            navigation.navigate('MyOffers');
+          },
+        },
+      ]
+    );
+  };
+
+  // ── Discard changes ──────────────────────────────
+  const handleBack = () => {
+    if (hasChanges) {
+      Alert.alert(
+        'Discard Changes?',
+        'You have unsaved changes. Are you sure you want to go back?',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          { text: 'Discard',      style: 'destructive', onPress: () => navigation.goBack() },
+        ]
+      );
+    } else {
+      navigation.goBack();
+    }
+  };
+
   // ── Success screen ───────────────────────────────
-  if (isPublished) {
+  if (isSaved) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.successScreen}>
@@ -108,46 +160,28 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
             <Feather name="check-circle" size={64} color={COLORS.success} />
           </View>
 
-          <Text style={styles.successTitle}>Offer Published!</Text>
+          <Text style={styles.successTitle}>Changes Saved!</Text>
           <Text style={styles.successSub}>
-            Your loan offer "{title}" is now live and borrowers can start applying
+            Your loan offer has been updated successfully
           </Text>
 
-          {/* Offer summary */}
+          {/* Updated offer summary */}
           <View style={styles.successCard}>
-            <SummaryRow label="Offer Title"    value={title}                              />
-            <SummaryRow label="Loan Type"      value={loanType.charAt(0).toUpperCase() + loanType.slice(1)} />
-            <SummaryRow label="Amount Range"   value={`LKR ${minAmount} – ${maxAmount}`} />
-            <SummaryRow label="Interest Rate"  value={`${interestRate}% p.a.`}           />
-            <SummaryRow label="Tenure"         value={`${tenure} months`}                />
-            <SummaryRow label="Repayment"      value={repayment.charAt(0).toUpperCase() + repayment.slice(1)} />
+            <SummaryRow label="Offer Title"   value={title}                                    />
+            <SummaryRow label="Loan Type"     value={loanType.charAt(0).toUpperCase() + loanType.slice(1)} />
+            <SummaryRow label="Amount Range"  value={`LKR ${minAmount} – ${maxAmount}`}        />
+            <SummaryRow label="Interest Rate" value={`${interestRate}% p.a.`}                  />
+            <SummaryRow label="Tenure"        value={`${tenure} months`}                       />
+            <SummaryRow label="Status"        value={isActive ? 'Active' : 'Inactive'}         />
           </View>
 
-          <View style={styles.successBtns}>
-            <TouchableOpacity
-              style={styles.viewOffersBtn}
-              onPress={() => navigation.navigate('MyOffers')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.viewOffersBtnText}>View My Offers</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.newOfferBtn}
-              onPress={() => {
-                setIsPublished(false);
-                setTitle('');
-                setMinAmount('');
-                setMaxAmount('');
-                setInterestRate('');
-                setTenure('');
-                setDescription('');
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.newOfferBtnText}>Create Another</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.doneBtn}
+            onPress={() => navigation.navigate('MyOffers')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.doneBtnText}>Back to My Offers</Text>
+          </TouchableOpacity>
 
         </View>
       </SafeAreaView>
@@ -161,15 +195,22 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => navigation.goBack()}
+          onPress={handleBack}
           activeOpacity={0.7}
         >
           <Feather name="arrow-left" size={22} color="#fff" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Create Loan Offer</Text>
+        <Text style={styles.headerTitle}>Edit Offer</Text>
 
-        <View style={{ width: 36 }} />
+        {/* Delete button in header */}
+        <TouchableOpacity
+          style={styles.deleteHeaderBtn}
+          onPress={handleDelete}
+          activeOpacity={0.7}
+        >
+          <Feather name="trash-2" size={20} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -177,10 +218,36 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
         contentContainerStyle={styles.scroll}
       >
 
-        {/* ── STEP 1 — LOAN TYPE ──────────────── */}
+        {/* ── OFFER INFO BANNER ────────────────── */}
+        {/* Shows original offer info at the top */}
+        <View style={styles.infoBanner}>
+          <View style={styles.infoLeft}>
+            <Feather name="info" size={16} color={COLORS.primary} />
+            <View>
+              <Text style={styles.infoTitle}>
+                Editing: {existingOffer.title}
+              </Text>
+              <Text style={styles.infoSub}>
+                {existingOffer.applications} applications received
+              </Text>
+            </View>
+          </View>
+          <View style={[
+            styles.infoBadge,
+            { backgroundColor: existingOffer.active ? '#ECFDF5' : COLORS.border }
+          ]}>
+            <Text style={[
+              styles.infoBadgeText,
+              { color: existingOffer.active ? COLORS.success : COLORS.textSecondary }
+            ]}>
+              {existingOffer.active ? 'Active' : 'Inactive'}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── LOAN TYPE ───────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.stepLabel}>Step 1</Text>
-          <Text style={styles.sectionTitle}>Select Loan Type</Text>
+          <Text style={styles.sectionTitle}>Loan Type</Text>
 
           <View style={styles.typeGrid}>
             {LOAN_TYPES.map((type) => (
@@ -196,7 +263,6 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
                 onPress={() => setLoanType(type.id)}
                 activeOpacity={0.8}
               >
-                {/* Icon */}
                 <View style={[
                   styles.typeIconWrap,
                   { backgroundColor: loanType === type.id ? type.bg : COLORS.background }
@@ -215,7 +281,6 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
                   {type.label}
                 </Text>
 
-                {/* Checkmark when selected */}
                 {loanType === type.id && (
                   <View style={[styles.typeCheck, { backgroundColor: type.color }]}>
                     <Feather name="check" size={10} color="#fff" />
@@ -226,12 +291,10 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* ── STEP 2 — OFFER DETAILS ──────────── */}
+        {/* ── OFFER DETAILS ────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.stepLabel}>Step 2</Text>
           <Text style={styles.sectionTitle}>Offer Details</Text>
 
-          {/* Offer title */}
           <InputField
             label="Offer Title *"
             placeholder="e.g. Quick Personal Loan"
@@ -240,7 +303,6 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
             icon="tag"
           />
 
-          {/* Min and max amount side by side */}
           <View style={styles.amountRow}>
             <View style={styles.amountField}>
               <InputField
@@ -265,7 +327,6 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Interest rate and tenure side by side */}
           <View style={styles.amountRow}>
             <View style={styles.amountField}>
               <InputField
@@ -289,12 +350,10 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
               />
             </View>
           </View>
-
         </View>
 
-        {/* ── STEP 3 — REPAYMENT ──────────────── */}
+        {/* ── REPAYMENT TYPE ───────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.stepLabel}>Step 3</Text>
           <Text style={styles.sectionTitle}>Repayment Type</Text>
 
           <View style={styles.repaymentRow}>
@@ -327,34 +386,33 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* ── STEP 4 — DESCRIPTION ────────────── */}
+        {/* ── DESCRIPTION ──────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.stepLabel}>Step 4</Text>
           <Text style={styles.sectionTitle}>Description & Terms</Text>
-
           <Text style={styles.fieldLabel}>Description (optional)</Text>
           <TextInput
             style={styles.textArea}
-            placeholder="Describe your loan offer, requirements, terms and conditions..."
+            placeholder="Describe your loan offer..."
             placeholderTextColor={COLORS.textSecondary}
             value={description}
             onChangeText={setDescription}
             multiline
-            numberOfLines={5}
+            numberOfLines={4}
             textAlignVertical="top"
           />
         </View>
 
-        {/* ── STEP 5 — SETTINGS ───────────────── */}
+        {/* ── SETTINGS ─────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.stepLabel}>Step 5</Text>
           <Text style={styles.sectionTitle}>Offer Settings</Text>
 
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Publish Immediately</Text>
+              <Text style={styles.settingLabel}>Active</Text>
               <Text style={styles.settingSub}>
-                Make this offer visible to borrowers right away
+                {isActive
+                  ? 'Borrowers can see and apply for this offer'
+                  : 'This offer is hidden from borrowers'}
               </Text>
             </View>
             <Switch
@@ -369,52 +427,45 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* ── PREVIEW ─────────────────────────── */}
-        {title && minAmount && maxAmount && interestRate && (
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>Preview</Text>
-            <Text style={styles.previewOfferTitle}>{title}</Text>
-            <View style={styles.previewRow}>
-              <Text style={styles.previewMeta}>
-                {interestRate}% p.a.
-              </Text>
-              <Text style={styles.previewDot}>•</Text>
-              <Text style={styles.previewMeta}>
-                LKR {minAmount} – {maxAmount}
-              </Text>
-              <Text style={styles.previewDot}>•</Text>
-              <Text style={styles.previewMeta}>
-                {tenure} months
-              </Text>
-            </View>
-            <View style={styles.previewBadge}>
-              <Text style={styles.previewBadgeText}>
-                {isActive ? '● Live' : '○ Draft'}
-              </Text>
-            </View>
+        {/* ── CHANGES INDICATOR ────────────────── */}
+        {hasChanges && (
+          <View style={styles.changesAlert}>
+            <Feather name="edit-3" size={14} color={COLORS.warning} />
+            <Text style={styles.changesText}>
+              You have unsaved changes
+            </Text>
           </View>
         )}
 
-        {/* ── PUBLISH BUTTON ───────────────────── */}
+        {/* ── SAVE BUTTON ──────────────────────── */}
         <TouchableOpacity
           style={[
-            styles.publishBtn,
+            styles.saveBtn,
+            !hasChanges && { opacity: 0.5 },
             isLoading && { opacity: 0.7 },
           ]}
-          onPress={handlePublish}
+          onPress={handleSave}
           disabled={isLoading}
           activeOpacity={0.85}
         >
           {isLoading ? (
-            <Text style={styles.publishBtnText}>Publishing...</Text>
+            <Text style={styles.saveBtnText}>Saving...</Text>
           ) : (
             <>
-              <Feather name="send" size={18} color="#fff" />
-              <Text style={styles.publishBtnText}>
-                {isActive ? 'Publish Offer' : 'Save as Draft'}
-              </Text>
+              <Feather name="save" size={18} color="#fff" />
+              <Text style={styles.saveBtnText}>Save Changes</Text>
             </>
           )}
+        </TouchableOpacity>
+
+        {/* ── DELETE BUTTON ────────────────────── */}
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={handleDelete}
+          activeOpacity={0.85}
+        >
+          <Feather name="trash-2" size={18} color={COLORS.danger} />
+          <Text style={styles.deleteBtnText}>Delete This Offer</Text>
         </TouchableOpacity>
 
         <View style={{ height: 32 }} />
@@ -424,7 +475,6 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
 }
 
 // ── InputField component ──────────────────────────────
-// Reusable text input with label and icon
 const InputField = ({
   label,
   placeholder,
@@ -483,7 +533,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  // Header
   header: {
     backgroundColor: COLORS.primary,
     flexDirection: 'row',
@@ -505,13 +554,58 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
+  deleteHeaderBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   scroll: {
     paddingHorizontal: 16,
     paddingTop: 16,
   },
 
-  // Section
+  // Info banner
+  infoBanner: {
+    backgroundColor: '#EBF4FF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  infoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  infoSub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  infoBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  infoBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
   section: {
     backgroundColor: COLORS.surface,
     borderRadius: 12,
@@ -523,14 +617,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  stepLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -538,7 +624,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
-  // Loan type grid
   typeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -578,7 +663,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Amount row
   amountRow: {
     flexDirection: 'row',
   },
@@ -586,7 +670,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Repayment
   repaymentRow: {
     gap: 10,
   },
@@ -615,7 +698,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Text area
   fieldLabel: {
     fontSize: 13,
     fontWeight: '500',
@@ -628,12 +710,11 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 15,
     color: COLORS.textPrimary,
-    minHeight: 120,
+    minHeight: 100,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
 
-  // Setting row
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -654,58 +735,26 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Preview card
-  previewCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    borderStyle: 'dashed',
-  },
-  previewTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  previewOfferTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 6,
-  },
-  previewRow: {
+  // Changes indicator
+  changesAlert: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.warning,
   },
-  previewMeta: {
+  changesText: {
     fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  previewDot: {
-    color: COLORS.border,
-  },
-  previewBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  previewBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.success,
+    color: '#92400E',
+    fontWeight: '500',
   },
 
-  // Publish button
-  publishBtn: {
+  // Save button
+  saveBtn: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,
     paddingVertical: 16,
@@ -715,10 +764,29 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 12,
   },
-  publishBtnText: {
+  saveBtnText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
+  },
+
+  // Delete button
+  deleteBtn: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: COLORS.danger,
+    marginBottom: 12,
+  },
+  deleteBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.danger,
   },
 
   // Success screen
@@ -759,33 +827,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  successBtns: {
-    width: '100%',
-    gap: 12,
-  },
-  viewOffersBtn: {
+  doneBtn: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
+    width: '100%',
   },
-  viewOffersBtnText: {
+  doneBtnText: {
     fontSize: 15,
     fontWeight: '700',
     color: '#fff',
-  },
-  newOfferBtn: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  newOfferBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
   },
 });
 
