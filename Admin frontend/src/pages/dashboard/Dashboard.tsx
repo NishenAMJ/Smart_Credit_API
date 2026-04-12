@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -11,46 +12,7 @@ import {
   Cell,
 } from "recharts";
 import { Users, CreditCard, TrendingUp, Activity } from "lucide-react";
-
-// ── Mock Data ─────────────────────────────────────────────────────────────────
-const statCards = [
-  {
-    label:  "Total Lenders",
-    value:  "132",
-    change: "+12% this month",
-    up:     true,
-    icon:   Users,
-    color:  "#007AFF",
-    bg:     "#EFF6FF",
-  },
-  {
-    label:  "Total Borrowers",
-    value:  "132",
-    change: "+8% this month",
-    up:     true,
-    icon:   CreditCard,
-    color:  "#10B981",
-    bg:     "#ECFDF5",
-  },
-  {
-    label:  "Pending KYC",
-    value:  "132",
-    change: "-5% this month",
-    up:     false,
-    icon:   Activity,
-    color:  "#F59E0B",
-    bg:     "#FFFBEB",
-  },
-  {
-    label:  "Number",
-    value:  "132",
-    change: "+3% this month",
-    up:     true,
-    icon:   TrendingUp,
-    color:  "#8B5CF6",
-    bg:     "#F5F3FF",
-  },
-];
+import { getDashboardAnalytics, type DashboardAnalyticsResponse } from "../../lib/api";
 
 const barData = [
   { month: "Jan", lenders: 40, borrowers: 24 },
@@ -62,85 +24,139 @@ const barData = [
   { month: "Jul", lenders: 82, borrowers: 70 },
 ];
 
-const pieData = [
-  { name: "Approved", value: 63, color: "#007AFF" },
-  { name: "Pending",  value: 25, color: "#F59E0B" },
-  { name: "Rejected", value: 12, color: "#EF4444" },
-];
-
-const recentAdmins = [
-  { name: "Sarah Johnson",  email: "sarah@smartcredit.com",  role: "Moderator",  status: "active"   },
-  { name: "David Chen",     email: "david@smartcredit.com",  role: "Analyst",    status: "active"   },
-  { name: "Priya Patel",    email: "priya@smartcredit.com",  role: "Support",    status: "inactive" },
-  { name: "Marcus Williams",email: "marcus@smartcredit.com", role: "Moderator",  status: "active"   },
-];
-
-// ── Badge helper ──────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    active:   "badge badge-success",
-    inactive: "badge badge-gray",
-  };
-  return <span className={map[status] ?? "badge badge-gray"}>{status}</span>;
-}
-
-// ── Avatar initials ───────────────────────────────────────────────────────────
-function Avatar({ name }: { name: string }) {
-  const initials = name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+function StatusBadge({ active }: { active: boolean }) {
   return (
-    <div style={S.avatar}>
-      {initials}
-    </div>
+    <span className={active ? "badge badge-success" : "badge badge-gray"}>
+      {active ? "active" : "clear"}
+    </span>
   );
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function Avatar({ label }: { label: string }) {
+  const initials = label
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return <div style={S.avatar}>{initials}</div>;
+}
+
 export default function Dashboard() {
+  const [dashboard, setDashboard] = useState<DashboardAnalyticsResponse["data"] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        const response = await getDashboardAnalytics();
+        setDashboard(response.data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load dashboard.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadDashboard();
+  }, []);
+
+  const statCards = [
+    {
+      label: "Total Users",
+      value: dashboard?.overview.totalUsers ?? 0,
+      change: `${dashboard?.recentActivity.newUsersToday ?? 0} new today`,
+      up: true,
+      icon: Users,
+      color: "#007AFF",
+      bg: "#EFF6FF",
+    },
+    {
+      label: "Total Loans",
+      value: dashboard?.overview.totalLoans ?? 0,
+      change: `${dashboard?.recentActivity.loansCreatedToday ?? 0} created today`,
+      up: true,
+      icon: CreditCard,
+      color: "#10B981",
+      bg: "#ECFDF5",
+    },
+    {
+      label: "Active Disputes",
+      value: dashboard?.overview.activeDisputes ?? 0,
+      change: `${dashboard?.recentActivity.disputesResolvedToday ?? 0} resolved today`,
+      up: (dashboard?.overview.activeDisputes ?? 0) === 0,
+      icon: Activity,
+      color: "#F59E0B",
+      bg: "#FFFBEB",
+    },
+    {
+      label: "Total Revenue",
+      value: `LKR ${(dashboard?.overview.totalRevenue ?? 0).toLocaleString()}`,
+      change: `${dashboard?.recentActivity.transactionsToday ?? 0} transactions today`,
+      up: true,
+      icon: TrendingUp,
+      color: "#8B5CF6",
+      bg: "#F5F3FF",
+    },
+  ];
+
+  const pieData = [
+    {
+      name: "Users Today",
+      value: dashboard?.recentActivity.newUsersToday ?? 0,
+      color: "#007AFF",
+    },
+    {
+      name: "Loans Today",
+      value: dashboard?.recentActivity.loansCreatedToday ?? 0,
+      color: "#10B981",
+    },
+    {
+      name: "Transactions",
+      value: dashboard?.recentActivity.transactionsToday ?? 0,
+      color: "#F59E0B",
+    },
+  ];
+
+  const alerts = dashboard?.alerts ?? [];
+
   return (
     <div>
-
-      {/* Page header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Admin Dashboard</h1>
-          <p className="page-subtitle">Welcome back! Here's what's happening today.</p>
+          <p className="page-subtitle">Live data from your NestJS admin backend</p>
         </div>
         <div style={{ fontSize: 13, color: "#6B7280" }}>
           {new Date().toLocaleDateString("en-US", {
             weekday: "long",
-            year:    "numeric",
-            month:   "long",
-            day:     "numeric",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
           })}
         </div>
       </div>
 
-      {/* ── Stat cards ── */}
+      {error && <div className="card" style={S.errorCard}>{error}</div>}
+
       <div style={S.statsGrid}>
         {statCards.map((card) => {
           const Icon = card.icon;
+
           return (
             <div key={card.label} className="card" style={S.statCard}>
               <div style={S.statTop}>
                 <div>
                   <p style={S.statLabel}>{card.label}</p>
-                  <p style={S.statValue}>{card.value}</p>
+                  <p style={S.statValue}>{loading ? "..." : card.value}</p>
                 </div>
                 <div style={{ ...S.iconBox, background: card.bg }}>
                   <Icon size={20} color={card.color} />
                 </div>
               </div>
-              <p style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: card.up ? "#10B981" : "#EF4444",
-                marginTop: 10,
-              }}>
+              <p style={{ fontSize: 12, fontWeight: 500, color: card.up ? "#10B981" : "#EF4444", marginTop: 10 }}>
                 {card.up ? "▲" : "▼"} {card.change}
               </p>
             </div>
@@ -148,51 +164,31 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* ── Charts row ── */}
       <div style={S.chartsRow}>
-
-        {/* Bar chart */}
         <div className="card" style={{ flex: 2 }}>
           <div style={S.cardHeader}>
-            <p style={S.cardTitle}>Overview</p>
+            <p style={S.cardTitle}>Platform Overview</p>
             <div style={S.legendRow}>
-              <span style={S.legendDot("#007AFF")} /> Lenders
+              <span style={legendDot("#007AFF")} /> Lenders
               <span style={{ width: 16 }} />
-              <span style={S.legendDot("#10B981")} /> Borrowers
+              <span style={legendDot("#10B981")} /> Borrowers
             </div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={barData} barSize={10} barGap={4}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-              <XAxis
-                dataKey="month"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 12, fill: "#6B7280" }}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 12, fill: "#6B7280" }}
-              />
-              <Tooltip
-                contentStyle={{
-                  borderRadius: 8,
-                  border: "none",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                  fontSize: 13,
-                }}
-              />
-              <Bar dataKey="lenders"   fill="#007AFF" radius={[4, 4, 0, 0]} />
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
+              <Tooltip />
+              <Bar dataKey="lenders" fill="#007AFF" radius={[4, 4, 0, 0]} />
               <Bar dataKey="borrowers" fill="#10B981" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Pie chart */}
         <div className="card" style={{ flex: 1 }}>
           <div style={S.cardHeader}>
-            <p style={S.cardTitle}>Activity</p>
+            <p style={S.cardTitle}>Today&apos;s Activity</p>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
             <PieChart width={160} height={160}>
@@ -205,73 +201,65 @@ export default function Dashboard() {
                 paddingAngle={3}
                 dataKey="value"
               >
-                {pieData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
+                {pieData.map((entry) => (
+                  <Cell key={entry.name} fill={entry.color} />
                 ))}
               </Pie>
             </PieChart>
+
             <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
-              {pieData.map((d) => (
-                <div key={d.name} style={S.legendItem}>
+              {pieData.map((item) => (
+                <div key={item.name} style={S.legendItem}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: d.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 13, color: "#6B7280" }}>{d.name}</span>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, color: "#6B7280" }}>{item.name}</span>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>{d.value}%</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>{item.value}</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
-
       </div>
 
-      {/* ── Recent admins table ── */}
       <div style={{ marginTop: 24 }}>
         <div style={{ ...S.cardHeader, marginBottom: 16 }}>
-          <p style={S.cardTitle}>Recent Admin Activity</p>
-          <button
-            className="btn-secondary btn-sm"
-            onClick={() => {}}
-          >
-            View All
-          </button>
+          <p style={S.cardTitle}>System Alerts</p>
+          <button className="btn-secondary btn-sm">View All</button>
         </div>
 
         <div className="table-container">
           <table>
             <thead>
               <tr>
-                <th>Admin</th>
-                <th>Email</th>
-                <th>Role</th>
+                <th>Alert</th>
+                <th>Type</th>
+                <th>Count</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {recentAdmins.map((admin) => (
-                <tr key={admin.email}>
+              {(alerts.length ? alerts : [{ message: "No critical system alerts", type: "info", count: 0 }]).map((alert) => (
+                <tr key={`${alert.message}-${alert.type}`}>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <Avatar name={admin.name} />
-                      <span style={{ fontWeight: 500, fontSize: 14 }}>{admin.name}</span>
+                      <Avatar label={alert.message} />
+                      <span style={{ fontWeight: 500, fontSize: 14 }}>{alert.message}</span>
                     </div>
                   </td>
-                  <td style={{ color: "#6B7280" }}>{admin.email}</td>
-                  <td style={{ color: "#6B7280" }}>{admin.role}</td>
-                  <td><StatusBadge status={admin.status} /></td>
+                  <td style={{ color: "#6B7280", textTransform: "capitalize" }}>{alert.type}</td>
+                  <td style={{ color: "#6B7280" }}>{alert.count}</td>
+                  <td><StatusBadge active={alert.count > 0} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
-
     </div>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const S: Record<string, React.CSSProperties> = {
   statsGrid: {
     display: "grid",
@@ -349,9 +337,15 @@ const S: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     flexShrink: 0,
   },
+  errorCard: {
+    marginBottom: 16,
+    color: "#991B1B",
+    background: "#FEF2F2",
+    border: "1px solid #FECACA",
+  },
 };
 
-function S_legendDot(color: string): React.CSSProperties {
+function legendDot(color: string): React.CSSProperties {
   return {
     display: "inline-block",
     width: 8,
@@ -361,6 +355,3 @@ function S_legendDot(color: string): React.CSSProperties {
     marginRight: 5,
   };
 }
-
-// attach to S so JSX can use it inline
-Object.assign(S, { legendDot: S_legendDot });

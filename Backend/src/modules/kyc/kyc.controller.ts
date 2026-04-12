@@ -6,12 +6,15 @@ import {
   Body,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { KycService } from './kyc.service';
 import { ApproveKycDto } from './dto/approve-kyc.dto';
 import { RejectKycDto } from './dto/reject-kyc.dto';
+import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
 
 @Controller('admin/kyc')
+@UseGuards(AdminJwtGuard)
 export class KycController {
   constructor(private readonly kycService: KycService) {}
 

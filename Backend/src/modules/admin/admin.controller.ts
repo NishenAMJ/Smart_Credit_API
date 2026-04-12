@@ -5,20 +5,30 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { SuspendUserDto } from './dto/suspend-user.dto';
 import { ActivateUserDto } from './dto/activate-user.dto';
+import { QueryUsersDto } from './dto/query-users.dto';
+import { AdminJwtGuard } from './admin-auth/guards/admin-jwt.guard';
 
 @Controller('admin')
+@UseGuards(AdminJwtGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
+  @Get('users/stats')
+  async getUserStats() {
+    return this.adminService.getUserStats();
+  }
+
   @Get('users')
-  async getAllUsers() {
-    return this.adminService.getAllUsers();
+  async getAllUsers(@Query() query: QueryUsersDto) {
+    return this.adminService.getAllUsers(query);
   }
 
   @Get('users/:userId')

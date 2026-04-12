@@ -1,11 +1,26 @@
-import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
 import { AdsService } from './ads.service';
 import { ApproveAdDto } from './dto/approve-ad.dto';
 import { RejectAdDto } from './dto/reject-ad.dto';
+import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
 
 @Controller('admin/ads')
+@UseGuards(AdminJwtGuard)
 export class AdsController {
   constructor(private readonly adsService: AdsService) {}
+
+  @Get()
+  async getAllAds() {
+    return this.adsService.getAllAds();
+  }
 
   @Get('pending')
   async getPendingAds() {

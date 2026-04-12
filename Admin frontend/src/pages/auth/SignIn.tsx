@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { adminLogin } from "../../lib/api";
+import { setAdminSession } from "../../lib/auth";
 
 export default function SignIn() {
   const navigate = useNavigate();
-  const [email, setEmail]       = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -20,36 +22,32 @@ export default function SignIn() {
 
     setLoading(true);
 
-    // Simulate auth — replace with your real API call later
-    setTimeout(() => {
-      if (email === "admin@smartcredit.com" && password === "admin123") {
-        localStorage.setItem("adminToken", "demo-token-123");
-        navigate("/dashboard");
-      } else {
-        setError("Invalid email or password.");
-        setLoading(false);
-      }
-    }, 1000);
+    try {
+      const response = await adminLogin(email, password);
+      setAdminSession(response.accessToken, response.user);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid email or password.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <div style={styles.page}>
-
-      {/* ── Left panel ── */}
       <div style={styles.left}>
         <div style={styles.leftInner}>
-
-          {/* Logo */}
           <div style={styles.logoRow}>
             <div style={styles.logoIcon}>SC</div>
             <span style={styles.logoText}>Smart Credit+</span>
           </div>
 
-          {/* Headline */}
           <div style={styles.headline}>
             <h1 style={styles.h1}>
-              The future of<br />
-              <span style={styles.h1Blue}>peer-to-peer lending</span><br />
+              The future of
+              <br />
+              <span style={styles.h1Blue}>peer-to-peer lending</span>
+              <br />
               is here.
             </h1>
             <p style={styles.tagline}>
@@ -57,12 +55,11 @@ export default function SignIn() {
             </p>
           </div>
 
-          {/* Stats row */}
           <div style={styles.statsRow}>
             {[
-              { value: "10K+", label: "Active Users"  },
-              { value: "98%",  label: "Approval Rate" },
-              { value: "24/7", label: "Monitoring"    },
+              { value: "API", label: "Live Backend" },
+              { value: "JWT", label: "Secure Access" },
+              { value: "24/7", label: "Monitoring" },
             ].map((s) => (
               <div key={s.label} style={styles.statItem}>
                 <div style={styles.statValue}>{s.value}</div>
@@ -70,44 +67,31 @@ export default function SignIn() {
               </div>
             ))}
           </div>
-
         </div>
       </div>
 
-      {/* ── Right panel — form ── */}
       <div style={styles.right}>
         <div style={styles.formCard}>
-
-          {/* Header */}
           <div style={{ marginBottom: 28 }}>
             <h2 style={styles.formTitle}>Welcome back</h2>
             <p style={styles.formSub}>Sign in to your admin account</p>
           </div>
 
-          {/* Error */}
-          {error && (
-            <div style={styles.errorBox}>
-              {error}
-            </div>
-          )}
+          {error && <div style={styles.errorBox}>{error}</div>}
 
-          {/* Form */}
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-
-            {/* Email */}
             <div>
               <label style={styles.label}>Email address</label>
               <input
                 type="email"
                 className="input"
-                placeholder="admin@smartcredit.com"
+                placeholder="sarah.admin@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
               />
             </div>
 
-            {/* Password */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <label style={styles.label}>Password</label>
@@ -119,6 +103,7 @@ export default function SignIn() {
                   Forgot password?
                 </button>
               </div>
+
               <div style={{ position: "relative" }}>
                 <input
                   type={showPass ? "text" : "password"}
@@ -139,23 +124,16 @@ export default function SignIn() {
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               className="btn-primary"
               style={{ width: "100%", marginTop: 4, height: 48, fontSize: 15 }}
               disabled={loading}
             >
-              {loading ? (
-                <span style={styles.spinner} />
-              ) : (
-                "Sign In"
-              )}
+              {loading ? <span style={styles.spinner} /> : "Sign In"}
             </button>
-
           </form>
 
-          {/* Footer link */}
           <p style={styles.footerText}>
             Don't have an account?{" "}
             <Link to="/signup" style={styles.link}>
@@ -163,27 +141,22 @@ export default function SignIn() {
             </Link>
           </p>
 
-          {/* Demo hint */}
           <div style={styles.demoBox}>
-            <span style={styles.demoLabel}>Demo credentials</span>
-            <span style={styles.demoValue}>admin@smartcredit.com / admin123</span>
+            <span style={styles.demoLabel}>Test credentials</span>
+            <span style={styles.demoValue}>sarah.admin@example.com / admin123</span>
           </div>
-
         </div>
       </div>
     </div>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const styles: Record<string, React.CSSProperties> = {
   page: {
     display: "flex",
     minHeight: "100vh",
     background: "#F5F6FA",
   },
-
-  // Left
   left: {
     flex: 1,
     background: "#0A1628",
@@ -191,7 +164,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     padding: "48px",
-    position: "relative",
     overflow: "hidden",
   },
   leftInner: {
@@ -200,7 +172,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 40,
-    zIndex: 1,
   },
   logoRow: {
     display: "flex",
@@ -261,46 +232,55 @@ const styles: Record<string, React.CSSProperties> = {
   statLabel: {
     fontSize: 12,
     color: "#8A9BB5",
-    fontWeight: 500,
   },
-
-  // Right
   right: {
-    width: 480,
+    width: "50%",
+    minWidth: 440,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "48px 40px",
-    background: "#FFFFFF",
+    padding: 40,
   },
   formCard: {
     width: "100%",
-    maxWidth: 380,
+    maxWidth: 430,
+    background: "#FFFFFF",
+    borderRadius: 20,
+    padding: 36,
+    boxShadow: "0 18px 60px rgba(15, 23, 42, 0.08)",
   },
   formTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 700,
-    color: "#1A1A1A",
-    marginBottom: 6,
+    color: "#0F172A",
   },
   formSub: {
+    marginTop: 8,
+    color: "#64748B",
     fontSize: 14,
-    color: "#6B7280",
+  },
+  errorBox: {
+    marginBottom: 20,
+    background: "#FEF2F2",
+    color: "#B91C1C",
+    border: "1px solid #FECACA",
+    borderRadius: 12,
+    padding: "12px 14px",
+    fontSize: 14,
   },
   label: {
     display: "block",
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#1A1A1A",
     marginBottom: 6,
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#334155",
   },
   forgotBtn: {
-    background: "none",
+    background: "transparent",
     border: "none",
-    fontSize: 13,
     color: "#007AFF",
+    fontSize: 12,
     cursor: "pointer",
-    fontWeight: 500,
     padding: 0,
     fontFamily: "inherit",
   },
@@ -309,61 +289,49 @@ const styles: Record<string, React.CSSProperties> = {
     right: 12,
     top: "50%",
     transform: "translateY(-50%)",
-    background: "none",
     border: "none",
+    background: "transparent",
     cursor: "pointer",
     fontSize: 16,
-    padding: 0,
-    lineHeight: 1,
-  },
-  errorBox: {
-    background: "#FEE2E2",
-    color: "#991B1B",
-    borderRadius: 8,
-    padding: "10px 14px",
-    fontSize: 13,
-    fontWeight: 500,
-    marginBottom: 16,
-  },
-  footerText: {
-    textAlign: "center",
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 20,
-  },
-  link: {
-    color: "#007AFF",
-    fontWeight: 600,
-    textDecoration: "none",
-  },
-  demoBox: {
-    marginTop: 20,
-    background: "#F5F6FA",
-    borderRadius: 8,
-    padding: "10px 14px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-  },
-  demoLabel: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#6B7280",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
-  demoValue: {
-    fontSize: 12,
-    color: "#1A1A1A",
-    fontFamily: "monospace",
   },
   spinner: {
     width: 18,
     height: 18,
-    border: "2px solid rgba(255,255,255,0.3)",
-    borderTop: "2px solid #fff",
+    border: "2px solid rgba(255,255,255,0.4)",
+    borderTopColor: "#FFFFFF",
     borderRadius: "50%",
     display: "inline-block",
-    animation: "spin 0.7s linear infinite",
+    animation: "spin 1s linear infinite",
+  },
+  footerText: {
+    marginTop: 22,
+    fontSize: 14,
+    color: "#64748B",
+    textAlign: "center",
+  },
+  link: {
+    color: "#007AFF",
+    textDecoration: "none",
+    fontWeight: 600,
+  },
+  demoBox: {
+    marginTop: 22,
+    background: "#F8FAFC",
+    borderRadius: 12,
+    border: "1px solid #E2E8F0",
+    padding: 14,
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  demoLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: 600,
+  },
+  demoValue: {
+    fontSize: 13,
+    color: "#0F172A",
+    fontWeight: 600,
   },
 };

@@ -6,6 +6,29 @@ import { Ad } from './interfaces/ad.interface';
 export class AdsService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
+  async getAllAds(): Promise<{ success: boolean; count: number; ads: Ad[] }> {
+    try {
+      const db = this.firebaseService.db;
+      const snapshot = await db.collection('ads').get();
+
+      const ads: Ad[] = [];
+      snapshot.forEach((doc) => {
+        ads.push({
+          id: doc.id,
+          ...doc.data(),
+        } as Ad);
+      });
+
+      return {
+        success: true,
+        count: ads.length,
+        ads,
+      };
+    } catch (error) {
+      throw new Error(`Failed to fetch ads: ${error.message}`);
+    }
+  }
+
   async getPendingAds(): Promise<{ success: boolean; count: number; ads: Ad[] }> {
     try {
       const db = this.firebaseService.db;
@@ -145,5 +168,4 @@ export class AdsService {
     }
   }
 }
-
 

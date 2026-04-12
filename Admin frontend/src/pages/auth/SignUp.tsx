@@ -143,8 +143,6 @@ export default function SignUp() {
     }, 1200);
   }
 
-  const strength = getPasswordStrength(form.password);
-
   return (
     <div style={styles.page}>
 

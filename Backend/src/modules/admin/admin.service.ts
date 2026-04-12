@@ -4,24 +4,63 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import { FirebaseService } from '../../firebase/firebase.service';
 import { User } from './interfaces/user.interface';
+import { QueryUsersDto } from './dto/query-users.dto';
 
 @Injectable()
 export class AdminService {
-  private db = admin.firestore();
+  constructor(private readonly firebaseService: FirebaseService) {}
 
-  async getAllUsers() {
+  private get db() {
+    return this.firebaseService.db;
+  }
+
+  private sanitizeUser(
+    id: string,
+    data: FirebaseFirestore.DocumentData,
+  ): User {
+    const { passwordHash, ...sanitizedData } = data;
+
+    return {
+      id,
+      ...sanitizedData,
+    } as User;
+  }
+
+  async getAllUsers(query: QueryUsersDto = {}) {
     try {
       const usersSnapshot = await this.db.collection('users').get();
-      const users = usersSnapshot.docs.map((doc) => {
-        const data = doc.data() as any;
-        // Exclude sensitive fields like passwordHash
-        const { passwordHash, ...sanitizedData } = data;
-        return {
-          id: doc.id,
-          ...sanitizedData,
-        } as User;
-      });
+      const normalizedSearch = query.search?.trim().toLowerCase();
+
+      const users = usersSnapshot.docs
+        .map((doc) => this.sanitizeUser(doc.id, doc.data()))
+        .filter((user) => {
+          if (query.role && user.role !== query.role) {
+            return false;
+          }
+
+          if (query.status && user.status !== query.status) {
+            return false;
+          }
+
+          if (normalizedSearch) {
+            const searchableValues = [
+              user.email,
+              user.id,
+              user.role,
+              user.status,
+            ]
+              .filter(Boolean)
+              .map((value) => String(value).toLowerCase());
+
+            return searchableValues.some((value) =>
+              value.includes(normalizedSearch),
+            );
+          }
+
+          return true;
+        });
 
       return {
         success: true,
@@ -42,21 +81,50 @@ export class AdminService {
         throw new NotFoundException('User not found');
       }
 
-      const data = userDoc.data() as any;
-      // Exclude sensitive fields like passwordHash
-      const { passwordHash, ...sanitizedData } = data;
-
       return {
         success: true,
-        user: {
-          id: userDoc.id,
-          ...sanitizedData,
-        } as User,
+        user: this.sanitizeUser(userDoc.id, userDoc.data() ?? {}),
       };
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       console.error('Error fetching user:', error);
       throw new InternalServerErrorException('Failed to fetch user');
+    }
+  }
+
+  async getUserStats() {
+    try {
+      const usersSnapshot = await this.db.collection('users').get();
+
+      const stats = {
+        totalUsers: usersSnapshot.size,
+        activeUsers: 0,
+        suspendedUsers: 0,
+        pendingUsers: 0,
+        admins: 0,
+        borrowers: 0,
+        lenders: 0,
+      };
+
+      usersSnapshot.forEach((doc) => {
+        const user = doc.data() as User;
+
+        if (user.status === 'active') stats.activeUsers++;
+        if (user.status === 'suspended') stats.suspendedUsers++;
+        if (user.status === 'pending') stats.pendingUsers++;
+
+        if (user.role === 'admin') stats.admins++;
+        if (user.role === 'borrower') stats.borrowers++;
+        if (user.role === 'lender') stats.lenders++;
+      });
+
+      return {
+        success: true,
+        stats,
+      };
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+      throw new InternalServerErrorException('Failed to fetch user stats');
     }
   }
 

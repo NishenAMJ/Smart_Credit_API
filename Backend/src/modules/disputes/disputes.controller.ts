@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
 import { DisputesService } from './disputes.service';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 import { EscalateDisputeDto } from './dto/escalate-dispute.dto';
+import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
 
 @Controller('admin/disputes')
+@UseGuards(AdminJwtGuard)
 export class DisputesController {
   constructor(private readonly disputesService: DisputesService) {}
 

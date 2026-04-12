@@ -4,11 +4,16 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import { FirebaseService } from '../../firebase/firebase.service';
 import { KycDocument } from './interfaces/kyc-document.interface';
 
 @Injectable()
 export class KycService {
-  private db = admin.firestore();
+  constructor(private readonly firebaseService: FirebaseService) {}
+
+  private get db() {
+    return this.firebaseService.db;
+  }
 
   async getPendingKyc() {
     try {
