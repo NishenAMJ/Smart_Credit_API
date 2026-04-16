@@ -1,0 +1,91 @@
+type LenderView =
+  | 'dashboard'
+  | 'analytics'
+  | 'create-ad'
+  | 'pending-requests'
+  | 'settings'
+  | 'notifications'
+
+type NavItem = {
+  id: LenderView
+  label: string
+  shortLabel: string
+}
+
+const navItems: NavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', shortLabel: 'DB' },
+  { id: 'analytics', label: 'Analytics', shortLabel: 'AN' },
+  { id: 'create-ad', label: 'Create Ad', shortLabel: 'AD' },
+  { id: 'pending-requests', label: 'Pending Requests', shortLabel: 'PR' },
+  { id: 'settings', label: 'Settings', shortLabel: 'ST' },
+  { id: 'notifications', label: 'Notifications', shortLabel: 'NT' },
+]
+
+type LenderSidebarProps = {
+  activeView: LenderView
+  onNavigate: (view: LenderView) => void
+}
+
+export default function LenderSidebar({
+  activeView,
+  onNavigate,
+}: LenderSidebarProps) {
+  return (
+    <aside className="lender-sidebar">
+      <div className="lender-sidebar__logo-wrap">
+        <div className="lender-sidebar__logo-inner">
+          <div className="lender-sidebar__logo-icon">SC</div>
+          <div>
+            <div className="lender-sidebar__logo-text">Smart Credit+</div>
+            <div className="lender-sidebar__logo-sub">Lender Panel</div>
+          </div>
+        </div>
+      </div>
+
+      <nav className="lender-sidebar__nav" aria-label="Lender navigation">
+        <div className="lender-sidebar__section-label">Main Menu</div>
+
+        {navItems.map((item) => {
+          const isActive = item.id === activeView
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`lender-sidebar__nav-item${
+                isActive ? ' lender-sidebar__nav-item--active' : ''
+              }`}
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => onNavigate(item.id)}
+            >
+              <span className="lender-sidebar__nav-indicator" aria-hidden="true" />
+              <span className="lender-sidebar__nav-icon" aria-hidden="true">
+                {item.shortLabel}
+              </span>
+              <span>{item.label}</span>
+            </button>
+          )
+        })}
+      </nav>
+
+      <div className="lender-sidebar__bottom-wrap">
+        <div className="lender-sidebar__admin-wrap">
+          <div className="lender-sidebar__admin-avatar">L</div>
+          <div>
+            <div className="lender-sidebar__admin-name">Lender</div>
+            <div className="lender-sidebar__admin-role">Verified Account</div>
+          </div>
+        </div>
+
+        <button type="button" className="lender-sidebar__logout-btn">
+          <span className="lender-sidebar__logout-icon" aria-hidden="true">
+            LO
+          </span>
+          <span>Log Out</span>
+        </button>
+      </div>
+    </aside>
+  )
+}
+
+export type { LenderView }
