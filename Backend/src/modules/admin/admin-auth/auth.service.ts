@@ -5,18 +5,26 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import * as admin from 'firebase-admin';
+import { FirebaseService } from '../../../firebase/firebase.service';
+import { User, UserRole } from '../interfaces/user.interface';
+
+type AdminJwtPayload = {
+  uid: string;
+  email: string;
+  role: UserRole;
+};
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly firebaseService: FirebaseService,
+  ) {}
 
+  // Validates the admin's credentials and returns a signed JWT session token.
   async adminLogin(email: string, password: string) {
     try {
-      const db = admin.firestore();
-
-      // 🔹 1️⃣ Find user by email in Firestore
-      const snapshot = await db
+      const snapshot = await this.firebaseService.db
         .collection('users')
         .where('email', '==', email)
         .limit(1)
@@ -27,30 +35,23 @@ export class AuthService {
       }
 
       const userDoc = snapshot.docs[0];
-      const user = userDoc.data() as any;
+      const user = userDoc.data() as User;
 
-      // 🔹 2️⃣ Must be admin
       if (user.role !== 'admin') {
         throw new UnauthorizedException('Not an admin account');
       }
 
-      // 🔹 3️⃣ Must have passwordHash
       if (!user.passwordHash) {
         throw new UnauthorizedException('Password not set');
       }
 
-      // 🔹 4️⃣ Compare password using bcrypt
-      const passwordMatch = await bcrypt.compare(
-        password,
-        user.passwordHash,
-      );
+      const passwordMatch = await bcrypt.compare(password, user.passwordHash);
 
       if (!passwordMatch) {
         throw new UnauthorizedException('Invalid credentials');
       }
 
-      // 🔹 5️⃣ Create JWT token
-      const payload = {
+      const payload: AdminJwtPayload = {
         uid: userDoc.id,
         email: user.email,
         role: user.role,
@@ -63,7 +64,6 @@ export class AuthService {
         user: payload,
       };
     } catch (error: any) {
-      // If already HTTP exception, throw it
       if (error?.status) throw error;
 
       console.error('adminLogin error:', error);
@@ -71,11 +71,3 @@ export class AuthService {
     }
   }
 }
-
-
-
-
-
-
-
-

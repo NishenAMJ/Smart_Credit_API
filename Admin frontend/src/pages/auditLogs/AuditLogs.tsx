@@ -1,8 +1,7 @@
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Download, AlertTriangle, FileText, Shield, UserCheck, UserX } from "lucide-react";
-import { getAuditLogs, type AuditLogEntry } from "../../lib/api";
-
-type Severity = "info" | "warning" | "critical" | "success";
+import { getAuditLogs, type AuditLogEntry, type AuditSeverity } from "../../lib/api";
 
 const ACTION_META: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
   kyc_approved: { label: "KYC Approved", icon: UserCheck, color: "#10B981", bg: "#ECFDF5" },
@@ -15,22 +14,24 @@ const ACTION_META: Record<string, { label: string; icon: React.ElementType; colo
   system_event: { label: "System Event", icon: AlertTriangle, color: "#F59E0B", bg: "#FFFBEB" },
 };
 
-const SEVERITY_META: Record<Severity, { color: string; bg: string }> = {
+const SEVERITY_META: Record<AuditSeverity, { color: string; bg: string }> = {
   success: { color: "#065F46", bg: "#D1FAE5" },
   info: { color: "#1E40AF", bg: "#DBEAFE" },
   warning: { color: "#92400E", bg: "#FEF3C7" },
   critical: { color: "#991B1B", bg: "#FEE2E2" },
 };
 
+// Keeps audit filtering and export logic close to the data it operates on.
 export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [search, setSearch] = useState("");
-  const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
+  const [filterSeverity, setFilterSeverity] = useState<AuditSeverity | "all">("all");
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Loads the latest audit feed so filters and counts start from the same dataset.
     async function loadLogs() {
       try {
         const response = await getAuditLogs();
@@ -57,6 +58,7 @@ export default function AuditLogs() {
     });
   }, [filterSeverity, logs, search]);
 
+  // Exports the filtered view so the downloaded file matches what the admin sees.
   function exportCsv() {
     const headers = ["ID", "Action", "Description", "Performed By", "Target", "Date", "Severity"];
     const rows = filteredLogs.map((log) => [
@@ -217,6 +219,7 @@ export default function AuditLogs() {
   );
 }
 
+// Reuses one field renderer so the modal layout stays consistent.
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div style={S.detailCard}>
@@ -226,7 +229,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, any> = {
+const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)> = {
   errorCard: {
     marginBottom: 16,
     color: "#991B1B",

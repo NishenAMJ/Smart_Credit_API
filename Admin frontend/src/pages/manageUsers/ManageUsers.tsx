@@ -1,26 +1,30 @@
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Eye, Ban, CheckCircle, Users, UserCheck, Shield } from "lucide-react";
-import { activateUser, getUsers, getUserStats, suspendUser, type AdminUser } from "../../lib/api";
-
-type UserStatus = "active" | "pending" | "suspended" | "inactive";
-type UserRole = "borrower" | "lender" | "admin";
+import {
+  activateUser,
+  getUsers,
+  getUserStats,
+  suspendUser,
+  type AdminUser,
+  type AdminUserRole,
+  type AdminUserStatus,
+} from "../../lib/api";
+import { DEFAULT_USER_SUSPENSION_REASON } from "../../constants/admin-actions";
+import { formatFirestoreDate } from "../../lib/admin-format";
 
 type UserRow = {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
-  status: UserStatus;
+  role: AdminUserRole;
+  status: AdminUserStatus;
   joinDate: string;
   updatedAt: string;
   suspensionReason?: string;
 };
 
-function formatFirestoreDate(value?: { _seconds?: number }) {
-  if (!value?._seconds) return "N/A";
-  return new Date(value._seconds * 1000).toLocaleDateString();
-}
-
+// Converts backend user records into stable table rows so rendering stays simple.
 function mapApiUser(user: AdminUser): UserRow {
   const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || user.email.split("@")[0];
 
@@ -28,15 +32,16 @@ function mapApiUser(user: AdminUser): UserRow {
     id: user.id,
     name,
     email: user.email,
-    role: (user.role as UserRole) || "borrower",
-    status: (user.status as UserStatus) || "active",
+    role: user.role,
+    status: user.status ?? "active",
     joinDate: formatFirestoreDate(user.createdAt),
     updatedAt: formatFirestoreDate(user.updatedAt),
     suspensionReason: user.suspensionReason,
   };
 }
 
-function StatusBadge({ status }: { status: UserStatus }) {
+// Keeps status styling in one place so the table stays readable.
+function StatusBadge({ status }: { status: AdminUserStatus }) {
   const className = {
     active: "badge badge-success",
     pending: "badge badge-warning",
@@ -47,7 +52,8 @@ function StatusBadge({ status }: { status: UserStatus }) {
   return <span className={className}>{status}</span>;
 }
 
-function RoleBadge({ role }: { role: UserRole }) {
+// Keeps role styling in one place so role meaning is obvious in the table.
+function RoleBadge({ role }: { role: AdminUserRole }) {
   const styles = {
     lender: { color: "#007AFF", background: "#EFF6FF" },
     borrower: { color: "#8B5CF6", background: "#F5F3FF" },
@@ -61,11 +67,12 @@ function RoleBadge({ role }: { role: UserRole }) {
   );
 }
 
+// Keeps user moderation logic and view state together on a single screen.
 export default function ManageUsers() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<UserStatus | "all">("all");
-  const [filterRole, setFilterRole] = useState<UserRole | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<AdminUserStatus | "all">("all");
+  const [filterRole, setFilterRole] = useState<AdminUserRole | "all">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
@@ -79,6 +86,7 @@ export default function ManageUsers() {
   });
 
   useEffect(() => {
+    // Fetches both datasets together so the page loads with consistent summary values.
     async function loadUsers() {
       try {
         const [usersResponse, statsResponse] = await Promise.all([getUsers(), getUserStats()]);
@@ -114,15 +122,17 @@ export default function ManageUsers() {
     });
   }, [filterRole, filterStatus, search, users]);
 
+  // Updates local state immediately after a successful backend moderation action.
   async function handleSuspend(userId: string) {
     try {
-      await suspendUser(userId, "Suspended by admin");
+      await suspendUser(userId, DEFAULT_USER_SUSPENSION_REASON);
       setUsers((prev) => prev.map((user) => (user.id === userId ? { ...user, status: "suspended" } : user)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to suspend user.");
     }
   }
 
+  // Mirrors the backend reactivation result without forcing a full page reload.
   async function handleActivate(userId: string) {
     try {
       await activateUser(userId);
@@ -275,6 +285,7 @@ export default function ManageUsers() {
   );
 }
 
+// Reuses one detail renderer so the modal stays consistent and easy to extend.
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div style={S.detailCard}>
@@ -284,7 +295,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, any> = {
+const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)> = {
   pendingChip: {
     background: "#FEF3C7",
     color: "#92400E",

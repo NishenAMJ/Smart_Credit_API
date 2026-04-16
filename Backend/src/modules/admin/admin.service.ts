@@ -5,7 +5,12 @@ import {
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirebaseService } from '../../firebase/firebase.service';
-import { User } from './interfaces/user.interface';
+import {
+  FirestoreTimestampLike,
+  User,
+  UserRole,
+  UserStatus,
+} from './interfaces/user.interface';
 import { QueryUsersDto } from './dto/query-users.dto';
 
 @Injectable()
@@ -16,10 +21,8 @@ export class AdminService {
     return this.firebaseService.db;
   }
 
-  private sanitizeUser(
-    id: string,
-    data: FirebaseFirestore.DocumentData,
-  ): User {
+  // Removes sensitive fields before user records are returned to the client.
+  private sanitizeUser(id: string, data: FirebaseFirestore.DocumentData): User {
     const { passwordHash, ...sanitizedData } = data;
 
     return {
@@ -28,39 +31,42 @@ export class AdminService {
     } as User;
   }
 
+  // Returns a Firestore document reference for a user id.
+  private getUserDocument(userId: string) {
+    return this.db.collection('users').doc(userId);
+  }
+
+  // Checks whether a user matches the requested admin-side filters.
+  private matchesUserFilters(user: User, query: QueryUsersDto): boolean {
+    const normalizedSearch = query.search?.trim().toLowerCase();
+
+    if (query.role && user.role !== query.role) {
+      return false;
+    }
+
+    if (query.status && user.status !== query.status) {
+      return false;
+    }
+
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    const searchableValues = [user.email, user.id, user.role, user.status]
+      .filter(Boolean)
+      .map((value) => String(value).toLowerCase());
+
+    return searchableValues.some((value) => value.includes(normalizedSearch));
+  }
+
+  // Returns all users after removing sensitive fields and applying optional filters.
   async getAllUsers(query: QueryUsersDto = {}) {
     try {
       const usersSnapshot = await this.db.collection('users').get();
-      const normalizedSearch = query.search?.trim().toLowerCase();
 
       const users = usersSnapshot.docs
         .map((doc) => this.sanitizeUser(doc.id, doc.data()))
-        .filter((user) => {
-          if (query.role && user.role !== query.role) {
-            return false;
-          }
-
-          if (query.status && user.status !== query.status) {
-            return false;
-          }
-
-          if (normalizedSearch) {
-            const searchableValues = [
-              user.email,
-              user.id,
-              user.role,
-              user.status,
-            ]
-              .filter(Boolean)
-              .map((value) => String(value).toLowerCase());
-
-            return searchableValues.some((value) =>
-              value.includes(normalizedSearch),
-            );
-          }
-
-          return true;
-        });
+        .filter((user) => this.matchesUserFilters(user, query));
 
       return {
         success: true,
@@ -73,9 +79,10 @@ export class AdminService {
     }
   }
 
+  // Returns a single sanitized user record for the requested id.
   async getUserById(userId: string) {
     try {
-      const userDoc = await this.db.collection('users').doc(userId).get();
+      const userDoc = await this.getUserDocument(userId).get();
 
       if (!userDoc.exists) {
         throw new NotFoundException('User not found');
@@ -92,6 +99,7 @@ export class AdminService {
     }
   }
 
+  // Aggregates user counts by status and role for admin reporting.
   async getUserStats() {
     try {
       const usersSnapshot = await this.db.collection('users').get();
@@ -107,7 +115,7 @@ export class AdminService {
       };
 
       usersSnapshot.forEach((doc) => {
-        const user = doc.data() as User;
+        const user = doc.data() as Omit<User, 'id'>;
 
         if (user.status === 'active') stats.activeUsers++;
         if (user.status === 'suspended') stats.suspendedUsers++;
@@ -128,9 +136,10 @@ export class AdminService {
     }
   }
 
+  // Suspends the selected user and persists the audit-related metadata.
   async suspendUser(userId: string, reason?: string) {
     try {
-      const userRef = this.db.collection('users').doc(userId);
+      const userRef = this.getUserDocument(userId);
       const userDoc = await userRef.get();
 
       if (!userDoc.exists) {
@@ -156,9 +165,10 @@ export class AdminService {
     }
   }
 
+  // Restores a suspended user to the active state and clears suspension metadata.
   async activateUser(userId: string) {
     try {
-      const userRef = this.db.collection('users').doc(userId);
+      const userRef = this.getUserDocument(userId);
       const userDoc = await userRef.get();
 
       if (!userDoc.exists) {
@@ -184,9 +194,10 @@ export class AdminService {
     }
   }
 
+  // Deletes a user document after confirming that it exists.
   async deleteUser(userId: string) {
     try {
-      const userRef = this.db.collection('users').doc(userId);
+      const userRef = this.getUserDocument(userId);
       const userDoc = await userRef.get();
 
       if (!userDoc.exists) {

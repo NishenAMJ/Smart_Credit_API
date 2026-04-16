@@ -7,6 +7,7 @@ import { AdminAuditService } from './admin-audit.service';
 export class AdminAuditController {
   constructor(private readonly adminAuditService: AdminAuditService) {}
 
+  // Returns the latest admin-facing activity feed generated from stored records.
   @Get()
   async getAuditLogs() {
     return this.adminAuditService.getAuditLogs();

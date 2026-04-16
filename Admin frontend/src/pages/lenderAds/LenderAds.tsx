@@ -1,8 +1,8 @@
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Eye, Check, X, Megaphone } from "lucide-react";
-import { approveAd, getAds, rejectAd, type AdminAd } from "../../lib/api";
-
-type AdStatus = "pending" | "approved" | "rejected" | "active" | "closed";
+import { approveAd, getAds, rejectAd, type AdminAd, type AdStatus } from "../../lib/api";
+import { formatFirestoreDate } from "../../lib/admin-format";
 
 type LenderAdRow = {
   id: string;
@@ -17,11 +17,7 @@ type LenderAdRow = {
   adType: "borrower" | "lender";
 };
 
-function formatFirestoreDate(value?: { _seconds?: number }) {
-  if (!value?._seconds) return "N/A";
-  return new Date(value._seconds * 1000).toLocaleDateString();
-}
-
+// Converts backend ads into stable rows so the moderation table stays simple.
 function mapAd(ad: AdminAd): LenderAdRow {
   return {
     id: ad.id,
@@ -37,6 +33,7 @@ function mapAd(ad: AdminAd): LenderAdRow {
   };
 }
 
+// Centralizes status styling so moderation states are easy to scan.
 function StatusBadge({ status }: { status: AdStatus }) {
   const className = {
     active: "badge badge-success",
@@ -49,6 +46,7 @@ function StatusBadge({ status }: { status: AdStatus }) {
   return <span className={className}>{status}</span>;
 }
 
+// Keeps ad moderation state and actions together on one screen.
 export default function LenderAds() {
   const [ads, setAds] = useState<LenderAdRow[]>([]);
   const [search, setSearch] = useState("");
@@ -58,6 +56,7 @@ export default function LenderAds() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // Loads the moderation queue before the admin starts taking actions.
     async function loadAds() {
       try {
         const response = await getAds();
@@ -93,6 +92,7 @@ export default function LenderAds() {
     closed: ads.filter((ad) => ad.status === "closed").length,
   };
 
+  // Mirrors an approval in local state to avoid an extra full reload.
   async function handleApprove(adId: string) {
     try {
       await approveAd(adId);
@@ -102,6 +102,7 @@ export default function LenderAds() {
     }
   }
 
+  // Mirrors a rejection in local state to avoid an extra full reload.
   async function handleReject(adId: string) {
     try {
       await rejectAd(adId);
@@ -259,6 +260,7 @@ export default function LenderAds() {
   );
 }
 
+// Reuses one field renderer so the modal layout stays consistent.
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div style={S.detailCard}>
@@ -268,7 +270,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, any> = {
+const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)> = {
   pendingChip: {
     background: "#FEF3C7",
     color: "#92400E",

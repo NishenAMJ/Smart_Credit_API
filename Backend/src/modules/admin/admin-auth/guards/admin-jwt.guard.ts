@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 export class AdminJwtGuard implements CanActivate {
   constructor(private readonly jwtService: JwtService) {}
 
+  // Verifies the bearer token and ensures the authenticated user has the admin role.
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization;

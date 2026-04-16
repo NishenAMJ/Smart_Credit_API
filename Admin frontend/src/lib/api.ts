@@ -1,11 +1,25 @@
 import { clearAdminSession, getAdminToken } from "./auth";
+import {
+  DEFAULT_AD_APPROVAL_NOTE,
+  DEFAULT_AD_REJECTION_REASON,
+  DEFAULT_KYC_APPROVAL_NOTE,
+  DEFAULT_KYC_REJECTION_REASON,
+} from "../constants/admin-actions";
 
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
+
+export type FirestoreTimestamp = { _seconds?: number };
+export type AdminUserRole = "admin" | "borrower" | "lender";
+export type AdminUserStatus = "active" | "pending" | "suspended" | "inactive";
+export type AuditSeverity = "info" | "warning" | "critical" | "success";
+export type AuditTargetType = "user" | "ad" | "system" | "report";
+export type AdStatus = "pending" | "approved" | "rejected" | "active" | "closed";
 
 type ApiOptions = RequestInit & {
   auth?: boolean;
 };
 
+// Centralizes request setup so auth handling and JSON parsing stay consistent across pages.
 async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
 
@@ -47,20 +61,20 @@ export interface AdminAuthResponse {
   user: {
     uid: string;
     email: string;
-    role: string;
+    role: AdminUserRole;
   };
 }
 
 export interface AdminUser {
   id: string;
   email: string;
-  role: string;
-  status?: string;
+  role: AdminUserRole;
+  status?: AdminUserStatus;
   firstName?: string;
   lastName?: string;
-  createdAt?: { _seconds?: number };
-  updatedAt?: { _seconds?: number };
-  suspendedAt?: { _seconds?: number };
+  createdAt?: FirestoreTimestamp;
+  updatedAt?: FirestoreTimestamp;
+  suspendedAt?: FirestoreTimestamp;
   suspensionReason?: string;
 }
 
@@ -89,8 +103,8 @@ export interface KycDocument {
   documentType: string;
   documentUrl: string;
   status: "pending" | "approved" | "rejected";
-  submittedAt?: { _seconds?: number };
-  reviewedAt?: { _seconds?: number };
+  submittedAt?: FirestoreTimestamp;
+  reviewedAt?: FirestoreTimestamp;
   reviewedBy?: string;
   rejectionReason?: string;
   notes?: string;
@@ -204,14 +218,14 @@ export interface AdminAd {
   interestRate?: number;
   duration?: number;
   adType: "borrower" | "lender";
-  status: "pending" | "approved" | "rejected" | "active" | "closed";
-  createdAt?: { _seconds?: number };
-  reviewedAt?: { _seconds?: number };
-  approvedAt?: { _seconds?: number };
-  rejectedAt?: { _seconds?: number };
+  status: AdStatus;
+  createdAt?: FirestoreTimestamp;
+  reviewedAt?: FirestoreTimestamp;
+  approvedAt?: FirestoreTimestamp;
+  rejectedAt?: FirestoreTimestamp;
   rejectionReason?: string;
   notes?: string;
-  updatedAt?: { _seconds?: number };
+  updatedAt?: FirestoreTimestamp;
 }
 
 export interface AdsResponse {
@@ -234,9 +248,9 @@ export interface AuditLogEntry {
   description: string;
   performedBy: string;
   targetName: string;
-  targetType: "user" | "ad" | "system" | "report";
+  targetType: AuditTargetType;
   dateTime: string;
-  severity: "info" | "warning" | "critical" | "success";
+  severity: AuditSeverity;
 }
 
 export interface AuditLogsResponse {
@@ -245,6 +259,7 @@ export interface AuditLogsResponse {
   logs: AuditLogEntry[];
 }
 
+// Keeps login calls typed so the calling page can store the session safely.
 export function adminLogin(email: string, password: string) {
   return apiRequest<AdminAuthResponse>("/auth/admin/login", {
     method: "POST",
@@ -252,13 +267,21 @@ export function adminLogin(email: string, password: string) {
   });
 }
 
+// Keeps dashboard pages independent from raw fetch configuration.
 export function getDashboardAnalytics() {
   return apiRequest<DashboardAnalyticsResponse>("/admin/analytics/dashboard", {
     auth: true,
   });
 }
 
-export function getUsers(params?: { search?: string; role?: string; status?: string }) {
+export type UserQueryParams = {
+  search?: string;
+  role?: AdminUser["role"] | "all";
+  status?: NonNullable<AdminUser["status"]> | "all";
+};
+
+// Encapsulates user filters so pages do not have to assemble query strings manually.
+export function getUsers(params?: UserQueryParams) {
   const searchParams = new URLSearchParams();
 
   if (params?.search) searchParams.set("search", params.search);
@@ -271,12 +294,14 @@ export function getUsers(params?: { search?: string; role?: string; status?: str
   });
 }
 
+// Separates aggregate dashboard data from the full user list request.
 export function getUserStats() {
   return apiRequest<UserStatsResponse>("/admin/users/stats", {
     auth: true,
   });
 }
 
+// Keeps the user moderation request shape in one place for reuse.
 export function suspendUser(userId: string, reason?: string) {
   return apiRequest("/admin/users/suspend", {
     method: "POST",
@@ -285,6 +310,7 @@ export function suspendUser(userId: string, reason?: string) {
   });
 }
 
+// Keeps reactivation logic out of page components.
 export function activateUser(userId: string) {
   return apiRequest("/admin/users/activate", {
     method: "POST",
@@ -293,13 +319,18 @@ export function activateUser(userId: string) {
   });
 }
 
+// Gives the KYC page a single typed entry point for review data.
 export function getPendingKyc() {
   return apiRequest<KycPendingResponse>("/admin/kyc/pending", {
     auth: true,
   });
 }
 
-export function approveKyc(documentId: string, notes = "Approved by admin") {
+// Uses a shared default note so approval messages stay consistent.
+export function approveKyc(
+  documentId: string,
+  notes = DEFAULT_KYC_APPROVAL_NOTE,
+) {
   return apiRequest(`/admin/kyc/${documentId}/approve`, {
     method: "POST",
     auth: true,
@@ -307,7 +338,11 @@ export function approveKyc(documentId: string, notes = "Approved by admin") {
   });
 }
 
-export function rejectKyc(documentId: string, reason = "Rejected by admin") {
+// Uses a shared default reason so rejection messages stay consistent.
+export function rejectKyc(
+  documentId: string,
+  reason = DEFAULT_KYC_REJECTION_REASON,
+) {
   return apiRequest(`/admin/kyc/${documentId}/reject`, {
     method: "POST",
     auth: true,
@@ -315,37 +350,43 @@ export function rejectKyc(documentId: string, reason = "Rejected by admin") {
   });
 }
 
+// Keeps report-fetching logic consistent across reporting pages.
 export function getUsersReport() {
   return apiRequest<UsersReportResponse>("/admin/reports/users", {
     auth: true,
   });
 }
 
+// Keeps report-fetching logic consistent across reporting pages.
 export function getLoansReport() {
   return apiRequest<LoansReportResponse>("/admin/reports/loans", {
     auth: true,
   });
 }
 
+// Keeps report-fetching logic consistent across reporting pages.
 export function getTransactionsReport() {
   return apiRequest<TransactionsReportResponse>("/admin/reports/transactions", {
     auth: true,
   });
 }
 
+// Keeps report-fetching logic consistent across reporting pages.
 export function getRevenueReport() {
   return apiRequest<RevenueReportResponse>("/admin/reports/revenue", {
     auth: true,
   });
 }
 
+// Gives the ads page a typed moderation data source.
 export function getAds() {
   return apiRequest<AdsResponse>("/admin/ads", {
     auth: true,
   });
 }
 
-export function approveAd(adId: string, notes = "Approved by admin") {
+// Uses a shared approval note so moderation actions are predictable.
+export function approveAd(adId: string, notes = DEFAULT_AD_APPROVAL_NOTE) {
   return apiRequest(`/admin/ads/${adId}/approve`, {
     method: "POST",
     auth: true,
@@ -353,7 +394,8 @@ export function approveAd(adId: string, notes = "Approved by admin") {
   });
 }
 
-export function rejectAd(adId: string, reason = "Rejected by admin") {
+// Uses a shared rejection reason so moderation actions are predictable.
+export function rejectAd(adId: string, reason = DEFAULT_AD_REJECTION_REASON) {
   return apiRequest(`/admin/ads/${adId}/reject`, {
     method: "POST",
     auth: true,
@@ -361,6 +403,7 @@ export function rejectAd(adId: string, reason = "Rejected by admin") {
   });
 }
 
+// Keeps audit pages isolated from raw request details.
 export function getAuditLogs() {
   return apiRequest<AuditLogsResponse>("/admin/audit-logs", {
     auth: true,

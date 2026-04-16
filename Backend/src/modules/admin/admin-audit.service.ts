@@ -1,12 +1,14 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { AuditLogEntry } from './interfaces/audit-log.interface';
+import { FirestoreTimestampLike } from './interfaces/user.interface';
 
 @Injectable()
 export class AdminAuditService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
-  private formatDate(value?: { toDate?: () => Date } | Date) {
+  // Normalizes Firestore timestamps and Date objects for the audit table.
+  private formatDate(value?: FirestoreTimestampLike | Date) {
     if (!value) {
       return 'N/A';
     }
@@ -20,6 +22,7 @@ export class AdminAuditService {
     return date.toISOString().replace('T', ' ').slice(0, 19);
   }
 
+  // Builds a flat activity feed from admin-relevant Firestore collections.
   async getAuditLogs() {
     try {
       const db = this.firebaseService.db;
@@ -106,7 +109,9 @@ export class AdminAuditService {
             performedBy: 'Admin',
             targetName: ad.title || doc.id,
             targetType: 'ad',
-            dateTime: this.formatDate(ad.approvedAt || ad.reviewedAt || ad.updatedAt),
+            dateTime: this.formatDate(
+              ad.approvedAt || ad.reviewedAt || ad.updatedAt,
+            ),
             severity: 'success',
           });
         }
@@ -119,7 +124,9 @@ export class AdminAuditService {
             performedBy: 'Admin',
             targetName: ad.title || doc.id,
             targetType: 'ad',
-            dateTime: this.formatDate(ad.rejectedAt || ad.reviewedAt || ad.updatedAt),
+            dateTime: this.formatDate(
+              ad.rejectedAt || ad.reviewedAt || ad.updatedAt,
+            ),
             severity: 'warning',
           });
         }

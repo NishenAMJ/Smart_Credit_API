@@ -609,7 +609,7 @@ export default function Settings() {
 }
 
 // ── Page Styles ───────────────────────────────────────────────────────────────
-const S: Record<string, any> = {
+const S: Record<string, React.CSSProperties> = {
   layout: {
     display: "flex",
     gap: 24,

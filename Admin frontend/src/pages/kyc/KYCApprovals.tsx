@@ -1,6 +1,8 @@
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Eye, Check, X } from "lucide-react";
 import { approveKyc, getPendingKyc, rejectKyc, type KycDocument } from "../../lib/api";
+import { formatFirestoreDate } from "../../lib/admin-format";
 
 type KycStatus = "pending" | "approved" | "rejected";
 
@@ -13,11 +15,7 @@ type KycRow = {
   documentUrl?: string;
 };
 
-function formatFirestoreDate(value?: { _seconds?: number }) {
-  if (!value?._seconds) return "N/A";
-  return new Date(value._seconds * 1000).toLocaleDateString();
-}
-
+// Converts raw KYC documents into stable rows so table rendering stays simple.
 function mapDocument(document: KycDocument): KycRow {
   return {
     id: document.id,
@@ -29,6 +27,7 @@ function mapDocument(document: KycDocument): KycRow {
   };
 }
 
+// Centralizes status styling so review states are easy to scan.
 function StatusBadge({ status }: { status: KycStatus }) {
   const className = {
     pending: "badge badge-warning",
@@ -39,6 +38,7 @@ function StatusBadge({ status }: { status: KycStatus }) {
   return <span className={className}>{status}</span>;
 }
 
+// Keeps KYC review state and moderation actions together on one page.
 export default function KYCApprovals() {
   const [records, setRecords] = useState<KycRow[]>([]);
   const [search, setSearch] = useState("");
@@ -48,6 +48,7 @@ export default function KYCApprovals() {
   const [selectedRecord, setSelectedRecord] = useState<KycRow | null>(null);
 
   useEffect(() => {
+    // Loads the latest review queue before the admin starts taking actions.
     async function loadKyc() {
       try {
         const response = await getPendingKyc();
@@ -81,6 +82,7 @@ export default function KYCApprovals() {
     rejected: records.filter((record) => record.status === "rejected").length,
   };
 
+  // Mirrors an approval in local state to avoid an extra full reload.
   async function handleApprove(id: string) {
     try {
       await approveKyc(id);
@@ -90,6 +92,7 @@ export default function KYCApprovals() {
     }
   }
 
+  // Mirrors a rejection in local state to avoid an extra full reload.
   async function handleReject(id: string) {
     try {
       await rejectKyc(id);
@@ -221,6 +224,7 @@ export default function KYCApprovals() {
   );
 }
 
+// Reuses one field renderer so the modal layout stays consistent.
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -230,7 +234,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, any> = {
+const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)> = {
   pendingChip: {
     background: "#FEF3C7",
     color: "#92400E",

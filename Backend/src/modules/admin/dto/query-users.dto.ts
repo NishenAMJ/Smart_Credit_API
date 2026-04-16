@@ -1,4 +1,5 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
+import type { UserRole, UserStatus } from '../interfaces/user.interface';
 
 export class QueryUsersDto {
   @IsOptional()
@@ -8,10 +9,10 @@ export class QueryUsersDto {
   @IsOptional()
   @IsString()
   @IsIn(['admin', 'borrower', 'lender'])
-  role?: string;
+  role?: UserRole;
 
   @IsOptional()
   @IsString()
   @IsIn(['active', 'suspended', 'pending', 'inactive'])
-  status?: string;
+  status?: UserStatus;
 }
