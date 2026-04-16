@@ -1,17 +1,26 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { app } from 'firebase-admin';
-import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import * as admin from 'firebase-admin';
+import { Firestore, getFirestore } from 'firebase-admin/firestore';
 
 @Injectable()
-export class FirebaseService {
-  public db: Firestore;
+export class FirebaseService implements OnModuleInit {
+  private db!: Firestore;
 
-  constructor(@Inject('FIREBASE_APP') private firebaseApp: app.App) {
-    this.db = getFirestore(this.firebaseApp);
+  onModuleInit() {
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        }),
+      });
+    }
+    this.db = getFirestore();
+    console.log('✅ Firebase connected successfully!');
   }
 
-  // Example: Saving a loan application
-  async saveData(collection: string, data: any) {
-    return await this.db.collection(collection).add(data);
+  getDb(): Firestore {
+    return this.db;
   }
 }
