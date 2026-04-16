@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
-import { DashboardService } from './dashboard.service';
-import { DashboardController } from './dashboard.controller';
 import { FirebaseModule } from '../firebase/firebase.module';
+import { DashboardController } from './dashboard.controller';
+import { DashboardService } from './dashboard.service';
 
 @Module({
-  imports: [FirebaseModule], // Import Firebase so we can use it
+  imports: [FirebaseModule],
   controllers: [DashboardController],
   providers: [DashboardService],
-  exports: [DashboardService],
 })
 export class DashboardModule {}

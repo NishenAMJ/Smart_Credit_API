@@ -20,37 +20,18 @@ let DashboardController = class DashboardController {
     constructor(dashboardService) {
         this.dashboardService = dashboardService;
     }
-    async getDashboardMetrics() {
-        return this.dashboardService.getDashboardMetrics();
-    }
-    async getRecentBorrowers(limit) {
-        const lim = limit ? parseInt(limit, 10) : 50;
-        return this.dashboardService.getRecentBorrowers(lim);
-    }
-    async getUserProfile(uid) {
+    getOverview(limit) {
+        return this.dashboardService.getOverview(limit);
     }
 };
 exports.DashboardController = DashboardController;
 __decorate([
-    (0, common_1.Get)('metrics'),
+    (0, common_1.Get)('overview'),
+    __param(0, (0, common_1.Query)('limit', new common_1.DefaultValuePipe(24), common_1.ParseIntPipe)),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Number]),
     __metadata("design:returntype", Promise)
-], DashboardController.prototype, "getDashboardMetrics", null);
-__decorate([
-    (0, common_1.Get)('recent-borrowers'),
-    __param(0, Query('limit')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", Promise)
-], DashboardController.prototype, "getRecentBorrowers", null);
-__decorate([
-    (0, common_1.Get)('user/:uid'),
-    __param(0, (0, common_1.Param)('uid')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", Promise)
-], DashboardController.prototype, "getUserProfile", null);
+], DashboardController.prototype, "getOverview", null);
 exports.DashboardController = DashboardController = __decorate([
     (0, common_1.Controller)('dashboard'),
     __metadata("design:paramtypes", [dashboard_service_1.DashboardService])
