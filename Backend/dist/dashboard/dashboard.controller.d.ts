@@ -1,13 +1,7 @@
-import { DashboardService, Borrower } from './dashboard.service';
+import { DashboardService } from './dashboard.service';
+import { DashboardOverviewResponse } from './dashboard.types';
 export declare class DashboardController {
     private readonly dashboardService;
     constructor(dashboardService: DashboardService);
-    getDashboardMetrics(): Promise<{
-        totalBorrowers: number;
-        todaysCollection: number;
-        overduePayments: number;
-        activeAds: number;
-    }>;
-    getRecentBorrowers(limit?: string): Promise<Borrower[]>;
-    getUserProfile(uid: string): Promise<void>;
+    getOverview(limit: number): Promise<DashboardOverviewResponse>;
 }

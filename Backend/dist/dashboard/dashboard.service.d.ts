@@ -1,26 +1,24 @@
 import { FirebaseService } from '../firebase/firebase.service';
-export interface Borrower {
-    id: string;
-    name: string;
-    email: string;
-    phone?: string;
-    creditScore?: number;
-    status: string;
-    totalBorrowed?: number;
-    joinedDate?: string;
-}
+import { DashboardOverviewResponse } from './dashboard.types';
 export declare class DashboardService {
-    private firebaseService;
-    private db;
+    private readonly firebaseService;
+    private readonly logger;
+    private readonly warnedFallbacks;
     constructor(firebaseService: FirebaseService);
-    getUserProfile(uid: string): Promise<{
-        uid: string;
-    }>;
-    getDashboardMetrics(): Promise<{
-        totalBorrowers: number;
-        todaysCollection: number;
-        overduePayments: number;
-        activeAds: number;
-    }>;
-    getRecentBorrowers(limit?: number): Promise<Borrower[]>;
+    getOverview(limit?: number): Promise<DashboardOverviewResponse>;
+    private clamp;
+    private getBorrowerCount;
+    private getActiveAdsCount;
+    private getOverduePaymentsCount;
+    private getTodaysCollection;
+    private getCurrentDayRange;
+    private getRecentBorrowers;
+    private getCountWithFallback;
+    private logFallback;
+    private getFirestoreErrorCode;
+    private countOverdueInstallmentsByLoans;
+    private sumRepaymentTransactions;
+    private mapBorrower;
+    private toIsoString;
+    private toDate;
 }

@@ -1,41 +1,21 @@
-import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
-import { DashboardService, Borrower } from './dashboard.service';
+import {
+  Controller,
+  DefaultValuePipe,
+  Get,
+  ParseIntPipe,
+  Query,
+} from '@nestjs/common';
+import { DashboardService } from './dashboard.service';
+import { DashboardOverviewResponse } from './dashboard.types';
 
 @Controller('dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
-  @Get('metrics')
-  async getDashboardMetrics() {
-    return this.dashboardService.getDashboardMetrics();
-  }
-
-  @Get('recent-borrowers')
-  async getRecentBorrowers(
-    @Query('limit') limit?: string,
-  ): Promise<Borrower[]> {
-    const lim = limit ? parseInt(limit, 10) : 50;
-    return this.dashboardService.getRecentBorrowers(lim);
-  }
-
-  // Keep your previous endpoint if you still need it
-  @Get('user/:uid')
-  async getUserProfile(@Param('uid') uid: string) {
-    // ... your existing code
+  @Get('overview')
+  getOverview(
+    @Query('limit', new DefaultValuePipe(24), ParseIntPipe) limit: number,
+  ): Promise<DashboardOverviewResponse> {
+    return this.dashboardService.getOverview(limit);
   }
 }
-
-/*
-// Example: GET http://localhost:3000/dashboard/user/abc123...
-  @Get('user/:uid')
-  async getUserProfile(@Param('uid') uid: string) {
-    try {
-      return await this.dashboardService.getUserProfile(uid);
-    } catch (error) {
-      if (error.message.includes('not found')) {
-        throw new NotFoundException(error.message);
-      }
-      throw error;
-    }
-  }
-*/
