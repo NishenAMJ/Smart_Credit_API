@@ -4,6 +4,6 @@ import { LegalService } from './legal.service';
 
 @Module({
   controllers: [LegalController],
-  providers: [LegalService]
+  providers: [LegalService],
 })
 export class LegalModule {}

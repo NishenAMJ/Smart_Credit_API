@@ -9,7 +9,7 @@ const serviceAccountPath =
 let absolutePath: string;
 
 // First try: relative to current working directory
-let candidates = [
+const candidates = [
   path.resolve(process.cwd(), serviceAccountPath),
   // Second try: relative to this file's directory (dist folder after build)
   path.resolve(__dirname, '../../', serviceAccountPath),
