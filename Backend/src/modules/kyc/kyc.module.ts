@@ -4,6 +4,6 @@ import { KycService } from './kyc.service';
 
 @Module({
   controllers: [KycController],
-  providers: [KycService]
+  providers: [KycService],
 })
 export class KycModule {}
