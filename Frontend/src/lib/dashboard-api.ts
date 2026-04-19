@@ -11,7 +11,12 @@ export type DashboardBorrower = {
   email: string
   creditScore: number | null
   kycStatus: string
+  loanCount: number
   activeLoansCount: number
+  totalBorrowedAmount: number
+  outstandingAmount: number
+  latestLoanStatus: string
+  latestLoanCreatedAt: string | null
   isActive: boolean
   createdAt: string | null
 }
@@ -33,7 +38,21 @@ export type BorrowerDetails = {
   kycStatus: string
   creditScore: number | null
   rating: number | null
+  loanCount: number
   activeLoansCount: number
+  totalBorrowedAmount: number
+  outstandingAmount: number
   isActive: boolean
+  createdAt: string | null
+  loans: BorrowerLoan[]
+}
+
+export type BorrowerLoan = {
+  id: string
+  status: string
+  amount: number
+  remainingAmount: number
+  interestRate: number
+  tenureMonths: number
   createdAt: string | null
 }

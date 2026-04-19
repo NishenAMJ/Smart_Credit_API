@@ -3,6 +3,7 @@ import type {
   BorrowerDetails,
   DashboardOverviewResponse,
 } from '../lib/dashboard-api'
+import type { LenderSession } from '../lib/lender-session'
 
 const ITEMS_PER_PAGE = 8
 const BORROWER_FETCH_LIMIT = 24
@@ -50,9 +51,13 @@ function formatJoinedDate(value: string | null): string {
     : joinedDateFormatter.format(parsed)
 }
 
-async function fetchDashboardOverview(): Promise<DashboardOverviewResponse> {
+async function fetchDashboardOverview(
+  lenderId: string,
+): Promise<DashboardOverviewResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/dashboard/overview?limit=${BORROWER_FETCH_LIMIT}`,
+    `${API_BASE_URL}/dashboard/overview?lenderId=${encodeURIComponent(
+      lenderId,
+    )}&limit=${BORROWER_FETCH_LIMIT}`,
   )
 
   if (!response.ok) {
@@ -62,8 +67,15 @@ async function fetchDashboardOverview(): Promise<DashboardOverviewResponse> {
   return response.json()
 }
 
-async function fetchBorrowerDetails(borrowerId: string): Promise<BorrowerDetails> {
-  const response = await fetch(`${API_BASE_URL}/dashboard/borrowers/${borrowerId}`)
+async function fetchBorrowerDetails(
+  lenderId: string,
+  borrowerId: string,
+): Promise<BorrowerDetails> {
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/borrowers/${borrowerId}?lenderId=${encodeURIComponent(
+      lenderId,
+    )}`,
+  )
 
   if (!response.ok) {
     throw new Error(`Borrower request failed with status ${response.status}`)
@@ -77,7 +89,11 @@ function getMetricTone(index: number): string {
   return tones[index] ?? 'primary'
 }
 
-export default function DashboardPage() {
+type DashboardPageProps = {
+  session: LenderSession
+}
+
+export default function DashboardPage({ session }: DashboardPageProps) {
   const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -97,7 +113,7 @@ export default function DashboardPage() {
       try {
         setIsLoading(true)
         setError(null)
-        const data = await fetchDashboardOverview()
+        const data = await fetchDashboardOverview(session.lenderId)
 
         if (isMounted) {
           setOverview(data)
@@ -122,7 +138,7 @@ export default function DashboardPage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [session.lenderId])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -139,7 +155,10 @@ export default function DashboardPage() {
       try {
         setIsBorrowerLoading(true)
         setBorrowerError(null)
-        const details = await fetchBorrowerDetails(selectedBorrowerId)
+        const details = await fetchBorrowerDetails(
+          session.lenderId,
+          selectedBorrowerId,
+        )
 
         if (isMounted) {
           setSelectedBorrower(details)
@@ -164,7 +183,7 @@ export default function DashboardPage() {
     return () => {
       isMounted = false
     }
-  }, [selectedBorrowerId])
+  }, [selectedBorrowerId, session.lenderId])
 
   useEffect(() => {
     if (!selectedBorrowerId) {
@@ -199,7 +218,10 @@ export default function DashboardPage() {
         borrower.fullName.toLowerCase().includes(normalizedQuery) ||
         borrower.email.toLowerCase().includes(normalizedQuery) ||
         formatLabel(borrower.kycStatus).toLowerCase().includes(normalizedQuery) ||
-        String(borrower.creditScore ?? '').includes(normalizedQuery)
+        String(borrower.creditScore ?? '').includes(normalizedQuery) ||
+        formatLabel(borrower.latestLoanStatus).toLowerCase().includes(
+          normalizedQuery,
+        )
       )
     })
   }, [borrowers, searchQuery])
@@ -220,25 +242,25 @@ export default function DashboardPage() {
     {
       label: 'Total Borrowers',
       value: summary ? String(summary.totalBorrowers) : '--',
-      caption: 'Registered borrower accounts',
+      caption: 'Borrowers who already borrowed from you',
       accent: 'BR',
     },
     {
       label: "Today's Collection",
       value: summary ? formatCurrency(summary.todaysCollection) : '--',
-      caption: 'Repayments recorded today',
+      caption: 'Repayments recorded today from your loans',
       accent: 'LKR',
     },
     {
       label: 'Overdue Payments',
       value: summary ? String(summary.overduePayments) : '--',
-      caption: 'Installments marked overdue',
+      caption: 'Overdue installments inside your loan book',
       accent: 'OD',
     },
     {
       label: 'Active Ads',
       value: summary ? String(summary.activeAds) : '--',
-      caption: 'Approved lender advertisements',
+      caption: 'Approved ads owned by this lender',
       accent: 'AD',
     },
   ]
@@ -268,8 +290,20 @@ export default function DashboardPage() {
               : 'Not available',
         },
         {
+          label: 'Loans With This Lender',
+          value: String(selectedBorrower.loanCount),
+        },
+        {
           label: 'Active Loans',
           value: String(selectedBorrower.activeLoansCount),
+        },
+        {
+          label: 'Total Borrowed From You',
+          value: formatCurrency(selectedBorrower.totalBorrowedAmount),
+        },
+        {
+          label: 'Outstanding With You',
+          value: formatCurrency(selectedBorrower.outstandingAmount),
         },
         {
           label: 'Account Status',
@@ -305,6 +339,9 @@ export default function DashboardPage() {
               Lender workspace for collections, portfolio health, borrower
               activity, and ad performance from Firebase.
             </p>
+            <p className="dashboard-context-pill">
+              Temporary session: {session.displayName} - {session.lenderId}
+            </p>
           </div>
           <div className="header-date">
             <span className="header-date__label">Today</span>
@@ -321,8 +358,8 @@ export default function DashboardPage() {
             <h2>Dashboard data is not available yet</h2>
             <p>{error}</p>
             <p>
-              Check whether the Nest API is running and Firebase credentials are
-              valid.
+              Check whether the Nest API is running, Firebase credentials are
+              valid, and the lender has loan records.
             </p>
           </section>
         ) : (
@@ -348,10 +385,11 @@ export default function DashboardPage() {
             <section className="card borrowers-card">
               <div className="borrowers-toolbar">
                 <div>
-                  <h2 className="section-title">Recent Borrowers</h2>
+                  <h2 className="section-title">Borrowers Linked To You</h2>
                   <p className="section-subtitle">
-                    Limited to the latest {borrowers.length} borrowers retrieved
-                    from Firestore for a faster first dashboard.
+                    These borrowers have taken at least one loan from this
+                    lender. If they also borrowed from another lender, those
+                    loans stay out of this view.
                   </p>
                 </div>
                 <label className="search-field">
@@ -361,7 +399,7 @@ export default function DashboardPage() {
                   <input
                     className="input"
                     type="search"
-                    placeholder="Search name, email, KYC, score"
+                    placeholder="Search name, email, KYC, score, loan status"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                   />
@@ -375,9 +413,9 @@ export default function DashboardPage() {
                       <th>Borrower</th>
                       <th>Credit Score</th>
                       <th>KYC</th>
-                      <th>Active Loans</th>
-                      <th>Status</th>
-                      <th>Joined</th>
+                      <th>Loans With You</th>
+                      <th>Outstanding</th>
+                      <th>Latest Loan</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -405,17 +443,21 @@ export default function DashboardPage() {
                               {formatLabel(borrower.kycStatus)}
                             </span>
                           </td>
-                          <td>{borrower.activeLoansCount}</td>
                           <td>
-                            <span
-                              className={`badge ${
-                                borrower.isActive ? 'badge-success' : 'badge-danger'
-                              }`}
-                            >
-                              {borrower.isActive ? 'Active' : 'Suspended'}
-                            </span>
+                            {borrower.loanCount} total / {borrower.activeLoansCount}{' '}
+                            active
                           </td>
-                          <td>{formatJoinedDate(borrower.createdAt)}</td>
+                          <td>{formatCurrency(borrower.outstandingAmount)}</td>
+                          <td>
+                            <div className="dashboard-table__stack">
+                              <span className="badge badge-gray">
+                                {formatLabel(borrower.latestLoanStatus)}
+                              </span>
+                              <span className="dashboard-table__subcopy">
+                                {formatJoinedDate(borrower.latestLoanCreatedAt)}
+                              </span>
+                            </div>
+                          </td>
                         </tr>
                       ))
                     ) : (
@@ -423,7 +465,7 @@ export default function DashboardPage() {
                         <td className="table-empty" colSpan={6}>
                           {searchQuery
                             ? `No borrowers found for "${searchQuery}".`
-                            : 'No borrower data available yet.'}
+                            : 'No lender-linked borrower data available yet.'}
                         </td>
                       </tr>
                     )}
@@ -434,7 +476,7 @@ export default function DashboardPage() {
               <div className="table-footer">
                 <p>
                   Showing {visibleStart}-{visibleEnd} of {filteredBorrowers.length}{' '}
-                  borrowers
+                  lender-linked borrowers
                 </p>
 
                 <div className="pagination">
@@ -467,6 +509,7 @@ export default function DashboardPage() {
           </>
         )}
       </section>
+
       {selectedBorrowerId ? (
         <div
           className="borrower-modal__backdrop"
@@ -487,7 +530,8 @@ export default function DashboardPage() {
                   {selectedBorrower?.fullName ?? 'Loading borrower...'}
                 </h2>
                 <p className="section-subtitle">
-                  Review the borrower profile and account details.
+                  Review the borrower profile and only the loans connected to
+                  this lender.
                 </p>
               </div>
               <button
@@ -510,13 +554,80 @@ export default function DashboardPage() {
                   {borrowerError}
                 </div>
               ) : selectedBorrower ? (
-                <div className="borrower-modal__grid">
-                  {detailFields.map((field) => (
-                    <article className="borrower-detail-card" key={field.label}>
-                      <p className="borrower-detail-card__label">{field.label}</p>
-                      <p className="borrower-detail-card__value">{field.value}</p>
-                    </article>
-                  ))}
+                <div className="borrower-modal__content">
+                  <div className="borrower-modal__grid">
+                    {detailFields.map((field) => (
+                      <article className="borrower-detail-card" key={field.label}>
+                        <p className="borrower-detail-card__label">{field.label}</p>
+                        <p className="borrower-detail-card__value">{field.value}</p>
+                      </article>
+                    ))}
+                  </div>
+
+                  <section className="borrower-loans-section">
+                    <div className="borrower-loans-section__header">
+                      <div>
+                        <h3 className="section-title">Loans With This Lender</h3>
+                        <p className="section-subtitle">
+                          Only this lender&apos;s loans are shown, even if the
+                          borrower has loans elsewhere.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="borrower-loan-list">
+                      {selectedBorrower.loans.map((loan) => (
+                        <article className="borrower-loan-card" key={loan.id}>
+                          <div className="borrower-loan-card__header">
+                            <div>
+                              <p className="borrower-loan-card__eyebrow">Loan ID</p>
+                              <h4 className="borrower-loan-card__title">{loan.id}</h4>
+                            </div>
+                            <span className="badge badge-gray">
+                              {formatLabel(loan.status)}
+                            </span>
+                          </div>
+
+                          <div className="borrower-loan-card__grid">
+                            <div>
+                              <p className="borrower-detail-card__label">Amount</p>
+                              <p className="borrower-detail-card__value">
+                                {formatCurrency(loan.amount)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="borrower-detail-card__label">
+                                Remaining
+                              </p>
+                              <p className="borrower-detail-card__value">
+                                {formatCurrency(loan.remainingAmount)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="borrower-detail-card__label">
+                                Interest Rate
+                              </p>
+                              <p className="borrower-detail-card__value">
+                                {loan.interestRate.toFixed(1)}%
+                              </p>
+                            </div>
+                            <div>
+                              <p className="borrower-detail-card__label">Tenure</p>
+                              <p className="borrower-detail-card__value">
+                                {loan.tenureMonths} months
+                              </p>
+                            </div>
+                            <div>
+                              <p className="borrower-detail-card__label">Created</p>
+                              <p className="borrower-detail-card__value">
+                                {formatJoinedDate(loan.createdAt)}
+                              </p>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
                 </div>
               ) : null}
             </div>

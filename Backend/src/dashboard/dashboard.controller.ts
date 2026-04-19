@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   DefaultValuePipe,
   Get,
@@ -19,16 +20,29 @@ export class DashboardController {
 
   @Get('overview')
   getOverview(
+    @Query('lenderId') lenderId: string | undefined,
     @Query('limit', new DefaultValuePipe(24), ParseIntPipe) limit: number,
   ): Promise<DashboardOverviewResponse> {
-    return this.dashboardService.getOverview(limit);
+    if (!lenderId?.trim()) {
+      throw new BadRequestException('lenderId is required.');
+    }
+
+    return this.dashboardService.getOverview(lenderId.trim(), limit);
   }
 
   @Get('borrowers/:id')
   async getBorrowerDetails(
     @Param('id') id: string,
+    @Query('lenderId') lenderId: string | undefined,
   ): Promise<BorrowerDetailsResponse> {
-    const borrower = await this.dashboardService.getBorrowerDetails(id);
+    if (!lenderId?.trim()) {
+      throw new BadRequestException('lenderId is required.');
+    }
+
+    const borrower = await this.dashboardService.getBorrowerDetails(
+      lenderId.trim(),
+      id,
+    );
 
     if (!borrower) {
       throw new NotFoundException(`Borrower ${id} was not found.`);

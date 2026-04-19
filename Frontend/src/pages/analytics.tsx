@@ -5,13 +5,11 @@ import type {
   AnalyticsOverviewResponse,
   AnalyticsTrendPoint,
 } from '../lib/analytics-api'
+import type { LenderSession } from '../lib/lender-session'
 
 const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
   'http://localhost:3000'
-
-const DEFAULT_LENDER_ID =
-  (import.meta.env.VITE_LENDER_ID as string | undefined)?.trim() || 'lender_001'
 
 const RANGE_OPTIONS = [
   { key: '30d', label: '30 Days' },
@@ -159,7 +157,11 @@ function StatusBreakdown({
   )
 }
 
-export default function AnalyticsPage() {
+type AnalyticsPageProps = {
+  session: LenderSession
+}
+
+export default function AnalyticsPage({ session }: AnalyticsPageProps) {
   const [selectedRange, setSelectedRange] =
     useState<(typeof RANGE_OPTIONS)[number]['key']>('90d')
   const [overview, setOverview] = useState<AnalyticsOverviewResponse | null>(null)
@@ -177,7 +179,7 @@ export default function AnalyticsPage() {
       try {
         setIsLoading(true)
         setError(null)
-        const data = await fetchAnalyticsOverview(DEFAULT_LENDER_ID, selectedRange)
+        const data = await fetchAnalyticsOverview(session.lenderId, selectedRange)
 
         if (isMounted) {
           setOverview(data)
@@ -202,7 +204,7 @@ export default function AnalyticsPage() {
     return () => {
       isMounted = false
     }
-  }, [selectedRange])
+  }, [selectedRange, session.lenderId])
 
   useEffect(() => {
     if (!drilldownType) {
@@ -216,7 +218,7 @@ export default function AnalyticsPage() {
         setIsDrilldownLoading(true)
         setDrilldownError(null)
         const data = await fetchAnalyticsDrilldown(
-          DEFAULT_LENDER_ID,
+          session.lenderId,
           drilldownType,
           selectedRange,
         )
@@ -244,7 +246,7 @@ export default function AnalyticsPage() {
     return () => {
       isMounted = false
     }
-  }, [drilldownType, selectedRange])
+  }, [drilldownType, selectedRange, session.lenderId])
 
   useEffect(() => {
     if (!drilldownType) {
@@ -324,7 +326,9 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="analytics-header-tools">
-            <div className="analytics-lender-pill">Lender: {DEFAULT_LENDER_ID}</div>
+            <div className="analytics-lender-pill">
+              {session.displayName} • {session.lenderId}
+            </div>
             <div className="analytics-range-tabs" role="tablist" aria-label="Time range">
               {RANGE_OPTIONS.map((option) => (
                 <button

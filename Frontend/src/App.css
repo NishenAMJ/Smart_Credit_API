@@ -4,6 +4,183 @@
   background: var(--color-background);
 }
 
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(circle at top left, rgba(0, 122, 255, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.18), transparent 26%),
+    linear-gradient(180deg, #f8fbff 0%, #eef3fb 100%);
+}
+
+.auth-card {
+  width: min(1080px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 420px);
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  border-radius: 28px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 24px 60px rgba(10, 22, 40, 0.14);
+  backdrop-filter: blur(20px);
+}
+
+.auth-card__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 40px;
+  background:
+    linear-gradient(160deg, rgba(10, 22, 40, 0.96), rgba(20, 43, 77, 0.92)),
+    var(--color-sidebar-bg);
+  color: var(--color-surface);
+}
+
+.auth-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.auth-card__logo {
+  width: 58px;
+  height: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #3aa1ff, #007aff);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+}
+
+.auth-card__eyebrow {
+  margin: 0 0 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.auth-card__title {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.auth-card__subtitle {
+  margin: 0;
+  max-width: 560px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.auth-card__highlights {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-highlight {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.auth-highlight strong {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.auth-highlight span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: var(--font-size-13);
+  line-height: 1.6;
+}
+
+.auth-card__form-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 32px;
+}
+
+.auth-tabs {
+  display: inline-flex;
+  gap: var(--spacing-2);
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(0, 122, 255, 0.06);
+  align-self: flex-start;
+}
+
+.auth-tab {
+  min-width: 110px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
+}
+
+.auth-tab--active {
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+}
+
+.auth-field {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-field__label {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
+}
+
+.auth-submit {
+  width: 100%;
+  justify-content: center;
+  padding: 14px 18px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.auth-helper,
+.auth-error {
+  margin: 0;
+  font-size: var(--font-size-13);
+  line-height: 1.6;
+}
+
+.auth-helper {
+  color: var(--color-text-secondary);
+}
+
+.auth-error {
+  padding: 12px 14px;
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
 .lender-layout__content {
   flex: 1;
   min-width: 0;
@@ -257,6 +434,19 @@
   background: rgba(255, 255, 255, 0.78);
   text-align: right;
   box-shadow: var(--shadow-card);
+}
+
+.dashboard-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(0, 122, 255, 0.08);
+  color: var(--color-info-text);
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
 }
 
 .header-date__label {
@@ -697,6 +887,16 @@
   background: rgba(0, 122, 255, 0.04);
 }
 
+.dashboard-table__stack {
+  display: grid;
+  gap: 6px;
+}
+
+.dashboard-table__subcopy {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+}
+
 .dashboard-table th {
   color: var(--color-text-secondary);
   font-size: var(--font-size-12);
@@ -805,6 +1005,11 @@
   gap: var(--spacing-4);
 }
 
+.borrower-modal__content {
+  display: grid;
+  gap: var(--spacing-5);
+}
+
 .borrower-detail-card {
   padding: var(--spacing-4);
   border: 1px solid var(--color-border);
@@ -831,6 +1036,65 @@
   font-size: var(--font-size-14);
   line-height: 1.6;
   word-break: break-word;
+}
+
+.borrower-loans-section {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.borrower-loans-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+}
+
+.borrower-loan-list {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.borrower-loan-card {
+  padding: var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.borrower-loan-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+}
+
+.borrower-loan-card__eyebrow,
+.borrower-loan-card__title {
+  margin: 0;
+}
+
+.borrower-loan-card__eyebrow {
+  margin-bottom: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.borrower-loan-card__title {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: var(--font-weight-semibold);
+  word-break: break-word;
+}
+
+.borrower-loan-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-4);
 }
 
 .borrower-modal__state {
@@ -887,6 +1151,15 @@
 }
 
 @media (max-width: 1080px) {
+  .auth-card {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-card__hero,
+  .auth-card__form-panel {
+    padding: 28px;
+  }
+
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -982,6 +1255,28 @@
 }
 
 @media (max-width: 680px) {
+  .auth-shell {
+    padding: 16px;
+  }
+
+  .auth-card__hero,
+  .auth-card__form-panel {
+    padding: 22px;
+  }
+
+  .auth-card__brand {
+    align-items: flex-start;
+  }
+
+  .auth-tabs {
+    width: 100%;
+  }
+
+  .auth-tab {
+    flex: 1;
+    min-width: 0;
+  }
+
   .lender-sidebar__mobile-bar {
     padding: 12px 14px;
   }
@@ -1058,6 +1353,16 @@
   }
 
   .borrower-modal__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .borrower-loan-card__header,
+  .borrower-loans-section__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .borrower-loan-card__grid {
     grid-template-columns: 1fr;
   }
 }

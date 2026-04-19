@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { LenderSession } from '../../lib/lender-session'
 
 type LenderView =
   | 'dashboard'
@@ -26,11 +27,15 @@ const navItems: NavItem[] = [
 type LenderSidebarProps = {
   activeView: LenderView
   onNavigate: (view: LenderView) => void
+  session: LenderSession
+  onLogout: () => void
 }
 
 export default function LenderSidebar({
   activeView,
   onNavigate,
+  session,
+  onLogout,
 }: LenderSidebarProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false)
 
@@ -38,6 +43,10 @@ export default function LenderSidebar({
     onNavigate(view)
     setIsMobileOpen(false)
   }
+
+  const lenderInitial = (session.displayName || session.lenderId || 'L')
+    .slice(0, 1)
+    .toUpperCase()
 
   return (
     <>
@@ -116,14 +125,18 @@ export default function LenderSidebar({
 
         <div className="lender-sidebar__bottom-wrap">
           <div className="lender-sidebar__admin-wrap">
-            <div className="lender-sidebar__admin-avatar">L</div>
+            <div className="lender-sidebar__admin-avatar">{lenderInitial}</div>
             <div>
-              <div className="lender-sidebar__admin-name">Lender</div>
-              <div className="lender-sidebar__admin-role">Verified Account</div>
+              <div className="lender-sidebar__admin-name">{session.displayName}</div>
+              <div className="lender-sidebar__admin-role">{session.lenderId}</div>
             </div>
           </div>
 
-          <button type="button" className="lender-sidebar__logout-btn">
+          <button
+            type="button"
+            className="lender-sidebar__logout-btn"
+            onClick={onLogout}
+          >
             <span className="lender-sidebar__logout-icon" aria-hidden="true">
               LO
             </span>
