@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@nestjs/platform-socket.io": "^11.1.19",
+    "@nestjs/websockets": "^11.1.19"
+  }
+}
