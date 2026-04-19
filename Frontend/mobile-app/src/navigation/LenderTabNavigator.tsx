@@ -49,6 +49,12 @@ export default function LenderTabNavigator() {
       <Tab.Screen
         name="Home"
         component={LenderDashboardScreen}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('LenderTabs', { screen: 'Home' });
+          },
+        })}
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
@@ -61,6 +67,12 @@ export default function LenderTabNavigator() {
       <Tab.Screen
         name="MyBorrowers"
         component={MyBorrowersScreen}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('LenderTabs', { screen: 'MyBorrowers' });
+          },
+        })}
         options={{
           tabBarLabel: 'Borrowers',
           tabBarIcon: ({ color, size }) => (
@@ -86,12 +98,18 @@ export default function LenderTabNavigator() {
         }}
       />
 
-      {/* Tab 4 — Applications (placeholder for now) */}
+      {/* Tab 4 — Chat/Applications */}
       <Tab.Screen
         name="chat"
         component={LenderDashboardScreen}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('ApplicationsReceived');
+          },
+        })}
         options={{
-          tabBarLabel: 'chat',
+          tabBarLabel: 'Messages',
           tabBarIcon: ({ color, size }) => (
             <Feather name="inbox" size={size} color={color} />
           ),
@@ -102,6 +120,12 @@ export default function LenderTabNavigator() {
       <Tab.Screen
         name="LenderProfile"
         component={LenderProfileScreen}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('LenderTabs', { screen: 'LenderProfile' });
+          },
+        })}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => (
