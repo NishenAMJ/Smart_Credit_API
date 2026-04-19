@@ -13,6 +13,7 @@ import ReviewApplicationScreen from '../screens/lender/ReviewApplicationScreen';
 import CreateLoanOfferScreen from '../screens/lender/CreateLoanOfferScreen';
 import EditOfferScreen from '../screens/lender/EditOfferScreen';
 import LoanDetailsScreen from '../screens/lender/LoanDetailsScreen';
+import QRScannerScreen from '../screens/lender/QRScannerScreen';
 import AnalyticsScreen from '../screens/lender/AnalyticsScreen';
 import PortfolioScreen from '../screens/lender/PortfolioScreen';
 import LegalActionsScreen from '../screens/lender/LegalActionsScreen';
@@ -38,6 +39,7 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="CreateLoanOffer" component={CreateLoanOfferScreen} />
       <Stack.Screen name="EditOffer" component={EditOfferScreen} />
       <Stack.Screen name="LoanDetails" component={LoanDetailsScreen} />
+      <Stack.Screen name="QRScanner" component={QRScannerScreen} />
       <Stack.Screen name="Analytics" component={AnalyticsScreen} />
       <Stack.Screen name="Portfolio" component={PortfolioScreen} />
       <Stack.Screen name="LegalActions" component={LegalActionsScreen} />

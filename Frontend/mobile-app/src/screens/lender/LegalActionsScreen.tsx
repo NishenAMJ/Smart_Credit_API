@@ -449,7 +449,7 @@ export default function LegalActionsScreen({ route, navigation }: any) {
                 <Feather name="bell" size={20} color={COLORS.primary} />
               </View>
               <Text style={styles.quickLabel}>Send Reminder</Text>
-            </ActionQuickBtn>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.quickBtn}

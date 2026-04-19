@@ -24,12 +24,8 @@ export class AppController {
         .collection('_test')
         .doc('connection');
 
-      // Try to set a small test value (this also needs permission)
-      // If this fails, it means Firebase is not connected properly
-      const testData = {
-        timestamp: new Date(),
-        status: 'connected',
-      };
+      // Try to read the test document to verify connection
+      const doc = await testRef.get();
 
       return {
         status: 'ok',
@@ -38,6 +34,7 @@ export class AppController {
           name: this.firebaseApp.name,
           projectId: this.firebaseApp.options.projectId,
         },
+        testDocExists: doc.exists,
         timestamp: new Date(),
       };
     } catch (error) {

@@ -71,8 +71,14 @@ export default function LenderTabNavigator() {
 
       {/* Tab 3 — QR Scanner (center button) */}
       <Tab.Screen
-        name="QRScanner"
+        name="QRScannerTab"
         component={LenderDashboardScreen}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('QRScanner');
+          },
+        })}
         options={{
           tabBarLabel: '',
           tabBarIcon: () => null,
