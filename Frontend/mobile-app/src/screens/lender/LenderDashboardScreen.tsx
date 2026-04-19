@@ -164,13 +164,13 @@ export default function LenderDashboardScreen({ navigation }: any) {
 
           <TouchableOpacity
             style={styles.quickBtn}
-            onPress={() => navigation.navigate('QRScanner')}
+            onPress={() => navigation.navigate('MyOffers')}
             activeOpacity={0.8}
           >
             <View style={[styles.quickIcon, { backgroundColor: '#ECFDF5' }]}>
-              <Feather name="maximize" size={22} color={COLORS.success} />
+              <Feather name="layers" size={22} color={COLORS.success} />
             </View>
-            <Text style={styles.quickLabel}>Scan QR</Text>
+            <Text style={styles.quickLabel}>My Offers</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -186,13 +186,13 @@ export default function LenderDashboardScreen({ navigation }: any) {
 
           <TouchableOpacity
             style={styles.quickBtn}
-            onPress={() => navigation.navigate('Portfolio')}
+            onPress={() => navigation.navigate('ActiveLoans')}
             activeOpacity={0.8}
           >
             <View style={[styles.quickIcon, { backgroundColor: '#FEF2F2' }]}>
               <Feather name="pie-chart" size={22} color={COLORS.danger} />
             </View>
-            <Text style={styles.quickLabel}>Portfolio</Text>
+            <Text style={styles.quickLabel}>Active Loans</Text>
           </TouchableOpacity>
 
         </View>
@@ -268,6 +268,60 @@ export default function LenderDashboardScreen({ navigation }: any) {
 
           </TouchableOpacity>
         ))}
+
+        {/* ── MORE ACTIONS ──────────────────────────── */}
+        <Text style={styles.sectionTitle}>More Actions</Text>
+        <View style={styles.actionsList}>
+          
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => navigation.navigate('MyOffers')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionIcon}>
+              <Feather name="layers" size={20} color={COLORS.primary} />
+            </View>
+            <Text style={styles.actionLabel}>My Offers</Text>
+            <Feather name="chevron-right" size={18} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => navigation.navigate('ActiveLoans')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionIcon}>
+              <Feather name="trending-up" size={20} color={COLORS.success} />
+            </View>
+            <Text style={styles.actionLabel}>Active Loans</Text>
+            <Feather name="chevron-right" size={18} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => navigation.navigate('MyBorrowers')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionIcon}>
+              <Feather name="users" size={20} color={COLORS.warning} />
+            </View>
+            <Text style={styles.actionLabel}>My Borrowers</Text>
+            <Feather name="chevron-right" size={18} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => navigation.navigate('CollectionHistory')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionIcon}>
+              <Feather name="book" size={20} color={COLORS.danger} />
+            </View>
+            <Text style={styles.actionLabel}>Collection History</Text>
+            <Feather name="chevron-right" size={18} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+
+        </View>
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -540,5 +594,35 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+
+  // More actions section
+  actionsList: {
+    paddingHorizontal: 16,
+    gap: 0,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: COLORS.surface,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  actionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
   },
 });

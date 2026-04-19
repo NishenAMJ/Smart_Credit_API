@@ -1,9 +1,10 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LenderTabNavigator from './LenderTabNavigator';
+import LenderProfileScreen from '../screens/lender/LenderProfileScreen';
 import MyBorrowersScreen from '../screens/lender/MyBorrowersScreen';
 import CollectionHistoryScreen from '../screens/lender/CollectionHistoryScreen';
-import PaymentREmindersScreen from '../screens/lender/PaymentRemindersScreen';
+import PaymentRemindersScreen from '../screens/lender/PaymentRemindersScreen';
 import MyOffersScreen from '../screens/lender/MyOffersScreen';
 import ApplicationsReceivedScreen from '../screens/lender/ApplicationsReceivedScreen';
 import ActiveLoansScreen from '../screens/lender/ActiveLoansScreen';
@@ -13,8 +14,6 @@ import CreateLoanOfferScreen from '../screens/lender/CreateLoanOfferScreen';
 import EditOfferScreen from '../screens/lender/EditOfferScreen';
 import LoanDetailsScreen from '../screens/lender/LoanDetailsScreen';
 
-
-
 const Stack = createNativeStackNavigator();
 
 export default function LenderStackNavigator() {
@@ -22,10 +21,12 @@ export default function LenderStackNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {/* Tab navigator is the first screen — shows bottom bar */}
       <Stack.Screen name="LenderTabs" component={LenderTabNavigator} />
-      {/* Screens without bottom bar */}
+      
+      {/* Screens without bottom bar (modal-style navigation) */}
+      <Stack.Screen name="LenderProfile" component={LenderProfileScreen} />
       <Stack.Screen name="MyBorrowers" component={MyBorrowersScreen} />
       <Stack.Screen name="CollectionHistory" component={CollectionHistoryScreen} />
-      <Stack.Screen name="PaymentReminders" component={PaymentREmindersScreen} />
+      <Stack.Screen name="PaymentReminders" component={PaymentRemindersScreen} />
       <Stack.Screen name="MyOffers" component={MyOffersScreen} />
       <Stack.Screen name="ApplicationsReceived" component={ApplicationsReceivedScreen} />
       <Stack.Screen name="ActiveLoans" component={ActiveLoansScreen} />
@@ -34,7 +35,6 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="CreateLoanOffer" component={CreateLoanOfferScreen} />
       <Stack.Screen name="EditOffer" component={EditOfferScreen} />
       <Stack.Screen name="LoanDetails" component={LoanDetailsScreen} />
-
     </Stack.Navigator>
   );
 }
