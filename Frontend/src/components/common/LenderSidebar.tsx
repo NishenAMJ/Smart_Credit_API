@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 type LenderView =
   | 'dashboard'
   | 'analytics'
@@ -30,9 +32,16 @@ export default function LenderSidebar({
   activeView,
   onNavigate,
 }: LenderSidebarProps) {
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+
+  const handleNavigate = (view: LenderView) => {
+    onNavigate(view)
+    setIsMobileOpen(false)
+  }
+
   return (
-    <aside className="lender-sidebar">
-      <div className="lender-sidebar__logo-wrap">
+    <>
+      <div className="lender-sidebar__mobile-bar">
         <div className="lender-sidebar__logo-inner">
           <div className="lender-sidebar__logo-icon">SC</div>
           <div>
@@ -40,51 +49,89 @@ export default function LenderSidebar({
             <div className="lender-sidebar__logo-sub">Lender Panel</div>
           </div>
         </div>
-      </div>
 
-      <nav className="lender-sidebar__nav" aria-label="Lender navigation">
-        <div className="lender-sidebar__section-label">Main Menu</div>
-
-        {navItems.map((item) => {
-          const isActive = item.id === activeView
-
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`lender-sidebar__nav-item${
-                isActive ? ' lender-sidebar__nav-item--active' : ''
-              }`}
-              aria-current={isActive ? 'page' : undefined}
-              onClick={() => onNavigate(item.id)}
-            >
-              <span className="lender-sidebar__nav-indicator" aria-hidden="true" />
-              <span className="lender-sidebar__nav-icon" aria-hidden="true">
-                {item.shortLabel}
-              </span>
-              <span>{item.label}</span>
-            </button>
-          )
-        })}
-      </nav>
-
-      <div className="lender-sidebar__bottom-wrap">
-        <div className="lender-sidebar__admin-wrap">
-          <div className="lender-sidebar__admin-avatar">L</div>
-          <div>
-            <div className="lender-sidebar__admin-name">Lender</div>
-            <div className="lender-sidebar__admin-role">Verified Account</div>
-          </div>
-        </div>
-
-        <button type="button" className="lender-sidebar__logout-btn">
-          <span className="lender-sidebar__logout-icon" aria-hidden="true">
-            LO
-          </span>
-          <span>Log Out</span>
+        <button
+          type="button"
+          className="lender-sidebar__mobile-toggle"
+          aria-expanded={isMobileOpen}
+          aria-label={isMobileOpen ? 'Close menu' : 'Open menu'}
+          onClick={() => setIsMobileOpen((open) => !open)}
+        >
+          {isMobileOpen ? 'Close' : 'Menu'}
         </button>
       </div>
-    </aside>
+
+      {isMobileOpen ? (
+        <button
+          type="button"
+          className="lender-sidebar__backdrop"
+          aria-label="Close menu"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      ) : null}
+
+      <aside
+        className={`lender-sidebar${isMobileOpen ? ' lender-sidebar--open' : ''}`}
+      >
+        <div className="lender-sidebar__scroll">
+          <div className="lender-sidebar__logo-wrap">
+            <div className="lender-sidebar__logo-inner">
+              <div className="lender-sidebar__logo-icon">SC</div>
+              <div>
+                <div className="lender-sidebar__logo-text">Smart Credit+</div>
+                <div className="lender-sidebar__logo-sub">Lender Panel</div>
+              </div>
+            </div>
+          </div>
+
+          <nav className="lender-sidebar__nav" aria-label="Lender navigation">
+            <div className="lender-sidebar__section-label">Main Menu</div>
+
+            {navItems.map((item) => {
+              const isActive = item.id === activeView
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`lender-sidebar__nav-item${
+                    isActive ? ' lender-sidebar__nav-item--active' : ''
+                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                  onClick={() => handleNavigate(item.id)}
+                >
+                  <span
+                    className="lender-sidebar__nav-indicator"
+                    aria-hidden="true"
+                  />
+                  <span className="lender-sidebar__nav-icon" aria-hidden="true">
+                    {item.shortLabel}
+                  </span>
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+
+        <div className="lender-sidebar__bottom-wrap">
+          <div className="lender-sidebar__admin-wrap">
+            <div className="lender-sidebar__admin-avatar">L</div>
+            <div>
+              <div className="lender-sidebar__admin-name">Lender</div>
+              <div className="lender-sidebar__admin-role">Verified Account</div>
+            </div>
+          </div>
+
+          <button type="button" className="lender-sidebar__logout-btn">
+            <span className="lender-sidebar__logout-icon" aria-hidden="true">
+              LO
+            </span>
+            <span>Log Out</span>
+          </button>
+        </div>
+      </aside>
+    </>
   )
 }
 

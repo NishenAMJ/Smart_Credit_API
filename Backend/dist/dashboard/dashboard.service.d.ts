@@ -1,11 +1,12 @@
 import { FirebaseService } from '../firebase/firebase.service';
-import { DashboardOverviewResponse } from './dashboard.types';
+import { BorrowerDetailsResponse, DashboardOverviewResponse } from './dashboard.types';
 export declare class DashboardService {
     private readonly firebaseService;
     private readonly logger;
     private readonly warnedFallbacks;
     constructor(firebaseService: FirebaseService);
     getOverview(limit?: number): Promise<DashboardOverviewResponse>;
+    getBorrowerDetails(borrowerId: string): Promise<BorrowerDetailsResponse | null>;
     private clamp;
     private getBorrowerCount;
     private getActiveAdsCount;

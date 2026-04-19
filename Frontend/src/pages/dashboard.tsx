@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { DashboardOverviewResponse } from '../lib/dashboard-api'
+import type {
+  BorrowerDetails,
+  DashboardOverviewResponse,
+} from '../lib/dashboard-api'
 
 const ITEMS_PER_PAGE = 8
 const BORROWER_FETCH_LIMIT = 24
@@ -59,6 +62,16 @@ async function fetchDashboardOverview(): Promise<DashboardOverviewResponse> {
   return response.json()
 }
 
+async function fetchBorrowerDetails(borrowerId: string): Promise<BorrowerDetails> {
+  const response = await fetch(`${API_BASE_URL}/dashboard/borrowers/${borrowerId}`)
+
+  if (!response.ok) {
+    throw new Error(`Borrower request failed with status ${response.status}`)
+  }
+
+  return response.json()
+}
+
 function getMetricTone(index: number): string {
   const tones = ['primary', 'success', 'warning', 'danger']
   return tones[index] ?? 'primary'
@@ -70,6 +83,12 @@ export default function DashboardPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null)
+  const [selectedBorrower, setSelectedBorrower] = useState<BorrowerDetails | null>(
+    null,
+  )
+  const [isBorrowerLoading, setIsBorrowerLoading] = useState(false)
+  const [borrowerError, setBorrowerError] = useState<string | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -108,6 +127,59 @@ export default function DashboardPage() {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchQuery])
+
+  useEffect(() => {
+    if (!selectedBorrowerId) {
+      return
+    }
+
+    let isMounted = true
+
+    const loadBorrower = async () => {
+      try {
+        setIsBorrowerLoading(true)
+        setBorrowerError(null)
+        const details = await fetchBorrowerDetails(selectedBorrowerId)
+
+        if (isMounted) {
+          setSelectedBorrower(details)
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setBorrowerError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Failed to load borrower details.',
+          )
+        }
+      } finally {
+        if (isMounted) {
+          setIsBorrowerLoading(false)
+        }
+      }
+    }
+
+    void loadBorrower()
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedBorrowerId])
+
+  useEffect(() => {
+    if (!selectedBorrowerId) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        handleCloseBorrowerModal()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedBorrowerId])
 
   const borrowers = useMemo(
     () => overview?.recentBorrowers ?? [],
@@ -171,7 +243,59 @@ export default function DashboardPage() {
     },
   ]
 
+  const detailFields = selectedBorrower
+    ? [
+        { label: 'Borrower ID', value: selectedBorrower.id },
+        { label: 'Full Name', value: selectedBorrower.fullName },
+        { label: 'Email', value: selectedBorrower.email },
+        { label: 'Phone', value: selectedBorrower.phone ?? 'Not available' },
+        { label: 'Address', value: selectedBorrower.address ?? 'Not available' },
+        { label: 'NIC', value: selectedBorrower.nic ?? 'Not available' },
+        { label: 'Role', value: formatLabel(selectedBorrower.role) },
+        { label: 'KYC Status', value: formatLabel(selectedBorrower.kycStatus) },
+        {
+          label: 'Credit Score',
+          value:
+            selectedBorrower.creditScore !== null
+              ? String(selectedBorrower.creditScore)
+              : 'Not available',
+        },
+        {
+          label: 'Rating',
+          value:
+            selectedBorrower.rating !== null
+              ? selectedBorrower.rating.toFixed(1)
+              : 'Not available',
+        },
+        {
+          label: 'Active Loans',
+          value: String(selectedBorrower.activeLoansCount),
+        },
+        {
+          label: 'Account Status',
+          value: selectedBorrower.isActive ? 'Active' : 'Suspended',
+        },
+        {
+          label: 'Joined',
+          value: formatJoinedDate(selectedBorrower.createdAt),
+        },
+      ]
+    : []
+
+  function handleOpenBorrowerModal(borrowerId: string) {
+    setSelectedBorrowerId(borrowerId)
+    setSelectedBorrower(null)
+    setBorrowerError(null)
+  }
+
+  function handleCloseBorrowerModal() {
+    setSelectedBorrowerId(null)
+    setSelectedBorrower(null)
+    setBorrowerError(null)
+  }
+
   return (
+    <>
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
@@ -259,7 +383,11 @@ export default function DashboardPage() {
                   <tbody>
                     {visibleBorrowers.length > 0 ? (
                       visibleBorrowers.map((borrower) => (
-                        <tr key={borrower.id}>
+                        <tr
+                          key={borrower.id}
+                          className="dashboard-table__row"
+                          onClick={() => handleOpenBorrowerModal(borrower.id)}
+                        >
                           <td>
                             <div className="borrower-cell">
                               <span className="borrower-avatar" aria-hidden="true">
@@ -339,5 +467,62 @@ export default function DashboardPage() {
           </>
         )}
       </section>
+      {selectedBorrowerId ? (
+        <div
+          className="borrower-modal__backdrop"
+          role="presentation"
+          onClick={handleCloseBorrowerModal}
+        >
+          <section
+            className="borrower-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="borrower-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="borrower-modal__header">
+              <div>
+                <p className="eyebrow">Borrower details</p>
+                <h2 className="section-title" id="borrower-modal-title">
+                  {selectedBorrower?.fullName ?? 'Loading borrower...'}
+                </h2>
+                <p className="section-subtitle">
+                  Review the borrower profile and account details.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="borrower-modal__close"
+                aria-label="Close borrower details"
+                onClick={handleCloseBorrowerModal}
+              >
+                X
+              </button>
+            </div>
+
+            <div className="borrower-modal__body">
+              {isBorrowerLoading ? (
+                <div className="borrower-modal__state">
+                  Loading borrower details...
+                </div>
+              ) : borrowerError ? (
+                <div className="borrower-modal__state borrower-modal__state--error">
+                  {borrowerError}
+                </div>
+              ) : selectedBorrower ? (
+                <div className="borrower-modal__grid">
+                  {detailFields.map((field) => (
+                    <article className="borrower-detail-card" key={field.label}>
+                      <p className="borrower-detail-card__label">{field.label}</p>
+                      <p className="borrower-detail-card__value">{field.value}</p>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
   )
 }

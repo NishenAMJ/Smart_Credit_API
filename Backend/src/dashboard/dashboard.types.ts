@@ -21,3 +21,19 @@ export interface DashboardOverviewResponse {
   recentBorrowers: DashboardBorrower[];
   generatedAt: string;
 }
+
+export interface BorrowerDetailsResponse {
+  id: string;
+  role: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  address: string | null;
+  nic: string | null;
+  kycStatus: string;
+  creditScore: number | null;
+  rating: number | null;
+  activeLoansCount: number;
+  isActive: boolean;
+  createdAt: string | null;
+}

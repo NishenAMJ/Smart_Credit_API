@@ -23,6 +23,13 @@ let DashboardController = class DashboardController {
     getOverview(limit) {
         return this.dashboardService.getOverview(limit);
     }
+    async getBorrowerDetails(id) {
+        const borrower = await this.dashboardService.getBorrowerDetails(id);
+        if (!borrower) {
+            throw new common_1.NotFoundException(`Borrower ${id} was not found.`);
+        }
+        return borrower;
+    }
 };
 exports.DashboardController = DashboardController;
 __decorate([
@@ -32,6 +39,13 @@ __decorate([
     __metadata("design:paramtypes", [Number]),
     __metadata("design:returntype", Promise)
 ], DashboardController.prototype, "getOverview", null);
+__decorate([
+    (0, common_1.Get)('borrowers/:id'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], DashboardController.prototype, "getBorrowerDetails", null);
 exports.DashboardController = DashboardController = __decorate([
     (0, common_1.Controller)('dashboard'),
     __metadata("design:paramtypes", [dashboard_service_1.DashboardService])

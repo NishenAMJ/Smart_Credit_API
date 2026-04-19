@@ -45,6 +45,44 @@ let DashboardService = DashboardService_1 = class DashboardService {
             generatedAt: new Date().toISOString(),
         };
     }
+    async getBorrowerDetails(borrowerId) {
+        const snapshot = await this.firebaseService
+            .getDb()
+            .collection('users')
+            .doc(borrowerId)
+            .get();
+        if (!snapshot.exists) {
+            return null;
+        }
+        const data = snapshot.data();
+        if (!data || data.role !== 'borrower') {
+            return null;
+        }
+        return {
+            id: snapshot.id,
+            role: typeof data.role === 'string' ? data.role : 'borrower',
+            fullName: typeof data.fullName === 'string' && data.fullName.trim().length > 0
+                ? data.fullName
+                : 'Unnamed borrower',
+            email: typeof data.email === 'string' ? data.email : 'No email',
+            phone: typeof data.phone === 'string' ? data.phone : null,
+            address: typeof data.address === 'string' ? data.address : null,
+            nic: typeof data.nic === 'string' ? data.nic : null,
+            kycStatus: typeof data.kycStatus === 'string' ? data.kycStatus : 'not_submitted',
+            creditScore: typeof data.creditScore === 'number' && Number.isFinite(data.creditScore)
+                ? data.creditScore
+                : null,
+            rating: typeof data.rating === 'number' && Number.isFinite(data.rating)
+                ? data.rating
+                : null,
+            activeLoansCount: typeof data.activeLoansCount === 'number' &&
+                Number.isFinite(data.activeLoansCount)
+                ? data.activeLoansCount
+                : 0,
+            isActive: data.isActive !== false,
+            createdAt: this.toIsoString(data.createdAt),
+        };
+    }
     clamp(value, min, max) {
         return Math.min(Math.max(value, min), max);
     }
