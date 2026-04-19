@@ -2,6 +2,7 @@ import './App.css'
 import LenderLayout from './components/layout/LenderLayout'
 import type { LenderView } from './components/common/LenderSidebar'
 import { useState } from 'react'
+import AnalyticsPage from './pages/analytics'
 import DashboardPage from './pages/dashboard'
 
 function App() {
@@ -11,6 +12,8 @@ function App() {
     <LenderLayout activeView={activeView} onNavigate={setActiveView}>
       {activeView === 'dashboard' ? (
         <DashboardPage />
+      ) : activeView === 'analytics' ? (
+        <AnalyticsPage />
       ) : (
         <section className="dashboard-panel">
           <header className="page-header">

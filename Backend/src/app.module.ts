@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 
@@ -14,6 +15,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     FirebaseModule,
     // Dashboard feature
     DashboardModule,
+    AnalyticsModule,
   ],
   controllers: [], // We can remove AppController if not needed
   providers: [], // We can remove AppService if not needed
