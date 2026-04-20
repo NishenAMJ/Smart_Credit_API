@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { FirebaseService } from '../../config/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import { ConversationsService } from '../conversations/conversations.service';
-import { COLLECTIONS, MessageDoc, ConversationDoc } from '../../common/types';
+import { COLLECTIONS, MessageDoc, ConversationDoc } from '../common/types';
 import { readFileSync, unlinkSync } from 'fs';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import * as admin from 'firebase-admin';
 
 const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const VIDEO_EXTS = ['.mp4', '.mov'];
@@ -26,7 +27,7 @@ export class MessagesService {
     const conv = await this.conversations.findOne(conversationId, senderId);
     const recipientId = conv.participantIds.find((id) => id !== senderId)!;
 
-    const ref = await this.firebase.firestore
+    const ref = await this.firebase.db
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .add({
         conversationId,
@@ -36,7 +37,7 @@ export class MessagesService {
         mediaType: null,
         fileName: null,
         readAt: null,
-        createdAt: this.firebase.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
     await this.conversations.updateLastMessage(
@@ -50,86 +51,24 @@ export class MessagesService {
     return { id: snap.id, ...snap.data() } as MessageDoc;
   }
 
-  // ── Upload media and send message ────────────────────────────────────────────
-
-  async sendMedia(
-    conversationId: string,
-    senderId: string,
-    file: Express.Multer.File,
-  ): Promise<MessageDoc> {
-    const conv = await this.conversations.findOne(conversationId, senderId);
-    const recipientId = conv.participantIds.find((id) => id !== senderId)!;
-
-    // Upload to Firebase Storage
-    const ext = extname(file.originalname).toLowerCase();
-    const storagePath = `chat-media/${conversationId}/${uuidv4()}${ext}`;
-    const bucket = this.firebase.storage.bucket();
-
-    await bucket.upload(file.path, {
-      destination: storagePath,
-      metadata: { contentType: file.mimetype },
-    });
-
-    const [signedUrl] = await bucket.file(storagePath).getSignedUrl({
-      action: 'read',
-      expires: '2099-01-01', // long-lived public URL; use short-lived + token for private
-    });
-
-    // Clean up temp file from disk
-    try { unlinkSync(file.path); } catch {}
-
-    const mediaType = IMAGE_EXTS.includes(ext)
-      ? 'image'
-      : VIDEO_EXTS.includes(ext)
-      ? 'video'
-      : 'file';
-
-    const ref = await this.firebase.firestore
-      .collection(COLLECTIONS.MESSAGES(conversationId))
-      .add({
-        conversationId,
-        senderId,
-        text: null,
-        mediaUrl: signedUrl,
-        mediaType,
-        fileName: file.originalname,
-        readAt: null,
-        createdAt: this.firebase.serverTimestamp(),
-      });
-
-    await this.conversations.updateLastMessage(
-      conversationId,
-      senderId,
-      mediaType === 'image' ? '📷 Photo' : mediaType === 'video' ? '🎥 Video' : `📎 ${file.originalname}`,
-      recipientId,
-    );
-
-    const snap = await ref.get();
-    return { id: snap.id, ...snap.data() } as MessageDoc;
-  }
-
   // ── Paginated message list ───────────────────────────────────────────────────
 
   async getMessages(
     conversationId: string,
     userId: string,
-    limit = 30,
-    before?: string, // messageId cursor for pagination
+    page: string | number,
+    limit: string | number,
   ): Promise<MessageDoc[]> {
     await this.conversations.findOne(conversationId, userId); // access check
 
-    let query = this.firebase.firestore
+    const pageNum = typeof page === 'string' ? parseInt(page, 10) : page;
+    const limitNum = typeof limit === 'string' ? parseInt(limit, 10) : limit;
+
+    let query = this.firebase.db
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .orderBy('createdAt', 'desc')
-      .limit(limit);
-
-    if (before) {
-      const cursorSnap = await this.firebase.firestore
-        .collection(COLLECTIONS.MESSAGES(conversationId))
-        .doc(before)
-        .get();
-      if (cursorSnap.exists) query = query.startAfter(cursorSnap);
-    }
+      .limit(limitNum)
+      .offset(pageNum * limitNum);
 
     const snap = await query.get();
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MessageDoc));
@@ -144,9 +83,9 @@ export class MessagesService {
   ): Promise<void> {
     await this.conversations.findOne(conversationId, userId); // access check
 
-    await this.firebase.firestore
+    await this.firebase.db
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .doc(messageId)
-      .update({ readAt: this.firebase.serverTimestamp() });
+      .update({ readAt: admin.firestore.FieldValue.serverTimestamp() });
   }
 }

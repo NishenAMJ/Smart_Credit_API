@@ -3,77 +3,63 @@ import {
   Get,
   Post,
   Delete,
-  Patch,
   Param,
   Body,
+  Query,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { IsString, IsBoolean } from 'class-validator';
-import { ConversationsService } from './conversations.service';
+import { IsString } from 'class-validator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { MessagesService } from './messages.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
-class StartConversationDto {
+class SendMessageDto {
   @IsString()
-  targetUserId: string;
+  text!: string;
 }
 
-class MuteDto {
-  @IsBoolean()
-  muted: boolean;
-}
+@Controller('conversations/:conversationId/messages')
+export class MessagesController {
+  constructor(private messagesService: MessagesService) {}
 
-@Controller('conversations')
-export class ConversationsController {
-  constructor(private conversations: ConversationsService) {}
-
-  // GET /conversations
+  // GET /conversations/:conversationId/messages?page=0&limit=30
   @Get()
-  list(@CurrentUser() userId: string) {
-    return this.conversations.listForUser(userId);
+  list(
+    @Param('conversationId') conversationId: string,
+    @CurrentUser() userId: string,
+    @Query('page') page: string = '0',
+    @Query('limit') limit: string = '30',
+  ) {
+    return this.messagesService.getMessages(
+      conversationId,
+      userId,
+      page,
+      limit,
+    );
   }
 
-  // POST /conversations  — get-or-create 1-on-1 conversation
+  // POST /conversations/:conversationId/messages
   @Post()
-  start(
+  sendText(
+    @Param('conversationId') conversationId: string,
     @CurrentUser() userId: string,
-    @Body() dto: StartConversationDto,
+    @Body() dto: SendMessageDto,
   ) {
-    return this.conversations.getOrCreate(userId, dto.targetUserId);
+    return this.messagesService.sendText(conversationId, userId, dto.text);
   }
 
-  // GET /conversations/:id
-  @Get(':id')
-  findOne(
-    @Param('id') id: string,
+  // POST /conversations/:conversationId/messages/upload
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadMedia(
+    @Param('conversationId') conversationId: string,
     @CurrentUser() userId: string,
+    @UploadedFile() file: any,
   ) {
-    return this.conversations.findOne(id, userId);
-  }
-
-  // PATCH /conversations/:id/read
-  @Patch(':id/read')
-  markRead(
-    @Param('id') id: string,
-    @CurrentUser() userId: string,
-  ) {
-    return this.conversations.markAsRead(id, userId);
-  }
-
-  // PATCH /conversations/:id/mute
-  @Patch(':id/mute')
-  mute(
-    @Param('id') id: string,
-    @CurrentUser() userId: string,
-    @Body() dto: MuteDto,
-  ) {
-    return this.conversations.setMuted(id, userId, dto.muted);
-  }
-
-  // DELETE /conversations/:id
-  @Delete(':id')
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() userId: string,
-  ) {
-    return this.conversations.delete(id, userId);
+    if (!file) {
+      throw new Error('No file provided');
+    }
+    return this.messagesService.sendText(conversationId, userId, file.filename);
   }
 }

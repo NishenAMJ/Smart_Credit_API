@@ -13,12 +13,12 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 class StartConversationDto {
   @IsString()
-  targetUserId: string;
+  targetUserId!: string;
 }
 
 class MuteDto {
   @IsBoolean()
-  muted: boolean;
+  muted!: boolean;
 }
 
 @Controller('conversations')

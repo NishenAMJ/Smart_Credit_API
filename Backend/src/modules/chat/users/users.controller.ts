@@ -12,7 +12,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 class UpdateFcmTokenDto {
   @IsString()
-  fcmToken: string;
+  fcmToken!: string;
 }
 
 @Controller('users')

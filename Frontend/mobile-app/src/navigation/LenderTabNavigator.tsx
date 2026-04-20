@@ -14,14 +14,10 @@ const Tab = createBottomTabNavigator();
 
 // ── Big round QR button in center ────────────────────
 function QRTabButton({ onPress }: any) {
-  const navigation = useNavigation<any>();
-  
   return (
     <TouchableOpacity 
       style={styles.qrButton} 
-      onPress={() => {
-        navigation.getParent()?.navigate('QRScanner');
-      }} 
+      onPress={onPress}
       activeOpacity={0.85}
     >
       <Feather name="maximize" size={26} color="#fff" />
