@@ -1,5 +1,14 @@
+// src/screens/lender/MyBorrowersScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+} from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader } from '../../components/lender';
@@ -17,7 +26,7 @@ const BORROWERS = [
 const getScoreColor = (score: number) => {
   if (score >= 750) return COLORS.success;
   if (score >= 650) return COLORS.warning;
-  return COLORS.danger;
+  return COLORS.danger || '#EF4444';
 };
 
 // ── Main Component ──────────────────────────────────
@@ -29,7 +38,11 @@ export default function MyBorrowersScreen({ navigation }: any) {
   );
 
   const renderCard = ({ item }: any) => (
-    <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('MyBorrowers', { borrower: item })} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => navigation.navigate('BorrowerDetail', { borrower: item })} // Changed to better screen name
+      activeOpacity={0.8}
+    >
       <View style={commonStyles.rowSpaceBetween}>
         <View style={commonStyles.row}>
           <View style={styles.avatar}>
@@ -37,7 +50,9 @@ export default function MyBorrowersScreen({ navigation }: any) {
           </View>
           <View>
             <Text style={commonStyles.textPrimary}>{item.name}</Text>
-            <Text style={[styles.scoreText]}>Score: {item.score} ★{item.rating}</Text>
+            <Text style={styles.scoreText}>
+              Score: {item.score} • ★{item.rating}
+            </Text>
           </View>
         </View>
         <Feather name="chevron-right" size={18} color={COLORS.textSecondary} />
@@ -74,9 +89,11 @@ export default function MyBorrowersScreen({ navigation }: any) {
         />
       </View>
 
-      {/* Borrower count */}
+      {/* Borrower Count */}
       <View style={styles.countRow}>
-        <Text style={commonStyles.sectionTitle}>{filtered.length} Borrowers</Text>
+        <Text style={commonStyles.sectionTitle}>
+          {filtered.length} Borrowers
+        </Text>
       </View>
 
       {/* LIST */}
@@ -84,15 +101,13 @@ export default function MyBorrowersScreen({ navigation }: any) {
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderCard}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-      />      {/* LIST */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={renderCard}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
-        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No borrowers found</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -136,6 +151,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EBF4FF',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
   avatarText: {
     fontSize: 18,
@@ -157,5 +173,19 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: 4,
     fontWeight: '500',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 100,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
   },
 });
