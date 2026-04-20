@@ -36,6 +36,7 @@ export default function LenderTabNavigator() {
         headerShown: false,
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#9CA3AF',
+        tabBarLabelPosition: 'below-icon',
         tabBarStyle: {
           height: 70,
           paddingBottom: 10,
@@ -50,8 +51,9 @@ export default function LenderTabNavigator() {
           shadowRadius: 4,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '500',
+          marginTop: 2,
         },
       }}
     >
