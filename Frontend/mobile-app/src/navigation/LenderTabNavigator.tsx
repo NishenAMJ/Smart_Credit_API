@@ -36,7 +36,6 @@ export default function LenderTabNavigator() {
         headerShown: false,
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#9CA3AF',
-        tabBarLabelPosition: 'below-icon',
         tabBarStyle: {
           height: 70,
           paddingBottom: 10,
@@ -53,7 +52,7 @@ export default function LenderTabNavigator() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '500',
-          marginTop: 2,
+          marginTop: 4,
         },
       }}
     >
@@ -71,7 +70,7 @@ export default function LenderTabNavigator() {
 
       {/* Tab 2 — Borrowers */}
       <Tab.Screen
-        name="MyBorrowers"
+        name="BorrowersTab"
         component={MyBorrowersScreen}
         options={{
           tabBarLabel: 'Borrowers',
@@ -106,7 +105,7 @@ export default function LenderTabNavigator() {
 
       {/* Tab 5 — Profile */}
       <Tab.Screen
-        name="LenderProfile"
+        name="ProfileTab"
         component={LenderProfileScreen}
         options={{
           tabBarLabel: 'Profile',

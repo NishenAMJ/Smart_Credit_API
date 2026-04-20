@@ -40,6 +40,7 @@ export default function BorrowerTabNavigator() {
         name='Home'
         component={FindLoansScreen}
         options={{
+          tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
             <Feather name='home' size={size} color={color} />
           ),
@@ -50,6 +51,7 @@ export default function BorrowerTabNavigator() {
         name='Loans'
         component={MyLoansScreen}
         options={{
+          tabBarLabel: 'Loans',
           tabBarIcon: ({ color, size }) => (
             <Feather name='file-text' size={size} color={color} />
           ),
@@ -60,6 +62,7 @@ export default function BorrowerTabNavigator() {
         name='Payments'
         component={PaymentsScreen}
         options={{
+          tabBarLabel: 'Payments',
           tabBarIcon: ({ color, size }) => (
             <Feather name='credit-card' size={size} color={color} />
           ),
@@ -70,6 +73,7 @@ export default function BorrowerTabNavigator() {
         name='Support'
         component={ChatNavigator}
         options={{
+          tabBarLabel: 'Messages',
           tabBarIcon: ({ color, size }) => (
             <Feather name='message-circle' size={size} color={color} />
           ),
@@ -80,6 +84,7 @@ export default function BorrowerTabNavigator() {
         name='Profile'
         component={ProfileScreen}
         options={{
+          tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => (
             <Feather name='user' size={size} color={color} />
           ),
