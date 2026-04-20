@@ -7,6 +7,7 @@ type LenderLayoutProps = {
   activeView: LenderView
   onNavigate: (view: LenderView) => void
   session: LenderSession
+  onOpenProfile: () => void
   onLogout: () => void
   children: ReactNode
 }
@@ -15,6 +16,7 @@ export default function LenderLayout({
   activeView,
   onNavigate,
   session,
+  onOpenProfile,
   onLogout,
   children,
 }: LenderLayoutProps) {
@@ -24,6 +26,7 @@ export default function LenderLayout({
         activeView={activeView}
         onNavigate={onNavigate}
         session={session}
+        onOpenProfile={onOpenProfile}
         onLogout={onLogout}
       />
       <main className="lender-layout__content">{children}</main>

@@ -110,6 +110,18 @@ export function clearStoredSession() {
   window.localStorage.removeItem(SESSION_STORAGE_KEY)
 }
 
+export function updateStoredSession(session: LenderSession) {
+  setStoredSession(session)
+
+  const existingAccounts = readStoredAccounts()
+  const nextAccounts = existingAccounts.filter(
+    (account) => account.lenderId !== session.lenderId,
+  )
+
+  nextAccounts.unshift(session)
+  writeStoredAccounts(nextAccounts)
+}
+
 export function signInWithLenderId(lenderId: string): LenderSession {
   const normalizedLenderId = normalizeLenderId(lenderId)
   const storedAccount = readStoredAccounts().find(

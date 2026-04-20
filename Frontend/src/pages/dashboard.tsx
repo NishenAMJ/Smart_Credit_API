@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { LenderView } from '../components/common/LenderSidebar'
 import type {
   BorrowerDetails,
   DashboardOverviewResponse,
@@ -91,9 +92,71 @@ function getMetricTone(index: number): string {
 
 type DashboardPageProps = {
   session: LenderSession
+  onNavigate: (view: LenderView) => void
 }
 
-export default function DashboardPage({ session }: DashboardPageProps) {
+type DashboardQuickAction = {
+  id: Extract<LenderView, 'pending-requests' | 'settings' | 'notifications'>
+  icon: 'requests' | 'settings' | 'notifications'
+  label: string
+}
+
+const quickActions: DashboardQuickAction[] = [
+  {
+    id: 'pending-requests',
+    icon: 'requests',
+    label: 'Pending requests',
+  },
+  {
+    id: 'settings',
+    icon: 'settings',
+    label: 'Settings',
+  },
+  {
+    id: 'notifications',
+    icon: 'notifications',
+    label: 'Notifications',
+  },
+]
+
+function DashboardQuickActionIcon({
+  icon,
+}: {
+  icon: DashboardQuickAction['icon']
+}) {
+  if (icon === 'requests') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M4.75 8.75h14.5v9a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2v-9Z" />
+        <path d="M8 8.75V6.5a4 4 0 0 1 8 0v2.25" />
+        <path d="M8.5 13h7" />
+      </svg>
+    )
+  }
+
+  if (icon === 'settings') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M5 7h14" />
+        <path d="M5 17h14" />
+        <circle cx="9" cy="7" r="2.2" fill="currentColor" stroke="none" />
+        <circle cx="15" cy="17" r="2.2" fill="currentColor" stroke="none" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 5a4.5 4.5 0 0 1 4.5 4.5v2.18c0 .76.25 1.5.72 2.1l1.03 1.32H5.75l1.03-1.32c.47-.6.72-1.34.72-2.1V9.5A4.5 4.5 0 0 1 12 5Z" />
+      <path d="M10 18a2.25 2.25 0 0 0 4 0" />
+    </svg>
+  )
+}
+
+export default function DashboardPage({
+  session,
+  onNavigate,
+}: DashboardPageProps) {
   const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -343,9 +406,35 @@ export default function DashboardPage({ session }: DashboardPageProps) {
               Temporary session: {session.displayName} - {session.lenderId}
             </p>
           </div>
-          <div className="header-date">
-            <span className="header-date__label">Today</span>
-            <strong>{dateFormatter.format(new Date())}</strong>
+          <div className="dashboard-header-tools">
+            <div
+              className="dashboard-quick-actions"
+              aria-label="Dashboard quick actions"
+            >
+              {quickActions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className="dashboard-quick-action"
+                  onClick={() => onNavigate(action.id)}
+                  title={action.label}
+                  data-tooltip={action.label}
+                  aria-label={action.label}
+                >
+                  <span
+                    className="dashboard-quick-action__symbol"
+                    aria-hidden="true"
+                  >
+                    <DashboardQuickActionIcon icon={action.icon} />
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="header-date">
+              <span className="header-date__label">Today</span>
+              <strong>{dateFormatter.format(new Date())}</strong>
+            </div>
           </div>
         </header>
 

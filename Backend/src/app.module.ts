@@ -3,6 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { LenderAdsModule } from './lender-ads/lender-ads.module';
+import { LenderProfileModule } from './lender-profile/lender-profile.module';
+import { LoanRequestsModule } from './loan-requests/loan-requests.module';
 
 @Module({
   imports: [
@@ -16,6 +19,9 @@ import { DashboardModule } from './dashboard/dashboard.module';
     // Dashboard feature
     DashboardModule,
     AnalyticsModule,
+    LenderAdsModule,
+    LenderProfileModule,
+    LoanRequestsModule,
   ],
   controllers: [], // We can remove AppController if not needed
   providers: [], // We can remove AppService if not needed

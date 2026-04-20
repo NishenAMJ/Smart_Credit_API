@@ -19,15 +19,13 @@ const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'DB' },
   { id: 'analytics', label: 'Analytics', shortLabel: 'AN' },
   { id: 'create-ad', label: 'Create Ad', shortLabel: 'AD' },
-  { id: 'pending-requests', label: 'Pending Requests', shortLabel: 'PR' },
-  { id: 'settings', label: 'Settings', shortLabel: 'ST' },
-  { id: 'notifications', label: 'Notifications', shortLabel: 'NT' },
 ]
 
 type LenderSidebarProps = {
   activeView: LenderView
   onNavigate: (view: LenderView) => void
   session: LenderSession
+  onOpenProfile: () => void
   onLogout: () => void
 }
 
@@ -35,6 +33,7 @@ export default function LenderSidebar({
   activeView,
   onNavigate,
   session,
+  onOpenProfile,
   onLogout,
 }: LenderSidebarProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false)
@@ -124,13 +123,17 @@ export default function LenderSidebar({
         </div>
 
         <div className="lender-sidebar__bottom-wrap">
-          <div className="lender-sidebar__admin-wrap">
+          <button
+            type="button"
+            className="lender-sidebar__admin-wrap lender-sidebar__profile-trigger"
+            onClick={onOpenProfile}
+          >
             <div className="lender-sidebar__admin-avatar">{lenderInitial}</div>
             <div>
               <div className="lender-sidebar__admin-name">{session.displayName}</div>
               <div className="lender-sidebar__admin-role">{session.lenderId}</div>
             </div>
-          </div>
+          </button>
 
           <button
             type="button"
