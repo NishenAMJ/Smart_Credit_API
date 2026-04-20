@@ -38,10 +38,11 @@ export class AppController {
         timestamp: new Date(),
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return {
         status: 'error',
         message: 'Firebase connection failed',
-        error: error.message,
+        error: errorMessage,
       };
     }
   }

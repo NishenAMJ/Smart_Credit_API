@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  TouchableOpacity,
-  ScrollView,
+  Animated,
+  Dimensions,
   Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+
+const { width, height } = Dimensions.get('window');
+const SCAN_SIZE = width * 0.7;
 
 // ── Design Tokens ────────────────────────────────────
 const COLORS = {
@@ -23,389 +27,779 @@ const COLORS = {
   danger: '#EF4444',
 };
 
+// ── Mock borrower data ───────────────────────────────
+// In real app this comes from scanning the actual QR
+const MOCK_SCANNED_DATA = {
+  borrowerId: 'B-001',
+  name: 'Kasun Silva',
+  loanId: 'L-2026-001',
+  offer: 'Quick Personal Loan',
+  amountDue: 4707,
+  dueDate: '15 Apr 2026',
+};
+
 // ── Main Component ────────────────────────────────────
 export default function QRScannerScreen({ navigation }: any) {
-  const [scannedFile, setScannedFile] = useState<string | null>(null);
 
-  const handleScanQR = () => {
-    Alert.alert(
-      'QR Scanner',
-      'QR scanning feature coming soon.\n\nYou can scan payment receipts or borrower codes.',
-      [{ text: 'OK' }]
-    );
+  // ── State ────────────────────────────────────────
+  const [scanState, setScanState] = useState<'scanning' | 'scanned' | 'error'>('scanning');
+  const [torchOn,   setTorchOn]   = useState(false);
+  const [scannedData, setScannedData] = useState<typeof MOCK_SCANNED_DATA | null>(null);
+
+  // ── Animated scan line ───────────────────────────
+  // This creates the moving red scan line effect
+  const scanLineAnim = new Animated.Value(0);
+
+  useEffect(() => {
+    // Loop the scan line animation up and down
+    const animate = () => {
+      Animated.sequence([
+        Animated.timing(scanLineAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanLineAnim, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ]).start(() => animate()); // loop forever
+    };
+
+    if (scanState === 'scanning') {
+      animate();
+    }
+  }, [scanState]);
+
+  // ── Scan line Y position ─────────────────────────
+  // Moves from top to bottom of scan box
+  const scanLineY = scanLineAnim.interpolate({
+    inputRange:  [0, 1],
+    outputRange: [0, SCAN_SIZE - 4],
+  });
+
+  // ── Simulate scan ────────────────────────────────
+  // In real app this is triggered by camera detecting QR
+  const simulateScan = () => {
+    setScanState('scanned');
+    setScannedData(MOCK_SCANNED_DATA);
   };
 
-  const handleUploadPayment = () => {
-    setScannedFile('PAYMENT_RECEIPT_001');
-    Alert.alert('Success', 'Payment receipt uploaded successfully!');
+  // ── Simulate error ───────────────────────────────
+  const simulateError = () => {
+    setScanState('error');
   };
 
-  const handleVerifyBorrower = () => {
-    navigation.navigate('MyBorrowers');
+  // ── Reset to scanning ────────────────────────────
+  const resetScan = () => {
+    setScanState('scanning');
+    setScannedData(null);
   };
 
-  return (
-    <SafeAreaView style={styles.safe}>
-      {/* ── HEADER ────────────────────────────────── */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name="arrow-left" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>QR Scanner</Text>
-        <View style={{ width: 24 }} />
-      </View>
+  // ── Go to verify payment ─────────────────────────
+  const handleVerify = () => {
+    navigation.navigate('VerifyPayment', {
+      borrower: scannedData,
+    });
+  };
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.content}>
-        {/* ── SCANNER PLACEHOLDER ────────────────────── */}
-        <View style={styles.scannerBox}>
-          <View style={styles.scannerFrame}>
-            <Feather name="maximize" size={48} color={COLORS.primary} />
+  // ── Scanned success screen ───────────────────────
+  if (scanState === 'scanned' && scannedData) {
+    return (
+      <SafeAreaView style={styles.safe}>
+
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Feather name="arrow-left" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>QR Scanned</Text>
+          <View style={{ width: 36 }} />
+        </View>
+
+        <View style={styles.scannedScreen}>
+
+          {/* Success icon */}
+          <View style={styles.scannedIconWrap}>
+            <Feather name="check-circle" size={64} color={COLORS.success} />
           </View>
-          <Text style={styles.scannerLabel}>Position QR Code Here</Text>
-          <Text style={styles.scannerSub}>
-            Keep the QR code within the frame
+
+          <Text style={styles.scannedTitle}>QR Code Detected!</Text>
+          <Text style={styles.scannedSub}>
+            Borrower information retrieved successfully
           </Text>
-        </View>
 
-        {/* ── ACTION BUTTONS ────────────────────────── */}
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={handleScanQR}
-          activeOpacity={0.8}
-        >
-          <Feather name="camera" size={20} color="#fff" />
-          <Text style={styles.buttonText}>Start Scanning</Text>
-        </TouchableOpacity>
+          {/* Borrower info card */}
+          <View style={styles.scannedCard}>
 
-        {/* ── QUICK ACTIONS ──────────────────────────── */}
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-        <View style={styles.actionGrid}>
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={handleUploadPayment}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#ECFDF5' }]}>
-              <Feather name="upload" size={24} color={COLORS.success} />
+            {/* Borrower header */}
+            <View style={styles.scannedCardHeader}>
+              <View style={styles.scannedAvatar}>
+                <Text style={styles.scannedAvatarText}>
+                  {scannedData.name[0]}
+                </Text>
+              </View>
+              <View>
+                <Text style={styles.scannedName}>{scannedData.name}</Text>
+                <Text style={styles.scannedId}>
+                  ID: {scannedData.borrowerId}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.actionTitle}>Upload Payment</Text>
-            <Text style={styles.actionDesc}>Verify payment receipt</Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={handleVerifyBorrower}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#EBF4FF' }]}>
-              <Feather name="user-check" size={24} color={COLORS.primary} />
-            </View>
-            <Text style={styles.actionTitle}>Verify Borrower</Text>
-            <Text style={styles.actionDesc}>Check borrower details</Text>
-          </TouchableOpacity>
+            <View style={styles.scannedDivider} />
 
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('ReviewApplication')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#FFFBEB' }]}>
-              <Feather name="check-square" size={24} color={COLORS.warning} />
-            </View>
-            <Text style={styles.actionTitle}>Review Application</Text>
-            <Text style={styles.actionDesc}>Process new requests</Text>
-          </TouchableOpacity>
+            {/* Loan details */}
+            <ScannedRow label="Loan Reference" value={scannedData.loanId}            />
+            <ScannedRow label="Loan Offer"     value={scannedData.offer}             />
+            <ScannedRow
+              label="Amount Due"
+              value={`LKR ${scannedData.amountDue.toLocaleString()}`}
+              highlight
+            />
+            <ScannedRow label="Due Date"       value={scannedData.dueDate}           />
 
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('ApplicationsReceived')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#FEF2F2' }]}>
-              <Feather name="inbox" size={24} color={COLORS.danger} />
-            </View>
-            <Text style={styles.actionTitle}>Pending Requests</Text>
-            <Text style={styles.actionDesc}>5 applications waiting</Text>
-          </TouchableOpacity>
-        </View>
+          </View>
 
-        {/* ── SCANNED FILE INFO ──────────────────────── */}
-        {scannedFile && (
-          <View style={styles.infoCard}>
-            <View style={styles.infoHeader}>
-              <Feather name="check-circle" size={20} color={COLORS.success} />
-              <Text style={styles.infoTitle}>Scan Successful</Text>
-            </View>
-            <Text style={styles.infoContent}>File: {scannedFile}</Text>
+          {/* Action buttons */}
+          <View style={styles.scannedBtns}>
             <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => setScannedFile(null)}
+              style={styles.proceedBtn}
+              onPress={handleVerify}
+              activeOpacity={0.85}
             >
-              <Text style={styles.secondaryButtonText}>Clear</Text>
+              <Feather name="check" size={18} color="#fff" />
+              <Text style={styles.proceedBtnText}>
+                Proceed to Payment
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.rescanBtn}
+              onPress={resetScan}
+              activeOpacity={0.85}
+            >
+              <Feather name="refresh-cw" size={18} color={COLORS.primary} />
+              <Text style={styles.rescanBtnText}>Scan Again</Text>
             </TouchableOpacity>
           </View>
-        )}
 
-        {/* ── INFO SECTION ──────────────────────────── */}
-        <View style={styles.infoSection}>
-          <Text style={styles.infoSectionTitle}>How to Use</Text>
-          
-          <View style={styles.stepCard}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>1</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.stepTitle}>Position QR Code</Text>
-              <Text style={styles.stepDesc}>
-                Place any valid QR code within the frame
-              </Text>
-            </View>
-          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-          <View style={styles.stepCard}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>2</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.stepTitle}>Automatic Detection</Text>
-              <Text style={styles.stepDesc}>
-                Camera will automatically scan and detect the code
-              </Text>
-            </View>
-          </View>
+  // ── Error screen ─────────────────────────────────
+  if (scanState === 'error') {
+    return (
+      <SafeAreaView style={styles.safe}>
 
-          <View style={styles.stepCard}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>3</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.stepTitle}>Instant Processing</Text>
-              <Text style={styles.stepDesc}>
-                Process or verify the scanned information immediately
-              </Text>
-            </View>
-          </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Feather name="arrow-left" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Scan Error</Text>
+          <View style={{ width: 36 }} />
         </View>
 
-        <View style={{ height: 32 }} />
-      </ScrollView>
+        <View style={styles.scannedScreen}>
+
+          <View style={[
+            styles.scannedIconWrap,
+            { backgroundColor: '#FEF2F2' }
+          ]}>
+            <Feather name="x-circle" size={64} color={COLORS.danger} />
+          </View>
+
+          <Text style={styles.scannedTitle}>Invalid QR Code</Text>
+          <Text style={styles.scannedSub}>
+            The QR code could not be recognized. Please make sure you are scanning a valid Smart Credit borrower QR code.
+          </Text>
+
+          <View style={styles.errorTips}>
+            <Text style={styles.errorTipsTitle}>Tips for better scanning:</Text>
+            <ErrorTip icon="sun"      text="Ensure good lighting"                  />
+            <ErrorTip icon="maximize" text="Hold QR code steady within the frame"  />
+            <ErrorTip icon="zoom-in"  text="Move closer to the QR code"            />
+            <ErrorTip icon="refresh-cw" text="Ask borrower to refresh their QR"    />
+          </View>
+
+          <TouchableOpacity
+            style={styles.proceedBtn}
+            onPress={resetScan}
+            activeOpacity={0.85}
+          >
+            <Feather name="refresh-cw" size={18} color="#fff" />
+            <Text style={styles.proceedBtnText}>Try Again</Text>
+          </TouchableOpacity>
+
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Main scanner screen ──────────────────────────
+  return (
+    <SafeAreaView style={styles.safe}>
+
+      {/* ── HEADER ──────────────────────────────── */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={22} color="#fff" />
+        </TouchableOpacity>
+
+        <Text style={styles.headerTitle}>Scan QR Code</Text>
+
+        {/* Torch toggle */}
+        <TouchableOpacity
+          style={[
+            styles.torchBtn,
+            torchOn && styles.torchBtnOn,
+          ]}
+          onPress={() => setTorchOn(!torchOn)}
+          activeOpacity={0.7}
+        >
+          <Feather
+            name="zap"
+            size={20}
+            color={torchOn ? '#FFD700' : '#fff'}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* ── CAMERA AREA ─────────────────────────── */}
+      <View style={styles.cameraArea}>
+
+        {/* Dark overlay — top */}
+        <View style={styles.overlayTop} />
+
+        {/* Middle row */}
+        <View style={styles.overlayMiddle}>
+
+          {/* Dark overlay — left */}
+          <View style={styles.overlaySide} />
+
+          {/* Scan box */}
+          <View style={styles.scanBox}>
+
+            {/* Corner brackets */}
+            <View style={[styles.corner, styles.cornerTL]} />
+            <View style={[styles.corner, styles.cornerTR]} />
+            <View style={[styles.corner, styles.cornerBL]} />
+            <View style={[styles.corner, styles.cornerBR]} />
+
+            {/* Animated scan line */}
+            <Animated.View style={[
+              styles.scanLine,
+              { transform: [{ translateY: scanLineY }] }
+            ]} />
+
+            {/* QR placeholder icon in center */}
+            <View style={styles.qrPlaceholder}>
+              <Feather name="maximize" size={48} color="rgba(255,255,255,0.3)" />
+            </View>
+
+          </View>
+
+          {/* Dark overlay — right */}
+          <View style={styles.overlaySide} />
+
+        </View>
+
+        {/* Dark overlay — bottom */}
+        <View style={styles.overlayBottom} />
+
+      </View>
+
+      {/* ── INSTRUCTIONS ────────────────────────── */}
+      <View style={styles.instructions}>
+
+        <Text style={styles.instructTitle}>
+          Position QR code within the frame
+        </Text>
+        <Text style={styles.instructSub}>
+          Ask the borrower to open their Smart Credit app and show their payment QR code
+        </Text>
+
+        {/* Instruction steps */}
+        <View style={styles.steps}>
+          <Step number="1" text="Borrower opens Smart Credit app"     />
+          <Step number="2" text="Borrower taps 'Show Payment QR'"     />
+          <Step number="3" text="Point camera at their QR code"       />
+          <Step number="4" text="Payment details appear automatically" />
+        </View>
+
+        {/* Demo buttons — remove in production */}
+        <View style={styles.demoRow}>
+          <TouchableOpacity
+            style={styles.demoBtn}
+            onPress={simulateScan}
+            activeOpacity={0.85}
+          >
+            <Feather name="maximize" size={16} color="#fff" />
+            <Text style={styles.demoBtnText}>Simulate Scan ✓</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.demoBtn, { backgroundColor: COLORS.danger }]}
+            onPress={simulateError}
+            activeOpacity={0.85}
+          >
+            <Feather name="x" size={16} color="#fff" />
+            <Text style={styles.demoBtnText}>Simulate Error ✗</Text>
+          </TouchableOpacity>
+        </View>
+
+      </View>
+
     </SafeAreaView>
   );
 }
 
+// ── ScannedRow component ──────────────────────────────
+const ScannedRow = ({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) => (
+  <View style={scannedRowStyles.wrap}>
+    <Text style={scannedRowStyles.label}>{label}</Text>
+    <Text style={[
+      scannedRowStyles.value,
+      highlight && { color: COLORS.primary, fontWeight: '700', fontSize: 16 }
+    ]}>
+      {value}
+    </Text>
+  </View>
+);
+
+// ── ErrorTip component ────────────────────────────────
+const ErrorTip = ({
+  icon,
+  text,
+}: {
+  icon: string;
+  text: string;
+}) => (
+  <View style={errorTipStyles.wrap}>
+    <View style={errorTipStyles.iconWrap}>
+      <Feather name={icon as any} size={14} color={COLORS.primary} />
+    </View>
+    <Text style={errorTipStyles.text}>{text}</Text>
+  </View>
+);
+
+// ── Step component ────────────────────────────────────
+const Step = ({
+  number,
+  text,
+}: {
+  number: string;
+  text: string;
+}) => (
+  <View style={stepStyles.wrap}>
+    <View style={stepStyles.numWrap}>
+      <Text style={stepStyles.num}>{number}</Text>
+    </View>
+    <Text style={stepStyles.text}>{text}</Text>
+  </View>
+);
+
 // ── Styles ────────────────────────────────────────────
 const styles = StyleSheet.create({
+
   safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#000',
   },
 
   // Header
   header: {
     backgroundColor: COLORS.primary,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-
-  // Content
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-
-  // Scanner
-  scannerBox: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  scannerFrame: {
-    width: 200,
-    height: 200,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  scannerLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-  },
-  scannerSub: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-
-  // Buttons
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 24,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    backgroundColor: COLORS.border,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginTop: 12,
-  },
-  secondaryButtonText: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-
-  // Section
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-  },
-
-  // Action Grid
-  actionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
-  },
-  actionCard: {
-    width: '48%',
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  actionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  actionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  actionDesc: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-
-  // Info Card
-  infoCard: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.success,
-  },
-  infoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#047857',
-  },
-  infoContent: {
-    fontSize: 13,
-    color: '#065F46',
-    marginBottom: 12,
-  },
-
-  // Info Section
-  infoSection: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
-  },
-  infoSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-  },
-
-  // Step Card
-  stepCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 12,
-  },
-  stepNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepNumberText: {
-    fontSize: 14,
     fontWeight: '700',
     color: '#fff',
   },
-  stepTitle: {
+  torchBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  torchBtnOn: {
+    backgroundColor: 'rgba(255,215,0,0.3)',
+  },
+
+  // Camera area
+  cameraArea: {
+    height: height * 0.42,
+    backgroundColor: '#111',
+  },
+  overlayTop: {
+    height: (height * 0.42 - SCAN_SIZE) / 2,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  overlayMiddle: {
+    flexDirection: 'row',
+    height: SCAN_SIZE,
+  },
+  overlaySide: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  overlayBottom: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+
+  // Scan box
+  scanBox: {
+    width: SCAN_SIZE,
+    height: SCAN_SIZE,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+
+  // Corner brackets
+  corner: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderColor: COLORS.primary,
+  },
+  cornerTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 4,
+  },
+  cornerTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 4,
+  },
+  cornerBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 4,
+  },
+  cornerBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 4,
+  },
+
+  // Scan line
+  scanLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: COLORS.primary,
+    opacity: 0.8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+
+  // QR placeholder
+  qrPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Instructions
+  instructions: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  instructTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  instructSub: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+
+  // Steps
+  steps: {
+    gap: 10,
+    marginBottom: 20,
+  },
+
+  // Demo buttons
+  demoRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  demoBtn: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  demoBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+  },
+
+  // Scanned screen
+  scannedScreen: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    alignItems: 'center',
+  },
+  scannedIconWrap: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  scannedTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  scannedSub: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  scannedCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    padding: 16,
+    width: '100%',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  scannedCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  scannedAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#EBF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannedAvatarText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  scannedName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  scannedId: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  scannedDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginBottom: 12,
+  },
+  scannedBtns: {
+    width: '100%',
+    gap: 10,
+  },
+  proceedBtn: {
+    backgroundColor: COLORS.success,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+  },
+  proceedBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  rescanBtn: {
+    backgroundColor: '#EBF4FF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  rescanBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+
+  // Error tips
+  errorTips: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    width: '100%',
+    marginBottom: 20,
+  },
+  errorTipsTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.textPrimary,
-    marginBottom: 2,
+    marginBottom: 12,
   },
-  stepDesc: {
-    fontSize: 12,
+});
+
+// ── ScannedRow styles ─────────────────────────────────
+const scannedRowStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  label: {
+    fontSize: 13,
     color: COLORS.textSecondary,
+    flex: 1,
+  },
+  value: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+    textAlign: 'right',
+    flex: 1,
+  },
+});
+
+// ── ErrorTip styles ───────────────────────────────────
+const errorTipStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EBF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  text: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+});
+
+// ── Step styles ───────────────────────────────────────
+const stepStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  numWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  num: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  text: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    flex: 1,
   },
 });

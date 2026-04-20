@@ -1,19 +1,29 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 
 // Only import screens that EXIST right now
 import LenderDashboardScreen from '../screens/lender/LenderDashboardScreen';
 import LenderProfileScreen   from '../screens/lender/LenderProfileScreen';
 import MyBorrowersScreen     from '../screens/lender/MyBorrowersScreen';
+import ChatNavigator from './ChatNavigator';
 
 const Tab = createBottomTabNavigator();
 
 // ── Big round QR button in center ────────────────────
 function QRTabButton({ onPress }: any) {
+  const navigation = useNavigation<any>();
+  
   return (
-    <TouchableOpacity style={styles.qrButton} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity 
+      style={styles.qrButton} 
+      onPress={() => {
+        navigation.getParent()?.navigate('QRScanner');
+      }} 
+      activeOpacity={0.85}
+    >
       <Feather name="maximize" size={26} color="#fff" />
     </TouchableOpacity>
   );
@@ -49,12 +59,6 @@ export default function LenderTabNavigator() {
       <Tab.Screen
         name="Home"
         component={LenderDashboardScreen}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.navigate('LenderTabs', { screen: 'Home' });
-          },
-        })}
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
@@ -67,12 +71,6 @@ export default function LenderTabNavigator() {
       <Tab.Screen
         name="MyBorrowers"
         component={MyBorrowersScreen}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.navigate('LenderTabs', { screen: 'MyBorrowers' });
-          },
-        })}
         options={{
           tabBarLabel: 'Borrowers',
           tabBarIcon: ({ color, size }) => (
@@ -85,12 +83,6 @@ export default function LenderTabNavigator() {
       <Tab.Screen
         name="QRScannerTab"
         component={LenderDashboardScreen}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.navigate('QRScanner');
-          },
-        })}
         options={{
           tabBarLabel: '',
           tabBarIcon: () => null,
@@ -101,13 +93,7 @@ export default function LenderTabNavigator() {
       {/* Tab 4 — Chat/Applications */}
       <Tab.Screen
         name="chat"
-        component={LenderDashboardScreen}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.navigate('ApplicationsReceived');
-          },
-        })}
+        component={ChatNavigator}
         options={{
           tabBarLabel: 'Messages',
           tabBarIcon: ({ color, size }) => (
@@ -120,12 +106,6 @@ export default function LenderTabNavigator() {
       <Tab.Screen
         name="LenderProfile"
         component={LenderProfileScreen}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.navigate('LenderTabs', { screen: 'LenderProfile' });
-          },
-        })}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => (

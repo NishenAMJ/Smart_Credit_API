@@ -1,22 +1,25 @@
-import React from 'react';
+import React, { ComponentType } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LenderTabNavigator from './LenderTabNavigator';
 import LenderProfileScreen from '../screens/lender/LenderProfileScreen';
 import MyBorrowersScreen from '../screens/lender/MyBorrowersScreen';
-import CollectionHistoryScreen from '../screens/lender/CollectionHistoryScreen';
 import PaymentRemindersScreen from '../screens/lender/PaymentRemindersScreen';
 import MyOffersScreen from '../screens/lender/MyOffersScreen';
 import ApplicationsReceivedScreen from '../screens/lender/ApplicationsReceivedScreen';
 import ActiveLoansScreen from '../screens/lender/ActiveLoansScreen';
-import ApproveRejectScreen from '../screens/lender/ApproveRejectScreen';
 import ReviewApplicationScreen from '../screens/lender/ReviewApplicationScreen';
-import CreateLoanOfferScreen from '../screens/lender/CreateLoanOfferScreen';
-import EditOfferScreen from '../screens/lender/EditOfferScreen';
-import LoanDetailsScreen from '../screens/lender/LoanDetailsScreen';
 import QRScannerScreen from '../screens/lender/QRScannerScreen';
-import AnalyticsScreen from '../screens/lender/AnalyticsScreen';
-import PortfolioScreen from '../screens/lender/PortfolioScreen';
 import LegalActionsScreen from '../screens/lender/LegalActionsScreen';
+import VerifyPaymentScreen from '../screens/lender/VerifyPaymentScreen';
+
+// Use require to bypass module resolution issues
+const CollectionHistoryScreen = require('../screens/lender/CollectionHistoryScreen').default as ComponentType;
+const ApproveRejectScreen = require('../screens/lender/ApproveRejectScreen').default as ComponentType;
+const CreateLoanOfferScreen = require('../screens/lender/CreateLoanOfferScreen').default as ComponentType;
+const EditOfferScreen = require('../screens/lender/EditOfferScreen').default as ComponentType;
+const LoanDetailsScreen = require('../screens/lender/LoanDetailsScreen').default as ComponentType;
+const AnalyticsScreen = require('../screens/lender/AnalyticsScreen').default as ComponentType;
+const PortfolioScreen = require('../screens/lender/PortfolioScreen').default as ComponentType;
 
 const Stack = createNativeStackNavigator();
 
@@ -43,6 +46,7 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="Analytics" component={AnalyticsScreen} />
       <Stack.Screen name="Portfolio" component={PortfolioScreen} />
       <Stack.Screen name="LegalActions" component={LegalActionsScreen} />
+      <Stack.Screen name="VerifyPayment" component={VerifyPaymentScreen} />
       
     </Stack.Navigator>
   );

@@ -6,8 +6,8 @@ import { Feather } from "@expo/vector-icons";
 import FindLoansScreen from "../screens/borrower/FindLoansScreen";
 import MyLoansScreen from "../screens/borrower/MyLoansScreen";
 import PaymentsScreen from "../screens/borrower/PaymentsScreen";
-import SupportScreen from "../screens/borrower/SupportScreen";
 import ProfileScreen from "../screens/borrower/ProfileScreen";
+import ChatNavigator from "./ChatNavigator";
 
 const Tab = createBottomTabNavigator();
 
@@ -68,7 +68,7 @@ export default function BorrowerTabNavigator() {
 
       <Tab.Screen
         name='Support'
-        component={SupportScreen}
+        component={ChatNavigator}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Feather name='message-circle' size={size} color={color} />
