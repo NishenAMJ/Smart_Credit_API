@@ -70,6 +70,12 @@ export interface AnalyticsDrilldownItem {
   date: string | null;
 }
 
+export interface AnalyticsDrilldownPageInfo {
+  pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 export interface AnalyticsDrilldownResponse {
   lenderId: string;
   range: AnalyticsRangeResponse;
@@ -77,4 +83,5 @@ export interface AnalyticsDrilldownResponse {
   title: string;
   description: string;
   items: AnalyticsDrilldownItem[];
+  pageInfo: AnalyticsDrilldownPageInfo;
 }

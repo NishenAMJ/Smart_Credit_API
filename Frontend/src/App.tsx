@@ -7,6 +7,9 @@ import CreateAdPage from './pages/create-ad'
 import DashboardPage from './pages/dashboard'
 import AuthPage from './pages/auth'
 import PendingRequestsPage from './pages/pending-requests'
+import NotificationsPage from './pages/notifications'
+import RecentTransactionsPage from './pages/recent-transactions'
+import SettingsPage from './pages/settings'
 import LenderProfileModal from './components/profile/LenderProfileModal'
 import {
   clearStoredSession,
@@ -54,6 +57,10 @@ function App() {
     setSession(nextSession)
   }
 
+  const fallbackViewLabel = String(activeView)
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (character: string) => character.toUpperCase())
+
   if (!session) {
     return <AuthPage onLogin={handleLogin} onSignUp={handleSignUp} />
   }
@@ -69,21 +76,29 @@ function App() {
       >
         {activeView === 'dashboard' ? (
           <DashboardPage session={session} onNavigate={setActiveView} />
+        ) : activeView === 'recent-transactions' ? (
+          <RecentTransactionsPage session={session} />
         ) : activeView === 'analytics' ? (
           <AnalyticsPage session={session} />
         ) : activeView === 'create-ad' ? (
           <CreateAdPage session={session} />
         ) : activeView === 'pending-requests' ? (
           <PendingRequestsPage session={session} />
+        ) : activeView === 'settings' ? (
+          <SettingsPage
+            session={session}
+            onLogout={handleLogout}
+            onOpenProfile={() => setIsProfileOpen(true)}
+          />
+        ) : activeView === 'notifications' ? (
+          <NotificationsPage session={session} onNavigate={setActiveView} />
         ) : (
           <section className="dashboard-panel">
             <header className="page-header">
               <div>
                 <p className="eyebrow">Lender module</p>
                 <h1 className="page-title">
-                  {activeView
-                    .replace(/-/g, ' ')
-                    .replace(/\b\w/g, (character) => character.toUpperCase())}
+                  {fallbackViewLabel}
                 </h1>
                 <p className="page-subtitle">
                   This lender page is reserved in the new app shell. We can build

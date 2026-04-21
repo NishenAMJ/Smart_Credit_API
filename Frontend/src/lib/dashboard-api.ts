@@ -56,3 +56,40 @@ export type BorrowerLoan = {
   tenureMonths: number
   createdAt: string | null
 }
+
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
+  'http://localhost:3000'
+
+async function parseError(response: Response, fallback: string): Promise<never> {
+  try {
+    const body = (await response.json()) as { message?: string | string[] }
+    const message = Array.isArray(body.message)
+      ? body.message.join(', ')
+      : body.message
+    throw new Error(message || fallback)
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error
+    }
+
+    throw new Error(fallback)
+  }
+}
+
+export async function fetchBorrowerDetails(
+  lenderId: string,
+  borrowerId: string,
+): Promise<BorrowerDetails> {
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/borrowers/${borrowerId}?lenderId=${encodeURIComponent(
+      lenderId,
+    )}`,
+  )
+
+  if (!response.ok) {
+    return parseError(response, 'Failed to load borrower details.')
+  }
+
+  return response.json()
+}

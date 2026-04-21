@@ -1,6 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { DocumentData, QueryDocumentSnapshot, Timestamp } from 'firebase-admin/firestore';
+import {
+  DocumentData,
+  Firestore,
+  QueryDocumentSnapshot,
+} from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
+import {
+  applyDateCursor,
+  buildPageInfo,
+  orderByDateAndId,
+  readDate,
+  readNumber,
+  readString,
+  readStringArray,
+  scanQueryPage,
+} from '../firebase/firestore-query.utils';
 import {
   PendingRequestListItem,
   PendingRequestsResponse,
@@ -26,6 +40,8 @@ type RawLoanRequest = {
   notes: string;
   createdAt: Date | null;
   updatedAt: Date | null;
+  cursorDate: Date | null;
+  cursorId: string;
 };
 
 type BorrowerProfile = {
@@ -50,16 +66,14 @@ export class LoanRequestsService {
 
   async getPendingRequests(
     lenderId: string,
-    limit = 30,
+    pageSize = 30,
+    cursor?: string | null,
+    includeSummary = true,
   ): Promise<PendingRequestsResponse> {
-    const safeLimit = Math.min(Math.max(limit, 8), 60);
+    const safePageSize = Math.min(Math.max(pageSize, 8), 60);
     const db = this.firebaseService.getDb();
 
-    const [adsSnapshot, requestsSnapshot] = await Promise.all([
-      db.collection('lenderAds').where('lenderId', '==', lenderId).get(),
-      db.collection('loanRequests').get(),
-    ]);
-
+    const adsSnapshot = await db.collection('ads').where('lenderId', '==', lenderId).get();
     const adTitleMap = new Map(
       adsSnapshot.docs.map((doc) => {
         const data = doc.data();
@@ -72,28 +86,12 @@ export class LoanRequestsService {
       }),
     );
     const adIds = new Set(adTitleMap.keys());
-
-    const scopedRequests = requestsSnapshot.docs
-      .map((doc) => this.mapLoanRequest(doc))
-      .filter((request) => this.belongsToLender(request, lenderId, adIds))
-      .filter((request) => PENDING_STATUSES.has(request.status))
-      .sort((left, right) => {
-        const leftScore = this.getUrgencyScore(left.urgency);
-        const rightScore = this.getUrgencyScore(right.urgency);
-
-        if (rightScore !== leftScore) {
-          return rightScore - leftScore;
-        }
-
-        const leftTime = left.createdAt ? left.createdAt.getTime() : 0;
-        const rightTime = right.createdAt ? right.createdAt.getTime() : 0;
-        return rightTime - leftTime;
-      })
-      .slice(0, safeLimit);
+    const pagedRequests = await this.getRequestsPage(db, lenderId, adIds, safePageSize, cursor);
+    const prioritizedRequests = pagedRequests.items.slice(0, safePageSize);
 
     const borrowerIds = Array.from(
       new Set(
-        scopedRequests
+        prioritizedRequests
           .map((request) => request.borrowerId)
           .filter((borrowerId): borrowerId is string => Boolean(borrowerId)),
       ),
@@ -101,7 +99,7 @@ export class LoanRequestsService {
 
     const borrowerProfiles = await this.getBorrowerProfiles(borrowerIds);
 
-    const requests: PendingRequestListItem[] = scopedRequests.map((request) => {
+    const requests: PendingRequestListItem[] = prioritizedRequests.map((request) => {
       const borrower = request.borrowerId
         ? borrowerProfiles.get(request.borrowerId)
         : undefined;
@@ -135,19 +133,124 @@ export class LoanRequestsService {
       };
     });
 
+    const summary = includeSummary
+      ? await this.buildSummary(db, lenderId, adIds)
+      : this.buildSummaryFromRequests(prioritizedRequests);
+
     return {
       lenderId,
-      summary: {
-        totalPendingRequests: requests.length,
-        targetedRequests: requests.filter((request) => request.targetType === 'targeted').length,
-        marketplaceMatches: requests.filter((request) => request.targetType === 'marketplace').length,
-        highUrgencyRequests: requests.filter((request) =>
-          ['high', 'critical'].includes(request.urgency),
-        ).length,
-      },
+      summary,
       requests,
+      pageInfo: buildPageInfo(prioritizedRequests, safePageSize, pagedRequests.items.length > safePageSize),
       generatedAt: new Date().toISOString(),
     };
+  }
+
+  private async getRequestsPage(
+    db: Firestore,
+    lenderId: string,
+    adIds: Set<string>,
+    pageSize: number,
+    cursor?: string | null,
+  ): Promise<{ items: RawLoanRequest[] }> {
+    return scanQueryPage({
+      pageSize,
+      cursor,
+      batchSize: Math.max(pageSize * 2, 40),
+      fetchChunk: async (nextCursor, batchSize) => {
+        const snapshot = await applyDateCursor(
+          orderByDateAndId(db.collection('loanRequests'), 'createdAt'),
+          nextCursor,
+        )
+          .limit(batchSize)
+          .get();
+
+        return snapshot.docs;
+      },
+      mapDoc: async (doc) => {
+        const request = this.mapLoanRequest(doc);
+
+        if (!this.isRequestVisibleToLender(request, lenderId, adIds)) {
+          return null;
+        }
+
+        if (!PENDING_STATUSES.has(request.status)) {
+          return null;
+        }
+
+        return request;
+      },
+    });
+  }
+
+  private async buildSummary(
+    db: Firestore,
+    lenderId: string,
+    adIds: Set<string>,
+  ) {
+    const requests: RawLoanRequest[] = [];
+    let cursor: string | null = null;
+    let hasMore = true;
+
+    while (hasMore) {
+      const snapshot = await applyDateCursor(
+        orderByDateAndId(db.collection('loanRequests'), 'createdAt'),
+        cursor,
+      )
+        .limit(80)
+        .get();
+
+      snapshot.docs.forEach((doc) => {
+        const request = this.mapLoanRequest(doc);
+
+        if (
+          this.isRequestVisibleToLender(request, lenderId, adIds) &&
+          PENDING_STATUSES.has(request.status)
+        ) {
+          requests.push(request);
+        }
+      });
+
+      hasMore = snapshot.docs.length === 80;
+      const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      cursor =
+        lastDoc && hasMore
+          ? Buffer.from(
+              JSON.stringify({
+                timestamp:
+                  readDate(lastDoc.get('createdAt'))?.toISOString() ??
+                  new Date(0).toISOString(),
+                id: lastDoc.id,
+              }),
+              'utf8',
+            ).toString('base64url')
+          : null;
+    }
+
+    return this.buildSummaryFromRequests(requests);
+  }
+
+  private buildSummaryFromRequests(requests: RawLoanRequest[]) {
+    return {
+      totalPendingRequests: requests.length,
+      targetedRequests: requests.filter((request) => Boolean(request.adId)).length,
+      marketplaceMatches: requests.filter((request) => !request.adId).length,
+      highUrgencyRequests: requests.filter((request) =>
+        ['high', 'critical'].includes(request.urgency),
+      ).length,
+    };
+  }
+
+  private isRequestVisibleToLender(
+    request: RawLoanRequest,
+    lenderId: string,
+    adIds: Set<string>,
+  ): boolean {
+    return Boolean(
+      request.targetLenderId === lenderId ||
+        request.matchedLenderIds.includes(lenderId) ||
+        (request.adId && adIds.has(request.adId)),
+    );
   }
 
   private mapLoanRequest(
@@ -180,31 +283,13 @@ export class LoanRequestsService {
       requestedRegion:
         typeof data.requestedRegion === 'string' ? data.requestedRegion : 'Unknown',
       collateralOffered: data.collateralOffered === true,
-      matchedLenderIds: Array.isArray(data.matchedLenderIds)
-        ? data.matchedLenderIds.filter(
-            (value): value is string => typeof value === 'string',
-          )
-        : [],
+      matchedLenderIds: readStringArray(data.matchedLenderIds),
       notes: typeof data.notes === 'string' ? data.notes : '',
-      createdAt: this.toDate(data.createdAt),
-      updatedAt: this.toDate(data.updatedAt),
+      createdAt: readDate(data.createdAt),
+      updatedAt: readDate(data.updatedAt, data.createdAt),
+      cursorDate: readDate(data.createdAt),
+      cursorId: doc.id,
     };
-  }
-
-  private belongsToLender(
-    request: RawLoanRequest,
-    lenderId: string,
-    adIds: Set<string>,
-  ): boolean {
-    if (request.targetLenderId === lenderId) {
-      return true;
-    }
-
-    if (request.adId && adIds.has(request.adId)) {
-      return true;
-    }
-
-    return request.matchedLenderIds.includes(lenderId);
   }
 
   private async getBorrowerProfiles(
@@ -264,32 +349,10 @@ export class LoanRequestsService {
   }
 
   private toNumber(value: unknown): number {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : 0;
-    }
-
-    return 0;
+    return readNumber(value);
   }
 
   private toDate(value: unknown): Date | null {
-    if (value instanceof Timestamp) {
-      return value.toDate();
-    }
-
-    if (value instanceof Date) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    }
-
-    return null;
+    return readDate(value);
   }
 }

@@ -1,9 +1,7 @@
 import {
   BadRequestException,
   Controller,
-  DefaultValuePipe,
   Get,
-  ParseIntPipe,
   Query,
 } from '@nestjs/common';
 import { LoanRequestsService } from './loan-requests.service';
@@ -16,12 +14,29 @@ export class LoanRequestsController {
   @Get('pending')
   getPendingRequests(
     @Query('lenderId') lenderId: string | undefined,
-    @Query('limit', new DefaultValuePipe(30), ParseIntPipe) limit: number,
+    @Query('pageSize') pageSize?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+    @Query('includeSummary') includeSummary?: string,
   ): Promise<PendingRequestsResponse> {
     if (!lenderId?.trim()) {
       throw new BadRequestException('lenderId is required.');
     }
 
-    return this.loanRequestsService.getPendingRequests(lenderId.trim(), limit);
+    return this.loanRequestsService.getPendingRequests(
+      lenderId.trim(),
+      this.toNumber(pageSize) ?? this.toNumber(limit) ?? 30,
+      cursor?.trim() || null,
+      includeSummary !== 'false',
+    );
+  }
+
+  private toNumber(value: string | undefined): number | null {
+    if (!value) {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 }

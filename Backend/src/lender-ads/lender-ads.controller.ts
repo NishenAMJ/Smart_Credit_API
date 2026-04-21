@@ -2,13 +2,15 @@ import {
   BadRequestException,
   Body,
   Controller,
-  DefaultValuePipe,
   Get,
-  ParseIntPipe,
   Post,
   Query,
 } from '@nestjs/common';
-import { CreateLenderAdInput, LenderAdResponse } from './lender-ads.types';
+import {
+  CreateLenderAdInput,
+  LenderAdResponse,
+  LenderAdsListResponse,
+} from './lender-ads.types';
 import { LenderAdsService } from './lender-ads.service';
 
 type CreateLenderAdBody = {
@@ -38,13 +40,19 @@ export class LenderAdsController {
   @Get()
   getAdsForLender(
     @Query('lenderId') lenderId: string | undefined,
-    @Query('limit', new DefaultValuePipe(6), ParseIntPipe) limit: number,
-  ): Promise<LenderAdResponse[]> {
+    @Query('pageSize') pageSize?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ): Promise<LenderAdsListResponse> {
     if (!lenderId?.trim()) {
       throw new BadRequestException('lenderId is required.');
     }
 
-    return this.lenderAdsService.getAdsForLender(lenderId.trim(), limit);
+    return this.lenderAdsService.getAdsForLender(
+      lenderId.trim(),
+      this.toOptionalNumber(pageSize) ?? this.toOptionalNumber(limit) ?? 6,
+      cursor?.trim() || null,
+    );
   }
 
   private toCreateInput(body: CreateLenderAdBody): CreateLenderAdInput {
@@ -81,5 +89,14 @@ export class LenderAdsController {
     }
 
     throw new BadRequestException(`${fieldName} must be a valid number.`);
+  }
+
+  private toOptionalNumber(value: string | undefined): number | null {
+    if (!value) {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 }

@@ -29,6 +29,18 @@ export type LenderAd = {
   source: string
 }
 
+export type CursorPageInfo = {
+  pageSize: number
+  hasMore: boolean
+  nextCursor: string | null
+}
+
+export type LenderAdsListResponse = {
+  lenderId: string
+  ads: LenderAd[]
+  pageInfo: CursorPageInfo
+}
+
 export type CreateLenderAdPayload = {
   lenderId: string
   lenderName: string
@@ -91,5 +103,6 @@ export async function fetchLenderAds(
     return extractError(response, 'Failed to load lender ads.')
   }
 
-  return response.json()
+  const body = (await response.json()) as LenderAdsListResponse
+  return body.ads
 }

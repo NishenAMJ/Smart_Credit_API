@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
+import { hasRole, readDate } from '../firebase/firestore-query.utils';
 import {
   LenderProfileResponse,
   UpdateLenderProfileInput,
@@ -23,7 +24,7 @@ export class LenderProfileService {
 
     const data = snapshot.data();
 
-    if (!data || data.role !== 'lender') {
+    if (!data || !hasRole(data.role, 'lender')) {
       throw new NotFoundException(`Lender ${lenderId} was not found.`);
     }
 
@@ -45,7 +46,7 @@ export class LenderProfileService {
 
     const data = snapshot.data();
 
-    if (!data || data.role !== 'lender') {
+    if (!data || !hasRole(data.role, 'lender')) {
       throw new NotFoundException(`Lender ${lenderId} was not found.`);
     }
 
@@ -158,19 +159,6 @@ export class LenderProfileService {
   }
 
   private toIsoString(value: unknown): string | null {
-    if (value instanceof Timestamp) {
-      return value.toDate().toISOString();
-    }
-
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-    }
-
-    return null;
+    return readDate(value)?.toISOString() ?? null;
   }
 }

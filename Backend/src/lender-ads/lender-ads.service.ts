@@ -1,11 +1,28 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
-import { CreateLenderAdInput, LenderAdResponse } from './lender-ads.types';
+import {
+  applyDateCursor,
+  buildPageInfo,
+  orderByDateAndId,
+  readDate,
+  readNumber,
+  readStringArray,
+} from '../firebase/firestore-query.utils';
+import { getAdStatus } from '../firebase/firestore-seed.utils';
+import { LenderNotificationsService } from '../lender-notifications/lender-notifications.service';
+import {
+  CreateLenderAdInput,
+  LenderAdResponse,
+  LenderAdsListResponse,
+} from './lender-ads.types';
 
 @Injectable()
 export class LenderAdsService {
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly lenderNotificationsService: LenderNotificationsService,
+  ) {}
 
   async createAd(input: CreateLenderAdInput): Promise<LenderAdResponse> {
     this.validateCreateInput(input);
@@ -15,7 +32,7 @@ export class LenderAdsService {
     const lenderData = lenderSnapshot.data();
     const now = Timestamp.now();
     const expiresAt = Timestamp.fromDate(this.getExpiryDate(now.toDate(), 30));
-    const docRef = db.collection('lenderAds').doc();
+    const docRef = db.collection('ads').doc();
     const title = input.headline.trim();
     const preferredPurposes = this.buildPreferredPurposes(input);
     const lenderName =
@@ -39,10 +56,11 @@ export class LenderAdsService {
       minAmount: input.minAmount,
       maxAmount: input.maxAmount,
       preferredInterestRate: input.interestRate,
+      minTenureMonths: Math.min(6, input.tenureMonths),
       maxTenureMonths: input.tenureMonths,
       location,
       preferredPurposes,
-      status: 'approved',
+      status: 'active',
       isBoosted: false,
       availableCapital: input.maxAmount,
       applicationCount: 0,
@@ -62,6 +80,25 @@ export class LenderAdsService {
     };
 
     await docRef.set(document);
+    await this.lenderNotificationsService.createNotification({
+      id: `ad-published-${docRef.id}`,
+      lenderId: input.lenderId,
+      category: 'ad',
+      eventType: 'ad_published',
+      title: 'Lender ad published',
+      message: `${title} is now available in your lender workspace.`,
+      severity: 'success',
+      createdAt: now.toDate(),
+      relatedEntityType: 'ad',
+      relatedEntityId: docRef.id,
+      actionLabel: 'Open ad page',
+      actionTarget: 'create-ad',
+      metadata: {
+        adId: docRef.id,
+        amount: input.maxAmount,
+        status: document.status,
+      },
+    });
 
     return {
       id: docRef.id,
@@ -91,31 +128,37 @@ export class LenderAdsService {
     };
   }
 
-  async getAdsForLender(lenderId: string, limit = 6): Promise<LenderAdResponse[]> {
-    const safeLimit = Math.min(Math.max(limit, 1), 12);
-    const collection = this.firebaseService.getDb().collection('lenderAds');
+  async getAdsForLender(
+    lenderId: string,
+    pageSize = 6,
+    cursor?: string | null,
+  ): Promise<LenderAdsListResponse> {
+    const safePageSize = Math.min(Math.max(pageSize, 1), 12);
+    const collection = this.firebaseService.getDb().collection('ads');
+    const snapshot = await applyDateCursor(
+      orderByDateAndId(collection.where('lenderId', '==', lenderId), 'createdAt'),
+      cursor,
+    )
+      .limit(safePageSize + 1)
+      .get();
 
-    try {
-      const snapshot = await collection
-        .where('lenderId', '==', lenderId)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get();
+    const items = snapshot.docs
+      .slice(0, safePageSize)
+      .map((doc) => this.mapLenderAd(doc.id, lenderId, doc.data()));
 
-      return snapshot.docs.map((doc) => this.mapLenderAd(doc.id, lenderId, doc.data()));
-    } catch {
-      const snapshot = await collection.where('lenderId', '==', lenderId).get();
-
-      return snapshot.docs
-        .map((doc) => this.mapLenderAd(doc.id, lenderId, doc.data()))
-        .sort((left, right) => {
-          const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
-          const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
-
-          return rightTime - leftTime;
-        })
-        .slice(0, safeLimit);
-    }
+    return {
+      lenderId,
+      ads: items,
+      pageInfo: buildPageInfo(
+        items.map((item) => ({
+          ...item,
+          cursorDate: item.createdAt ? new Date(item.createdAt) : null,
+          cursorId: item.id,
+        })),
+        safePageSize,
+        snapshot.docs.length > safePageSize,
+      ),
+    };
   }
 
   private validateCreateInput(input: CreateLenderAdInput): void {
@@ -171,33 +214,11 @@ export class LenderAdsService {
   }
 
   private toIsoString(value: unknown): string | null {
-    if (value instanceof Timestamp) {
-      return value.toDate().toISOString();
-    }
-
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-    }
-
-    return null;
+    return readDate(value)?.toISOString() ?? null;
   }
 
   private toNumber(value: unknown): number {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : 0;
-    }
-
-    return 0;
+    return readNumber(value);
   }
 
   private buildPreferredPurposes(input: CreateLenderAdInput): string[] {
@@ -228,24 +249,17 @@ export class LenderAdsService {
       id,
       adId: typeof data.adId === 'string' ? data.adId : id,
       lenderId: typeof data.lenderId === 'string' ? data.lenderId : lenderId,
-      title:
-        typeof data.title === 'string' && data.title.trim().length > 0
-          ? data.title
-          : 'Untitled ad',
+      title: typeof data.title === 'string' && data.title.trim().length > 0 ? data.title : 'Untitled ad',
       description: typeof data.description === 'string' ? data.description : '',
       minAmount: this.toNumber(data.minAmount),
       maxAmount: this.toNumber(data.maxAmount),
       preferredInterestRate: this.toNumber(data.preferredInterestRate),
       maxTenureMonths: this.toNumber(data.maxTenureMonths),
       location: typeof data.location === 'string' ? data.location : '',
-      preferredPurposes: Array.isArray(data.preferredPurposes)
-        ? data.preferredPurposes.filter(
-            (value): value is string => typeof value === 'string',
-          )
-        : [],
-      status: typeof data.status === 'string' ? data.status : 'unknown',
+      preferredPurposes: readStringArray(data.preferredPurposes),
+      status: getAdStatus(data),
       isBoosted: data.isBoosted === true,
-      availableCapital: this.toNumber(data.availableCapital),
+      availableCapital: this.toNumber(data.availableCapital ?? data.maxAmount),
       applicationCount: this.toNumber(data.applicationCount),
       fundedLoansCount: this.toNumber(data.fundedLoansCount),
       responseTimeHours: this.toNumber(data.responseTimeHours),

@@ -3,9 +3,25 @@ import {
   DocumentData,
   Firestore,
   QueryDocumentSnapshot,
-  Timestamp,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
+import {
+  buildPageInfo,
+  chunkValues,
+  decodeCursor,
+  dedupeById,
+  readDate,
+  readNumber,
+} from '../firebase/firestore-query.utils';
+import {
+  computeLoanRemainingAmount,
+  getAdStatus,
+  getLoanAmount,
+  getLoanCreatedAt,
+  getPaymentAmount,
+  getPaymentCreatedAt,
+  isActiveAd as isSeedActiveAd,
+} from '../firebase/firestore-seed.utils';
 import {
   AnalyticsDrilldownItem,
   AnalyticsDrilldownResponse,
@@ -93,15 +109,15 @@ export class AnalyticsService {
     const db = this.firebaseService.getDb();
     const range = this.resolveRange(rangeKey);
 
-    const [loanSnapshot, adSnapshot, requestSnapshot] = await Promise.all([
+    const [loanSnapshot, adSnapshot] = await Promise.all([
       db.collection('loans').where('lenderId', '==', lenderId).get(),
-      db.collection('lenderAds').where('lenderId', '==', lenderId).get(),
-      db.collection('loanRequests').get(),
+      db.collection('ads').where('lenderId', '==', lenderId).get(),
     ]);
 
-    const loans = loanSnapshot.docs.map((doc) => this.mapLoan(doc));
+    const loans = await Promise.all(
+      loanSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
+    );
     const ads = adSnapshot.docs.map((doc) => this.mapAd(doc));
-    const requests = requestSnapshot.docs.map((doc) => this.mapRequest(doc));
 
     const loanIds = new Set(loans.map((loan) => loan.id));
     const adIds = new Set(ads.map((ad) => ad.id));
@@ -113,33 +129,19 @@ export class AnalyticsService {
       ),
     );
 
-    const [transactionSnapshot, disputeSnapshot, overdueLoans, borrowerScores] =
+    const [requests, transactions, disputes, overdueLoans, borrowerScores] =
       await Promise.all([
-        loanIds.size > 0 ? db.collection('transactions').get() : Promise.resolve(null),
-        loanIds.size > 0 ? db.collection('disputes').get() : Promise.resolve(null),
+        this.getRequestsForLender(db, lenderId, adIds),
+        this.getTransactionsForLoanIds(db, loanIds),
+        this.getDisputesForLoanIds(db, loanIds),
         loanIds.size > 0
-          ? this.countOverdueLoans(db, loans)
+          ? this.countOverdueLoans(db, lenderId, loans)
           : Promise.resolve(0),
         borrowerIds.length > 0
           ? this.getBorrowerCreditScores(db, borrowerIds)
           : Promise.resolve([]),
       ]);
-
-    const transactions = transactionSnapshot
-      ? transactionSnapshot.docs
-          .map((doc) => this.mapTransaction(doc))
-          .filter((transaction) =>
-            transaction.loanId ? loanIds.has(transaction.loanId) : false,
-          )
-      : [];
-
-    const disputes = disputeSnapshot
-      ? disputeSnapshot.docs
-          .map((doc) => this.mapDispute(doc))
-          .filter((dispute) => (dispute.loanId ? loanIds.has(dispute.loanId) : false))
-      : [];
-
-    const scopedRequests = this.filterRequestsForLender(requests, lenderId, adIds);
+    const scopedRequests = requests;
     const rangeLoans = loans.filter((loan) => this.isWithinRange(loan.createdAt, range));
     const rangeTransactions = transactions.filter((transaction) =>
       this.isWithinRange(transaction.createdAt, range),
@@ -260,6 +262,8 @@ export class AnalyticsService {
     lenderId: string,
     type: string,
     rangeKey = '90d',
+    pageSize = 30,
+    cursor?: string | null,
   ): Promise<AnalyticsDrilldownResponse> {
     const range = this.resolveRange(rangeKey);
     const normalizedType = this.resolveDrilldownType(type);
@@ -279,6 +283,7 @@ export class AnalyticsService {
     const activeAds = context.ads.filter((ad) => this.isActiveAd(ad, range.end));
     const overdueLoanIds = await this.findOverdueLoanIds(
       this.firebaseService.getDb(),
+      lenderId,
       context.loans,
     );
 
@@ -293,9 +298,12 @@ export class AnalyticsService {
       type: normalizedType,
     };
 
+    const safePageSize = Math.min(Math.max(pageSize, 10), 60);
+    let response: Omit<AnalyticsDrilldownResponse, 'pageInfo'>;
+
     switch (normalizedType) {
       case 'total-lent':
-        return {
+        response = {
           ...base,
           title: 'Lent Loans',
           description: 'Loans created in the selected period.',
@@ -306,8 +314,9 @@ export class AnalyticsService {
             (loan) => this.formatCurrency(loan.amount),
           ),
         };
+        break;
       case 'total-collected':
-        return {
+        response = {
           ...base,
           title: 'Repayment Collections',
           description: 'Repayment transactions recorded in the selected period.',
@@ -317,8 +326,9 @@ export class AnalyticsService {
             context.borrowerNameMap,
           ),
         };
+        break;
       case 'active-loans':
-        return {
+        response = {
           ...base,
           title: 'Active Loans',
           description: 'Loans that are currently active in the portfolio.',
@@ -329,22 +339,25 @@ export class AnalyticsService {
             (loan) => this.formatCurrency(loan.remainingAmount),
           ),
         };
+        break;
       case 'active-ads':
-        return {
+        response = {
           ...base,
           title: 'Active Ads',
           description: 'Approved ads that are still active for this lender.',
           items: this.buildAdItems(activeAds),
         };
+        break;
       case 'requests-received':
-        return {
+        response = {
           ...base,
           title: 'Requests Received',
           description: 'Loan requests linked to the lender or one of the lender ads.',
           items: this.buildRequestItems(rangeRequests, context.borrowerNameMap),
         };
+        break;
       case 'accepted-requests':
-        return {
+        response = {
           ...base,
           title: 'Accepted Requests',
           description: 'Requests that were accepted or converted into loans.',
@@ -355,8 +368,9 @@ export class AnalyticsService {
             context.borrowerNameMap,
           ),
         };
+        break;
       case 'overdue-loans':
-        return {
+        response = {
           ...base,
           title: 'Overdue Loans',
           description: 'Loans with at least one overdue installment.',
@@ -367,8 +381,9 @@ export class AnalyticsService {
             (loan) => this.formatCurrency(loan.remainingAmount),
           ),
         };
+        break;
       case 'defaulted-loans':
-        return {
+        response = {
           ...base,
           title: 'Defaulted Loans',
           description: 'Loans marked as defaulted in the lender portfolio.',
@@ -379,8 +394,9 @@ export class AnalyticsService {
             (loan) => this.formatCurrency(loan.amount),
           ),
         };
+        break;
       case 'open-disputes':
-        return {
+        response = {
           ...base,
           title: 'Open Disputes',
           description: 'Disputes still open or under review for lender-linked loans.',
@@ -390,7 +406,24 @@ export class AnalyticsService {
             context.borrowerNameMap,
           ),
         };
+        break;
     }
+
+    const pagedItems = this.paginateItems(response.items, safePageSize, cursor);
+
+    return {
+      ...response,
+      items: pagedItems.items,
+      pageInfo: buildPageInfo(
+        pagedItems.items.map((item) => ({
+          ...item,
+          cursorDate: item.date ? new Date(item.date) : null,
+          cursorId: item.id,
+        })),
+        safePageSize,
+        pagedItems.hasMore,
+      ),
+    };
   }
 
   private resolveRange(rangeKey: string): RangeConfig & { start: Date; end: Date } {
@@ -415,22 +448,22 @@ export class AnalyticsService {
     return value ? value >= range.start && value <= range.end : false;
   }
 
-  private mapLoan(doc: QueryDocumentSnapshot<DocumentData>): LoanRecord {
+  private async mapLoan(
+    db: Firestore,
+    doc: QueryDocumentSnapshot<DocumentData>,
+  ): Promise<LoanRecord> {
     const data = doc.data();
 
     return {
       id: doc.id,
       requestId: typeof data.requestId === 'string' ? data.requestId : null,
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
-      amount: this.toNumber(data.amount),
+      amount: getLoanAmount(data),
       interestRate: this.toNumber(data.interestRate),
       tenureMonths: this.toNumber(data.tenureMonths),
-      remainingAmount: this.toNumber(data.remainingAmount),
+      remainingAmount: await computeLoanRemainingAmount(db, doc.id, data),
       status: typeof data.status === 'string' ? data.status : 'unknown',
-      createdAt:
-        this.toDate(data.createdAt) ??
-        this.toDate(data.startDate) ??
-        this.toDate(data.signedAt),
+      createdAt: getLoanCreatedAt(data),
     };
   }
 
@@ -439,7 +472,7 @@ export class AnalyticsService {
 
     return {
       id: doc.id,
-      status: typeof data.status === 'string' ? data.status : 'unknown',
+      status: getAdStatus(data),
       expiresAt: this.toDate(data.expiresAt),
     };
   }
@@ -505,38 +538,23 @@ export class AnalyticsService {
 
   private async loadAnalyticsContext(lenderId: string) {
     const db = this.firebaseService.getDb();
-    const [loanSnapshot, adSnapshot, requestSnapshot] = await Promise.all([
+    const [loanSnapshot, adSnapshot] = await Promise.all([
       db.collection('loans').where('lenderId', '==', lenderId).get(),
-      db.collection('lenderAds').where('lenderId', '==', lenderId).get(),
-      db.collection('loanRequests').get(),
+      db.collection('ads').where('lenderId', '==', lenderId).get(),
     ]);
 
-    const loans = loanSnapshot.docs.map((doc) => this.mapLoan(doc));
+    const loans = await Promise.all(
+      loanSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
+    );
     const ads = adSnapshot.docs.map((doc) => this.mapAd(doc));
-    const requests = requestSnapshot.docs.map((doc) => this.mapRequest(doc));
 
     const loanIds = new Set(loans.map((loan) => loan.id));
     const adIds = new Set(ads.map((ad) => ad.id));
-    const scopedRequests = this.filterRequestsForLender(requests, lenderId, adIds);
-
-    const [transactionSnapshot, disputeSnapshot] = await Promise.all([
-      loanIds.size > 0 ? db.collection('transactions').get() : Promise.resolve(null),
-      loanIds.size > 0 ? db.collection('disputes').get() : Promise.resolve(null),
+    const [scopedRequests, transactions, disputes] = await Promise.all([
+      this.getRequestsForLender(db, lenderId, adIds),
+      this.getTransactionsForLoanIds(db, loanIds),
+      this.getDisputesForLoanIds(db, loanIds),
     ]);
-
-    const transactions = transactionSnapshot
-      ? transactionSnapshot.docs
-          .map((doc) => this.mapTransaction(doc))
-          .filter((transaction) =>
-            transaction.loanId ? loanIds.has(transaction.loanId) : false,
-          )
-      : [];
-
-    const disputes = disputeSnapshot
-      ? disputeSnapshot.docs
-          .map((doc) => this.mapDispute(doc))
-          .filter((dispute) => (dispute.loanId ? loanIds.has(dispute.loanId) : false))
-      : [];
 
     const borrowerIds = Array.from(
       new Set(
@@ -563,52 +581,116 @@ export class AnalyticsService {
     };
   }
 
-  private filterRequestsForLender(
-    requests: RequestRecord[],
+  private async getRequestsForLender(
+    db: Firestore,
     lenderId: string,
     adIds: Set<string>,
-  ): RequestRecord[] {
-    const seen = new Set<string>();
+  ): Promise<RequestRecord[]> {
+    const scopedSnapshots = await Promise.all([
+      db.collection('loanRequests').where('targetLenderId', '==', lenderId).get(),
+      db.collection('loanRequests').where('matchedLenderIds', 'array-contains', lenderId).get(),
+      ...chunkValues(Array.from(adIds), 10).map((adIdChunk) =>
+        db.collection('loanRequests').where('adId', 'in', adIdChunk).get(),
+      ),
+    ]);
 
-    return requests.filter((request) => {
-      const matches =
-        request.targetLenderId === lenderId ||
-        (request.adId ? adIds.has(request.adId) : false);
-
-      if (!matches || seen.has(request.id)) {
-        return false;
-      }
-
-      seen.add(request.id);
-      return true;
-    });
+    return dedupeById(
+      scopedSnapshots
+        .flatMap((snapshot) => snapshot.docs)
+        .map((doc) => this.mapRequest(doc)),
+    );
   }
 
-  private async countOverdueLoans(db: Firestore, loans: LoanRecord[]): Promise<number> {
-    const overdueLoanIds = await this.findOverdueLoanIds(db, loans);
+  private async countOverdueLoans(
+    db: Firestore,
+    lenderId: string,
+    loans: LoanRecord[],
+  ): Promise<number> {
+    const overdueLoanIds = await this.findOverdueLoanIds(db, lenderId, loans);
     return overdueLoanIds.size;
   }
 
   private async findOverdueLoanIds(
     db: Firestore,
+    lenderId: string,
     loans: LoanRecord[],
   ): Promise<Set<string>> {
-    const overdueChecks = await Promise.all(
-      loans.map(async (loan) => {
-        const snapshot = await db
-          .collection('loans')
-          .doc(loan.id)
-          .collection('installments')
-          .where('status', '==', 'overdue')
-          .limit(1)
-          .get();
+    try {
+      const snapshot = await db
+        .collectionGroup('installments')
+        .where('lenderId', '==', lenderId)
+        .where('status', '==', 'overdue')
+        .get();
 
-        return snapshot.empty ? null : loan.id;
-      }),
+      return new Set(
+        snapshot.docs
+          .map((doc) => doc.get('loanId'))
+          .filter((loanId): loanId is string => typeof loanId === 'string'),
+      );
+    } catch {
+      const overdueChecks = await Promise.all(
+        loans.map(async (loan) => {
+          const snapshot = await db
+            .collection('loans')
+            .doc(loan.id)
+            .collection('installments')
+            .where('status', '==', 'overdue')
+            .limit(1)
+            .get();
+
+          return snapshot.empty ? null : loan.id;
+        }),
+      );
+
+      return new Set(
+        overdueChecks.filter((loanId): loanId is string => loanId !== null),
+      );
+    }
+  }
+
+  private async getTransactionsForLoanIds(
+    db: Firestore,
+    loanIds: Set<string>,
+  ): Promise<TransactionRecord[]> {
+    if (loanIds.size === 0) {
+      return [];
+    }
+
+    const snapshots = await Promise.all(
+      chunkValues(Array.from(loanIds), 10).map((loanIdChunk) =>
+        db.collection('transactions').where('loanId', 'in', loanIdChunk).get(),
+      ),
     );
 
-    return new Set(
-      overdueChecks.filter((loanId): loanId is string => loanId !== null),
+    const topLevelTransactions = snapshots.flatMap((snapshot) =>
+      snapshot.docs.map((doc) => this.mapTransaction(doc)),
+    );
+
+    if (topLevelTransactions.length > 0) {
+      return topLevelTransactions;
+    }
+
+    return this.getNestedPaymentTransactions(db, Array.from(loanIds));
+  }
+
+  private async getDisputesForLoanIds(
+    db: Firestore,
+    loanIds: Set<string>,
+  ): Promise<DisputeRecord[]> {
+    if (loanIds.size === 0) {
+      return [];
+    }
+
+    const snapshots = await Promise.all(
+      chunkValues(Array.from(loanIds), 10).map((loanIdChunk) =>
+        db.collection('disputes').where('loanId', 'in', loanIdChunk).get(),
+      ),
+    );
+
+    return dedupeById(
+      snapshots.flatMap((snapshot) =>
+        snapshot.docs.map((doc) => this.mapDispute(doc)),
+      ),
     );
   }
 
@@ -770,11 +852,13 @@ export class AnalyticsService {
   }
 
   private isActiveAd(ad: AdRecord, now: Date): boolean {
-    if (ad.status !== 'approved') {
-      return false;
-    }
-
-    return ad.expiresAt ? ad.expiresAt >= now : true;
+    return isSeedActiveAd(
+      {
+        status: ad.status,
+        expiresAt: ad.expiresAt,
+      } as DocumentData,
+      now,
+    );
   }
 
   private buildLoanItems(
@@ -942,33 +1026,11 @@ export class AnalyticsService {
   }
 
   private toDate(value: unknown): Date | null {
-    if (value instanceof Timestamp) {
-      return value.toDate();
-    }
-
-    if (value instanceof Date) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    }
-
-    return null;
+    return readDate(value);
   }
 
   private toNumber(value: unknown): number {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : 0;
-    }
-
-    return 0;
+    return readNumber(value);
   }
 
   private toNullableNumber(value: unknown): number | null {
@@ -978,5 +1040,68 @@ export class AnalyticsService {
 
   private sum(values: number[]): number {
     return values.reduce((total, value) => total + value, 0);
+  }
+
+  private async getNestedPaymentTransactions(
+    db: Firestore,
+    loanIds: string[],
+  ): Promise<TransactionRecord[]> {
+    const groups = await Promise.all(
+      loanIds.map(async (loanId) => {
+        const installmentsSnapshot = await db
+          .collection('loans')
+          .doc(loanId)
+          .collection('installments')
+          .get();
+
+        const paymentGroups = await Promise.all(
+          installmentsSnapshot.docs.map(async (installmentDoc) => {
+            const paymentsSnapshot = await installmentDoc.ref.collection('payments').get();
+
+            return paymentsSnapshot.docs.map((paymentDoc) => {
+              const data = paymentDoc.data();
+              return {
+                loanId,
+                type:
+                  typeof data.type === 'string'
+                    ? data.type
+                    : typeof data.paymentType === 'string'
+                      ? data.paymentType
+                      : 'repayment',
+                amount: getPaymentAmount(data),
+                createdAt: getPaymentCreatedAt(data),
+              } satisfies TransactionRecord;
+            });
+          }),
+        );
+
+        return paymentGroups.flat();
+      }),
+    );
+
+    return groups.flat();
+  }
+
+  private paginateItems<T extends { id: string; date: string | null }>(
+    items: T[],
+    pageSize: number,
+    cursor?: string | null,
+  ): { items: T[]; hasMore: boolean } {
+    const decoded = decodeCursor(cursor);
+    const startIndex = decoded
+      ? items.findIndex(
+          (item) =>
+            item.id === decoded.id &&
+            (item.date ? new Date(item.date).toISOString() : null) ===
+              decoded.date.toISOString(),
+        ) + 1
+      : 0;
+    const safeStartIndex = startIndex > 0 ? startIndex : 0;
+    const sliced = items.slice(safeStartIndex, safeStartIndex + pageSize + 1);
+
+    return {
+      items: sliced.slice(0, pageSize),
+      hasMore: sliced.length > pageSize,
+    };
   }
 }

@@ -1,3 +1,9 @@
+export interface CursorPageInfo {
+  pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 export interface PendingRequestsSummary {
   totalPendingRequests: number;
   targetedRequests: number;
@@ -37,5 +43,6 @@ export interface PendingRequestsResponse {
   lenderId: string;
   summary: PendingRequestsSummary;
   requests: PendingRequestListItem[];
+  pageInfo: CursorPageInfo;
   generatedAt: string;
 }

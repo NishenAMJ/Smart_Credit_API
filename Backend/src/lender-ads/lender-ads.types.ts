@@ -1,3 +1,9 @@
+export interface CursorPageInfo {
+  pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 export interface CreateLenderAdInput {
   lenderId: string;
   lenderName: string | null;
@@ -38,4 +44,10 @@ export interface LenderAdResponse {
   searchKeywords: string[];
   seedBatchId: string;
   source: string;
+}
+
+export interface LenderAdsListResponse {
+  lenderId: string;
+  ads: LenderAdResponse[];
+  pageInfo: CursorPageInfo;
 }

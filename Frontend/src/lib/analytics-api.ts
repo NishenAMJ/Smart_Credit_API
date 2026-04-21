@@ -71,4 +71,9 @@ export type AnalyticsDrilldownResponse = {
   title: string
   description: string
   items: AnalyticsDrilldownItem[]
+  pageInfo: {
+    pageSize: number
+    hasMore: boolean
+    nextCursor: string | null
+  }
 }

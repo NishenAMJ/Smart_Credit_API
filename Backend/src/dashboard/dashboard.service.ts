@@ -4,9 +4,19 @@ import {
   Firestore,
   QueryDocumentSnapshot,
   Query,
-  Timestamp,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
+import { chunkValues, hasRole, readDate, readNumber } from '../firebase/firestore-query.utils';
+import {
+  computeLoanRemainingAmount,
+  getInstallmentAmount,
+  getLoanAmount,
+  getLoanCreatedAt,
+  getNormalizedInstallment,
+  getPaymentAmount,
+  getPaymentCreatedAt,
+  isActiveAd,
+} from '../firebase/firestore-seed.utils';
 import {
   BorrowerLoanSummary,
   BorrowerDetailsResponse,
@@ -48,7 +58,9 @@ export class DashboardService {
       .collection('loans')
       .where('lenderId', '==', lenderId)
       .get();
-    const lenderLoans = loansSnapshot.docs.map((doc) => this.mapLoan(doc));
+    const lenderLoans = await Promise.all(
+      loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
+    );
     const loanIds = new Set(lenderLoans.map((loan) => loan.id));
 
     const [
@@ -59,8 +71,8 @@ export class DashboardService {
       recentBorrowers,
     ] = await Promise.all([
       Promise.resolve(this.getBorrowerCount(lenderLoans)),
-      this.getTodaysCollection(db, loanIds),
-      this.getOverduePaymentsCount(db, lenderLoans),
+      this.getTodaysCollection(db, lenderId, loanIds),
+      this.getOverduePaymentsCount(db, lenderId, lenderLoans),
       this.getActiveAdsCount(db, lenderId),
       this.getRecentBorrowers(db, lenderLoans, safeLimit),
     ]);
@@ -97,11 +109,13 @@ export class DashboardService {
 
     const data = snapshot.data();
 
-    if (!data || data.role !== 'borrower') {
+    if (!data || !hasRole(data.role, 'borrower')) {
       return null;
     }
 
-    const lenderLoans = loansSnapshot.docs.map((doc) => this.mapLoan(doc));
+    const lenderLoans = await Promise.all(
+      loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
+    );
 
     if (lenderLoans.length === 0) {
       return null;
@@ -119,7 +133,7 @@ export class DashboardService {
 
     return {
       id: snapshot.id,
-      role: typeof data.role === 'string' ? data.role : 'borrower',
+      role: hasRole(data.role, 'borrower') ? 'borrower' : 'unknown',
       fullName:
         typeof data.fullName === 'string' && data.fullName.trim().length > 0
           ? data.fullName
@@ -172,40 +186,53 @@ export class DashboardService {
     db: Firestore,
     lenderId: string,
   ): Promise<number> {
-    const query = db
-      .collection('lenderAds')
-      .where('lenderId', '==', lenderId)
-      .where('status', '==', 'approved');
-
-    return this.getCountWithFallback(
-      'active ads count',
-      query,
-      async () => (await query.get()).size,
-    );
+    const snapshot = await db.collection('ads').where('lenderId', '==', lenderId).get();
+    return snapshot.docs.filter((doc) => isActiveAd(doc.data())).length;
   }
 
   private async getOverduePaymentsCount(
     db: Firestore,
+    lenderId: string,
     loans: DashboardLoanRecord[],
   ): Promise<number> {
-    const counts = await Promise.all(
-      loans.map(async (loan) => {
-        const snapshot = await db
-          .collection('loans')
-          .doc(loan.id)
-          .collection('installments')
-          .where('status', '==', 'overdue')
-          .get();
+    try {
+      const snapshot = await db
+        .collectionGroup('installments')
+        .where('lenderId', '==', lenderId)
+        .where('status', '==', 'overdue')
+        .count()
+        .get();
 
-        return snapshot.size;
-      }),
-    );
+      return snapshot.data().count;
+    } catch (error) {
+      this.logFallback(
+        'overdue-installments:lender-scope',
+        'Falling back from lender-scoped overdue installments query.',
+        error,
+      );
 
-    return counts.reduce((total, count) => total + count, 0);
+      const counts = await Promise.all(
+        loans.map(async (loan) => {
+          const snapshot = await db
+            .collection('loans')
+            .doc(loan.id)
+            .collection('installments')
+            .get();
+
+          return snapshot.docs.filter((doc) => {
+            const installment = getNormalizedInstallment(doc.data());
+            return installment.status === 'overdue';
+          }).length;
+        }),
+      );
+
+      return counts.reduce((total, count) => total + count, 0);
+    }
   }
 
   private async getTodaysCollection(
     db: Firestore,
+    lenderId: string,
     loanIds: Set<string>,
   ): Promise<number> {
     if (loanIds.size === 0) {
@@ -213,9 +240,47 @@ export class DashboardService {
     }
 
     const { start, end } = this.getCurrentDayRange();
-    const snapshot = await db.collection('transactions').get();
+    try {
+      const snapshot = await db
+        .collection('transactions')
+        .where('lenderId', '==', lenderId)
+        .where('type', '==', 'repayment')
+        .where('createdAt', '>=', start)
+        .where('createdAt', '<', end)
+        .get();
 
-    return this.sumRepaymentTransactions(snapshot.docs, loanIds, { start, end });
+      if (snapshot.size > 0) {
+        return this.sumRepaymentTransactions(snapshot.docs, loanIds, { start, end });
+      }
+    } catch (error) {
+      this.logFallback(
+        'todays-collection:lender-scope',
+        'Falling back from lender-scoped todays collection query.',
+        error,
+      );
+    }
+
+    const snapshots = await Promise.all(
+      chunkValues(Array.from(loanIds), 10).map((loanIdChunk) =>
+        db
+          .collection('transactions')
+          .where('loanId', 'in', loanIdChunk)
+          .where('type', '==', 'repayment')
+          .get(),
+      ),
+    );
+
+    const topLevelTotal = this.sumRepaymentTransactions(
+      snapshots.flatMap((snapshot) => snapshot.docs),
+      loanIds,
+      { start, end },
+    );
+
+    if (topLevelTotal > 0) {
+      return topLevelTotal;
+    }
+
+    return this.sumNestedPaymentsForDateRange(db, Array.from(loanIds), { start, end });
   }
 
   private getCurrentDayRange(): { start: Date; end: Date } {
@@ -350,7 +415,7 @@ export class DashboardService {
     data: DocumentData | undefined,
     loans: DashboardLoanRecord[],
   ): DashboardBorrower | null {
-    if (!data || data.role !== 'borrower' || loans.length === 0) {
+    if (!data || !hasRole(data.role, 'borrower') || loans.length === 0) {
       return null;
     }
 
@@ -392,21 +457,21 @@ export class DashboardService {
     };
   }
 
-  private mapLoan(doc: QueryDocumentSnapshot<DocumentData>): DashboardLoanRecord {
+  private async mapLoan(
+    db: Firestore,
+    doc: QueryDocumentSnapshot<DocumentData>,
+  ): Promise<DashboardLoanRecord> {
     const data = doc.data();
 
     return {
       id: doc.id,
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
-      amount: this.toNumber(data.amount),
-      remainingAmount: this.toNumber(data.remainingAmount),
+      amount: getLoanAmount(data),
+      remainingAmount: await computeLoanRemainingAmount(db, doc.id, data),
       interestRate: this.toNumber(data.interestRate),
       tenureMonths: this.toNumber(data.tenureMonths),
       status: typeof data.status === 'string' ? data.status : 'unknown',
-      createdAt:
-        this.toDate(data.createdAt) ??
-        this.toDate(data.startDate) ??
-        this.toDate(data.signedAt),
+      createdAt: getLoanCreatedAt(data),
     };
   }
 
@@ -447,38 +512,51 @@ export class DashboardService {
   }
 
   private toDate(value: unknown): Date | null {
-    if (value instanceof Timestamp) {
-      return value.toDate();
-    }
-
-    if (value instanceof Date) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = new Date(value);
-
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    }
-
-    return null;
+    return readDate(value);
   }
 
   private toNumber(value: unknown): number {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = Number(value);
-
-      return Number.isFinite(parsed) ? parsed : 0;
-    }
-
-    return 0;
+    return readNumber(value);
   }
 
   private sum(values: number[]): number {
     return values.reduce((total, value) => total + value, 0);
+  }
+
+  private async sumNestedPaymentsForDateRange(
+    db: Firestore,
+    loanIds: string[],
+    range: { start: Date; end: Date },
+  ): Promise<number> {
+    const totals = await Promise.all(
+      loanIds.map(async (loanId) => {
+        const installmentsSnapshot = await db
+          .collection('loans')
+          .doc(loanId)
+          .collection('installments')
+          .get();
+
+        const installmentTotals = await Promise.all(
+          installmentsSnapshot.docs.map(async (installmentDoc) => {
+            const paymentsSnapshot = await installmentDoc.ref.collection('payments').get();
+
+            return paymentsSnapshot.docs.reduce((total, paymentDoc) => {
+              const data = paymentDoc.data();
+              const createdAt = getPaymentCreatedAt(data);
+
+              if (!createdAt || createdAt < range.start || createdAt >= range.end) {
+                return total;
+              }
+
+              return total + getPaymentAmount(data);
+            }, 0);
+          }),
+        );
+
+        return this.sum(installmentTotals);
+      }),
+    );
+
+    return this.sum(totals);
   }
 }

@@ -9,6 +9,12 @@ export type PendingRequestsSummary = {
   highUrgencyRequests: number
 }
 
+export type CursorPageInfo = {
+  pageSize: number
+  hasMore: boolean
+  nextCursor: string | null
+}
+
 export type PendingRequest = {
   requestId: string
   borrowerId: string
@@ -41,6 +47,7 @@ export type PendingRequestsResponse = {
   lenderId: string
   summary: PendingRequestsSummary
   requests: PendingRequest[]
+  pageInfo: CursorPageInfo
   generatedAt: string
 }
 
