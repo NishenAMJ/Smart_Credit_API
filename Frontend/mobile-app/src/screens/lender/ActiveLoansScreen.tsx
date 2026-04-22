@@ -1,11 +1,14 @@
 ﻿import React, { useState } from 'react';
 import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+
 import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { LenderHeader, StatCard, AlertBanner } from '../../components/lender';
+import { LenderHeader } from '../../components/lender';
 
 export default function ActiveLoansScreen({ navigation }: any) {
+
+  {/*navigation is used to move between screens,  any is TypeScript type (means “any type”)*/}
   const [filter, setFilter] = useState<'all' | 'active' | 'overdue'>('all');
+  {/*filter → current selected filter,setFilter → function to change it*/}
   
   const loans = [
     { id: 'L-001', borrower: 'Kasun Silva', amount: 150000, disbursed: 150000, roi: 18, status: 'active', daysLeft: 45 },
@@ -14,10 +17,12 @@ export default function ActiveLoansScreen({ navigation }: any) {
   ];
 
   const filtered = loans.filter(l => filter === 'all' || l.status === filter);
+  {/*Filters loans based on selected filter*/}
 
   return (
     <SafeAreaView style={commonStyles.safe}>
       <LenderHeader title="Active Loans" onBackPress={() => navigation.goBack()} />
+        {/*Header component,Back button → goes to previous screen*/}
       
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.filters}>

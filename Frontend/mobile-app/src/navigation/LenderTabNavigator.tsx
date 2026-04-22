@@ -8,6 +8,7 @@ import { Feather } from '@expo/vector-icons';
 import LenderDashboardScreen from '../screens/lender/LenderDashboardScreen';
 import LenderProfileScreen   from '../screens/lender/LenderProfileScreen';
 import MyBorrowersScreen     from '../screens/lender/MyBorrowersScreen';
+import QRScannerScreen from '../screens/lender/QRScannerScreen'
 import ChatNavigator from './ChatNavigator';
 
 const Tab = createBottomTabNavigator();
@@ -79,7 +80,7 @@ export default function LenderTabNavigator() {
       {/* Tab 3 — QR Scanner (center button) */}
       <Tab.Screen
         name="QRScannerTab"
-        component={LenderDashboardScreen}
+        component={QRScannerScreen}
         options={{
           tabBarLabel: '',
           tabBarIcon: () => null,
