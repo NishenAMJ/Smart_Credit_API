@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+{/*Icon library (used for button icon*/}
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader, AlertBanner } from '../../components/lender';
 
-// ── Mock Loan ────────────────────────────────────────
+
 const MOCK_LOAN = {
   id: 'L-2026-001',
   borrowerName: 'Kasun Silva',
@@ -13,16 +14,20 @@ const MOCK_LOAN = {
   remainingAmount: '35,000',
   status: 'active',
   rate: '12',
-  tenure: '12',
+  tenure: '12', //months
   disbursedDate: '2026-03-15',
   maturityDate: '2027-03-15',
   nextPaymentDue: '2026-05-15',
   amountDue: '4,500',
 };
 
-// ── Main Component ──────────────────────────────────
+
 export default function LoanDetailsScreen({ navigation, route }: any) {
+
+    //navigation -move between screens
+    //route - get data passed from previous screen
   const loanId = route?.params?.loanId || 'L-2026-001';
+  // Gets loanId from navigatio If not found - use default
   const loan = MOCK_LOAN;
 
   const progressPercent = (parseInt(loan.paidAmount) / parseInt(loan.amount)) * 100;
