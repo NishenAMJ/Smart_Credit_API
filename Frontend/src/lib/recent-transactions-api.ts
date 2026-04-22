@@ -41,6 +41,7 @@ export type RecentTransactionItem = {
 export type RecentTransactionsResponse = {
   lenderId: string
   summary: RecentTransactionsSummary
+  searchResultCount: number | null
   transactions: RecentTransactionItem[]
   pageInfo: CursorPageInfo
   generatedAt: string
@@ -86,6 +87,13 @@ export type RecordInstallmentPaymentInput = {
   note?: string | null
 }
 
+export type FetchRecentTransactionsOptions = {
+  pageSize?: number
+  cursor?: string | null
+  includeSummary?: boolean
+  search?: string | null
+}
+
 async function parseError(response: Response, fallback: string): Promise<never> {
   try {
     const body = (await response.json()) as { message?: string | string[] }
@@ -104,12 +112,27 @@ async function parseError(response: Response, fallback: string): Promise<never> 
 
 export async function fetchRecentTransactions(
   lenderId: string,
-  limit = 30,
+  options: FetchRecentTransactionsOptions = {},
 ): Promise<RecentTransactionsResponse> {
+  const params = new URLSearchParams({
+    lenderId,
+    pageSize: String(options.pageSize ?? 15),
+  })
+
+  if (options.cursor) {
+    params.set('cursor', options.cursor)
+  }
+
+  if (options.includeSummary === false) {
+    params.set('includeSummary', 'false')
+  }
+
+  if (options.search && options.search.trim().length > 0) {
+    params.set('search', options.search.trim())
+  }
+
   const response = await fetch(
-    `${API_BASE_URL}/recent-transactions?lenderId=${encodeURIComponent(
-      lenderId,
-    )}&limit=${encodeURIComponent(String(limit))}`,
+    `${API_BASE_URL}/recent-transactions?${params.toString()}`,
   )
 
   if (!response.ok) {

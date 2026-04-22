@@ -29,7 +29,7 @@ type PaymentFormState = {
   isSaving: boolean
 }
 
-const API_LIMIT = 30
+const PAGE_SIZE = 15
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', {
   style: 'currency',
@@ -84,6 +84,9 @@ export default function RecentTransactionsPage({
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
   const [selectedTransaction, setSelectedTransaction] =
     useState<RecentTransactionItem | null>(null)
   const [detailSection, setDetailSection] = useState<DetailSection>('loan')
@@ -101,12 +104,22 @@ export default function RecentTransactionsPage({
     isSaving: false,
   })
 
-  async function loadTransactionsData() {
+  const activeCursor = pageCursors[currentPage - 1] ?? null
+
+  async function loadTransactionsData(options?: {
+    cursor?: string | null
+    search?: string
+  }) {
     setIsLoading(true)
     setError(null)
 
     try {
-      const data = await fetchRecentTransactions(session.lenderId, API_LIMIT)
+      const data = await fetchRecentTransactions(session.lenderId, {
+        pageSize: PAGE_SIZE,
+        cursor: options?.cursor ?? activeCursor,
+        includeSummary: false,
+        search: options?.search ?? debouncedSearchQuery,
+      })
       setResponse(data)
     } catch (loadError) {
       setError(
@@ -120,11 +133,40 @@ export default function RecentTransactionsPage({
   }
 
   useEffect(() => {
+    setCurrentPage(1)
+    setPageCursors([null])
+    setResponse(null)
+    setSearchQuery('')
+    setDebouncedSearchQuery('')
+  }, [session.lenderId])
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 250)
+
+    return () => window.clearTimeout(handle)
+  }, [searchQuery])
+
+  useEffect(() => {
+    setCurrentPage(1)
+    setPageCursors([null])
+  }, [debouncedSearchQuery])
+
+  useEffect(() => {
     let isMounted = true
 
     const loadTransactions = async () => {
       try {
-        const data = await fetchRecentTransactions(session.lenderId, API_LIMIT)
+        setIsLoading(true)
+        setError(null)
+
+        const data = await fetchRecentTransactions(session.lenderId, {
+          pageSize: PAGE_SIZE,
+          cursor: activeCursor,
+          includeSummary: false,
+          search: debouncedSearchQuery,
+        })
 
         if (isMounted) {
           setResponse(data)
@@ -149,7 +191,7 @@ export default function RecentTransactionsPage({
     return () => {
       isMounted = false
     }
-  }, [session.lenderId])
+  }, [activeCursor, currentPage, debouncedSearchQuery, session.lenderId])
 
   useEffect(() => {
     if (!selectedTransaction) {
@@ -284,7 +326,12 @@ export default function RecentTransactionsPage({
         success: 'Payment recorded successfully.',
         isSaving: false,
       })
-      await loadTransactionsData()
+      setCurrentPage(1)
+      setPageCursors([null])
+      await loadTransactionsData({
+        cursor: null,
+        search: debouncedSearchQuery,
+      })
     } catch (saveError) {
       setPaymentForm((current) => ({
         ...current,
@@ -303,57 +350,36 @@ export default function RecentTransactionsPage({
     [response?.transactions],
   )
 
-  const filteredTransactions = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase()
+  const visibleStart = response?.transactions.length
+    ? (currentPage - 1) * PAGE_SIZE + 1
+    : 0
+  const visibleEnd = response?.transactions.length
+    ? visibleStart + response.transactions.length - 1
+    : 0
+  const isSearchActive = debouncedSearchQuery.trim().length > 0
+  const matchedPaymentsCount =
+    response?.searchResultCount ?? (isSearchActive ? transactions.length : 0)
 
-    if (!normalizedQuery) {
-      return transactions
+  function goToPreviousPage() {
+    setCurrentPage((page) => Math.max(1, page - 1))
+  }
+
+  function goToNextPage() {
+    const nextCursor = response?.pageInfo.nextCursor
+
+    if (!nextCursor) {
+      return
     }
 
-    return transactions.filter((transaction) => {
-      return (
-        transaction.borrowerName.toLowerCase().includes(normalizedQuery) ||
-        transaction.borrowerEmail.toLowerCase().includes(normalizedQuery) ||
-        transaction.loanId.toLowerCase().includes(normalizedQuery) ||
-        (transaction.installmentId ?? '').toLowerCase().includes(normalizedQuery) ||
-        formatLabel(transaction.loanStatus).toLowerCase().includes(normalizedQuery) ||
-        formatLabel(transaction.installmentSummary.latestInstallmentStatus)
-          .toLowerCase()
-          .includes(normalizedQuery)
-      )
-    })
-  }, [transactions, searchQuery])
+    setPageCursors((current) => {
+      if (current[currentPage] === nextCursor) {
+        return current
+      }
 
-  const summaryCards = [
-    {
-      label: 'Recent Payments',
-      value: response ? String(response.summary.totalTransactions) : '--',
-      caption: 'Loan-linked payments recorded for this lender',
-      accent: 'PM',
-      tone: 'primary',
-    },
-    {
-      label: 'Total Collected',
-      value: response ? formatCurrency(response.summary.totalCollected) : '--',
-      caption: 'Total repayments recorded for this lender',
-      accent: 'LKR',
-      tone: 'success',
-    },
-    {
-      label: 'Loans With Activity',
-      value: response ? String(response.summary.loansWithActivity) : '--',
-      caption: 'Lender-owned loans with transaction history',
-      accent: 'LN',
-      tone: 'warning',
-    },
-    {
-      label: 'Overdue Installments',
-      value: response ? String(response.summary.overdueInstallments) : '--',
-      caption: 'Installments still overdue across those loans',
-      accent: 'OD',
-      tone: 'danger',
-    },
-  ]
+      return [...current.slice(0, currentPage), nextCursor]
+    })
+    setCurrentPage((page) => page + 1)
+  }
 
   return (
     <>
@@ -387,31 +413,15 @@ export default function RecentTransactionsPage({
           </section>
         ) : (
           <>
-            <section className="summary-grid" aria-label="Loan activity summary">
-              {summaryCards.map((card) => (
-                <article className="card metric-card" key={card.label}>
-                  <div
-                    className={`metric-icon metric-icon--${card.tone}`}
-                    aria-hidden="true"
-                  >
-                    {card.accent}
-                  </div>
-                  <div className="metric-copy">
-                    <p className="metric-label">{card.label}</p>
-                    <p className="metric-value">{card.value}</p>
-                    <p className="metric-caption">{card.caption}</p>
-                  </div>
-                </article>
-              ))}
-            </section>
-
             <section className="card pending-requests-card">
               <div className="borrowers-toolbar">
                 <div>
                   <h2 className="section-title">Loan Activity Ledger</h2>
                   <p className="section-subtitle">
-                    Every row is a lender-linked payment record, with the loan and
-                    installment context shown beside it.
+                    Every row is a lender-linked payment record. The page loads the
+                    latest {PAGE_SIZE} first, then fetches the next {PAGE_SIZE} when
+                    you move forward. Search runs on the server, so loan and
+                    installment lookups can match beyond the current page.
                   </p>
                 </div>
 
@@ -429,6 +439,25 @@ export default function RecentTransactionsPage({
                 </label>
               </div>
 
+              {isSearchActive ? (
+                <section className="summary-grid" aria-label="Loan search summary">
+                  <article className="card metric-card">
+                    <div className="metric-icon metric-icon--primary" aria-hidden="true">
+                      PM
+                    </div>
+                    <div className="metric-copy">
+                      <p className="metric-label">Total Payments</p>
+                      <p className="metric-value">
+                        {isLoading ? '...' : String(matchedPaymentsCount)}
+                      </p>
+                      <p className="metric-caption">
+                        Total matched payment rows across all pages for this search
+                      </p>
+                    </div>
+                  </article>
+                </section>
+              ) : null}
+
               <div className="table-container">
                 <table className="dashboard-table">
                   <thead>
@@ -442,8 +471,8 @@ export default function RecentTransactionsPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTransactions.length > 0 ? (
-                      filteredTransactions.map((transaction) => (
+                    {transactions.length > 0 ? (
+                      transactions.map((transaction) => (
                         <tr
                           key={transaction.transactionId}
                           className="dashboard-table__row"
@@ -535,6 +564,38 @@ export default function RecentTransactionsPage({
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="table-footer">
+                <p>
+                  {isSearchActive
+                    ? `Showing ${visibleStart}-${visibleEnd} of ${matchedPaymentsCount} matched payment row(s) on page ${currentPage}.`
+                    : `Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
+                </p>
+
+                <div className="pagination">
+                  <button
+                    type="button"
+                    className="pagination-button"
+                    onClick={goToPreviousPage}
+                    disabled={currentPage === 1 || isLoading}
+                  >
+                    Previous
+                  </button>
+
+                  <span className="pagination-status">
+                    Page {currentPage}
+                  </span>
+
+                  <button
+                    type="button"
+                    className="pagination-button"
+                    onClick={goToNextPage}
+                    disabled={!response?.pageInfo.hasMore || isLoading}
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </section>
           </>

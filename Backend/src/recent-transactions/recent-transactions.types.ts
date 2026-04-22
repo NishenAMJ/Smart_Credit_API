@@ -39,6 +39,7 @@ export interface RecentTransactionListItem {
 export interface RecentTransactionsResponse {
   lenderId: string;
   summary: RecentTransactionsSummary;
+  searchResultCount: number | null;
   transactions: RecentTransactionListItem[];
   pageInfo: CursorPageInfo;
   generatedAt: string;
