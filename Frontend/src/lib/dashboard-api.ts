@@ -21,9 +21,13 @@ export type DashboardBorrower = {
   createdAt: string | null
 }
 
-export type DashboardOverviewResponse = {
+export type DashboardSummaryResponse = {
   summary: DashboardSummary
-  recentBorrowers: DashboardBorrower[]
+  generatedAt: string
+}
+
+export type DashboardBorrowersResponse = {
+  borrowers: DashboardBorrower[]
   generatedAt: string
 }
 
@@ -75,6 +79,37 @@ async function parseError(response: Response, fallback: string): Promise<never> 
 
     throw new Error(fallback)
   }
+}
+
+export async function fetchDashboardSummary(
+  lenderId: string,
+): Promise<DashboardSummaryResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/summary?lenderId=${encodeURIComponent(lenderId)}`,
+  )
+
+  if (!response.ok) {
+    return parseError(response, 'Failed to load dashboard summary.')
+  }
+
+  return response.json()
+}
+
+export async function fetchDashboardBorrowers(
+  lenderId: string,
+  limit = 24,
+): Promise<DashboardBorrowersResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/borrowers?lenderId=${encodeURIComponent(
+      lenderId,
+    )}&limit=${limit}`,
+  )
+
+  if (!response.ok) {
+    return parseError(response, 'Failed to load dashboard borrowers.')
+  }
+
+  return response.json()
 }
 
 export async function fetchBorrowerDetails(

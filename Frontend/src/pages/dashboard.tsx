@@ -2,15 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import type { LenderView } from '../components/common/LenderSidebar'
 import type {
   BorrowerDetails,
-  DashboardOverviewResponse,
+  DashboardBorrower,
+  DashboardSummary,
+} from '../lib/dashboard-api'
+import {
+  fetchDashboardBorrowers,
+  fetchBorrowerDetails,
+  fetchDashboardSummary,
 } from '../lib/dashboard-api'
 import type { LenderSession } from '../lib/lender-session'
 
 const ITEMS_PER_PAGE = 8
 const BORROWER_FETCH_LIMIT = 24
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
-  'http://localhost:3000'
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', {
   style: 'currency',
@@ -50,39 +53,6 @@ function formatJoinedDate(value: string | null): string {
   return Number.isNaN(parsed.getTime())
     ? 'Unknown'
     : joinedDateFormatter.format(parsed)
-}
-
-async function fetchDashboardOverview(
-  lenderId: string,
-): Promise<DashboardOverviewResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/dashboard/overview?lenderId=${encodeURIComponent(
-      lenderId,
-    )}&limit=${BORROWER_FETCH_LIMIT}`,
-  )
-
-  if (!response.ok) {
-    throw new Error(`Dashboard request failed with status ${response.status}`)
-  }
-
-  return response.json()
-}
-
-async function fetchBorrowerDetails(
-  lenderId: string,
-  borrowerId: string,
-): Promise<BorrowerDetails> {
-  const response = await fetch(
-    `${API_BASE_URL}/dashboard/borrowers/${borrowerId}?lenderId=${encodeURIComponent(
-      lenderId,
-    )}`,
-  )
-
-  if (!response.ok) {
-    throw new Error(`Borrower request failed with status ${response.status}`)
-  }
-
-  return response.json()
 }
 
 function getMetricTone(index: number): string {
@@ -157,7 +127,8 @@ export default function DashboardPage({
   session,
   onNavigate,
 }: DashboardPageProps) {
-  const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null)
+  const [borrowers, setBorrowers] = useState<DashboardBorrower[]>([])
+  const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
@@ -176,10 +147,14 @@ export default function DashboardPage({
       try {
         setIsLoading(true)
         setError(null)
-        const data = await fetchDashboardOverview(session.lenderId)
+        const [summaryData, borrowersData] = await Promise.all([
+          fetchDashboardSummary(session.lenderId),
+          fetchDashboardBorrowers(session.lenderId, BORROWER_FETCH_LIMIT),
+        ])
 
         if (isMounted) {
-          setOverview(data)
+          setSummary(summaryData.summary)
+          setBorrowers(borrowersData.borrowers)
         }
       } catch (loadError) {
         if (isMounted) {
@@ -262,12 +237,6 @@ export default function DashboardPage({
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedBorrowerId])
-
-  const borrowers = useMemo(
-    () => overview?.recentBorrowers ?? [],
-    [overview?.recentBorrowers],
-  )
-  const summary = overview?.summary
 
   const filteredBorrowers = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()

@@ -21,9 +21,13 @@ export interface DashboardBorrower {
   createdAt: string | null;
 }
 
-export interface DashboardOverviewResponse {
+export interface DashboardSummaryResponse {
   summary: DashboardSummary;
-  recentBorrowers: DashboardBorrower[];
+  generatedAt: string;
+}
+
+export interface DashboardBorrowersResponse {
+  borrowers: DashboardBorrower[];
   generatedAt: string;
 }
 

@@ -11,23 +11,35 @@ import {
 import { DashboardService } from './dashboard.service';
 import {
   BorrowerDetailsResponse,
-  DashboardOverviewResponse,
+  DashboardBorrowersResponse,
+  DashboardSummaryResponse,
 } from './dashboard.types';
 
 @Controller('dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
-  @Get('overview')
-  getOverview(
+  @Get('summary')
+  getSummary(
     @Query('lenderId') lenderId: string | undefined,
-    @Query('limit', new DefaultValuePipe(24), ParseIntPipe) limit: number,
-  ): Promise<DashboardOverviewResponse> {
+  ): Promise<DashboardSummaryResponse> {
     if (!lenderId?.trim()) {
       throw new BadRequestException('lenderId is required.');
     }
 
-    return this.dashboardService.getOverview(lenderId.trim(), limit);
+    return this.dashboardService.getSummary(lenderId.trim());
+  }
+
+  @Get('borrowers')
+  getBorrowers(
+    @Query('lenderId') lenderId: string | undefined,
+    @Query('limit', new DefaultValuePipe(24), ParseIntPipe) limit: number,
+  ): Promise<DashboardBorrowersResponse> {
+    if (!lenderId?.trim()) {
+      throw new BadRequestException('lenderId is required.');
+    }
+
+    return this.dashboardService.getBorrowers(lenderId.trim(), limit);
   }
 
   @Get('borrowers/:id')
