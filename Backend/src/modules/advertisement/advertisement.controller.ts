@@ -18,6 +18,7 @@ import { AdvertisementReadService }     from './services/advertisement-read.serv
 import { AdvertisementUpdateService }   from './services/advertisement-update.service';
 import { AdvertisementDeleteService }   from './services/advertisement-delete.service';
 import { AdvertisementBoostService }    from './services/advertisement-boost.service';
+import { AdvertisementAnalyticsService }    from './services/advertisement-analytics.service';
 
 // ── NOTE ──────────────────────────────────────────────
 // In production you would use JWT Guards to get lenderId
@@ -226,4 +227,25 @@ export class AdvertisementController {
   ) {
     return this.deleteService.deleteAd(adId, lenderId);
   }
+
+  private readonly analyticsService: AdvertisementAnalyticsService,
+
+  // ── GET /advertisements/analytics/summary
+// Full analytics for all lender ads
+@Get('analytics/summary')
+async getLenderAnalytics(
+  @Query('lenderId') lenderId: string,
+) {
+  return this.analyticsService.getLenderAnalytics(lenderId);
+}
+
+// ── GET /advertisements/:id/analytics/full
+// Full analytics for one specific ad
+@Get(':id/analytics/full')
+async getFullAdAnalytics(
+  @Param('id')       adId:     string,
+  @Query('lenderId') lenderId: string,
+) {
+  return this.analyticsService.getAdAnalytics(adId, lenderId);
+}
 }
