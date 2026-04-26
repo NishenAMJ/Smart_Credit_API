@@ -48,8 +48,17 @@ input {
   padding: 2rem;
 }
 
+.dashboard-shell {
+  min-height: 100vh;
+  display: grid;
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
 .hero-panel,
-.auth-panel {
+.auth-panel,
+.dashboard-panel,
+.metric-card {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 28px;
@@ -68,6 +77,15 @@ input {
 .auth-panel {
   padding: 2rem;
   align-self: center;
+}
+
+.dashboard-panel,
+.metric-card {
+  padding: 1.5rem;
+}
+
+.dashboard-hero {
+  padding: 2rem;
 }
 
 .success-panel {
@@ -169,6 +187,248 @@ input {
   line-height: 1.6;
 }
 
+.dashboard-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.dashboard-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dashboard-role-label {
+  margin: 0.8rem 0 0;
+  color: var(--primary-dark);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-title {
+  margin: 1.25rem 0 0.75rem;
+  font-size: clamp(2rem, 3.8vw, 4rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.dashboard-copy {
+  max-width: 50rem;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.dashboard-user-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 1.75rem;
+}
+
+.dashboard-view-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.view-button {
+  border: 1px solid rgba(82, 110, 181, 0.16);
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--text);
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.view-button.active,
+.view-button:hover {
+  background: rgba(31, 86, 216, 0.08);
+  border-color: rgba(31, 86, 216, 0.42);
+}
+
+.info-chip {
+  min-width: 180px;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(82, 110, 181, 0.12);
+}
+
+.info-chip span,
+.metric-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.info-chip strong {
+  font-size: 1rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.metric-card strong {
+  display: block;
+  font-size: clamp(1.4rem, 2vw, 2.1rem);
+  letter-spacing: -0.04em;
+}
+
+.metric-card p {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.dashboard-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.account-columns {
+  align-items: start;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+}
+
+.section-header p {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.activity-list {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1.4rem;
+}
+
+.activity-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(82, 110, 181, 0.1);
+}
+
+.activity-main h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.activity-main p {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.activity-meta {
+  min-width: 150px;
+  text-align: right;
+}
+
+.activity-meta span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.compact-list {
+  margin-top: 1rem;
+}
+
+.detail-list {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.25rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(82, 110, 181, 0.1);
+}
+
+.detail-row span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.detail-row strong {
+  text-align: right;
+  max-width: 65%;
+  word-break: break-word;
+}
+
+.route-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(82, 110, 181, 0.1);
+}
+
+.status-chip {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.status-chip.allow {
+  background: rgba(22, 101, 52, 0.12);
+  color: var(--success);
+}
+
+.status-chip.block {
+  background: rgba(180, 35, 24, 0.12);
+  color: var(--danger);
+}
+
+.activity-meta strong {
+  display: inline-block;
+  margin-top: 0.7rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(31, 86, 216, 0.08);
+  color: var(--primary-dark);
+  text-transform: capitalize;
+  font-size: 0.85rem;
+}
+
+.empty-state {
+  padding: 1.1rem;
+  border-radius: 18px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px dashed rgba(82, 110, 181, 0.2);
+}
+
 .message-banner {
   padding: 0.95rem 1rem;
   border-radius: 16px;
@@ -239,6 +499,16 @@ input {
   opacity: 0.7;
 }
 
+.secondary-button {
+  border: 1px solid rgba(82, 110, 181, 0.16);
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .success-role {
   margin: 1.5rem 0 0;
   font-size: clamp(1.5rem, 2vw, 2.3rem);
@@ -269,6 +539,11 @@ input {
     grid-template-columns: 1fr;
   }
 
+  .dashboard-columns,
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .hero-panel {
     min-height: auto;
   }
@@ -279,13 +554,43 @@ input {
     padding: 1rem;
   }
 
+  .dashboard-shell {
+    padding: 1rem;
+  }
+
   .hero-panel,
-  .auth-panel {
+  .auth-panel,
+  .dashboard-panel,
+  .metric-card {
     padding: 1.25rem;
     border-radius: 22px;
   }
 
+  .dashboard-topbar,
+  .activity-card,
+  .route-card,
+  .detail-row {
+    flex-direction: column;
+  }
+
+  .dashboard-actions,
+  .dashboard-view-switch {
+    width: 100%;
+  }
+
+  .metrics-grid,
+  .dashboard-columns,
   .success-grid {
     grid-template-columns: 1fr;
+  }
+
+  .activity-meta {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .detail-row strong {
+    max-width: 100%;
+    text-align: left;
   }
 }

@@ -58,3 +58,38 @@ You also need a `JWT_SECRET`.
 - `npm run build:web`
 - `npm run build`
 
+## Role-Protected Auth Routes
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `GET /api/auth/session`
+- `GET /api/auth/dashboard`
+- `GET /api/auth/borrower/dashboard` - borrower token only
+- `GET /api/auth/lender/dashboard` - lender token only
+
+Detailed teammate docs:
+
+- `docs/auth-api.md`
+- `apps/backend/Smart_Credit_Auth.postman_collection.json`
+
+## Seeded User Login Backfill
+
+If the existing Firestore `users` collection was created before this auth flow,
+run the backfill script once so those accounts get the required auth fields:
+
+```bash
+npm --workspace apps/backend run backfill:auth-users
+```
+
+Default seeded-user password:
+
+```text
+SmartCredit@123
+```
+
+Dry run:
+
+```bash
+npm --workspace apps/backend run backfill:auth-users -- --dry-run
+```

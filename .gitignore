@@ -9,4 +9,5 @@ apps/*/node_modules/
 apps/*/dist/
 apps/*/.env
 apps/*/.env.local
-
+apps/backend/firebase-service-account.json
+apps/backend/your-service-account-key.json

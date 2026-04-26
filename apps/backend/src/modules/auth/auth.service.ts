@@ -7,12 +7,21 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { type CollectionReference, Timestamp } from 'firebase-admin/firestore';
+import {
+  type CollectionReference,
+  Timestamp,
+} from 'firebase-admin/firestore';
 
 import { FirebaseService } from '../../firebase/firebase.service';
 import { AuthResponseDto, MeResponseDto, RegisterResponseDto, SafeUserDto } from './dto/auth-response.dto';
+import {
+  DashboardListItemDto,
+  DashboardMetricDto,
+  DashboardResponseDto,
+} from './dto/dashboard-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { SessionResponseDto } from './dto/session-response.dto';
 import { UserDocument, UserRole } from './auth.types';
 
 @Injectable()
@@ -116,16 +125,83 @@ export class AuthService {
   }
 
   async getMe(userId: string): Promise<MeResponseDto> {
-    const snapshot = await this.usersCollection.doc(userId).get();
-
-    if (!snapshot.exists) {
-      throw new NotFoundException('User not found.');
-    }
-
-    const user = snapshot.data() as UserDocument;
+    const user = await this.getRequiredUser(userId);
 
     return {
       user: this.toSafeUser(user),
+    };
+  }
+
+  async getDashboard(
+    userId: string,
+    activeRole: UserRole,
+  ): Promise<DashboardResponseDto> {
+    const user = await this.getRequiredUser(userId);
+    const role = user.role.includes(activeRole) ? activeRole : user.role[0];
+
+    const [loanDocs, relationDocs, adDocs] = await Promise.all([
+      this.getCollectionDocs('loans', role === 'borrower' ? 'borrowerId' : 'lenderId', userId),
+      this.getCollectionDocs(
+        'lenderBorrowers',
+        role === 'borrower' ? 'borrowerId' : 'lenderId',
+        userId,
+      ),
+      role === 'lender'
+        ? this.getCollectionDocs('ads', 'lenderId', userId)
+        : Promise.resolve([]),
+    ]);
+
+    const sortedLoanDocs = this.sortByTimestamp(loanDocs, 'createdAt').slice(0, 4);
+    const sortedRelationDocs = this.sortByTimestamp(
+      relationDocs,
+      'latestLoanCreatedAt',
+    ).slice(0, 4);
+    const sortedAdDocs = this.sortByTimestamp(adDocs, 'createdAt').slice(0, 4);
+
+    return {
+      user: this.toSafeUser(user, role),
+      role,
+      headline:
+        role === 'borrower'
+          ? `Welcome back, ${user.fullName}`
+          : `Portfolio overview for ${user.fullName}`,
+      summary:
+        role === 'borrower'
+          ? 'Track active loans, trusted lender relationships, and your current credit standing.'
+          : 'Review your lending activity, active listings, and borrower network in one place.',
+      metrics:
+        role === 'borrower'
+          ? this.buildBorrowerMetrics(user, loanDocs, relationDocs)
+          : this.buildLenderMetrics(user, loanDocs, relationDocs, adDocs),
+      primaryListTitle:
+        role === 'borrower' ? 'Recent loan activity' : 'Active lender listings',
+      primaryList:
+        role === 'borrower'
+          ? sortedLoanDocs.map((doc) => this.toBorrowerLoanItem(doc))
+          : sortedAdDocs.map((doc) => this.toLenderAdItem(doc)),
+      secondaryListTitle:
+        role === 'borrower' ? 'Connected lenders' : 'Borrower relationships',
+      secondaryList:
+        role === 'borrower'
+          ? sortedRelationDocs.map((doc) => this.toBorrowerRelationItem(doc))
+          : sortedRelationDocs.map((doc) => this.toLenderRelationItem(doc)),
+    };
+  }
+
+  async getSessionStatus(
+    userId: string,
+    activeRole: UserRole,
+  ): Promise<SessionResponseDto> {
+    const user = await this.getRequiredUser(userId);
+    const resolvedRole = user.role.includes(activeRole) ? activeRole : user.role[0];
+
+    return {
+      message: 'Authenticated session is valid.',
+      activeRole: resolvedRole,
+      availableRoles: user.role,
+      accountStatus: user.accountStatus,
+      kycStatus: user.kycStatus,
+      user: this.toSafeUser(user, resolvedRole),
     };
   }
 
@@ -245,5 +321,244 @@ export class AuthService {
     ]);
 
     return !normalizedSnapshot.empty || !legacySnapshot.empty;
+  }
+
+  private async getRequiredUser(userId: string): Promise<UserDocument> {
+    const snapshot = await this.usersCollection.doc(userId).get();
+
+    if (!snapshot.exists) {
+      throw new NotFoundException('User not found.');
+    }
+
+    return snapshot.data() as UserDocument;
+  }
+
+  private async getCollectionDocs(
+    collectionName: string,
+    field: string,
+    value: string,
+  ): Promise<Array<Record<string, unknown>>> {
+    const snapshot = await this.firebaseService.db
+      .collection(collectionName)
+      .where(field, '==', value)
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  }
+
+  private buildBorrowerMetrics(
+    user: UserDocument,
+    loanDocs: Array<Record<string, unknown>>,
+    relationDocs: Array<Record<string, unknown>>,
+  ): DashboardMetricDto[] {
+    const activeLoans = loanDocs.filter((doc) => doc.status === 'active').length;
+    const totalRepayable = loanDocs.reduce(
+      (sum, doc) => sum + this.readNumber(doc.totalRepayable),
+      0,
+    );
+
+    return [
+      this.metric('Credit score', String(user.creditScore ?? 0), 'Current borrower score'),
+      this.metric(
+        'Active loans',
+        String(activeLoans),
+        `${loanDocs.length} total loan records`,
+      ),
+      this.metric(
+        'Repayable total',
+        this.formatCurrency(totalRepayable),
+        'Across visible loan records',
+      ),
+      this.metric(
+        'Lender links',
+        String(relationDocs.length),
+        'Relationships already established',
+      ),
+    ];
+  }
+
+  private buildLenderMetrics(
+    user: UserDocument,
+    loanDocs: Array<Record<string, unknown>>,
+    relationDocs: Array<Record<string, unknown>>,
+    adDocs: Array<Record<string, unknown>>,
+  ): DashboardMetricDto[] {
+    const activeLoans = loanDocs.filter((doc) => doc.status === 'active').length;
+    const activeAds = adDocs.filter((doc) => doc.status === 'active').length;
+
+    return [
+      this.metric(
+        'Total lent',
+        this.formatCurrency(user.totalAmountLent ?? 0),
+        'Tracked from your Firestore profile',
+      ),
+      this.metric(
+        'Completed loans',
+        String(user.totalLoansCompleted ?? 0),
+        'Closed lending cycles',
+      ),
+      this.metric(
+        'Active loans',
+        String(activeLoans),
+        `${loanDocs.length} total loan records`,
+      ),
+      this.metric(
+        'Live listings',
+        String(activeAds),
+        `${relationDocs.length} borrower relationships`,
+      ),
+    ];
+  }
+
+  private toBorrowerLoanItem(doc: Record<string, unknown>): DashboardListItemDto {
+    return {
+      id: this.readString(doc.id, 'loan'),
+      title: `Loan ${this.readString(doc.loanId ?? doc.id, 'loan').slice(0, 8)}`,
+      subtitle: `${this.formatCurrency(this.readNumber(doc.principalAmount))} requested for ${this.readNumber(doc.tenureMonths)} months`,
+      meta: this.readTimestampLabel(doc.nextDueDate, 'Next due'),
+      status: this.readString(doc.status, 'unknown'),
+    };
+  }
+
+  private toLenderAdItem(doc: Record<string, unknown>): DashboardListItemDto {
+    const amount = this.formatCurrency(this.readNumber(doc.maxAmount));
+    const interest = this.readNumber(doc.preferredInterestRate);
+
+    return {
+      id: this.readString(doc.id, 'ad'),
+      title: `${amount} listing`,
+      subtitle: `${this.readString(doc.location, 'Sri Lanka')} • ${interest}% preferred interest`,
+      meta: this.readTimestampLabel(doc.expiresAt, 'Expires'),
+      status: this.readString(doc.status, 'unknown'),
+    };
+  }
+
+  private toBorrowerRelationItem(
+    doc: Record<string, unknown>,
+  ): DashboardListItemDto {
+    const activeCount = this.readNumber(doc.activeLoanCount);
+    const completedCount = this.readNumber(doc.completedLoanCount);
+
+    return {
+      id: this.readString(doc.id, 'relation'),
+      title: this.readString(doc.lenderName, 'Lender connection'),
+      subtitle: `${activeCount} active loans • ${completedCount} completed loans`,
+      meta: this.formatCurrency(this.readNumber(doc.totalPrincipalAmount)),
+      status: this.readString(doc.latestLoanStatus, 'unknown'),
+    };
+  }
+
+  private toLenderRelationItem(
+    doc: Record<string, unknown>,
+  ): DashboardListItemDto {
+    const totalLoans = this.readNumber(doc.totalLoans);
+
+    return {
+      id: this.readString(doc.id, 'relation'),
+      title: this.readString(doc.borrowerName, 'Borrower connection'),
+      subtitle: `Credit score ${this.readNumber(doc.borrowerCreditScore)} • ${totalLoans} loans`,
+      meta: this.formatCurrency(this.readNumber(doc.totalPrincipalAmount)),
+      status: this.readString(doc.latestLoanStatus, 'unknown'),
+    };
+  }
+
+  private metric(label: string, value: string, helper: string): DashboardMetricDto {
+    return {
+      label,
+      value,
+      helper,
+    };
+  }
+
+  private formatCurrency(value: number): string {
+    return new Intl.NumberFormat('en-LK', {
+      style: 'currency',
+      currency: 'LKR',
+      maximumFractionDigits: 0,
+    }).format(value || 0);
+  }
+
+  private readNumber(value: unknown): number {
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  }
+
+  private readString(value: unknown, fallback: string): string {
+    return typeof value === 'string' && value.trim() ? value : fallback;
+  }
+
+  private readTimestampLabel(value: unknown, prefix: string): string {
+    const iso = this.toIsoString(value);
+    return iso ? `${prefix}: ${new Date(iso).toLocaleDateString('en-LK')}` : `${prefix}: not set`;
+  }
+
+  private toIsoString(value: unknown): string | null {
+    if (!value) {
+      return null;
+    }
+
+    if (
+      typeof value === 'object' &&
+      'toDate' in value &&
+      typeof (value as Timestamp).toDate === 'function'
+    ) {
+      return (value as Timestamp).toDate().toISOString();
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    }
+
+    return null;
+  }
+
+  private sortByTimestamp<T extends Record<string, unknown>>(
+    docs: T[],
+    field: string,
+  ): T[] {
+    return docs
+      .slice()
+      .sort(
+        (left, right) =>
+          this.toMillis(right[field]) - this.toMillis(left[field]),
+      );
+  }
+
+  private toMillis(value: unknown): number {
+    if (
+      value &&
+      typeof value === 'object' &&
+      'toMillis' in value &&
+      typeof (value as { toMillis?: () => number }).toMillis === 'function'
+    ) {
+      return (value as { toMillis: () => number }).toMillis();
+    }
+
+    if (
+      value &&
+      typeof value === 'object' &&
+      'toDate' in value &&
+      typeof (value as Timestamp).toDate === 'function'
+    ) {
+      return (value as Timestamp).toDate().getTime();
+    }
+
+    if (value instanceof Date) {
+      return value.getTime();
+    }
+
+    if (typeof value === 'string') {
+      const parsed = new Date(value).getTime();
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+
+    return 0;
   }
 }

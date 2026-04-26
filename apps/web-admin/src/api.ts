@@ -1,13 +1,25 @@
 import type {
   AuthResponse,
+  DashboardResponse,
   LoginPayload,
-  MeResponse,
   RegisterPayload,
   RegisterResponse,
+  SessionResponse,
+  UserRole,
 } from './types';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -25,7 +37,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const message = resolveErrorMessage(payload);
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
 
   return payload as T;
@@ -64,8 +76,21 @@ export const authApi = {
       body: JSON.stringify(payload),
     });
   },
-  me(accessToken: string) {
-    return request<MeResponse>('/auth/me', {
+  session(accessToken: string) {
+    return request<SessionResponse>('/auth/session', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  },
+  dashboard(accessToken: string, role: UserRole) {
+    const path =
+      role === 'borrower'
+        ? '/auth/borrower/dashboard'
+        : '/auth/lender/dashboard';
+
+    return request<DashboardResponse>(path, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -73,4 +98,3 @@ export const authApi = {
     });
   },
 };
-

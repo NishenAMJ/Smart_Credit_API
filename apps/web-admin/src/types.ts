@@ -43,3 +43,37 @@ export type StoredSession = {
   user: AuthUser;
 };
 
+export type DashboardMetric = {
+  label: string;
+  value: string;
+  helper: string;
+};
+
+export type DashboardListItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  meta: string;
+  status: string;
+};
+
+export type DashboardResponse = {
+  user: AuthUser;
+  role: UserRole;
+  headline: string;
+  summary: string;
+  metrics: DashboardMetric[];
+  primaryListTitle: string;
+  primaryList: DashboardListItem[];
+  secondaryListTitle: string;
+  secondaryList: DashboardListItem[];
+};
+
+export type SessionResponse = {
+  message: string;
+  activeRole: UserRole;
+  availableRoles: UserRole[];
+  accountStatus: string;
+  kycStatus: string;
+  user: AuthUser;
+};

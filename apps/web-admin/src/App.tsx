@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 
-import { authApi } from './api';
-import type { AuthMode, RegisterPayload, StoredSession, UserRole } from './types';
+import { ApiError, authApi } from './api';
+import type {
+  AuthMode,
+  DashboardListItem,
+  DashboardResponse,
+  RegisterPayload,
+  SessionResponse,
+  StoredSession,
+  UserRole,
+} from './types';
 
 const STORAGE_KEY = 'smart-credit-auth-session';
 
@@ -20,6 +28,8 @@ type RegisterFormState = {
   confirmPassword: string;
   role: UserRole;
 };
+
+type DashboardTab = 'overview' | 'account';
 
 function loadStoredSession(): StoredSession | null {
   const storedValue = localStorage.getItem(STORAGE_KEY);
@@ -61,6 +71,11 @@ export default function App() {
   const [apiError, setApiError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<SessionResponse | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState('');
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
   const [session, setSession] = useState<StoredSession | null>(() =>
     loadStoredSession(),
   );
@@ -79,26 +94,54 @@ export default function App() {
     [loginForm.role, mode, registerForm.role],
   );
 
-  async function hydrateSession(accessToken: string) {
+  async function loadDashboard(accessToken: string) {
     try {
-      const response = await authApi.me(accessToken);
+      setDashboardLoading(true);
+      setDashboardError('');
+      const sessionResponse = await authApi.session(accessToken);
+      const response = await authApi.dashboard(
+        accessToken,
+        sessionResponse.activeRole,
+      );
+
+      setSessionStatus(sessionResponse);
+      setDashboard(response);
       setSession({
         accessToken,
-        user: response.user,
+        user: sessionResponse.user,
       });
-    } catch {
-      setSession(null);
-      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      setDashboard(null);
+      setSessionStatus(null);
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
+
+      setDashboardError(
+        error instanceof Error
+          ? error.message
+          : 'We could not load your dashboard right now.',
+      );
+    } finally {
+      setDashboardLoading(false);
     }
   }
 
   useEffect(() => {
     if (!session?.accessToken) {
+      setDashboard(null);
+      setSessionStatus(null);
+      setDashboardError('');
+      setDashboardLoading(false);
+      setActiveTab('overview');
       return;
     }
 
-    void hydrateSession(session.accessToken);
-  }, []);
+    void loadDashboard(session.accessToken);
+  }, [session?.accessToken]);
 
   function updateRole(role: UserRole) {
     if (mode === 'login') {
@@ -211,6 +254,7 @@ export default function App() {
     try {
       setLoading(true);
       const response = await authApi.login(loginForm);
+      setActiveTab('overview');
       setSession({
         accessToken: response.accessToken,
         user: response.user,
@@ -223,6 +267,11 @@ export default function App() {
   }
 
   function handleLogout() {
+    setDashboard(null);
+    setSessionStatus(null);
+    setDashboardError('');
+    setDashboardLoading(false);
+    setActiveTab('overview');
     setSession(null);
     setLoginForm(initialLoginForm);
     setFieldErrors({});
@@ -232,41 +281,266 @@ export default function App() {
   }
 
   if (session) {
-    return (
-      <main className="page-shell">
-        <section className="auth-panel success-panel">
-          <div className="panel-badge">Smart Credit+ Auth MVP</div>
-          <p className="success-role">
-            As a {session.user.role}, you successfully logged in to the app.
-          </p>
-          <h1 className="panel-title">{session.user.fullName}</h1>
-          <p className="panel-subtitle">
-            Your session is active and ready for the next feature step.
-          </p>
+    const currentDashboard = dashboard;
 
-          <div className="success-grid">
-            <div className="info-card">
-              <span>Email</span>
-              <strong>{session.user.email}</strong>
+    return (
+      <main className="dashboard-shell">
+        <section className="dashboard-panel dashboard-hero">
+          <div className="dashboard-topbar">
+            <div>
+              <div className="panel-badge">Smart Credit+ Workspace</div>
+              <p className="dashboard-role-label">
+                {session.user.role === 'borrower'
+                  ? 'Borrower dashboard'
+                  : 'Lender dashboard'}
+              </p>
             </div>
-            <div className="info-card">
-              <span>Phone</span>
-              <strong>{session.user.phone}</strong>
-            </div>
-            <div className="info-card">
-              <span>Role</span>
-              <strong>{session.user.role}</strong>
-            </div>
-            <div className="info-card">
-              <span>KYC Status</span>
-              <strong>{session.user.kycStatus}</strong>
+
+            <div className="dashboard-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void loadDashboard(session.accessToken)}
+              >
+                Refresh data
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={handleLogout}
+              >
+                Log out
+              </button>
             </div>
           </div>
 
-          <button className="primary-button" type="button" onClick={handleLogout}>
-            Log out
-          </button>
+          <h1 className="dashboard-title">
+            {currentDashboard?.headline ?? `Welcome back, ${session.user.fullName}`}
+          </h1>
+          <p className="dashboard-copy">
+            {currentDashboard?.summary ??
+              'Your workspace is loading. We are preparing your latest Firestore activity.'}
+          </p>
+
+          <div className="dashboard-user-strip">
+            <div className="info-chip">
+              <span>Role</span>
+              <strong>{session.user.role}</strong>
+            </div>
+            <div className="info-chip">
+              <span>KYC</span>
+              <strong>{session.user.kycStatus}</strong>
+            </div>
+            <div className="info-chip">
+              <span>Email</span>
+              <strong>{session.user.email}</strong>
+            </div>
+          </div>
+
+          <div className="dashboard-view-switch" role="tablist" aria-label="Workspace view">
+            <button
+              type="button"
+              className={activeTab === 'overview' ? 'view-button active' : 'view-button'}
+              onClick={() => setActiveTab('overview')}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              className={activeTab === 'account' ? 'view-button active' : 'view-button'}
+              onClick={() => setActiveTab('account')}
+            >
+              Account
+            </button>
+          </div>
         </section>
+
+        {dashboardError && currentDashboard ? (
+          <section className="dashboard-panel">
+            <div className="message-banner error">{dashboardError}</div>
+          </section>
+        ) : null}
+
+        {dashboardLoading && !currentDashboard ? (
+          <section className="dashboard-panel">
+            <div className="section-header">
+              <h2>Loading dashboard</h2>
+              <p>Fetching your latest borrower/lender data from Firestore.</p>
+            </div>
+          </section>
+        ) : null}
+
+        {dashboardError && !currentDashboard ? (
+          <section className="dashboard-panel">
+            <div className="message-banner error">{dashboardError}</div>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => void loadDashboard(session.accessToken)}
+            >
+              Retry dashboard load
+            </button>
+          </section>
+        ) : null}
+
+        {currentDashboard ? (
+          <>
+            {activeTab === 'overview' ? (
+              <>
+                <section className="metrics-grid">
+                  {currentDashboard.metrics.map((metric) => (
+                    <article key={metric.label} className="metric-card">
+                      <span>{metric.label}</span>
+                      <strong>{metric.value}</strong>
+                      <p>{metric.helper}</p>
+                    </article>
+                  ))}
+                </section>
+
+                <section className="dashboard-columns">
+                  <section className="dashboard-panel">
+                    <div className="section-header">
+                      <h2>{currentDashboard.primaryListTitle}</h2>
+                      <p>Live records pulled from your current Firestore data.</p>
+                    </div>
+
+                    <div className="activity-list">
+                      {currentDashboard.primaryList.length > 0 ? (
+                        currentDashboard.primaryList.map((item) => (
+                          <DashboardItem key={item.id} item={item} />
+                        ))
+                      ) : (
+                        <EmptyState message="No records available yet for this section." />
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="dashboard-panel">
+                    <div className="section-header">
+                      <h2>{currentDashboard.secondaryListTitle}</h2>
+                      <p>
+                        Helpful counterpart and relationship snapshots for this role.
+                      </p>
+                    </div>
+
+                    <div className="activity-list">
+                      {currentDashboard.secondaryList.length > 0 ? (
+                        currentDashboard.secondaryList.map((item) => (
+                          <DashboardItem key={item.id} item={item} />
+                        ))
+                      ) : (
+                        <EmptyState message="No relationships available yet for this section." />
+                      )}
+                    </div>
+                  </section>
+                </section>
+              </>
+            ) : (
+              <section className="dashboard-columns account-columns">
+                <section className="dashboard-panel">
+                  <div className="section-header">
+                    <h2>Profile</h2>
+                    <p>Core identity details from your authenticated Firestore user record.</p>
+                  </div>
+
+                  <div className="detail-list">
+                    <DetailRow label="Full name" value={session.user.fullName} />
+                    <DetailRow label="User ID" value={session.user.uid} />
+                    <DetailRow label="Email" value={session.user.email} />
+                    <DetailRow label="Phone" value={session.user.phone} />
+                    <DetailRow label="Role" value={session.user.role} />
+                  </div>
+                </section>
+
+                <section className="dashboard-panel">
+                  <div className="section-header">
+                    <h2>Account Status</h2>
+                    <p>Live session details from `GET /api/auth/session`.</p>
+                  </div>
+
+                  <div className="detail-list">
+                    <DetailRow
+                      label="Session"
+                      value={sessionStatus?.message ?? 'Authenticated'}
+                    />
+                    <DetailRow
+                      label="Active role"
+                      value={sessionStatus?.activeRole ?? session.user.role}
+                    />
+                    <DetailRow
+                      label="Available roles"
+                      value={sessionStatus?.availableRoles.join(', ') ?? session.user.role}
+                    />
+                    <DetailRow
+                      label="Account status"
+                      value={sessionStatus?.accountStatus ?? 'active'}
+                    />
+                    <DetailRow
+                      label="KYC status"
+                      value={sessionStatus?.kycStatus ?? session.user.kycStatus}
+                    />
+                  </div>
+                </section>
+
+                <section className="dashboard-panel">
+                  <div className="section-header">
+                    <h2>Route Access</h2>
+                    <p>Quick teammate-friendly view of the routes this token can use.</p>
+                  </div>
+
+                  <div className="activity-list compact-list">
+                    <RouteItem
+                      path="/api/auth/session"
+                      status="allowed"
+                      note="Any authenticated borrower or lender token."
+                    />
+                    <RouteItem
+                      path="/api/auth/borrower/dashboard"
+                      status={
+                        (sessionStatus?.activeRole ?? session.user.role) === 'borrower'
+                          ? 'allowed'
+                          : 'blocked'
+                      }
+                      note="Borrower role only."
+                    />
+                    <RouteItem
+                      path="/api/auth/lender/dashboard"
+                      status={
+                        (sessionStatus?.activeRole ?? session.user.role) === 'lender'
+                          ? 'allowed'
+                          : 'blocked'
+                      }
+                      note="Lender role only."
+                    />
+                  </div>
+                </section>
+
+                <section className="dashboard-panel">
+                  <div className="section-header">
+                    <h2>Developer Notes</h2>
+                    <p>Useful handoff details for the rest of the group project.</p>
+                  </div>
+
+                  <div className="detail-list">
+                    <DetailRow
+                      label="Auth header"
+                      value="Authorization: Bearer <accessToken>"
+                    />
+                    <DetailRow
+                      label="Workspace key"
+                      value="smart-credit-auth-session"
+                    />
+                    <DetailRow
+                      label="Postman docs"
+                      value="apps/backend/Smart_Credit_Auth.postman_collection.json"
+                    />
+                    <DetailRow label="Written guide" value="docs/auth-api.md" />
+                  </div>
+                </section>
+              </section>
+            )}
+          </>
+        ) : null}
       </main>
     );
   }
@@ -464,5 +738,57 @@ export default function App() {
         )}
       </section>
     </main>
+  );
+}
+
+function DashboardItem({ item }: { item: DashboardListItem }) {
+  return (
+    <article className="activity-card">
+      <div className="activity-main">
+        <h3>{item.title}</h3>
+        <p>{item.subtitle}</p>
+      </div>
+      <div className="activity-meta">
+        <span>{item.meta}</span>
+        <strong>{item.status}</strong>
+      </div>
+    </article>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return <div className="empty-state">{message}</div>;
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="detail-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function RouteItem({
+  path,
+  status,
+  note,
+}: {
+  path: string;
+  status: 'allowed' | 'blocked';
+  note: string;
+}) {
+  return (
+    <article className="route-card">
+      <div className="activity-main">
+        <h3>{path}</h3>
+        <p>{note}</p>
+      </div>
+      <div className="activity-meta">
+        <strong className={status === 'allowed' ? 'status-chip allow' : 'status-chip block'}>
+          {status}
+        </strong>
+      </div>
+    </article>
   );
 }
