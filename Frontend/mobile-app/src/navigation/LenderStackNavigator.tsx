@@ -11,6 +11,13 @@ import ReviewApplicationScreen from '../screens/lender/ReviewApplicationScreen';
 import QRScannerScreen from '../screens/lender/QRScannerScreen';
 import LegalActionsScreen from '../screens/lender/LegalActionsScreen';
 import VerifyPaymentScreen from '../screens/lender/VerifyPaymentScreen';
+import MyAdsScreen               from '../screens/lender/MyAdsScreen';
+import CreateAdScreen             from '../screens/lender/CreateAdScreen';
+import EditAdScreen               from '../screens/lender/EditAdScreen';
+import AdAnalyticsScreen          from '../screens/lender/AdAnalyticsScreen';
+import BoostAdScreen              from '../screens/lender/BoostAdScreen';
+import AdSummaryAnalyticsScreen   from '../screens/lender/AdSummaryAnalyticsScreen';
+
 
 // Use require to bypass module resolution issues
 const CollectionHistoryScreen = require('../screens/lender/CollectionHistoryScreen').default as ComponentType;
@@ -47,6 +54,12 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="Portfolio" component={PortfolioScreen} />
       <Stack.Screen name="LegalActions" component={LegalActionsScreen} />
       <Stack.Screen name="VerifyPayment" component={VerifyPaymentScreen} />
+      <Stack.Screen name="MyAds"               component={MyAdsScreen}             />
+      <Stack.Screen name="CreateAd"            component={CreateAdScreen}          />
+      <Stack.Screen name="EditAd"              component={EditAdScreen}            />
+      <Stack.Screen name="AdAnalytics"         component={AdAnalyticsScreen}       />
+      <Stack.Screen name="BoostAd"             component={BoostAdScreen}           />
+      <Stack.Screen name="AdSummaryAnalytics"  component={AdSummaryAnalyticsScreen}/>
       
     </Stack.Navigator>
   );

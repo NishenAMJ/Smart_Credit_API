@@ -82,6 +82,20 @@ export const commonStyles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // Input fields
+  input: {
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+    marginVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
   // Cards
   card: {
     backgroundColor: COLORS.surface,
@@ -249,6 +263,7 @@ export const commonStyles = StyleSheet.create({
   },
 
   // Empty space
+  spacer8: { height: 8 },
   spacer12: { height: 12 },
   spacer16: { height: 16 },
   spacer24: { height: 24 },
