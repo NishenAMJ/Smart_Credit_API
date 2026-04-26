@@ -13,7 +13,7 @@ import { ChatModule } from './modules/chat/chat.module';
 
 import { KycModule } from './modules/kyc/kyc.module';
 import { LoansModule } from './modules/loans/loans.module';
-
+import { AdvertisementModule } from './modules/advertisement/advertisement.module';
 import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module';
 
 @Module({
@@ -36,6 +36,7 @@ import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module
     KycModule,
     LoansModule,
     LenderMobileModule,
+    AdvertisementModule,
   ],
   controllers: [AppController],
   providers: [AppService],
