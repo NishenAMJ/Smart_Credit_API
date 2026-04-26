@@ -182,13 +182,7 @@ export class AdvertisementReadService {
   async getAdAnalytics(
     adId: string,
     lenderId: string,
-  ): Promise<{
-    views: number;
-    clicks: number;
-    applicationCount: number;
-    fundedLoansCount: number;
-    clickThroughRate: string;
-  }> {
+  ): Promise<any> {
     const doc = await this.db
       .collection(this.collection)
       .doc(adId)

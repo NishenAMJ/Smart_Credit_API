@@ -34,7 +34,79 @@ export class AdvertisementController {
     private readonly updateService:   AdvertisementUpdateService,
     private readonly deleteService:   AdvertisementDeleteService,
     private readonly boostService:    AdvertisementBoostService,
+    private readonly analyticsService: AdvertisementAnalyticsService,
   ) {}
+
+  
+  // GET /advertisements/boost-packages
+  // Get available boost packages and prices
+  
+  @Get('boost-packages')
+  getBoostPackages() {
+    return this.boostService.getBoostPackages();
+  }
+
+  
+  // GET /advertisements/analytics/summary
+  // Full analytics for all lender ads
+  
+  @Get('analytics/summary')
+  async getLenderAnalytics(
+    @Query('lenderId') lenderId: string,
+  ) {
+    return this.analyticsService.getLenderAnalytics(lenderId);
+  }
+
+  
+  // GET /advertisements/my
+  // Get lender's own ads — includes private stats
+  
+  @Get('my')
+  async getMyAds(@Query('lenderId') lenderId: string) {
+    return this.readService.getMyAds(lenderId);
+  }
+
+  
+  // GET /advertisements/lender/:lenderId
+  // Get public ads by lender — hides views/clicks
+  
+  @Get('lender/:lenderId')
+  async getAdsByLender(@Param('lenderId') lenderId: string) {
+    return this.readService.getAdsByLender(lenderId);
+  }
+
+  
+  // GET /advertisements/:id/analytics
+  // Get analytics for lender's own ad
+  
+  @Get(':id/analytics')
+  async getAdAnalytics(
+    @Param('id')             adId:     string,
+    @Query('lenderId') lenderId: string,
+  ) {
+    return this.readService.getAdAnalytics(adId, lenderId);
+  }
+
+  
+  // GET /advertisements/:id/analytics/full
+  // Full analytics for one specific ad
+  
+  @Get(':id/analytics/full')
+  async getFullAdAnalytics(
+    @Param('id')       adId:     string,
+    @Query('lenderId') lenderId: string,
+  ) {
+    return this.analyticsService.getAdAnalytics(adId, lenderId);
+  }
+
+  
+  // GET /advertisements/:id
+  // Get single ad by ID
+  
+  @Get(':id')
+  async getAdById(@Param('id') id: string) {
+    return this.readService.getAdById(id);
+  }
 
   
   // GET /advertisements
@@ -56,54 +128,6 @@ export class AdvertisementController {
       maxAmount: maxAmount ? Number(maxAmount) : undefined,
       search,
     });
-  }
-
-  
-  // GET /advertisements/my
-  // Get lender's own ads — includes private stats
-  
-  @Get('my')
-  async getMyAds(@Query('lenderId') lenderId: string) {
-    return this.readService.getMyAds(lenderId);
-  }
-
-  
-  // GET /advertisements/boost-packages
-  // Get available boost packages and prices
-  
-  @Get('boost-packages')
-  getBoostPackages() {
-    return this.boostService.getBoostPackages();
-  }
-
-  
-  // GET /advertisements/lender/:lenderId
-  // Get public ads by lender — hides views/clicks
-  
-  @Get('lender/:lenderId')
-  async getAdsByLender(@Param('lenderId') lenderId: string) {
-    return this.readService.getAdsByLender(lenderId);
-  }
-
-  
-  // GET /advertisements/:id
-  // Get single ad by ID
-  
-  @Get(':id')
-  async getAdById(@Param('id') id: string) {
-    return this.readService.getAdById(id);
-  }
-
-  
-  // GET /advertisements/:id/analytics
-  // Get analytics for lender's own ad
-  
-  @Get(':id/analytics')
-  async getAdAnalytics(
-    @Param('id')             adId:     string,
-    @Query('lenderId') lenderId: string,
-  ) {
-    return this.readService.getAdAnalytics(adId, lenderId);
   }
 
   
@@ -227,25 +251,5 @@ export class AdvertisementController {
   ) {
     return this.deleteService.deleteAd(adId, lenderId);
   }
-
-  private readonly analyticsService: AdvertisementAnalyticsService,
-
-  // ── GET /advertisements/analytics/summary
-// Full analytics for all lender ads
-@Get('analytics/summary')
-async getLenderAnalytics(
-  @Query('lenderId') lenderId: string,
-) {
-  return this.analyticsService.getLenderAnalytics(lenderId);
-}
-
-// ── GET /advertisements/:id/analytics/full
-// Full analytics for one specific ad
-@Get(':id/analytics/full')
-async getFullAdAnalytics(
-  @Param('id')       adId:     string,
-  @Query('lenderId') lenderId: string,
-) {
-  return this.analyticsService.getAdAnalytics(adId, lenderId);
 }
 }
