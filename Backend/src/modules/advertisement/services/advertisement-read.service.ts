@@ -1,0 +1,221 @@
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import * as admin from 'firebase-admin';
+import { getFirestore } from '../../../config/firebase.config';
+import {
+  Advertisement,
+  AdvertisementResponse,
+} from '../interfaces/advertisement.interface';
+import { AdvertisementCreateService } from './advertisement-create.service';
+
+@Injectable()
+export class AdvertisementReadService {
+  private db         = getFirestore();
+  private collection = 'ads';
+
+  constructor(
+    private createService: AdvertisementCreateService,
+  ) {}
+
+  // ── Get all active ads (for borrowers) ───────────
+  // Boosted ads come first, then sorted by createdAt
+  async getAllActiveAds(filters?: {
+    location?: string;
+    purpose?: string;
+    minAmount?: number;
+    maxAmount?: number;
+    search?: string;
+  }): Promise<AdvertisementResponse[]> {
+
+    const now = admin.firestore.Timestamp.now();
+
+    // Base query — only active ads that haven't expired
+    let query = this.db
+      .collection(this.collection)
+      .where('status', '==', 'active')
+      .where('expiresAt', '>', now);
+
+    // Filter by location if provided
+    if (filters?.location) {
+      query = query.where('location', '==', filters.location);
+    }
+
+    const snapshot = await query.get();
+
+    if (snapshot.empty) {
+      return [];
+    }
+
+    let ads = snapshot.docs.map((doc) =>
+      doc.data() as Advertisement
+    );
+
+    // ── Client-side filters ──────────────────────────
+    // Firestore can't do all filters in one query
+    // so we filter in memory after fetching
+
+    // Filter by purpose
+    if (filters?.purpose) {
+      ads = ads.filter((ad) =>
+        ad.preferredPurposes.includes(filters.purpose)
+      );
+    }
+
+    // Filter by amount range
+    if (filters?.minAmount) {
+      ads = ads.filter((ad) =>
+        ad.maxAmount >= filters.minAmount
+      );
+    }
+
+    if (filters?.maxAmount) {
+      ads = ads.filter((ad) =>
+        ad.minAmount <= filters.maxAmount
+      );
+    }
+
+    // Filter by search keyword
+    if (filters?.search) {
+      const searchLower = filters.search.toLowerCase();
+      ads = ads.filter((ad) =>
+        ad.searchKeywords?.some((kw) =>
+          kw.toLowerCase().includes(searchLower)
+        ) ||
+        ad.title.toLowerCase().includes(searchLower) ||
+        ad.location.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // ── Sort: boosted ads first, then by createdAt ───
+    ads.sort((a, b) => {
+      if (a.isBoosted && !b.isBoosted) return -1;
+      if (!a.isBoosted && b.isBoosted) return 1;
+      return (
+        b.createdAt.toMillis() - a.createdAt.toMillis()
+      );
+    });
+
+    return ads.map((ad) => this.createService.toResponse(ad));
+  }
+
+  // ── Get lender's own ads ─────────────────────────
+  async getMyAds(lenderId: string): Promise<AdvertisementResponse[]> {
+    const snapshot = await this.db
+      .collection(this.collection)
+      .where('lenderId', '==', lenderId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    if (snapshot.empty) return [];
+
+    return snapshot.docs.map((doc) => {
+      const data = doc.data() as Advertisement;
+      return this.createService.toResponse(data);
+    });
+  }
+
+  // ── Get single ad by ID ──────────────────────────
+  async getAdById(adId: string): Promise<AdvertisementResponse> {
+    const doc = await this.db
+      .collection(this.collection)
+      .doc(adId)
+      .get();
+
+    if (!doc.exists) {
+      throw new NotFoundException(`Ad with ID ${adId} not found`);
+    }
+
+    const data = doc.data() as Advertisement;
+    return this.createService.toResponse(data);
+  }
+
+  // ── Get ads by lender ID (public — hides private stats) ──
+  async getAdsByLender(lenderId: string): Promise<AdvertisementResponse[]> {
+    const now = admin.firestore.Timestamp.now();
+
+    const snapshot = await this.db
+      .collection(this.collection)
+      .where('lenderId', '==', lenderId)
+      .where('status',   '==', 'active')
+      .where('expiresAt', '>', now)
+      .get();
+
+    if (snapshot.empty) return [];
+
+    return snapshot.docs.map((doc) => {
+      const data = doc.data() as Advertisement;
+
+      // ── Hide private analytics from other users ────
+      // Views and clicks are private to the lender
+      const response = this.createService.toResponse(data);
+      response.views  = 0;
+      response.clicks = 0;
+      return response;
+    });
+  }
+
+  // ── Increment views ──────────────────────────────
+  async incrementViews(adId: string): Promise<void> {
+    await this.db
+      .collection(this.collection)
+      .doc(adId)
+      .update({
+        views: admin.firestore.FieldValue.increment(1),
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
+  }
+
+  // ── Increment clicks ─────────────────────────────
+  async incrementClicks(adId: string): Promise<void> {
+    await this.db
+      .collection(this.collection)
+      .doc(adId)
+      .update({
+        clicks: admin.firestore.FieldValue.increment(1),
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
+  }
+
+  // ── Get analytics for lender's own ad ───────────
+  async getAdAnalytics(
+    adId: string,
+    lenderId: string,
+  ): Promise<{
+    views: number;
+    clicks: number;
+    applicationCount: number;
+    fundedLoansCount: number;
+    clickThroughRate: string;
+  }> {
+    const doc = await this.db
+      .collection(this.collection)
+      .doc(adId)
+      .get();
+
+    if (!doc.exists) {
+      throw new NotFoundException(`Ad ${adId} not found`);
+    }
+
+    const data = doc.data() as Advertisement;
+
+    // ── Only lender can see their own analytics ──────
+    if (data.lenderId !== lenderId) {
+      throw new NotFoundException('Ad not found');
+    }
+
+    // Calculate click-through rate
+    const ctr = data.views > 0
+      ? ((data.clicks / data.views) * 100).toFixed(1) + '%'
+      : '0%';
+
+    return {
+      views:            data.views,
+      clicks:           data.clicks,
+      applicationCount: data.applicationCount,
+      fundedLoansCount: data.fundedLoansCount,
+      clickThroughRate: ctr,
+    };
+  }
+}
