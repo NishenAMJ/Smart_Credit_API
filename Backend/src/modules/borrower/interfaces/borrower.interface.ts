@@ -1,0 +1,147 @@
+
+import {
+  LoanPurpose,
+  RepaymentMethod,
+  LoanApplicationStatus,
+} from '../dto/loan-application.dto';
+
+/**
+ * Firestore document shape for `borrowers` records.
+ */
+export interface BorrowerProfile {
+  userId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  nic: string;
+  address: {
+    line1: string;
+    line2?: string;
+    city: string;
+    district: string;
+    province: string;
+  };
+  employmentStatus: string;
+  monthlyIncome: number;
+  occupation?: string;
+  creditScore: number;
+  profileComplete: boolean;
+  kycVerified: boolean;
+  totalLoans: number;
+  activeLoans: number;
+  totalBorrowed: number;
+  totalRepaid: number;
+  createdAt: FirebaseFirestore.Timestamp;
+  updatedAt: FirebaseFirestore.Timestamp;
+}
+
+/**
+ * Firestore document shape for `loan_applications` records.
+ */
+export interface LoanApplication {
+  applicationId: string;
+  borrowerId: string;
+  selectedLoanId?: string;
+  loanAmount: number;
+  loanPurpose: LoanPurpose;
+  purposeDescription?: string;
+  loanTermMonths: number;
+  requestedInterestRate?: number; // Optional requested rate
+  preferredRepaymentMethod: RepaymentMethod;
+  collateralDetails?: string[];
+  additionalNotes?: string;
+  status: LoanApplicationStatus;
+  submittedAt?: FirebaseFirestore.Timestamp;
+  reviewedAt?: FirebaseFirestore.Timestamp;
+  reviewerNotes?: string;
+  createdAt: FirebaseFirestore.Timestamp;
+  updatedAt: FirebaseFirestore.Timestamp;
+}
+
+/**
+ * Loan repayment lifecycle states stored in Firestore.
+ */
+export enum LoanStatus {
+  ACTIVE = 'active',
+  COMPLETED = 'completed',
+  DEFAULTED = 'defaulted',
+  OVERDUE = 'overdue',
+  CANCELLED = 'cancelled',
+}
+
+/**
+ * Firestore document shape for `loans` records.
+ */
+export interface Loan {
+  loanId: string;
+  applicationId: string;
+  borrowerId: string;
+  lenderId: string;
+  lenderName?: string;
+  loanAmount: number;
+  interestRate: number;
+  loanTermMonths: number;
+  monthlyInstallment: number;
+  outstandingBalance: number;
+  totalInterest: number;
+  status: LoanStatus;
+  disbursedAt: FirebaseFirestore.Timestamp;
+  nextPaymentDate: FirebaseFirestore.Timestamp;
+  maturityDate: FirebaseFirestore.Timestamp;
+  repaymentsMade: number;
+  createdAt: FirebaseFirestore.Timestamp;
+  updatedAt: FirebaseFirestore.Timestamp;
+}
+
+/**
+ * Repayment status values stored in repayment records.
+ */
+export enum RepaymentStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  OVERDUE = 'overdue',
+}
+
+/**
+ * Firestore document shape for `repayments` records.
+ */
+export interface Repayment {
+  repaymentId: string;
+  loanId: string;
+  borrowerId: string;
+  lenderId: string;
+  amount: number;
+  principalPaid: number;
+  interestPaid: number;
+  paymentMethod: RepaymentMethod;
+  transactionReference?: string;
+  paymentProofUrl?: string;
+  status: RepaymentStatus;
+  dueDate: FirebaseFirestore.Timestamp;
+  paidAt?: FirebaseFirestore.Timestamp;
+  installmentNumber: number;
+  createdAt: FirebaseFirestore.Timestamp;
+}
+
+/**
+ * Aggregated borrower dashboard response returned by the API.
+ */
+export interface BorrowerDashboard {
+  profile: Partial<BorrowerProfile>;
+  activeLoans: number;
+  pendingApplications: number;
+  totalOutstanding: number;
+  nextPaymentDate?: FirebaseFirestore.Timestamp;
+  nextPaymentAmount?: number;
+  creditScore: number;
+  totalBorrowed: number;
+  totalRepaid: number;
+  recentActivity: Array<{
+    type: 'loan' | 'repayment' | 'application';
+    description: string;
+    amount?: number;
+    date: FirebaseFirestore.Timestamp;
+  }>;
+}
