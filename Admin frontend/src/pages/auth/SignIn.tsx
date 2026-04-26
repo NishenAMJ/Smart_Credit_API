@@ -119,7 +119,7 @@ export default function SignIn() {
                   onClick={() => setShowPass(!showPass)}
                   style={styles.eyeBtn}
                 >
-                  {showPass ? "🙈" : "👁️"}
+                  {showPass ? "🤫" : "👁️"}
                 </button>
               </div>
             </div>

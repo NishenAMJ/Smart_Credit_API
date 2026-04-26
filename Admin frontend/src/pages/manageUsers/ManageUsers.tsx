@@ -17,25 +17,42 @@ type UserRow = {
   id: string;
   name: string;
   email: string;
+  phone: string;
   role: AdminUserRole;
   status: AdminUserStatus;
+  kycStatus: "approved" | "pending" | "rejected";
+  creditScore: number;
+  rating: number;
   joinDate: string;
   updatedAt: string;
+  totalLoansCompleted: number;
+  totalAmountLent: number;
+  totalAmountBorrowed: number;
   suspensionReason?: string;
 };
 
 // Converts backend user records into stable table rows so rendering stays simple.
 function mapApiUser(user: AdminUser): UserRow {
-  const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || user.email.split("@")[0];
+  const name =
+    user.fullName ||
+    [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
+    user.email.split("@")[0];
 
   return {
     id: user.id,
     name,
     email: user.email,
+    phone: user.phone || "N/A",
     role: user.role,
     status: user.status ?? "active",
+    kycStatus: user.kycStatus ?? "approved",
+    creditScore: user.creditScore ?? 0,
+    rating: user.rating ?? 0,
     joinDate: formatFirestoreDate(user.createdAt),
     updatedAt: formatFirestoreDate(user.updatedAt),
+    totalLoansCompleted: user.totalLoansCompleted ?? 0,
+    totalAmountLent: user.totalAmountLent ?? 0,
+    totalAmountBorrowed: user.totalAmountBorrowed ?? 0,
     suspensionReason: user.suspensionReason,
   };
 }
@@ -147,7 +164,7 @@ export default function ManageUsers() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Manage Users</h1>
-          <p className="page-subtitle">Live admin user management connected to Firebase</p>
+          <p className="page-subtitle">Users loaded from Firestore with lender and borrower credit data</p>
         </div>
         <span style={S.pendingChip}>{stats.pendingUsers} Pending</span>
       </div>
@@ -210,10 +227,12 @@ export default function ManageUsers() {
           <thead>
             <tr>
               <th>User</th>
+              <th>Phone</th>
               <th>ID</th>
               <th>Role</th>
+              <th>KYC</th>
+              <th>Credit</th>
               <th>Join Date</th>
-              <th>Updated</th>
               <th>Status</th>
               <th style={{ textAlign: "center" }}>Action</th>
             </tr>
@@ -221,7 +240,7 @@ export default function ManageUsers() {
           <tbody>
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={7} style={S.emptyCell}>
+                <td colSpan={9} style={S.emptyCell}>
                   {loading ? "Loading users..." : "No users found."}
                 </td>
               </tr>
@@ -234,10 +253,12 @@ export default function ManageUsers() {
                       <span style={{ fontSize: 12, color: "#6B7280" }}>{user.email}</span>
                     </div>
                   </td>
+                  <td>{user.phone}</td>
                   <td style={S.monoCell}>{user.id}</td>
                   <td><RoleBadge role={user.role} /></td>
+                  <td>{user.kycStatus}</td>
+                  <td>{user.creditScore}</td>
                   <td>{user.joinDate}</td>
-                  <td>{user.updatedAt}</td>
                   <td><StatusBadge status={user.status} /></td>
                   <td>
                     <div style={S.actionRow}>
@@ -272,10 +293,17 @@ export default function ManageUsers() {
             <div style={S.modalGrid}>
               <Detail label="Name" value={selectedUser.name} />
               <Detail label="Email" value={selectedUser.email} />
+              <Detail label="Phone" value={selectedUser.phone} />
               <Detail label="Role" value={selectedUser.role} />
               <Detail label="Status" value={selectedUser.status} />
+              <Detail label="KYC Status" value={selectedUser.kycStatus} />
+              <Detail label="Credit Score" value={String(selectedUser.creditScore)} />
+              <Detail label="Rating" value={String(selectedUser.rating)} />
               <Detail label="Join Date" value={selectedUser.joinDate} />
               <Detail label="Updated At" value={selectedUser.updatedAt} />
+              <Detail label="Loans Completed" value={String(selectedUser.totalLoansCompleted)} />
+              <Detail label="Total Lent" value={`LKR ${selectedUser.totalAmountLent.toLocaleString()}`} />
+              <Detail label="Total Borrowed" value={`LKR ${selectedUser.totalAmountBorrowed.toLocaleString()}`} />
               <Detail label="Suspension Reason" value={selectedUser.suspensionReason || "N/A"} />
             </div>
           </div>

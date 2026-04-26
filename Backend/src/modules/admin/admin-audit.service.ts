@@ -2,10 +2,19 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { AuditLogEntry } from './interfaces/audit-log.interface';
 import { FirestoreTimestampLike } from './interfaces/user.interface';
+import { rethrowFirebaseError } from '../../common/firebase-error';
 
 @Injectable()
 export class AdminAuditService {
   constructor(private readonly firebaseService: FirebaseService) {}
+
+  private getPrimaryRole(role: unknown) {
+    if (Array.isArray(role)) {
+      return role[0];
+    }
+
+    return role;
+  }
 
   // Normalizes Firestore timestamps and Date objects for the audit table.
   private formatDate(value?: FirestoreTimestampLike | Date) {
@@ -27,12 +36,12 @@ export class AdminAuditService {
     try {
       const db = this.firebaseService.db;
 
-      const [usersSnapshot, kycSnapshot, adsSnapshot, disputesSnapshot] =
+      const [usersSnapshot, adsSnapshot, disputesSnapshot, requestsSnapshot] =
         await Promise.all([
           db.collection('users').get(),
-          db.collection('kyc_documents').get(),
           db.collection('ads').get(),
           db.collection('disputes').get(),
+          db.collection('loanRequests').get(),
         ]);
 
       const logs: AuditLogEntry[] = [];
@@ -58,7 +67,7 @@ export class AdminAuditService {
           logs.push({
             id: `USR-A-${doc.id}`,
             actionType: 'user_activated',
-            description: 'User account is active',
+            description: `${this.getPrimaryRole(user.role) || 'User'} account is active`,
             performedBy: 'Admin',
             targetName: user.email || doc.id,
             targetType: 'user',
@@ -68,31 +77,31 @@ export class AdminAuditService {
         }
       });
 
-      kycSnapshot.forEach((doc) => {
-        const kyc = doc.data();
+      usersSnapshot.forEach((doc) => {
+        const user = doc.data();
 
-        if (kyc.status === 'approved') {
+        if (user.kycStatus === 'approved') {
           logs.push({
             id: `KYC-A-${doc.id}`,
             actionType: 'kyc_approved',
-            description: kyc.notes || 'KYC document approved',
+            description: 'User KYC approved',
             performedBy: 'Admin',
-            targetName: kyc.userId || doc.id,
+            targetName: user.fullName || user.email || doc.id,
             targetType: 'user',
-            dateTime: this.formatDate(kyc.reviewedAt || kyc.updatedAt),
+            dateTime: this.formatDate(user.reviewedAt || user.updatedAt),
             severity: 'success',
           });
         }
 
-        if (kyc.status === 'rejected') {
+        if (user.kycStatus === 'rejected') {
           logs.push({
             id: `KYC-R-${doc.id}`,
             actionType: 'kyc_rejected',
-            description: kyc.rejectionReason || 'KYC document rejected',
+            description: user.rejectionReason || 'User KYC rejected',
             performedBy: 'Admin',
-            targetName: kyc.userId || doc.id,
+            targetName: user.fullName || user.email || doc.id,
             targetType: 'user',
-            dateTime: this.formatDate(kyc.reviewedAt || kyc.updatedAt),
+            dateTime: this.formatDate(user.reviewedAt || user.updatedAt),
             severity: 'warning',
           });
         }
@@ -107,7 +116,7 @@ export class AdminAuditService {
             actionType: 'ad_approved',
             description: ad.notes || 'Lender advertisement approved',
             performedBy: 'Admin',
-            targetName: ad.title || doc.id,
+            targetName: ad.lenderName || doc.id,
             targetType: 'ad',
             dateTime: this.formatDate(
               ad.approvedAt || ad.reviewedAt || ad.updatedAt,
@@ -122,7 +131,7 @@ export class AdminAuditService {
             actionType: 'ad_rejected',
             description: ad.rejectionReason || 'Lender advertisement rejected',
             performedBy: 'Admin',
-            targetName: ad.title || doc.id,
+            targetName: ad.lenderName || doc.id,
             targetType: 'ad',
             dateTime: this.formatDate(
               ad.rejectedAt || ad.reviewedAt || ad.updatedAt,
@@ -149,6 +158,21 @@ export class AdminAuditService {
         }
       });
 
+      requestsSnapshot.docs.slice(0, 25).forEach((doc) => {
+        const request = doc.data();
+
+        logs.push({
+          id: `REQ-${doc.id}`,
+          actionType: 'system_event',
+          description: `Loan request ${request.status || 'submitted'} for ${request.amount || 0}`,
+          performedBy: request.borrowerName || 'Borrower',
+          targetName: request.requestId || doc.id,
+          targetType: 'report',
+          dateTime: this.formatDate(request.createdAt),
+          severity: request.status === 'accepted' ? 'success' : 'info',
+        });
+      });
+
       logs.sort((a, b) => b.dateTime.localeCompare(a.dateTime));
 
       return {
@@ -158,7 +182,7 @@ export class AdminAuditService {
       };
     } catch (error) {
       console.error('Error fetching audit logs:', error);
-      throw new InternalServerErrorException('Failed to fetch audit logs');
+      rethrowFirebaseError(error, 'Failed to fetch audit logs');
     }
   }
 }

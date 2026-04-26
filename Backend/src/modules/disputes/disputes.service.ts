@@ -6,11 +6,15 @@ import { Dispute } from './interfaces/dispute.interface';
 export class DisputesService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
-  async getAllDisputes(): Promise<{ success: boolean; count: number; disputes: Dispute[] }> {
+  async getAllDisputes(): Promise<{
+    success: boolean;
+    count: number;
+    disputes: Dispute[];
+  }> {
     try {
       const db = this.firebaseService.db;
       const disputesRef = db.collection('disputes');
-      
+
       const snapshot = await disputesRef.get();
 
       const disputes: Dispute[] = [];

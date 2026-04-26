@@ -5,6 +5,7 @@ import {
   DEFAULT_KYC_APPROVAL_NOTE,
   DEFAULT_KYC_REJECTION_REASON,
 } from "../constants/admin-actions";
+import type { AdminAuthResponse } from "../types/admin-auth";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
 
@@ -56,22 +57,33 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T>
   return data as T;
 }
 
-export interface AdminAuthResponse {
-  accessToken: string;
-  user: {
-    uid: string;
-    email: string;
-    role: AdminUserRole;
-  };
+export interface AdminSignupRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  department: string;
+  adminRole: string;
+  password: string;
 }
 
 export interface AdminUser {
   id: string;
+  uid?: string;
   email: string;
   role: AdminUserRole;
   status?: AdminUserStatus;
+  fullName?: string;
   firstName?: string;
   lastName?: string;
+  phone?: string;
+  photoURL?: string;
+  creditScore?: number;
+  rating?: number;
+  totalLoansCompleted?: number;
+  totalAmountLent?: number;
+  totalAmountBorrowed?: number;
+  kycStatus?: "approved" | "pending" | "rejected";
   createdAt?: FirestoreTimestamp;
   updatedAt?: FirestoreTimestamp;
   suspendedAt?: FirestoreTimestamp;
@@ -100,8 +112,11 @@ export interface UsersResponse {
 export interface KycDocument {
   id: string;
   userId: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
   documentType: string;
-  documentUrl: string;
+  documentUrl?: string;
   status: "pending" | "approved" | "rejected";
   submittedAt?: FirestoreTimestamp;
   reviewedAt?: FirestoreTimestamp;
@@ -211,15 +226,20 @@ export interface RevenueReportResponse {
 
 export interface AdminAd {
   id: string;
-  userId: string;
-  title: string;
-  description: string;
-  amount?: number;
-  interestRate?: number;
-  duration?: number;
-  adType: "borrower" | "lender";
+  adId?: string;
+  lenderId: string;
+  lenderName?: string;
+  lenderPhotoURL?: string;
+  lenderRating?: number;
+  maxAmount?: number;
+  preferredInterestRate?: number;
+  minTenureMonths?: number;
+  maxTenureMonths?: number;
+  preferredPurposes?: string[];
+  location?: string;
   status: AdStatus;
   createdAt?: FirestoreTimestamp;
+  expiresAt?: FirestoreTimestamp;
   reviewedAt?: FirestoreTimestamp;
   approvedAt?: FirestoreTimestamp;
   rejectedAt?: FirestoreTimestamp;
@@ -259,11 +279,69 @@ export interface AuditLogsResponse {
   logs: AuditLogEntry[];
 }
 
+export type DisputeStatus = "open" | "in-progress" | "resolved" | "escalated" | "closed";
+export type DisputePriority = "low" | "medium" | "high" | "critical";
+export type DisputeCategory = "payment" | "fraud" | "service" | "other";
+
+export interface AdminDispute {
+  id: string;
+  disputeId?: string;
+  disputeCode?: string;
+  transactionId?: string;
+  loanId?: string;
+  lenderId?: string;
+  borrowerId?: string;
+  lenderName?: string;
+  borrowerName?: string;
+  lenderPhotoURL?: string;
+  borrowerPhotoURL?: string;
+  raisedBy: string;
+  raisedByUserId?: string;
+  raisedByRole?: "borrower" | "lender";
+  againstUser: string;
+  againstUserId?: string;
+  againstUserRole?: "borrower" | "lender";
+  title?: string;
+  description: string;
+  category: DisputeCategory;
+  status: DisputeStatus;
+  priority: DisputePriority;
+  disputedAmount?: number;
+  evidenceUrls?: string[];
+  statusHistory?: Array<{
+    status: string;
+    note: string;
+    at?: FirestoreTimestamp;
+    by: string;
+  }>;
+  createdAt?: FirestoreTimestamp;
+  updatedAt?: FirestoreTimestamp;
+  resolvedAt?: FirestoreTimestamp;
+  resolution?: string;
+  escalatedAt?: FirestoreTimestamp;
+  escalationReason?: string;
+  notes?: string;
+  assignedTo?: string;
+}
+
+export interface DisputesResponse {
+  success: boolean;
+  count: number;
+  disputes: AdminDispute[];
+}
+
 // Keeps login calls typed so the calling page can store the session safely.
 export function adminLogin(email: string, password: string) {
   return apiRequest<AdminAuthResponse>("/auth/admin/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
+  });
+}
+
+export function adminSignup(payload: AdminSignupRequest) {
+  return apiRequest<AdminAuthResponse>("/auth/admin/signup", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 
@@ -403,9 +481,52 @@ export function rejectAd(adId: string, reason = DEFAULT_AD_REJECTION_REASON) {
   });
 }
 
+// Allows admins to reopen or reverse moderation after borrower complaints.
+export function updateAdStatus(
+  adId: string,
+  status: Extract<AdStatus, "pending" | "approved" | "rejected">,
+  options: { reason?: string; notes?: string } = {},
+) {
+  return apiRequest(`/admin/ads/${adId}/status`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify({ status, ...options }),
+  });
+}
+
 // Keeps audit pages isolated from raw request details.
 export function getAuditLogs() {
   return apiRequest<AuditLogsResponse>("/admin/audit-logs", {
     auth: true,
+  });
+}
+
+export function getDisputes() {
+  return apiRequest<DisputesResponse>("/admin/disputes", {
+    auth: true,
+  });
+}
+
+export function resolveDispute(
+  disputeId: string,
+  resolution = "Resolved by admin after review",
+  notes?: string,
+) {
+  return apiRequest(`/admin/disputes/${disputeId}/resolve`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ resolution, notes }),
+  });
+}
+
+export function escalateDispute(
+  disputeId: string,
+  reason = "Escalated by admin for further investigation",
+  notes?: string,
+) {
+  return apiRequest(`/admin/disputes/${disputeId}/escalate`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ reason, notes }),
   });
 }

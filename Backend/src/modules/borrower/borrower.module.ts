@@ -4,6 +4,6 @@ import { BorrowerService } from './borrower.service';
 
 @Module({
   controllers: [BorrowerController],
-  providers: [BorrowerService]
+  providers: [BorrowerService],
 })
 export class BorrowerModule {}

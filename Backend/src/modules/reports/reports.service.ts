@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { FirebaseService } from '../../firebase/firebase.service';
+import { rethrowFirebaseError } from '../../common/firebase-error';
 import {
   UserReport,
   LoanReport,
@@ -11,6 +12,19 @@ import {
 @Injectable()
 export class ReportsService {
   constructor(private readonly firebaseService: FirebaseService) {}
+
+  private getPrimaryRole(role: unknown): 'admin' | 'borrower' | 'lender' | null {
+    if (Array.isArray(role)) {
+      const firstRole = role[0];
+      return typeof firstRole === 'string'
+        ? (firstRole as 'admin' | 'borrower' | 'lender')
+        : null;
+    }
+
+    return typeof role === 'string'
+      ? (role as 'admin' | 'borrower' | 'lender')
+      : null;
+  }
 
   async getUsersReport(): Promise<{ success: boolean; data: UserReport }> {
     try {
@@ -31,18 +45,19 @@ export class ReportsService {
 
       usersSnapshot.forEach((doc) => {
         const user = doc.data();
+        const primaryRole = this.getPrimaryRole(user.role);
+        const status =
+          user.status || (user.kycStatus === 'pending' ? 'pending' : 'active');
+
         totalUsers++;
 
-        // Count by status
-        if (user.status === 'active') activeUsers++;
-        if (user.status === 'suspended') suspendedUsers++;
+        if (status === 'active') activeUsers++;
+        if (status === 'suspended') suspendedUsers++;
 
-        // Count by role
-        if (user.role === 'borrower') borrowers++;
-        if (user.role === 'lender') lenders++;
-        if (user.role === 'admin') admins++;
+        if (primaryRole === 'borrower') borrowers++;
+        if (primaryRole === 'lender') lenders++;
+        if (primaryRole === 'admin') admins++;
 
-        // Count new users this month
         if (user.createdAt) {
           const createdDate = user.createdAt.toDate();
           if (
@@ -75,36 +90,44 @@ export class ReportsService {
         },
       };
     } catch (error) {
-      throw new Error(`Failed to generate users report: ${error.message}`);
+      rethrowFirebaseError(error, 'Failed to generate users report');
     }
   }
 
   async getLoansReport(): Promise<{ success: boolean; data: LoanReport }> {
     try {
       const db = this.firebaseService.db;
-      const adsSnapshot = await db.collection('ads').get();
+      const [loansSnapshot, requestsSnapshot] = await Promise.all([
+        db.collection('loans').get(),
+        db.collection('loanRequests').get(),
+      ]);
 
       let totalLoans = 0;
       let activeLoans = 0;
       let completedLoans = 0;
-      let pendingLoans = 0;
-      let approvedLoans = 0;
-      let rejectedLoans = 0;
+      let acceptedRequests = 0;
+      let pendingRequests = 0;
+      let rejectedRequests = 0;
       let totalAmount = 0;
 
-      adsSnapshot.forEach((doc) => {
-        const ad = doc.data();
+      loansSnapshot.forEach((doc) => {
+        const loan = doc.data();
         totalLoans++;
 
-        if (ad.status === 'active') activeLoans++;
-        if (ad.status === 'approved') approvedLoans++;
-        if (ad.status === 'rejected') rejectedLoans++;
-        if (ad.status === 'pending') pendingLoans++;
-        if (ad.status === 'closed') completedLoans++;
+        if (loan.status === 'active') activeLoans++;
+        if (loan.status === 'completed') completedLoans++;
 
-        if (ad.amount) {
-          totalAmount += ad.amount;
+        if (loan.principalAmount) {
+          totalAmount += Number(loan.principalAmount);
         }
+      });
+
+      requestsSnapshot.forEach((doc) => {
+        const request = doc.data();
+
+        if (request.status === 'accepted') acceptedRequests++;
+        if (request.status === 'pending') pendingRequests++;
+        if (request.status === 'rejected') rejectedRequests++;
       });
 
       const averageLoanAmount = totalLoans > 0 ? totalAmount / totalLoans : 0;
@@ -115,21 +138,21 @@ export class ReportsService {
           totalLoans,
           activeLoans,
           completedLoans,
-          defaultedLoans: 0, // Would need separate collection for defaults
+          defaultedLoans: 0,
           totalLoanAmount: totalAmount,
           averageLoanAmount: Math.round(averageLoanAmount * 100) / 100,
-          pendingApprovals: pendingLoans,
+          pendingApprovals: pendingRequests,
           loansByStatus: {
-            pending: pendingLoans,
-            approved: approvedLoans,
             active: activeLoans,
-            rejected: rejectedLoans,
             completed: completedLoans,
+            requestsAccepted: acceptedRequests,
+            requestsPending: pendingRequests,
+            requestsRejected: rejectedRequests,
           },
         },
       };
     } catch (error) {
-      throw new Error(`Failed to generate loans report: ${error.message}`);
+      rethrowFirebaseError(error, 'Failed to generate loans report');
     }
   }
 
@@ -152,20 +175,21 @@ export class ReportsService {
         const txn = doc.data();
         totalTransactions++;
 
-        if (txn.status === 'success' || txn.status === 'completed') {
+        if (txn.verifiedByLender === true || txn.status === 'completed') {
           successfulTransactions++;
+        } else if (txn.status === 'failed') {
+          failedTransactions++;
+        } else {
+          pendingTransactions++;
         }
-        if (txn.status === 'failed') failedTransactions++;
-        if (txn.status === 'pending') pendingTransactions++;
 
         if (txn.amount) {
-          totalVolume += txn.amount;
+          totalVolume += Number(txn.amount);
         }
 
-        if (txn.type) {
-          transactionsByType[txn.type] =
-            (transactionsByType[txn.type] || 0) + 1;
-        }
+        const transactionType = txn.paymentType || txn.type || 'manual';
+        transactionsByType[transactionType] =
+          (transactionsByType[transactionType] || 0) + 1;
       });
 
       const averageAmount =
@@ -184,58 +208,75 @@ export class ReportsService {
         },
       };
     } catch (error) {
-      throw new Error(
-        `Failed to generate transactions report: ${error.message}`,
-      );
+      rethrowFirebaseError(error, 'Failed to generate transactions report');
     }
   }
 
   async getRevenueReport(): Promise<{ success: boolean; data: RevenueReport }> {
     try {
       const db = this.firebaseService.db;
-      const txnSnapshot = await db.collection('transactions').get();
+      const [txnSnapshot, loansSnapshot] = await Promise.all([
+        db.collection('transactions').get(),
+        db.collection('loans').get(),
+      ]);
 
       let totalRevenue = 0;
       let monthlyRevenue = 0;
       let yearlyRevenue = 0;
       let platformFees = 0;
+      let interestRevenue = 0;
       const revenueByMonth: { [key: string]: number } = {};
 
       const currentDate = new Date();
       const currentMonth = currentDate.getMonth();
       const currentYear = currentDate.getFullYear();
 
+      loansSnapshot.forEach((doc) => {
+        const loan = doc.data();
+
+        if (loan.totalRepayable && loan.principalAmount) {
+          interestRevenue += Math.max(
+            0,
+            Number(loan.totalRepayable) - Number(loan.principalAmount),
+          );
+        }
+      });
+
       txnSnapshot.forEach((doc) => {
         const txn = doc.data();
 
-        if (txn.status === 'success' || txn.status === 'completed') {
-          const fee = txn.platformFee || txn.fee || 0;
-          totalRevenue += fee;
-          platformFees += fee;
-
-          if (txn.createdAt) {
-            const txnDate = txn.createdAt.toDate();
-            const txnMonth = txnDate.getMonth();
-            const txnYear = txnDate.getFullYear();
-
-            if (txnMonth === currentMonth && txnYear === currentYear) {
-              monthlyRevenue += fee;
-            }
-
-            if (txnYear === currentYear) {
-              yearlyRevenue += fee;
-            }
-
-            const monthKey = `${txnYear}-${String(txnMonth + 1).padStart(2, '0')}`;
-            revenueByMonth[monthKey] = (revenueByMonth[monthKey] || 0) + fee;
-          }
+        if (!txn.amount) {
+          return;
         }
+
+        const fee = Number(txn.platformFee || txn.fee || txn.amount * 0.02);
+        totalRevenue += fee;
+        platformFees += fee;
+
+        const txnDate = txn.paidAt?.toDate?.() ?? txn.createdAt?.toDate?.();
+        if (!txnDate) {
+          return;
+        }
+
+        const txnMonth = txnDate.getMonth();
+        const txnYear = txnDate.getFullYear();
+
+        if (txnMonth === currentMonth && txnYear === currentYear) {
+          monthlyRevenue += fee;
+        }
+
+        if (txnYear === currentYear) {
+          yearlyRevenue += fee;
+        }
+
+        const monthKey = `${txnYear}-${String(txnMonth + 1).padStart(2, '0')}`;
+        revenueByMonth[monthKey] = (revenueByMonth[monthKey] || 0) + fee;
       });
 
       const revenueByMonthArray = Object.entries(revenueByMonth)
         .map(([month, revenue]) => ({ month, revenue }))
         .sort((a, b) => a.month.localeCompare(b.month))
-        .slice(-12); // Last 12 months
+        .slice(-12);
 
       return {
         success: true,
@@ -244,13 +285,13 @@ export class ReportsService {
           monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
           revenueThisYear: Math.round(yearlyRevenue * 100) / 100,
           platformFees: Math.round(platformFees * 100) / 100,
-          interestRevenue: 0, // Would need separate tracking
-          revenueGrowth: 0, // Would need historical data
+          interestRevenue: Math.round(interestRevenue * 100) / 100,
+          revenueGrowth: 0,
           revenueByMonth: revenueByMonthArray,
         },
       };
     } catch (error) {
-      throw new Error(`Failed to generate revenue report: ${error.message}`);
+      rethrowFirebaseError(error, 'Failed to generate revenue report');
     }
   }
 
@@ -261,13 +302,21 @@ export class ReportsService {
     try {
       const db = this.firebaseService.db;
 
-      // Get counts for overview
-      const usersCount = (await db.collection('users').get()).size;
-      const loansCount = (await db.collection('ads').get()).size;
-      const disputesSnapshot = await db.collection('disputes').get();
+      const [usersSnapshot, loansSnapshot, requestsSnapshot, disputesSnapshot, txnSnapshot] =
+        await Promise.all([
+          db.collection('users').get(),
+          db.collection('loans').get(),
+          db.collection('loanRequests').get(),
+          db.collection('disputes').get(),
+          db.collection('transactions').get(),
+        ]);
 
       let activeDisputes = 0;
       let disputesResolvedToday = 0;
+      let newUsersToday = 0;
+      let loansCreatedToday = 0;
+      let transactionsToday = 0;
+      let totalRevenue = 0;
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -282,74 +331,72 @@ export class ReportsService {
           activeDisputes++;
         }
 
-        if (dispute.resolvedAt) {
-          const resolvedDate = dispute.resolvedAt.toDate();
-          if (resolvedDate >= today) {
-            disputesResolvedToday++;
-          }
+        if (dispute.resolvedAt?.toDate?.() >= today) {
+          disputesResolvedToday++;
         }
       });
-
-      // Get today's activity
-      const usersSnapshot = await db.collection('users').get();
-      const adsSnapshot = await db.collection('ads').get();
-      const txnSnapshot = await db.collection('transactions').get();
-
-      let newUsersToday = 0;
-      let loansCreatedToday = 0;
-      let transactionsToday = 0;
 
       usersSnapshot.forEach((doc) => {
         const user = doc.data();
-        if (user.createdAt) {
-          const createdDate = user.createdAt.toDate();
-          if (createdDate >= today) newUsersToday++;
+        if (user.createdAt?.toDate?.() >= today) {
+          newUsersToday++;
         }
       });
 
-      adsSnapshot.forEach((doc) => {
-        const ad = doc.data();
-        if (ad.createdAt) {
-          const createdDate = ad.createdAt.toDate();
-          if (createdDate >= today) loansCreatedToday++;
+      requestsSnapshot.forEach((doc) => {
+        const request = doc.data();
+        if (request.createdAt?.toDate?.() >= today) {
+          loansCreatedToday++;
         }
       });
 
       txnSnapshot.forEach((doc) => {
         const txn = doc.data();
-        if (txn.createdAt) {
-          const createdDate = txn.createdAt.toDate();
-          if (createdDate >= today) transactionsToday++;
+        const createdAt = txn.paidAt?.toDate?.() ?? txn.createdAt?.toDate?.();
+
+        if (createdAt && createdAt >= today) {
+          transactionsToday++;
+        }
+
+        if (txn.amount) {
+          totalRevenue += Number(txn.platformFee || txn.fee || txn.amount * 0.02);
         }
       });
 
-      // Calculate total revenue
-      let totalRevenue = 0;
-      txnSnapshot.forEach((doc) => {
-        const txn = doc.data();
-        if (txn.status === 'success' || txn.status === 'completed') {
-          totalRevenue += txn.platformFee || txn.fee || 0;
-        }
-      });
-
-      // Generate alerts
       const alerts: Array<{
         type: 'warning' | 'error' | 'info';
         message: string;
         count: number;
       }> = [];
-      if (activeDisputes > 5) {
+
+      const pendingRequests = requestsSnapshot.docs.filter(
+        (doc) => doc.data().status === 'pending',
+      ).length;
+      const pendingKyc = usersSnapshot.docs.filter(
+        (doc) => doc.data().kycStatus === 'pending',
+      ).length;
+
+      if (activeDisputes > 0) {
         alerts.push({
-          type: 'warning' as const,
-          message: 'High number of active disputes',
+          type: 'warning',
+          message: 'Active disputes need attention',
           count: activeDisputes,
         });
       }
-      if (newUsersToday > 10) {
+
+      if (pendingRequests > 0) {
         alerts.push({
-          type: 'info' as const,
-          message: 'Unusual spike in new user registrations',
-          count: newUsersToday,
+          type: 'info',
+          message: 'Loan requests pending review',
+          count: pendingRequests,
+        });
+      }
+
+      if (pendingKyc > 0) {
+        alerts.push({
+          type: 'info',
+          message: 'Users waiting for KYC review',
+          count: pendingKyc,
         });
       }
 
@@ -357,8 +404,8 @@ export class ReportsService {
         success: true,
         data: {
           overview: {
-            totalUsers: usersCount,
-            totalLoans: loansCount,
+            totalUsers: usersSnapshot.size,
+            totalLoans: loansSnapshot.size,
             totalRevenue: Math.round(totalRevenue * 100) / 100,
             activeDisputes,
           },
@@ -369,18 +416,25 @@ export class ReportsService {
             disputesResolvedToday,
           },
           trends: {
-            userGrowthRate: 0, // Would need historical data
+            userGrowthRate: 0,
             loanGrowthRate: 0,
             revenueGrowthRate: 0,
-            disputeResolutionRate: 0,
+            disputeResolutionRate:
+              disputesSnapshot.size > 0
+                ? Number(
+                    (
+                      disputesSnapshot.docs.filter(
+                        (doc) => doc.data().status === 'resolved',
+                      ).length / disputesSnapshot.size
+                    ).toFixed(2),
+                  )
+                : 0,
           },
           alerts,
         },
       };
     } catch (error) {
-      throw new Error(
-        `Failed to generate dashboard analytics: ${error.message}`,
-      );
+      rethrowFirebaseError(error, 'Failed to generate dashboard analytics');
     }
   }
 }

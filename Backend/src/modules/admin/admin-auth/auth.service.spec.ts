@@ -1,12 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { compare } from 'bcrypt';
+import { compare, hash } from 'bcrypt';
 import { AuthService } from './auth.service';
 import { FirebaseService } from '../../../firebase/firebase.service';
 
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
+  hash: jest.fn(),
 }));
 
 describe('AuthService', () => {
@@ -14,6 +15,8 @@ describe('AuthService', () => {
   const getMock = jest.fn();
   const limitMock = jest.fn(() => ({ get: getMock }));
   const whereMock = jest.fn(() => ({ limit: limitMock }));
+  const setMock = jest.fn();
+  const docMock = jest.fn(() => ({ id: 'admin-new', set: setMock }));
   const signAsyncMock = jest.fn();
 
   beforeEach(async () => {
@@ -33,6 +36,7 @@ describe('AuthService', () => {
             db: {
               collection: jest.fn(() => ({
                 where: whereMock,
+                doc: docMock,
               })),
             },
           },
@@ -96,5 +100,51 @@ describe('AuthService', () => {
     await expect(
       service.adminLogin('borrower@example.com', 'password123'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('creates a new admin account and returns a JWT payload', async () => {
+    getMock.mockResolvedValue({ empty: true, docs: [] });
+    (hash as jest.Mock).mockResolvedValue('hashed-password');
+    signAsyncMock.mockResolvedValue('signed-token');
+
+    const result = await service.adminSignup({
+      firstName: 'Sarah',
+      lastName: 'Admin',
+      email: 'sarah.admin@example.com',
+      phone: '+94 77 123 4567',
+      department: 'Compliance',
+      adminRole: 'Super Admin',
+      password: 'Password123!',
+    });
+
+    expect(hash).toHaveBeenCalledWith('Password123!', 10);
+    expect(setMock).toHaveBeenCalled();
+    expect(result).toEqual({
+      accessToken: 'signed-token',
+      user: {
+        uid: 'admin-new',
+        email: 'sarah.admin@example.com',
+        role: 'admin',
+      },
+    });
+  });
+
+  it('rejects duplicate admin signup emails', async () => {
+    getMock.mockResolvedValue({
+      empty: false,
+      docs: [{ id: 'existing-admin' }],
+    });
+
+    await expect(
+      service.adminSignup({
+        firstName: 'Sarah',
+        lastName: 'Admin',
+        email: 'sarah.admin@example.com',
+        phone: '+94 77 123 4567',
+        department: 'Compliance',
+        adminRole: 'Super Admin',
+        password: 'Password123!',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Body,
@@ -10,6 +11,7 @@ import {
 import { AdsService } from './ads.service';
 import { ApproveAdDto } from './dto/approve-ad.dto';
 import { RejectAdDto } from './dto/reject-ad.dto';
+import { UpdateAdStatusDto } from './dto/update-ad-status.dto';
 import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
 
 @Controller('admin/ads')
@@ -46,6 +48,17 @@ export class AdsController {
     @Body() rejectAdDto: RejectAdDto,
   ) {
     return this.adsService.rejectAd(adId, rejectAdDto.reason);
+  }
+
+  @Patch(':adId/status')
+  async updateAdStatus(
+    @Param('adId') adId: string,
+    @Body() updateAdStatusDto: UpdateAdStatusDto,
+  ) {
+    return this.adsService.updateAdStatus(adId, updateAdStatusDto.status, {
+      reason: updateAdStatusDto.reason,
+      notes: updateAdStatusDto.notes,
+    });
   }
 
   @Delete(':adId')

@@ -7,6 +7,7 @@ import ProtectedRoute from "./components/layout/ProtectedRoute";
 // Auth Pages
 import SignIn from "./pages/auth/SignIn";
 import SignUp from "./pages/auth/SignUp";
+import FriendsSignInPage from "./features/auth/pages/FriendsSignInPage";
 
 // Dashboard Pages
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -16,6 +17,7 @@ import ManageUsers from "./pages/manageUsers/ManageUsers";
 import Analytics from "./pages/analytics/Analytics";
 import AuditLogs from "./pages/auditLogs/AuditLogs";
 import SettingsPage from "./pages/settings/Settings";
+import Disputes from "./pages/disputes/Disputes";
 
 export default function App() {
   return (
@@ -25,6 +27,7 @@ export default function App() {
         {/* Public routes */}
         <Route path="/signin" element={<SignIn />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/friends/signin" element={<FriendsSignInPage />} />
 
         {/* Protected routes */}
         <Route
@@ -38,6 +41,7 @@ export default function App() {
           <Route path="/kyc" element={<KYCApprovals />} />
           <Route path="/lender-ads" element={<LenderAds />} />
           <Route path="/manage-users" element={<ManageUsers />} />
+          <Route path="/disputes" element={<Disputes />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/audit-logs" element={<AuditLogs />} />
           <Route path="/settings" element={<SettingsPage />} />

@@ -1,35 +1,43 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Search, Eye, Check, X, Megaphone } from "lucide-react";
-import { approveAd, getAds, rejectAd, type AdminAd, type AdStatus } from "../../lib/api";
+import { Search, Eye, Check, X, RotateCcw } from "lucide-react";
+import { approveAd, getAds, rejectAd, updateAdStatus, type AdminAd, type AdStatus } from "../../lib/api";
 import { formatFirestoreDate } from "../../lib/admin-format";
+import { DEFAULT_AD_REJECTION_REASON } from "../../constants/admin-actions";
 
 type LenderAdRow = {
   id: string;
   lender: string;
-  title: string;
+  lenderPhotoURL?: string;
+  location: string;
   description: string;
   interestRate: string;
   maxAmount: string;
-  duration: string;
+  tenureRange: string;
+  preferredPurposes: string;
   status: AdStatus;
   postedDate: string;
-  adType: "borrower" | "lender";
 };
 
 // Converts backend ads into stable rows so the moderation table stays simple.
 function mapAd(ad: AdminAd): LenderAdRow {
   return {
     id: ad.id,
-    lender: ad.userId || "Unknown lender",
-    title: ad.title,
-    description: ad.description,
-    interestRate: ad.interestRate ? `${ad.interestRate}%` : "N/A",
-    maxAmount: typeof ad.amount === "number" ? `LKR ${ad.amount.toLocaleString()}` : "N/A",
-    duration: ad.duration ? `${ad.duration} months` : "N/A",
+    lender: ad.lenderName || ad.lenderId || "Unknown lender",
+    lenderPhotoURL: ad.lenderPhotoURL,
+    location: ad.location || "N/A",
+    description: `Preferred purposes: ${(ad.preferredPurposes || []).join(", ") || "N/A"}`,
+    interestRate:
+      typeof ad.preferredInterestRate === "number" ? `${ad.preferredInterestRate}%` : "N/A",
+    maxAmount:
+      typeof ad.maxAmount === "number" ? `LKR ${ad.maxAmount.toLocaleString()}` : "N/A",
+    tenureRange:
+      typeof ad.minTenureMonths === "number" && typeof ad.maxTenureMonths === "number"
+        ? `${ad.minTenureMonths}-${ad.maxTenureMonths} months`
+        : "N/A",
+    preferredPurposes: (ad.preferredPurposes || []).join(", ") || "N/A",
     status: ad.status,
     postedDate: formatFirestoreDate(ad.createdAt),
-    adType: ad.adType,
   };
 }
 
@@ -76,8 +84,9 @@ export default function LenderAds() {
       const searchValue = search.toLowerCase();
       const matchesSearch =
         ad.lender.toLowerCase().includes(searchValue) ||
-        ad.title.toLowerCase().includes(searchValue) ||
-        ad.id.toLowerCase().includes(searchValue);
+        ad.location.toLowerCase().includes(searchValue) ||
+        ad.id.toLowerCase().includes(searchValue) ||
+        ad.preferredPurposes.toLowerCase().includes(searchValue);
       const matchesStatus = filterStatus === "all" || ad.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
@@ -92,11 +101,16 @@ export default function LenderAds() {
     closed: ads.filter((ad) => ad.status === "closed").length,
   };
 
+  function syncAdStatus(adId: string, status: AdStatus) {
+    setAds((prev) => prev.map((ad) => (ad.id === adId ? { ...ad, status } : ad)));
+    setSelectedAd((prev) => (prev?.id === adId ? { ...prev, status } : prev));
+  }
+
   // Mirrors an approval in local state to avoid an extra full reload.
   async function handleApprove(adId: string) {
     try {
       await approveAd(adId);
-      setAds((prev) => prev.map((ad) => (ad.id === adId ? { ...ad, status: "approved" } : ad)));
+      syncAdStatus(adId, "approved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to approve ad.");
     }
@@ -106,10 +120,60 @@ export default function LenderAds() {
   async function handleReject(adId: string) {
     try {
       await rejectAd(adId);
-      setAds((prev) => prev.map((ad) => (ad.id === adId ? { ...ad, status: "rejected" } : ad)));
+      syncAdStatus(adId, "rejected");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject ad.");
     }
+  }
+
+  // Reopens an approved or active ad when it needs another review.
+  async function handleMoveToPending(adId: string) {
+    try {
+      await updateAdStatus(adId, "pending", { notes: "Moved back to pending review by admin" });
+      syncAdStatus(adId, "pending");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to move ad to pending.");
+    }
+  }
+
+  // Rejects an approved or active ad after a later complaint or policy issue.
+  async function handleMoveToRejected(adId: string) {
+    try {
+      await updateAdStatus(adId, "rejected", { reason: DEFAULT_AD_REJECTION_REASON });
+      syncAdStatus(adId, "rejected");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to move ad to rejected.");
+    }
+  }
+
+  function renderActions(ad: LenderAdRow) {
+    return (
+      <>
+        <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedAd(ad)} title="View">
+          <Eye size={14} />
+        </button>
+        {ad.status === "pending" && (
+          <>
+            <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleApprove(ad.id)} title="Approve">
+              <Check size={14} />
+            </button>
+            <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleReject(ad.id)} title="Reject">
+              <X size={14} />
+            </button>
+          </>
+        )}
+        {(ad.status === "approved" || ad.status === "active") && (
+          <>
+            <button style={S.iconButton("#F59E0B", "#FFFBEB")} onClick={() => void handleMoveToPending(ad.id)} title="Move to pending">
+              <RotateCcw size={14} />
+            </button>
+            <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleMoveToRejected(ad.id)} title="Move to rejected">
+              <X size={14} />
+            </button>
+          </>
+        )}
+      </>
+    );
   }
 
   return (
@@ -117,19 +181,20 @@ export default function LenderAds() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Lender Ads</h1>
-          <p className="page-subtitle">Review and moderate live ad listings from Firebase</p>
+          <p className="page-subtitle">Only lenders can publish ads. Borrowers choose a lender ad and request a loan from that lender.</p>
         </div>
-        <span style={S.pendingChip}>{counts.pending} Pending Review</span>
       </div>
 
       {error && <div className="card" style={S.errorCard}>{error}</div>}
 
       <div style={S.summaryGrid}>
         {[
-          { label: "Total Ads", count: counts.all, color: "#007AFF" },
+          { label: "All Lender Ads", count: counts.all, color: "#007AFF" },
           { label: "Active", count: counts.active, color: "#10B981" },
           { label: "Approved", count: counts.approved, color: "#10B981" },
           { label: "Pending", count: counts.pending, color: "#F59E0B" },
+          { label: "Rejected", count: counts.rejected, color: "#EF4444" },
+          { label: "Closed", count: counts.closed, color: "#6B7280" },
         ].map((item) => (
           <div key={item.label} className="card">
             <p style={S.cardLabel}>{item.label}</p>
@@ -164,10 +229,10 @@ export default function LenderAds() {
           <thead>
             <tr>
               <th>Lender</th>
-              <th>Ad Title</th>
+              <th>Location</th>
               <th>Interest Rate</th>
-              <th>Amount</th>
-              <th>Duration</th>
+              <th>Max Amount</th>
+              <th>Tenure</th>
               <th>Posted</th>
               <th>Status</th>
               <th style={{ textAlign: "center" }}>Action</th>
@@ -185,39 +250,27 @@ export default function LenderAds() {
                 <tr key={ad.id}>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={S.avatar}>{ad.lender.slice(0, 2).toUpperCase()}</div>
+                      <LenderAvatar name={ad.lender} photoURL={ad.lenderPhotoURL} size={34} />
                       <div>
                         <p style={{ fontWeight: 600 }}>{ad.lender}</p>
-                        <p style={{ fontSize: 12, color: "#6B7280" }}>{ad.adType}</p>
+                        <p style={{ fontSize: 12, color: "#6B7280" }}>Lender ad</p>
                       </div>
                     </div>
                   </td>
                   <td>
                     <div style={{ maxWidth: 220 }}>
-                      <p style={{ fontWeight: 600 }}>{ad.title}</p>
-                      <p style={{ fontSize: 12, color: "#6B7280" }}>{ad.description}</p>
+                      <p style={{ fontWeight: 600 }}>{ad.location}</p>
+                      <p style={{ fontSize: 12, color: "#6B7280" }}>{ad.preferredPurposes}</p>
                     </div>
                   </td>
                   <td>{ad.interestRate}</td>
                   <td>{ad.maxAmount}</td>
-                  <td>{ad.duration}</td>
+                  <td>{ad.tenureRange}</td>
                   <td>{ad.postedDate}</td>
                   <td><StatusBadge status={ad.status} /></td>
                   <td>
                     <div style={S.actionRow}>
-                      <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedAd(ad)} title="View">
-                        <Eye size={14} />
-                      </button>
-                      {ad.status === "pending" && (
-                        <>
-                          <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleApprove(ad.id)} title="Approve">
-                            <Check size={14} />
-                          </button>
-                          <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleReject(ad.id)} title="Reject">
-                            <X size={14} />
-                          </button>
-                        </>
-                      )}
+                      {renderActions(ad)}
                     </div>
                   </td>
                 </tr>
@@ -232,26 +285,36 @@ export default function LenderAds() {
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
             <div style={S.modalHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={S.bigIcon}>
-                  <Megaphone size={18} color="#007AFF" />
-                </div>
+                <LenderAvatar name={selectedAd.lender} photoURL={selectedAd.lenderPhotoURL} size={48} />
                 <div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700 }}>{selectedAd.title}</h3>
+                  <h3 style={{ fontSize: 18, fontWeight: 700 }}>{selectedAd.lender}</h3>
                   <p style={{ fontSize: 12, color: "#6B7280" }}>{selectedAd.id}</p>
                 </div>
               </div>
               <button style={S.closeButton} onClick={() => setSelectedAd(null)}>×</button>
             </div>
 
+            <div style={S.profilePreview}>
+              <LenderAvatar name={selectedAd.lender} photoURL={selectedAd.lenderPhotoURL} size={96} />
+              <div>
+                <p style={S.profileLabel}>Lender Profile Picture</p>
+                <p style={S.profileName}>{selectedAd.lender}</p>
+              </div>
+            </div>
+
             <div style={S.detailsGrid}>
               <Detail label="Lender" value={selectedAd.lender} />
-              <Detail label="Ad Type" value={selectedAd.adType} />
+              <Detail label="Location" value={selectedAd.location} />
               <Detail label="Interest Rate" value={selectedAd.interestRate} />
               <Detail label="Amount" value={selectedAd.maxAmount} />
-              <Detail label="Duration" value={selectedAd.duration} />
+              <Detail label="Tenure Range" value={selectedAd.tenureRange} />
+              <Detail label="Preferred Purposes" value={selectedAd.preferredPurposes} />
               <Detail label="Posted Date" value={selectedAd.postedDate} />
               <Detail label="Status" value={selectedAd.status} />
               <Detail label="Description" value={selectedAd.description} />
+            </div>
+            <div style={S.modalActions}>
+              {renderActions(selectedAd)}
             </div>
           </div>
         </div>
@@ -270,15 +333,34 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)> = {
-  pendingChip: {
-    background: "#FEF3C7",
-    color: "#92400E",
-    borderRadius: 20,
-    padding: "4px 12px",
-    fontSize: 13,
-    fontWeight: 600,
-  },
+function LenderAvatar({
+  name,
+  photoURL,
+  size,
+}: {
+  name: string;
+  photoURL?: string;
+  size: number;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const initials = name.slice(0, 2).toUpperCase();
+  const avatarStyle: CSSProperties = { ...S.avatar, width: size, height: size };
+
+  if (photoURL && !imageFailed) {
+    return (
+      <img
+        src={photoURL}
+        alt={`${name} profile`}
+        style={{ ...avatarStyle, objectFit: "cover" }}
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
+  return <div style={avatarStyle}>{initials}</div>;
+}
+
+const S = {
   errorCard: {
     marginBottom: 16,
     color: "#991B1B",
@@ -331,11 +413,18 @@ const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSPrope
     justifyContent: "center",
     fontSize: 12,
     fontWeight: 700,
+    flexShrink: 0,
   },
   actionRow: {
     display: "flex",
     gap: 6,
     justifyContent: "center",
+  },
+  modalActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+    marginTop: 16,
   },
   iconButton: (color: string, bg: string) => ({
     width: 30,
@@ -386,6 +475,27 @@ const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSPrope
     cursor: "pointer",
     color: "#6B7280",
   },
+  profilePreview: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    padding: 16,
+    background: "#F8FAFC",
+    border: "1px solid #E2E8F0",
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  profileLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontWeight: 600,
+  },
+  profileName: {
+    marginTop: 4,
+    fontSize: 16,
+    color: "#111827",
+    fontWeight: 700,
+  },
   detailsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
@@ -397,4 +507,4 @@ const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSPrope
     borderRadius: 12,
     padding: 14,
   },
-};
+} satisfies Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)>;

@@ -24,4 +24,3 @@ import { FirebaseService } from './firebase.service';
   exports: ['FIREBASE_APP', FirebaseService],
 })
 export class FirebaseModule {}
-

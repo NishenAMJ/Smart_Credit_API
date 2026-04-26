@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Check, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { adminSignup } from "../../lib/api";
+import { setAdminSession } from "../../lib/auth";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormData {
@@ -90,6 +92,7 @@ export default function SignUp() {
 
   const [errors, setErrors]   = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [showPass, setShowPass]   = useState(false);
   const [showConf, setShowConf]   = useState(false);
   const [step, setStep]       = useState<1 | 2>(1);
@@ -98,6 +101,7 @@ export default function SignUp() {
   function update(field: keyof FormData, value: string | boolean) {
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: undefined }));
+    setSubmitError("");
   }
 
   // ── Validate step 1 ──────────────────────────────────────────────────────────
@@ -132,15 +136,30 @@ export default function SignUp() {
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────────
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validateStep2()) return;
     setLoading(true);
-    // Simulate API call — replace with real endpoint later
-    setTimeout(() => {
-      localStorage.setItem("adminToken", "demo-token-123");
+    setSubmitError("");
+
+    try {
+      const response = await adminSignup({
+        firstName: form.firstName,
+        lastName: form.lastName,
+        email: form.email,
+        phone: form.phone,
+        department: form.department,
+        adminRole: form.role,
+        password: form.password,
+      });
+
+      setAdminSession(response.accessToken, response.user);
       navigate("/dashboard");
-    }, 1200);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Unable to create account.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -197,6 +216,8 @@ export default function SignUp() {
             <h2 style={styles.formTitle}>Create Account</h2>
             <p style={styles.formSub}>Set up your admin account for Smart Credit+</p>
           </div>
+
+          {submitError ? <div style={styles.errorBox}>{submitError}</div> : null}
 
           {/* ── Step indicator ── */}
           <div style={styles.stepRow}>

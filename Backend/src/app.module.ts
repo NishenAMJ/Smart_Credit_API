@@ -3,7 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { FirebaseModule } from './firebase/firebase.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AuthModule } from './modules/admin/admin-auth/auth.module';
+import { AuthModule as AdminAuthModule } from './modules/admin/admin-auth/auth.module';
+import { AuthModule as MobileAuthModule } from './modules/auth/auth.module';
 import { BorrowerModule } from './modules/borrower/borrower.module';
 import { LenderModule } from './modules/lender/lender.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -17,14 +18,12 @@ import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
-    // 1. Load environment variables globally
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    // 2. Import your custom Firebase module
     FirebaseModule,
-    // 3. Import feature modules
-    AuthModule,
+    AdminAuthModule,
+    MobileAuthModule,
     BorrowerModule,
     LenderModule,
     AdminModule,

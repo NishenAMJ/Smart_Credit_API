@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirebaseService } from '../../firebase/firebase.service';
+import { rethrowFirebaseError } from '../../common/firebase-error';
 import {
   FirestoreTimestampLike,
   User,
@@ -21,12 +22,51 @@ export class AdminService {
     return this.firebaseService.db;
   }
 
+  private getPrimaryRole(role?: User['role']): UserRole {
+    if (Array.isArray(role)) {
+      return (role[0] as UserRole) ?? 'borrower';
+    }
+
+    return role ?? 'borrower';
+  }
+
+  private getDerivedStatus(data: FirebaseFirestore.DocumentData): UserStatus {
+    if (data.status) {
+      return data.status as UserStatus;
+    }
+
+    if (data.kycStatus === 'pending') {
+      return 'pending';
+    }
+
+    return 'active';
+  }
+
+  private splitName(fullName?: string) {
+    if (!fullName) {
+      return { firstName: undefined, lastName: undefined };
+    }
+
+    const [firstName, ...rest] = fullName.split(' ');
+    return {
+      firstName,
+      lastName: rest.join(' ') || undefined,
+    };
+  }
+
   // Removes sensitive fields before user records are returned to the client.
   private sanitizeUser(id: string, data: FirebaseFirestore.DocumentData): User {
     const { passwordHash, ...sanitizedData } = data;
+    const { firstName, lastName } = this.splitName(sanitizedData.fullName);
 
     return {
       id,
+      uid: sanitizedData.uid ?? id,
+      role: this.getPrimaryRole(sanitizedData.role),
+      status: this.getDerivedStatus(sanitizedData),
+      fullName: sanitizedData.fullName,
+      firstName: sanitizedData.firstName ?? firstName,
+      lastName: sanitizedData.lastName ?? lastName,
       ...sanitizedData,
     } as User;
   }
@@ -39,8 +79,9 @@ export class AdminService {
   // Checks whether a user matches the requested admin-side filters.
   private matchesUserFilters(user: User, query: QueryUsersDto): boolean {
     const normalizedSearch = query.search?.trim().toLowerCase();
+    const primaryRole = this.getPrimaryRole(user.role);
 
-    if (query.role && user.role !== query.role) {
+    if (query.role && primaryRole !== query.role) {
       return false;
     }
 
@@ -52,7 +93,14 @@ export class AdminService {
       return true;
     }
 
-    const searchableValues = [user.email, user.id, user.role, user.status]
+    const searchableValues = [
+      user.email,
+      user.id,
+      primaryRole,
+      user.status,
+      user.fullName,
+      user.phone,
+    ]
       .filter(Boolean)
       .map((value) => String(value).toLowerCase());
 
@@ -75,7 +123,7 @@ export class AdminService {
       };
     } catch (error) {
       console.error('Error fetching users:', error);
-      throw new InternalServerErrorException('Failed to fetch users');
+      rethrowFirebaseError(error, 'Failed to fetch users');
     }
   }
 
@@ -95,7 +143,7 @@ export class AdminService {
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       console.error('Error fetching user:', error);
-      throw new InternalServerErrorException('Failed to fetch user');
+      rethrowFirebaseError(error, 'Failed to fetch user');
     }
   }
 
@@ -116,14 +164,16 @@ export class AdminService {
 
       usersSnapshot.forEach((doc) => {
         const user = doc.data() as Omit<User, 'id'>;
+        const primaryRole = this.getPrimaryRole(user.role);
+        const status = this.getDerivedStatus(user);
 
-        if (user.status === 'active') stats.activeUsers++;
-        if (user.status === 'suspended') stats.suspendedUsers++;
-        if (user.status === 'pending') stats.pendingUsers++;
+        if (status === 'active') stats.activeUsers++;
+        if (status === 'suspended') stats.suspendedUsers++;
+        if (status === 'pending') stats.pendingUsers++;
 
-        if (user.role === 'admin') stats.admins++;
-        if (user.role === 'borrower') stats.borrowers++;
-        if (user.role === 'lender') stats.lenders++;
+        if (primaryRole === 'admin') stats.admins++;
+        if (primaryRole === 'borrower') stats.borrowers++;
+        if (primaryRole === 'lender') stats.lenders++;
       });
 
       return {
@@ -132,7 +182,7 @@ export class AdminService {
       };
     } catch (error) {
       console.error('Error fetching user stats:', error);
-      throw new InternalServerErrorException('Failed to fetch user stats');
+      rethrowFirebaseError(error, 'Failed to fetch user stats');
     }
   }
 

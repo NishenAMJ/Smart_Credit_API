@@ -12,17 +12,12 @@ import {
   Cell,
 } from "recharts";
 import { Users, CreditCard, TrendingUp, Activity } from "lucide-react";
-import { getDashboardAnalytics, type DashboardAnalyticsResponse } from "../../lib/api";
-
-const barData = [
-  { month: "Jan", lenders: 40, borrowers: 24 },
-  { month: "Feb", lenders: 55, borrowers: 38 },
-  { month: "Mar", lenders: 47, borrowers: 52 },
-  { month: "Apr", lenders: 60, borrowers: 41 },
-  { month: "May", lenders: 75, borrowers: 63 },
-  { month: "Jun", lenders: 68, borrowers: 55 },
-  { month: "Jul", lenders: 82, borrowers: 70 },
-];
+import {
+  getDashboardAnalytics,
+  getUsersReport,
+  type DashboardAnalyticsResponse,
+  type UsersReportResponse,
+} from "../../lib/api";
 
 function StatusBadge({ active }: { active: boolean }) {
   return (
@@ -45,14 +40,19 @@ function Avatar({ label }: { label: string }) {
 
 export default function Dashboard() {
   const [dashboard, setDashboard] = useState<DashboardAnalyticsResponse["data"] | null>(null);
+  const [usersReport, setUsersReport] = useState<UsersReportResponse["data"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const response = await getDashboardAnalytics();
-        setDashboard(response.data);
+        const [dashboardResponse, usersResponse] = await Promise.all([
+          getDashboardAnalytics(),
+          getUsersReport(),
+        ]);
+        setDashboard(dashboardResponse.data);
+        setUsersReport(usersResponse.data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load dashboard.");
       } finally {
@@ -120,6 +120,12 @@ export default function Dashboard() {
     },
   ];
 
+  const roleBreakdown = [
+    { label: "Lenders", value: usersReport?.lenders ?? 0 },
+    { label: "Borrowers", value: usersReport?.borrowers ?? 0 },
+    { label: "Admins", value: usersReport?.usersByRole.admin ?? 0 },
+  ];
+
   const alerts = dashboard?.alerts ?? [];
 
   return (
@@ -127,7 +133,7 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Admin Dashboard</h1>
-          <p className="page-subtitle">Live data from your NestJS admin backend</p>
+          <p className="page-subtitle">Live metrics from Firestore users, loans, requests, transactions, and disputes</p>
         </div>
         <div style={{ fontSize: 13, color: "#6B7280" }}>
           {new Date().toLocaleDateString("en-US", {
@@ -167,21 +173,35 @@ export default function Dashboard() {
       <div style={S.chartsRow}>
         <div className="card" style={{ flex: 2 }}>
           <div style={S.cardHeader}>
-            <p style={S.cardTitle}>Platform Overview</p>
+            <p style={S.cardTitle}>User Role Overview</p>
             <div style={S.legendRow}>
               <span style={legendDot("#007AFF")} /> Lenders
               <span style={{ width: 16 }} />
               <span style={legendDot("#10B981")} /> Borrowers
+              <span style={{ width: 16 }} />
+              <span style={legendDot("#8B5CF6")} /> Admins
             </div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={barData} barSize={10} barGap={4}>
+            <BarChart data={roleBreakdown} barSize={28} barGap={10}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
               <Tooltip />
-              <Bar dataKey="lenders" fill="#007AFF" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="borrowers" fill="#10B981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                {roleBreakdown.map((entry) => (
+                  <Cell
+                    key={entry.label}
+                    fill={
+                      entry.label === "Lenders"
+                        ? "#007AFF"
+                        : entry.label === "Borrowers"
+                          ? "#10B981"
+                          : "#8B5CF6"
+                    }
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

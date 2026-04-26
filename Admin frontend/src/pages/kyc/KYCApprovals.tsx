@@ -9,6 +9,9 @@ type KycStatus = "pending" | "approved" | "rejected";
 type KycRow = {
   id: string;
   userId: string;
+  fullName: string;
+  email: string;
+  phone: string;
   documentType: string;
   status: KycStatus;
   submittedAt: string;
@@ -20,6 +23,9 @@ function mapDocument(document: KycDocument): KycRow {
   return {
     id: document.id,
     userId: document.userId,
+    fullName: document.fullName || "Unknown user",
+    email: document.email || "N/A",
+    phone: document.phone || "N/A",
     documentType: document.documentType,
     status: document.status,
     submittedAt: formatFirestoreDate(document.submittedAt),
@@ -68,6 +74,8 @@ export default function KYCApprovals() {
       const searchValue = search.toLowerCase();
       const matchesSearch =
         record.userId.toLowerCase().includes(searchValue) ||
+        record.fullName.toLowerCase().includes(searchValue) ||
+        record.email.toLowerCase().includes(searchValue) ||
         record.id.toLowerCase().includes(searchValue) ||
         record.documentType.toLowerCase().includes(searchValue);
       const matchesStatus = filterStatus === "all" || record.status === filterStatus;
@@ -107,7 +115,7 @@ export default function KYCApprovals() {
       <div className="page-header">
         <div>
           <h1 className="page-title">KYC Approvals</h1>
-          <p className="page-subtitle">Review pending KYC submissions from Firebase</p>
+          <p className="page-subtitle">KYC status is sourced from Firestore user profiles</p>
         </div>
         <span style={S.pendingChip}>{counts.pending} Pending</span>
       </div>
@@ -135,7 +143,7 @@ export default function KYCApprovals() {
           <Search size={15} style={S.searchIcon} />
           <input
             className="input"
-            placeholder="Search by user ID, document type or record ID..."
+            placeholder="Search by user, email, document type or record ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ paddingLeft: 36 }}
@@ -155,9 +163,9 @@ export default function KYCApprovals() {
         <table>
           <thead>
             <tr>
-              <th>Record ID</th>
+              <th>User</th>
               <th>User ID</th>
-              <th>Document Type</th>
+              <th>Contact</th>
               <th>Submitted</th>
               <th>Status</th>
               <th style={{ textAlign: "center" }}>Action</th>
@@ -173,9 +181,19 @@ export default function KYCApprovals() {
             ) : (
               filtered.map((record) => (
                 <tr key={record.id}>
-                  <td style={S.monoCell}>{record.id}</td>
+                  <td>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span style={{ fontWeight: 600 }}>{record.fullName}</span>
+                      <span style={{ fontSize: 12, color: "#6B7280" }}>{record.documentType}</span>
+                    </div>
+                  </td>
                   <td style={S.monoCell}>{record.userId}</td>
-                  <td>{record.documentType}</td>
+                  <td>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span>{record.email}</span>
+                      <span style={{ fontSize: 12, color: "#6B7280" }}>{record.phone}</span>
+                    </div>
+                  </td>
                   <td>{record.submittedAt}</td>
                   <td><StatusBadge status={record.status} /></td>
                   <td>
@@ -211,7 +229,10 @@ export default function KYCApprovals() {
             </div>
             <div style={S.detailCard}>
               <Detail label="Record ID" value={selectedRecord.id} />
+              <Detail label="Full Name" value={selectedRecord.fullName} />
               <Detail label="User ID" value={selectedRecord.userId} />
+              <Detail label="Email" value={selectedRecord.email} />
+              <Detail label="Phone" value={selectedRecord.phone} />
               <Detail label="Document Type" value={selectedRecord.documentType} />
               <Detail label="Status" value={selectedRecord.status} />
               <Detail label="Submitted At" value={selectedRecord.submittedAt} />
