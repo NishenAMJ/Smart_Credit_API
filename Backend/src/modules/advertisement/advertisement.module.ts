@@ -5,6 +5,8 @@ import { AdvertisementReadService }      from './services/advertisement-read.ser
 import { AdvertisementUpdateService }    from './services/advertisement-update.service';
 import { AdvertisementDeleteService }    from './services/advertisement-delete.service';
 import { AdvertisementBoostService }     from './services/advertisement-boost.service';
+import { AdvertisementAnalyticsService }    from './services/advertisement-analytics.service';
+
 
 @Module({
   controllers: [AdvertisementController],
@@ -14,6 +16,7 @@ import { AdvertisementBoostService }     from './services/advertisement-boost.se
     AdvertisementUpdateService,
     AdvertisementDeleteService,
     AdvertisementBoostService,
+    AdvertisementAnalyticsService
   ],
   // Export services so other modules can use them
   exports: [
