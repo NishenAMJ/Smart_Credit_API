@@ -252,4 +252,3 @@ export class AdvertisementController {
     return this.deleteService.deleteAd(adId, lenderId);
   }
 }
-}
