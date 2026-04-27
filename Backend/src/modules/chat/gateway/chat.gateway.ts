@@ -50,7 +50,7 @@ class ReadReceiptDto {
   transports: ['websocket'],
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
-  @WebSocketServer() server: Server;
+  @WebSocketServer() server!: Server;
   private readonly logger = new Logger(ChatGateway.name);
 
   // userId → Set of socketIds (one user can have multiple tabs/devices)
