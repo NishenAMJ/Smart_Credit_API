@@ -1,6 +1,7 @@
 /** @format */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   FlatList,
@@ -8,24 +9,21 @@ import {
   Text,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { applicationService } from "../../api/services/application.service";
 import ApplicationCard from "../../components/borrower/ApplicationCard";
-
-type BorrowerApplication = {
-  applicationId?: string;
-  status?: string;
-  createdAt?: string;
-  loanTitle?: string;
-  requestedAmount?: number;
-  purpose?: string;
-};
+import type { BorrowerApplication } from "../../types/borrower";
+import type { BorrowerNavigation } from "../../types/navigation";
 
 type MyApplicationsScreenProps = {
-  navigation: any;
+  navigation: BorrowerNavigation;
 };
 
+/**
+ * Lists borrower loan applications and their current statuses.
+ */
 export default function MyApplicationsScreen({
   navigation,
 }: MyApplicationsScreenProps) {
@@ -34,27 +32,45 @@ export default function MyApplicationsScreen({
   const [activeFilter, setActiveFilter] = useState<
     "all" | "pending" | "approved" | "rejected"
   >("all");
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    void fetchApplications();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      void fetchApplications();
+    }, []),
+  );
 
   const fetchApplications = async () => {
     try {
       const response = await applicationService.getMyApplications();
-      setApplications((response?.data as BorrowerApplication[]) ?? []);
+      setApplications(response?.data ?? []);
     } catch (error) {
       console.error("Error fetching applications:", error);
       setApplications([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    void fetchApplications();
+  }, []);
 
   const filteredApplications = useMemo(() => {
     if (activeFilter === "all") {
       return applications;
     }
+
+    if (activeFilter === "pending") {
+      return applications.filter((app) =>
+        ["pending", "under_review"].includes(
+          String(app.status ?? "").toLowerCase(),
+        ),
+      );
+    }
+
     return applications.filter(
       (app) => (app.status ?? "").toLowerCase() === activeFilter,
     );
@@ -72,7 +88,7 @@ export default function MyApplicationsScreen({
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color='#007AFF' />
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }
@@ -81,11 +97,11 @@ export default function MyApplicationsScreen({
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name='arrow-left' size={24} color='#FFFFFF' />
+          <Feather name="arrow-left" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Applications</Text>
-        <TouchableOpacity>
-          <Feather name='bell' size={20} color='#FFFFFF' />
+        <TouchableOpacity onPress={() => navigation.navigate("Notifications")}>
+          <Feather name="bell" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -116,9 +132,16 @@ export default function MyApplicationsScreen({
         renderItem={renderApplication}
         keyExtractor={(item, index) => item.applicationId ?? String(index)}
         contentContainerStyle={styles.listContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#007AFF"
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Feather name='inbox' size={48} color='#9CA3AF' />
+            <Feather name="inbox" size={48} color="#9CA3AF" />
             <Text style={styles.emptyText}>No applications found</Text>
           </View>
         }

@@ -3,7 +3,7 @@ import * as admin from 'firebase-admin';
 import { firebaseConfig } from './firebase.config';
 import { FirebaseService } from './firebase.service';
 
-@Global() // Makes Firebase available everywhere without re-importing
+@Global()
 @Module({
   providers: [
     {
@@ -14,13 +14,15 @@ import { FirebaseService } from './firebase.service';
           const app = admin.initializeApp({
             credential: admin.credential.cert(firebaseConfig),
           });
-          console.log('✓ Firebase initialized successfully');
-          // Access project_id from the raw config object
-          const projectId = (firebaseConfig as any).project_id;
-          console.log('Project ID:', projectId);
+
+          console.log('Firebase initialized successfully');
+          console.log('Project ID:', firebaseConfig.projectId);
+
           return app;
         } catch (error) {
-          console.error('✗ Firebase initialization failed:', error.message);
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error('Firebase initialization failed:', message);
           throw error;
         }
       },

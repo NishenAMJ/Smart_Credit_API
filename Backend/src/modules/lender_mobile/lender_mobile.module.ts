@@ -7,11 +7,7 @@ import { LenderApplicationsService } from './lender_applications.service';
 
 @Module({
   controllers: [LenderMobileController, LenderApplicationsController],
-  providers: [
-    LenderMobileService,
-    LenderApplicationsService,
-    Logger,
-  ],
-  exports: [LenderMobileService, LenderApplicationsService], // allows reuse in other modules if needed
+  providers: [LenderMobileService, LenderApplicationsService, Logger],
+  exports: [LenderMobileService, LenderApplicationsService],
 })
 export class LenderMobileModule {}

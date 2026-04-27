@@ -1,12 +1,13 @@
-// modules/borrower/borrower.module.ts
 import { Module } from '@nestjs/common';
 import { BorrowerController } from './borrower.controller';
 import { BorrowerService } from './borrower.service';
 import { FirebaseModule } from '../../firebase/firebase.module';
-import { LoansModule } from '../loans/loans.module';
 
+/**
+ * Registers borrower HTTP routes and business services.
+ */
 @Module({
-  imports: [FirebaseModule, LoansModule],
+  imports: [FirebaseModule],
   controllers: [BorrowerController],
   providers: [BorrowerService],
   exports: [BorrowerService],

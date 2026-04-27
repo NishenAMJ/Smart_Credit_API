@@ -7,13 +7,21 @@ import { Feather } from "@expo/vector-icons";
 type PaymentCardProps = {
   payment: {
     dueDate?: string;
+    paidAt?: string;
+    timestamp?: string;
     amount?: number;
+    lenderName?: string;
+    status?: string;
+    type?: string;
   };
   paymentMethod?: string;
   onPay?: () => void;
   onPress?: () => void;
 };
 
+/**
+ * Renders a borrower repayment card with payment action controls.
+ */
 export default function PaymentCard({
   payment,
   paymentMethod,
@@ -26,23 +34,36 @@ export default function PaymentCard({
     <TouchableOpacity style={styles.card} onPress={onPress}>
       <View style={styles.header}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>M</Text>
-        </View>
-        <View style={styles.info}>
-          <Text style={styles.title}>Next Payment</Text>
-          <Text style={styles.date}>
-            {payment.dueDate
-              ? new Date(payment.dueDate).toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })
-              : "-"}
+          <Text style={styles.avatarText}>
+            {payment.lenderName?.charAt(0)?.toUpperCase() ?? "L"}
           </Text>
         </View>
-        <TouchableOpacity style={styles.payButton} onPress={onPay}>
-          <Text style={styles.payButtonText}>Pay via {methodLabel}</Text>
-        </TouchableOpacity>
+        <View style={styles.info}>
+          <Text style={styles.title}>
+            {payment.type === "disbursement" ? "Loan Received" : payment.status === "PAID" ? "Payment Made" : "Next Payment"}
+          </Text>
+          <Text style={styles.date}>
+            {(() => {
+              const dateVal = payment.timestamp ?? payment.paidAt ?? payment.dueDate;
+              return dateVal
+                ? typeof dateVal === "object"
+                  ? "Invalid Date"
+                  : new Date(dateVal).toLocaleDateString("en-US", {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                : "-";
+            })()}
+          </Text>
+        </View>
+        {payment.status !== "PAID" && payment.type !== "disbursement" && (
+          <TouchableOpacity style={styles.payButton} onPress={onPay}>
+            <Text style={styles.payButtonText}>
+              {paymentMethod === "Cash (QR)" ? "Generate Cash Code" : `Pay via ${methodLabel}`}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.divider} />
@@ -51,14 +72,18 @@ export default function PaymentCard({
         <Text style={styles.amount}>
           LKR {payment.amount?.toLocaleString() ?? "0"}
         </Text>
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.partialButton} onPress={onPay}>
-            <Text style={styles.partialText}>Partial</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.payActionButton} onPress={onPay}>
-            <Text style={styles.payActionText}>Pay</Text>
-          </TouchableOpacity>
-        </View>
+        {payment.status !== "PAID" && payment.type !== "disbursement" && (
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.partialButton} onPress={onPay}>
+              <Text style={styles.partialText}>Partial</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.payActionButton} onPress={onPay}>
+              <Text style={styles.payActionText}>
+                {paymentMethod === "Cash (QR)" ? "Show QR" : "Pay"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );

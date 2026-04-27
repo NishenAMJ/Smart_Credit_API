@@ -10,8 +10,10 @@ export class FirebaseService {
     this.db = getFirestore(this.firebaseApp);
   }
 
-  // Example: Saving a loan application
-  async saveData(collection: string, data: any) {
-    return await this.db.collection(collection).add(data);
+  /**
+   * Saves a generic document in the requested Firestore collection.
+   */
+  async saveData(collection: string, data: Record<string, unknown>) {
+    return this.db.collection(collection).add(data);
   }
 }

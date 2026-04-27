@@ -1,4 +1,3 @@
-// modules/borrower/borrower.controller.ts
 import {
   Controller,
   Get,
@@ -11,222 +10,621 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+
 import { BorrowerService } from './borrower.service';
-import { CreateApplicationDto } from './dto/create-application.dto';
-import { UpdateApplicationDto } from './dto/update-application.dto';
-import { FilterLoansDto } from './dto/filter-loans.dto';
-import { CreatePaymentDto } from './dto/create-payment.dto';
-import { UploadReceiptDto } from './dto/upload-receipt.dto';
-import { GenerateQrDto } from './dto/generate-qr.dto';
-import { SendMessageDto } from './dto/send-message.dto';
+import { CreateBorrowerProfileDto } from './dto/create-profile.dto';
+import { UpdateBorrowerProfileDto } from './dto/update-profile.dto';
+import {
+  LoanApplicationStatus,
+  LoanPurpose,
+  RepaymentMethod,
+} from './dto/loan-application.dto';
+import { LoanStatus } from './interfaces/borrower.interface';
+import {
+  BORROWER_DEFAULTS,
+  BORROWER_FILTER_LIMITS,
+  BORROWER_FLOW,
+} from './borrower.constants';
 
 @Controller('borrower')
 export class BorrowerController {
   constructor(private readonly borrowerService: BorrowerService) {}
 
-  // ==================== LOAN DISCOVERY ====================
-
-  // GET /api/borrower/loans/search?keyword=medical
-  @Get('loans/search')
-  @HttpCode(HttpStatus.OK)
-  async searchLoans(@Query('keyword') keyword: string) {
-    return this.borrowerService.searchLoans(keyword);
+  /**
+   * Uses the supplied borrower id, falling back to demo data for mobile screens.
+   */
+  private resolveBorrowerId(borrowerId?: string): string {
+    const trimmed = borrowerId?.trim();
+    return trimmed && trimmed.length > 0
+      ? trimmed
+      : BORROWER_DEFAULTS.DEMO_BORROWER_ID;
   }
 
-  // GET /api/borrower/loans/featured
+  /**
+   * POST /borrower/profile
+   * Creates a new borrower profile.
+   */
+  @Post('profile')
+  @HttpCode(HttpStatus.CREATED)
+  async createProfile(@Body() dto: CreateBorrowerProfileDto) {
+    return this.borrowerService.createProfile(dto);
+  }
+
+  /**
+   * GET /borrower/profile/:userId
+   * Gets a borrower profile by user id.
+   */
+  @Get('profile/:userId')
+  async getProfile(@Param('userId') userId: string) {
+    return this.borrowerService.getProfile(userId);
+  }
+
+  /**
+   * PUT /borrower/profile/:userId
+   * Updates borrower profile details.
+   */
+  @Put('profile/:userId')
+  async updateProfile(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateBorrowerProfileDto,
+  ) {
+    return this.borrowerService.updateProfile(userId, dto);
+  }
+
+  /**
+   * GET /borrower/dashboard/:userId
+   * Returns borrower dashboard metrics for the supplied user id.
+   */
+  @Get('dashboard/:userId')
+  async getDashboard(@Param('userId') userId: string) {
+    return {
+      success: true,
+      // Compose dashboard metrics from profile, loans, and recent activity.
+      data: await this.borrowerService.getDashboard(userId),
+    };
+  }
+
+  /**
+   * GET /borrower/loans/featured
+   * Returns a compact list of active loans for discovery cards.
+   */
   @Get('loans/featured')
-  @HttpCode(HttpStatus.OK)
-  async getFeaturedLoans() {
-    return this.borrowerService.getFeaturedLoans();
+  async getFeaturedLoans(@Query('borrowerId') borrowerId?: string) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const loans = await this.borrowerService.getLoans(id);
+
+    return {
+      success: true,
+      // Keep featured cards focused on active loans and cap payload size for mobile.
+      data: loans
+        .filter((loan) => loan.status === LoanStatus.ACTIVE)
+        .slice(0, BORROWER_FLOW.FEATURED_LOAN_LIMIT),
+    };
   }
 
-  // GET /api/borrower/loans/:loanId
+  /**
+   * GET /borrower/loans/search
+   * Searches loans using a keyword against common identifier fields.
+   */
+  @Get('loans/search')
+  async searchLoans(
+    @Query('keyword') keyword = '',
+    @Query('borrowerId') borrowerId?: string,
+  ) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const loans = await this.borrowerService.getLoans(id);
+    const normalized = keyword.trim().toLowerCase();
+
+    const filtered =
+      normalized.length === 0
+        ? loans
+        : loans.filter((loan) => {
+            // Search across all fields in the loan object dynamically
+            const haystack = JSON.stringify(loan).toLowerCase();
+            return haystack.includes(normalized);
+          });
+
+    return {
+      success: true,
+      data: filtered,
+    };
+  }
+
+  /**
+   * GET /borrower/loans
+   * Lists borrower loans, optionally filtered by status.
+   */
+  @Get('loans')
+  async getMyLoans(
+    @Query('borrowerId') borrowerId?: string,
+    @Query('status') status?: LoanStatus,
+  ) {
+    const id = this.resolveBorrowerId(borrowerId);
+    // Optional status narrows the query without changing endpoint shape.
+    const loans = await this.borrowerService.getLoans(id, status);
+
+    return {
+      success: true,
+      data: loans,
+    };
+  }
+
+  /**
+   * GET /borrower/loans/:loanId
+   * Returns details for a single borrower-owned loan.
+   */
   @Get('loans/:loanId')
-  @HttpCode(HttpStatus.OK)
-  async getLoanById(@Param('loanId') loanId: string) {
-    return this.borrowerService.getLoanById(loanId);
+  async getLoanDetails(
+    @Param('loanId') loanId: string,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
+    const id = this.resolveBorrowerId(borrowerId);
+    // Service validates loan ownership before returning details.
+    const loan = await this.borrowerService.getLoanById(loanId, id);
+
+    return {
+      success: true,
+      data: loan,
+    };
   }
 
-  // POST /api/borrower/loans/filter
+  /**
+   * POST /borrower/loans/filter
+   * Applies server-side amount and status filters to borrower loans.
+   */
   @Post('loans/filter')
-  @HttpCode(HttpStatus.OK)
-  async filterLoans(@Body() filterDto: FilterLoansDto) {
-    return this.borrowerService.filterLoans(filterDto);
+  async filterLoans(
+    @Body() filters: Record<string, unknown>,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const loans = await this.borrowerService.getLoans(id);
+    // Coerce flexible filter payload values into safe numeric bounds.
+    const minAmount = Number(
+      filters.minAmount ?? BORROWER_FILTER_LIMITS.MIN_AMOUNT,
+    );
+    const maxAmount = Number(
+      filters.maxAmount ?? BORROWER_FILTER_LIMITS.MAX_AMOUNT,
+    );
+    const status = String(filters.status ?? '').toLowerCase();
+
+    const filtered = loans.filter((loan) => {
+      const amountMatch =
+        loan.loanAmount >= minAmount && loan.loanAmount <= maxAmount;
+      const statusMatch = status ? loan.status === status : true;
+      return amountMatch && statusMatch;
+    });
+
+    return {
+      success: true,
+      data: filtered,
+    };
   }
 
-  // ==================== LOAN APPLICATION ====================
-
-  // GET /api/borrower/applications
+  /**
+   * GET /borrower/applications
+   * Lists borrower loan applications with optional status filtering.
+   */
   @Get('applications')
-  @HttpCode(HttpStatus.OK)
-  async getAllApplications(@Query('borrowerId') borrowerId?: string) {
-    return this.borrowerService.getAllApplications(borrowerId);
+  async getMyApplications(
+    @Query('borrowerId') borrowerId?: string,
+    @Query('status') status?: LoanApplicationStatus,
+  ) {
+    const id = this.resolveBorrowerId(borrowerId);
+    // Status filter supports list views like drafts, pending, and approved.
+    const applications = await this.borrowerService.getLoanApplications(
+      id,
+      status,
+    );
+
+    return {
+      success: true,
+      data: applications,
+    };
   }
 
-  // GET /api/borrower/applications/:applicationId
+  /**
+   * GET /borrower/applications/:applicationId
+   * Returns details for one borrower-owned loan application.
+   */
   @Get('applications/:applicationId')
-  @HttpCode(HttpStatus.OK)
-  async getApplicationById(@Param('applicationId') applicationId: string) {
-    return this.borrowerService.getApplicationById(applicationId);
+  async getApplicationDetails(
+    @Param('applicationId') applicationId: string,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const application = await this.borrowerService.getLoanApplicationById(
+      applicationId,
+      id,
+    );
+
+    return {
+      success: true,
+      data: application,
+    };
   }
 
-  // POST /api/borrower/applications
+  /**
+   * POST /borrower/applications
+   * Creates a new loan application draft from mobile payload input.
+   */
   @Post('applications')
   @HttpCode(HttpStatus.CREATED)
-  async createApplication(@Body() createApplicationDto: CreateApplicationDto) {
-    return this.borrowerService.createApplication(createApplicationDto);
+  async createApplication(
+    @Body()
+    payload: {
+      requestedAmount?: number;
+      purpose?: string;
+      description?: string;
+      loanTermMonths?: number;
+      preferredRepaymentMethod?: string;
+      borrowerId?: string;
+      loanId?: string;
+    },
+    @Query('borrowerId') borrowerId?: string,
+  ) {
+    const id = this.resolveBorrowerId(payload.borrowerId ?? borrowerId);
+    // Guard enum parsing to prevent invalid values from breaking application creation.
+    const purpose = (payload.purpose ?? 'business').toLowerCase();
+    const loanPurpose = (
+      Object.values(LoanPurpose).includes(purpose as LoanPurpose)
+        ? purpose
+        : LoanPurpose.BUSINESS
+    ) as LoanPurpose;
+
+    const application = await this.borrowerService.createLoanApplication({
+      borrowerId: id,
+      selectedLoanId: payload.loanId,
+      loanAmount: Number(
+        payload.requestedAmount ?? BORROWER_DEFAULTS.APPLICATION_AMOUNT,
+      ),
+      loanPurpose,
+      purposeDescription: payload.description,
+      loanTermMonths: Number(
+        payload.loanTermMonths ?? BORROWER_DEFAULTS.APPLICATION_TERM_MONTHS,
+      ),
+      preferredRepaymentMethod:
+        (payload.preferredRepaymentMethod as RepaymentMethod) ??
+        RepaymentMethod.QR_PAYMENT,
+    });
+
+    return {
+      success: true,
+      data: application,
+    };
   }
 
-  // PUT /api/borrower/applications/:applicationId
+  /**
+   * PUT /borrower/applications/:applicationId
+   * Updates an existing borrower loan application.
+   */
   @Put('applications/:applicationId')
-  @HttpCode(HttpStatus.OK)
   async updateApplication(
     @Param('applicationId') applicationId: string,
-    @Body() updateApplicationDto: UpdateApplicationDto,
+    @Body() payload: Record<string, unknown>,
+    @Query('borrowerId') borrowerId?: string,
   ) {
-    return this.borrowerService.updateApplication(
+    const id = this.resolveBorrowerId(borrowerId);
+    // Map mobile payload keys to backend update DTO fields.
+    const application = await this.borrowerService.updateLoanApplication(
       applicationId,
-      updateApplicationDto,
+      id,
+      {
+        loanAmount: payload.requestedAmount as number | undefined,
+        purposeDescription: payload.description as string | undefined,
+        loanTermMonths: payload.loanTermMonths as number | undefined,
+      },
     );
+
+    return {
+      success: true,
+      data: application,
+    };
   }
 
-  // DELETE /api/borrower/applications/:applicationId
+  @Post('applications/:applicationId/submit')
+  async submitApplication(
+    @Param('applicationId') applicationId: string,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const application = await this.borrowerService.submitLoanApplication(
+      applicationId,
+      id,
+    );
+
+    return {
+      success: true,
+      data: application,
+    };
+  }
+
+  /**
+   * DELETE /borrower/applications/:applicationId
+   * Deletes a borrower loan application (draft-only in service layer).
+   */
   @Delete('applications/:applicationId')
-  @HttpCode(HttpStatus.OK)
-  async deleteApplication(@Param('applicationId') applicationId: string) {
-    return this.borrowerService.deleteApplication(applicationId);
+  async deleteApplication(
+    @Param('applicationId') applicationId: string,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
+    const id = this.resolveBorrowerId(borrowerId);
+    // Delete is allowed only for draft applications (enforced in service).
+    const result = await this.borrowerService.deleteLoanApplication(
+      applicationId,
+      id,
+    );
+
+    return {
+      success: true,
+      data: result,
+    };
   }
 
-  // ==================== CREDIT SCORE ====================
-
-  // GET /api/borrower/credit-score?borrowerId=xxx
-  @Get('credit-score')
-  @HttpCode(HttpStatus.OK)
-  async getCreditScore(@Query('borrowerId') borrowerId: string) {
-    return this.borrowerService.getCreditScore(borrowerId);
-  }
-
-  // GET /api/borrower/credit-score/history?borrowerId=xxx
-  @Get('credit-score/history')
-  @HttpCode(HttpStatus.OK)
-  async getCreditScoreHistory(@Query('borrowerId') borrowerId: string) {
-    return this.borrowerService.getCreditScoreHistory(borrowerId);
-  }
-
-  // GET /api/borrower/credit-score/factors?borrowerId=xxx
-  @Get('credit-score/factors')
-  @HttpCode(HttpStatus.OK)
-  async getCreditScoreFactors(@Query('borrowerId') borrowerId: string) {
-    return this.borrowerService.getCreditScoreFactors(borrowerId);
-  }
-
-  // ==================== REPAYMENT ====================
-
-  // GET /api/borrower/payments?borrowerId=xxx
+  /**
+   * GET /borrower/payments
+   * Returns a unified payment history built from all borrower loans.
+   */
   @Get('payments')
-  @HttpCode(HttpStatus.OK)
-  async getAllPayments(@Query('borrowerId') borrowerId?: string) {
-    return this.borrowerService.getAllPayments(borrowerId);
+  async getMyPayments(@Query('borrowerId') borrowerId?: string) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const loans = await this.borrowerService.getLoans(id);
+
+    // Batch-fetch real lender names
+    const lenderIds = loans.map((l) => l.lenderId);
+    const lenderNames = await this.borrowerService.getLenderNamesMap(lenderIds);
+
+    // Aggregate repayment history per-loan — catch per-loan errors so one bad loan
+    // doesn't prevent the full list from returning.
+    const histories = await Promise.all(
+      loans.map((loan) =>
+        this.borrowerService
+          .getRepaymentHistory(loan.loanId, id)
+          .catch(() => [] as any[]),
+      ),
+    );
+
+    const repayments = histories.flat();
+
+    // Build upcoming payment stubs from active loans with outstanding balance.
+    const upcomingPayments = loans
+      .filter((l) => l.status === 'active' && l.outstandingBalance > 0)
+      .map((l) => {
+        const rawDate = l.nextPaymentDate as any;
+        const dueDate = rawDate?.toDate ? rawDate.toDate().toISOString() : rawDate ?? null;
+        return {
+          paymentId: `upcoming-${l.loanId}`,
+          loanId: l.loanId,
+          amount: l.monthlyInstallment,
+          status: 'PENDING',
+          dueDate,
+          lenderName: lenderNames.get(l.lenderId) ?? 'Lender',
+        };
+      });
+
+    // Sort upcoming payments ascending (earliest due date first)
+    upcomingPayments.sort((a, b) => {
+      const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+      const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      return aTime - bTime;
+    });
+
+    return {
+      success: true,
+      data: [...upcomingPayments, ...repayments],
+    };
   }
 
-  // GET /api/borrower/payments/:paymentId
-  @Get('payments/:paymentId')
-  @HttpCode(HttpStatus.OK)
-  async getPaymentById(@Param('paymentId') paymentId: string) {
-    return this.borrowerService.getPaymentById(paymentId);
-  }
-
-  // POST /api/borrower/payments
+  /**
+   * POST /borrower/payments
+   * Creates a repayment record for a borrower loan.
+   */
   @Post('payments')
-  @HttpCode(HttpStatus.CREATED)
-  async createPayment(@Body() createPaymentDto: CreatePaymentDto) {
-    return this.borrowerService.createPayment(createPaymentDto);
+  async createPayment(
+    @Body()
+    payload: {
+      loanId: string;
+      amount?: number;
+      paymentMethod?: RepaymentMethod;
+      transactionReference?: string;
+      paymentProofUrl?: string;
+      borrowerId?: string;
+    },
+    @Query('borrowerId') borrowerId?: string,
+  ) {
+    const id = this.resolveBorrowerId(payload.borrowerId ?? borrowerId);
+    // Apply safe defaults so test/demo flows can submit repayments quickly.
+    const repayment = await this.borrowerService.makeRepayment({
+      loanId: payload.loanId,
+      borrowerId: id,
+      amount: Number(payload.amount ?? BORROWER_DEFAULTS.REPAYMENT_AMOUNT),
+      paymentMethod: payload.paymentMethod ?? RepaymentMethod.QR_PAYMENT,
+      transactionReference: payload.transactionReference,
+      paymentProofUrl: payload.paymentProofUrl,
+    });
+
+    return {
+      success: true,
+      data: repayment,
+    };
   }
 
-  // POST /api/borrower/payments/qr-generate
-  @Post('payments/qr-generate')
-  @HttpCode(HttpStatus.OK)
-  async generateQrCode(@Body() generateQrDto: GenerateQrDto) {
-    return this.borrowerService.generateQrCode(generateQrDto);
+  /**
+   * POST /borrower/payments/generate-qr
+   * Generates a temporary QR token payload for repayment flow.
+   */
+  @Post('payments/generate-qr')
+  async generateQr(
+    @Body() payload: { loanId: string; borrowerId?: string },
+    @Query('borrowerId') borrowerId?: string,
+  ) {
+    const id = this.resolveBorrowerId(payload.borrowerId ?? borrowerId);
+
+    return {
+      success: true,
+      data: {
+        borrowerId: id,
+        loanId: payload.loanId,
+        // Temporary QR token generation until integrated with a payment provider.
+        qrCode: `${BORROWER_FLOW.QR_CODE_PREFIX}-${payload.loanId}-${Date.now()}`,
+      },
+    };
   }
 
-  // POST /api/borrower/payments/upload-receipt
+  /**
+   * POST /borrower/payments/upload-receipt
+   * Accepts receipt metadata and returns a temporary stub response.
+   */
   @Post('payments/upload-receipt')
-  @HttpCode(HttpStatus.OK)
-  async uploadReceipt(@Body() uploadReceiptDto: UploadReceiptDto) {
-    return this.borrowerService.uploadReceipt(uploadReceiptDto);
+  async uploadReceipt(@Body() payload: Record<string, unknown>) {
+    return {
+      success: true,
+      data: {
+        // Stub response until file storage integration is implemented.
+        uploaded: true,
+        ...payload,
+      },
+    };
   }
 
-  // ==================== TRANSACTION HISTORY ====================
-
-  // GET /api/borrower/transactions?borrowerId=xxx
+  /**
+   * GET /borrower/transactions
+   * Returns transaction-shaped records derived from repayments.
+   */
   @Get('transactions')
-  @HttpCode(HttpStatus.OK)
-  async getAllTransactions(@Query('borrowerId') borrowerId?: string) {
-    return this.borrowerService.getAllTransactions(borrowerId);
+  async getMyTransactions(@Query('borrowerId') borrowerId?: string) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const loans = await this.borrowerService.getLoans(id);
+
+    // Batch-fetch real lender names
+    const lenderIds = loans.map((l) => l.lenderId);
+    const lenderNames = await this.borrowerService.getLenderNamesMap(lenderIds);
+
+    // Flatten repayment histories and remap them to transaction response shape.
+    const histories = await Promise.all(
+      loans.map((loan) =>
+        this.borrowerService.getRepaymentHistory(loan.loanId, id),
+      ),
+    );
+
+    const repaymentTransactions = histories.flat().map((repayment) => {
+      const loan = loans.find((l) => l.loanId === repayment.loanId);
+      return {
+        transactionId: repayment.repaymentId,
+        loanId: repayment.loanId,
+        amount: repayment.amount,
+        status: repayment.status,
+        paidAt: repayment.paidAt,
+        createdAt: repayment.createdAt,
+        type: 'repayment',
+        lenderName: lenderNames.get(loan?.lenderId ?? '') ?? 'Lender',
+      };
+    });
+
+    const disbursementTransactions = loans
+      .filter((loan) => loan.disbursedAt)
+      .map((loan) => ({
+        transactionId: loan.loanId,
+        loanId: loan.loanId,
+        amount: loan.loanAmount,
+        status: 'COMPLETED',
+        paidAt: loan.disbursedAt,
+        createdAt: loan.createdAt,
+        type: 'disbursement',
+        lenderName: lenderNames.get(loan.lenderId) ?? 'Lender',
+      }));
+
+    const transactions = [...repaymentTransactions, ...disbursementTransactions];
+
+    transactions.sort((a, b) => {
+      const timeA = a.paidAt ? (typeof (a.paidAt as any).toMillis === 'function' ? (a.paidAt as any).toMillis() : (a.paidAt instanceof Date ? a.paidAt.getTime() : 0)) : 0;
+      const timeB = b.paidAt ? (typeof (b.paidAt as any).toMillis === 'function' ? (b.paidAt as any).toMillis() : (b.paidAt instanceof Date ? b.paidAt.getTime() : 0)) : 0;
+      return timeB - timeA;
+    });
+
+    return {
+      success: true,
+      data: transactions,
+    };
   }
 
-  // GET /api/borrower/transactions/:transactionId
+  /**
+   * GET /borrower/transactions/:transactionId
+   * Returns one transaction from the borrower transaction list.
+   */
   @Get('transactions/:transactionId')
-  @HttpCode(HttpStatus.OK)
-  async getTransactionById(@Param('transactionId') transactionId: string) {
-    return this.borrowerService.getTransactionById(transactionId);
-  }
-
-  // GET /api/borrower/payment-schedule/:loanId
-  @Get('payment-schedule/:loanId')
-  @HttpCode(HttpStatus.OK)
-  async getPaymentSchedule(@Param('loanId') loanId: string) {
-    return this.borrowerService.getPaymentSchedule(loanId);
-  }
-
-  // ==================== CHAT & COMMUNICATION ====================
-
-  // GET /api/borrower/chat/conversations?borrowerId=xxx
-  @Get('chat/conversations')
-  @HttpCode(HttpStatus.OK)
-  async getAllConversations(@Query('borrowerId') borrowerId: string) {
-    return this.borrowerService.getAllConversations(borrowerId);
-  }
-
-  // GET /api/borrower/chat/:conversationId
-  @Get('chat/:conversationId')
-  @HttpCode(HttpStatus.OK)
-  async getConversationMessages(
-    @Param('conversationId') conversationId: string,
+  async getTransactionDetails(
+    @Param('transactionId') transactionId: string,
+    @Query('borrowerId') borrowerId?: string,
   ) {
-    return this.borrowerService.getConversationMessages(conversationId);
+    // Reuse the normalized transaction list and select by transaction id.
+    const list = await this.getMyTransactions(borrowerId);
+    const transaction = (list.data as Array<Record<string, unknown>>).find(
+      (item) => item.transactionId === transactionId,
+    );
+
+    return {
+      success: true,
+      data: transaction ?? null,
+    };
   }
 
-  // POST /api/borrower/chat/send
-  @Post('chat/send')
-  @HttpCode(HttpStatus.CREATED)
-  async sendMessage(@Body() sendMessageDto: SendMessageDto) {
-    return this.borrowerService.sendMessage(sendMessageDto);
+  /**
+   * GET /borrower/credit-score
+   * Returns the borrower credit score summary for widgets.
+   */
+  @Get('credit-score')
+  async getCreditScore(@Query('borrowerId') borrowerId?: string) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const profile = await this.borrowerService.getProfile(id);
+
+    return {
+      success: true,
+      data: {
+        // Keep credit response minimal for score widgets.
+        score: profile.creditScore,
+        kycVerified: profile.kycVerified,
+        profileComplete: profile.profileComplete,
+      },
+    };
   }
 
-  // ==================== NOTIFICATIONS ====================
+  /**
+   * GET /borrower/credit-score/history
+   * Returns monthly credit score trend data for chart rendering.
+   */
+  @Get('credit-score/history')
+  async getCreditScoreHistory(@Query('borrowerId') borrowerId?: string) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const profile = await this.borrowerService.getProfile(id);
 
-  // GET /api/borrower/notifications?borrowerId=xxx
-  @Get('notifications')
-  @HttpCode(HttpStatus.OK)
-  async getAllNotifications(@Query('borrowerId') borrowerId: string) {
-    return this.borrowerService.getAllNotifications(borrowerId);
+    // Synthetic trend data used for dashboard visualization.
+    const history = BORROWER_DEFAULTS.CREDIT_HISTORY_OFFSETS.map(
+      (decrease, index) => ({
+        month: `2026-0${index + 2}`,
+        score: Math.max(
+          BORROWER_DEFAULTS.STARTING_CREDIT_SCORE,
+          profile.creditScore - decrease,
+        ),
+      }),
+    );
+
+    return {
+      success: true,
+      data: history,
+    };
   }
 
-  // PUT /api/borrower/notifications/:notificationId/read
-  @Put('notifications/:notificationId/read')
-  @HttpCode(HttpStatus.OK)
-  async markNotificationAsRead(
-    @Param('notificationId') notificationId: string,
-  ) {
-    return this.borrowerService.markNotificationAsRead(notificationId);
-  }
-
-  // DELETE /api/borrower/notifications/:notificationId
-  @Delete('notifications/:notificationId')
-  @HttpCode(HttpStatus.OK)
-  async deleteNotification(@Param('notificationId') notificationId: string) {
-    return this.borrowerService.deleteNotification(notificationId);
+  /**
+   * GET /borrower/support/status
+   * Returns current support ticket statuses for the borrower.
+   */
+  @Get('support/status')
+  async getSupportStatus(@Query('borrowerId') borrowerId?: string) {
+    const id = this.resolveBorrowerId(borrowerId);
+    return {
+      success: true,
+      data: await this.borrowerService.getSupportStatus(id),
+    };
   }
 }

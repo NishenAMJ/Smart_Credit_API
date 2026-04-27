@@ -1,52 +1,58 @@
 /** @format */
 
 export const ENDPOINTS = {
-  SEARCH_LOANS: "/api/borrower/loans/search",
-  FEATURED_LOANS: "/api/borrower/loans/featured",
-  LOAN_DETAILS: (loanId: string) => `/api/borrower/loans/${loanId}`,
-  FILTER_LOANS: "/api/borrower/loans/filter",
-  MY_APPLICATIONS: "/api/borrower/applications",
-  APPLICATION_DETAILS: (applicationId: string) =>
-    `/api/borrower/applications/${applicationId}`,
-  CREATE_APPLICATION: "/api/borrower/applications",
-  UPDATE_APPLICATION: (applicationId: string) =>
-    `/api/borrower/applications/${applicationId}`,
-  DELETE_APPLICATION: (applicationId: string) =>
-    `/api/borrower/applications/${applicationId}`,
-  MY_PAYMENTS: "/api/borrower/payments",
-  CREATE_PAYMENT: "/api/borrower/payments",
-  GENERATE_QR: "/api/borrower/payments/generate-qr",
-  UPLOAD_RECEIPT: "/api/borrower/payments/upload-receipt",
-  MY_TRANSACTIONS: "/api/borrower/transactions",
-  TRANSACTION_DETAILS: (transactionId: string) =>
-    `/api/borrower/transactions/${transactionId}`,
-  CREDIT_SCORE: "/api/borrower/credit-score",
-  CREDIT_SCORE_HISTORY: "/api/borrower/credit-score/history",
   auth: {
-    login: "/api/auth/login",
-    register: "/api/auth/register",
-    me: "/api/auth/me",
+    login: "/auth/login",
+    register: "/auth/register",
+    me: "/auth/me",
+    logout: "/auth/logout",
+    refresh: "/auth/refresh",
   },
-  loans: {
-    featured: "/api/borrower/loans/featured",
-    search: "/api/borrower/loans/search",
-    list: "/api/borrower/loans",
+
+  profile: {
+    create: "/borrower/profile",
+    get: (userId: string) => `/borrower/profile/${userId}`,
+    update: (userId: string) => `/borrower/profile/${userId}`,
   },
+
   applications: {
-    list: "/api/borrower/applications",
-    create: "/api/borrower/applications",
-    byId: (id: string) => `/api/borrower/applications/${id}`,
+    create: "/borrower/applications",
+    list: "/borrower/applications",
+    byId: (applicationId: string) => `/borrower/applications/${applicationId}`,
+    update: (applicationId: string) =>
+      `/borrower/applications/${applicationId}`,
+    submit: (applicationId: string) =>
+      `/borrower/applications/${applicationId}/submit`,
+    delete: (applicationId: string) =>
+      `/borrower/applications/${applicationId}`,
   },
-  payments: {
-    list: "/api/borrower/payments",
-    pay: "/api/borrower/payments/pay",
+
+  loans: {
+    list: "/borrower/loans",
+    featured: "/borrower/loans/featured",
+    search: "/borrower/loans/search",
+    byId: (loanId: string) => `/borrower/loans/${loanId}`,
+    filter: "/borrower/loans/filter",
   },
-  transactions: {
-    list: "/api/borrower/transactions",
-    byId: (id: string) => `/api/borrower/transactions/${id}`,
+
+  repayments: {
+    list: "/borrower/payments",
+    make: "/borrower/payments",
+    generateQr: "/borrower/payments/generate-qr",
+    uploadReceipt: "/borrower/payments/upload-receipt",
   },
+
+  dashboard: {
+    get: (userId: string) => `/borrower/dashboard/${userId}`,
+  },
+
   creditScore: {
-    summary: "/api/borrower/credit-score",
-    history: "/api/borrower/credit-score/history",
+    get: "/borrower/credit-score",
+    history: "/borrower/credit-score/history",
   },
-};
+
+  transactions: {
+    list: "/borrower/transactions",
+    byId: (transactionId: string) => `/borrower/transactions/${transactionId}`,
+  },
+} as const;

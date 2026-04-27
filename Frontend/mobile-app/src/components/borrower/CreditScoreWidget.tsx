@@ -10,6 +10,9 @@ type CreditScoreWidgetProps = {
   onPress?: () => void;
 };
 
+/**
+ * Displays borrower credit score metrics in a compact widget.
+ */
 export default function CreditScoreWidget({
   score = 0,
   creditLimit = 0,
@@ -28,7 +31,7 @@ export default function CreditScoreWidget({
     <TouchableOpacity style={styles.container} onPress={onPress}>
       <View style={styles.header}>
         <Text style={styles.title}>Smart Credit Score</Text>
-        <Feather name='chevron-right' size={20} color='#6B7280' />
+        <Feather name="chevron-right" size={20} color="#6B7280" />
       </View>
 
       <View style={styles.scoreContainer}>
@@ -43,7 +46,7 @@ export default function CreditScoreWidget({
           {[1, 2, 3, 4].map((star) => (
             <Feather
               key={star}
-              name='star'
+              name="star"
               size={16}
               color={score >= star * 200 ? "#F59E0B" : "#E5E7EB"}
             />

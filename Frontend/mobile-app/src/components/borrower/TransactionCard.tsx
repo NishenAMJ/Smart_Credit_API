@@ -3,17 +3,16 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import type { BorrowerTransaction } from "../../types/borrower";
 
 type TransactionCardProps = {
-  transaction: {
-    type?: string;
-    status?: string;
-    timestamp?: string;
-    amount?: number;
-  };
+  transaction: BorrowerTransaction;
   onPress?: () => void;
 };
 
+/**
+ * Renders a borrower transaction summary row/card.
+ */
 export default function TransactionCard({
   transaction,
   onPress,

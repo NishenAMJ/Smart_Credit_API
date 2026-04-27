@@ -11,11 +11,6 @@ export class AppController {
     @Inject('FIREBASE_APP') private firebaseApp: app.App,
   ) {}
 
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
-  }
-
   @Get('firebase-status')
   async getFirebaseStatus() {
     try {
@@ -24,13 +19,12 @@ export class AppController {
         .collection('_test')
         .doc('connection');
 
-      // Try to set a small test value (this also needs permission)
-      // If this fails, it means Firebase is not connected properly
       const testData = {
         timestamp: new Date(),
         status: 'connected',
       };
-      };.
+      await testRef.set(testData, { merge: true });
+      await testRef.get();
 
       return {
         status: 'ok',

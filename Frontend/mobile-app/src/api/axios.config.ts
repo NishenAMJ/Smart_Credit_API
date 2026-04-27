@@ -1,23 +1,45 @@
 /** @format */
 
 import axios from "axios";
-import { Platform } from "react-native";
+import { DeviceEventEmitter } from "react-native";
+import { getApiBaseUrl } from "./base-url";
+import { getToken, clearAuthStorage } from "../utils/auth.storage";
 
-const DEFAULT_PORT = 3000;
-
-function getDefaultApiBaseUrl() {
-  if (Platform.OS === "android") {
-    return `http://10.0.2.2:${DEFAULT_PORT}`;
-  }
-  return `http://localhost:${DEFAULT_PORT}`;
-}
+// Shared Axios client for all API calls.
 
 const apiClient = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiBaseUrl(),
+  baseURL: getApiBaseUrl(),
   timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },
 });
+
+// Add auth token automatically when available.
+
+apiClient.interceptors.request.use(
+  async (config) => {
+    const token = await getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
+
+// If the token is invalid/expired, clear session and notify the app.
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      await clearAuthStorage();
+      // Let the app decide how to redirect (usually back to Login).
+      DeviceEventEmitter.emit("unauthorized");
+    }
+    return Promise.reject(error);
+  },
+);
 
 export default apiClient;

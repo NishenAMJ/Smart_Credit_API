@@ -11,20 +11,20 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { creditScoreService } from "../../api/services/creditScore.service";
-
-type CreditData = {
-  smartScore?: number;
-  creditLimit?: number;
-};
+import type { CreditScoreSummary } from "../../types/borrower";
+import type { BorrowerNavigation } from "../../types/navigation";
 
 type CreditScoreScreenProps = {
-  navigation: any;
+  navigation: BorrowerNavigation;
 };
 
+/**
+ * Displays borrower credit score summary and key indicators.
+ */
 export default function CreditScoreScreen({
   navigation,
 }: CreditScoreScreenProps) {
-  const [creditData, setCreditData] = useState<CreditData | null>(null);
+  const [creditData, setCreditData] = useState<CreditScoreSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function CreditScoreScreen({
   const fetchCreditScore = async () => {
     try {
       const response = await creditScoreService.getMyCreditScore();
-      setCreditData((response?.data as CreditData) ?? null);
+      setCreditData(response?.data ?? null);
     } catch (error) {
       console.error("Error fetching credit score:", error);
       setCreditData(null);
@@ -53,7 +53,7 @@ export default function CreditScoreScreen({
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color='#007AFF' />
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }
@@ -64,11 +64,11 @@ export default function CreditScoreScreen({
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name='arrow-left' size={24} color='#FFFFFF' />
+          <Feather name="arrow-left" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Smart Credit Score</Text>
         <TouchableOpacity onPress={() => navigation.navigate("CreditHistory")}>
-          <Feather name='clock' size={20} color='#FFFFFF' />
+          <Feather name="clock" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -87,7 +87,7 @@ export default function CreditScoreScreen({
             {[1, 2, 3, 4].map((star) => (
               <Feather
                 key={star}
-                name='star'
+                name="star"
                 size={20}
                 color={
                   (creditData?.smartScore || 0) >= star * 200
@@ -143,15 +143,15 @@ export default function CreditScoreScreen({
         <View style={styles.tipsCard}>
           <Text style={styles.sectionTitle}>Tips to Improve</Text>
           <View style={styles.tip}>
-            <Feather name='check-circle' size={20} color='#10B981' />
+            <Feather name="check-circle" size={20} color="#10B981" />
             <Text style={styles.tipText}>Pay all loans on time</Text>
           </View>
           <View style={styles.tip}>
-            <Feather name='check-circle' size={20} color='#10B981' />
+            <Feather name="check-circle" size={20} color="#10B981" />
             <Text style={styles.tipText}>Maintain low balance</Text>
           </View>
           <View style={styles.tip}>
-            <Feather name='check-circle' size={20} color='#10B981' />
+            <Feather name="check-circle" size={20} color="#10B981" />
             <Text style={styles.tipText}>Avoid multiple loan applications</Text>
           </View>
         </View>

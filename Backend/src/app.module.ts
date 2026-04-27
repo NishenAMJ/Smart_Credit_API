@@ -23,7 +23,7 @@ import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module
       isGlobal: true,
       
     }),
-    // 2. Import your custom Firebase module
+    // 2. Import custom Firebase module
     FirebaseModule,
     // 3. Import feature modules
     AuthModule,

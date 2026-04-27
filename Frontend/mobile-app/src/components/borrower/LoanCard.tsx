@@ -3,20 +3,22 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import type { BorrowerLoan } from "../../types/borrower";
 
 type LoanCardProps = {
-  loan: {
-    lenderName?: string;
-    minAmount?: number;
-    maxAmount?: number;
-    amount?: number;
-    durationMonths?: number;
-    isFeatured?: boolean;
-  };
+  loan: BorrowerLoan;
   onPress?: () => void;
+  showApplyNow?: boolean;
 };
 
-export default function LoanCard({ loan, onPress }: LoanCardProps) {
+/**
+ * Renders a borrower-facing loan summary card.
+ */
+export default function LoanCard({
+  loan,
+  onPress,
+  showApplyNow = true,
+}: LoanCardProps) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
       <View style={styles.header}>
@@ -29,14 +31,20 @@ export default function LoanCard({ loan, onPress }: LoanCardProps) {
           <Text style={styles.lenderName}>
             {loan.lenderName ?? "Unknown Lender"}
           </Text>
-          <Text style={styles.amount}>
-            LKR {loan.minAmount?.toLocaleString() ?? "0"} - LKR{" "}
-            {loan.maxAmount?.toLocaleString() ?? "0"}
-          </Text>
+          {loan.amount && loan.amount > 0 ? (
+            <Text style={styles.amount}>
+              LKR {loan.amount.toLocaleString()}
+            </Text>
+          ) : (
+            <Text style={styles.amount}>
+              LKR {loan.minAmount?.toLocaleString() ?? "0"} -{" "}
+              LKR {loan.maxAmount?.toLocaleString() ?? "0"}
+            </Text>
+          )}
           <Text style={styles.duration}>{loan.durationMonths ?? 0} months</Text>
         </View>
         <Text style={styles.totalAmount}>
-          LKR {loan.amount?.toLocaleString() ?? "0"}
+          {loan.interestRate ? `${loan.interestRate}% p.a.` : loan.amount ? `LKR ${loan.amount.toLocaleString()}` : ""}
         </Text>
       </View>
 
@@ -46,10 +54,12 @@ export default function LoanCard({ loan, onPress }: LoanCardProps) {
         </View>
       ) : null}
 
-      <View style={styles.footer}>
-        <Text style={styles.applyText}>Apply Now</Text>
-        <Feather name='arrow-right' size={16} color='#007AFF' />
-      </View>
+      {showApplyNow ? (
+        <View style={styles.footer}>
+          <Text style={styles.applyText}>Apply Now</Text>
+          <Feather name="arrow-right" size={16} color="#007AFF" />
+        </View>
+      ) : null}
     </TouchableOpacity>
   );
 }
