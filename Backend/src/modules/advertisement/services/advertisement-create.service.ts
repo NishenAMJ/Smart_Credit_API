@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import { getFirestore } from '../../../config/firebase.config';
+import { getFirestore } from 'firebase-admin/firestore';
 import { CreateAdDto } from '../dto/create-ad.dto';
 import { Advertisement, AdvertisementResponse } from '../interfaces/advertisement.interface';
 
@@ -37,7 +37,7 @@ export class AdvertisementCreateService {
       throw new BadRequestException('Lender not found');
     }
 
-    const lenderData = lenderDoc.data();
+    const lenderData = lenderDoc.data()!;
 
     // ── Check lender role ────────────────────────────
     if (!lenderData.role?.includes('lender')) {

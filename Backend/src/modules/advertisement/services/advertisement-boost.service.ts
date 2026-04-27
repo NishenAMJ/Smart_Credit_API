@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import { getFirestore } from '../../../config/firebase.config';
+import { getFirestore } from 'firebase-admin/firestore';
 import { BoostAdDto } from '../dto/boost-ad.dto';
 import { Advertisement, AdvertisementResponse } from '../interfaces/advertisement.interface';
 import { AdvertisementCreateService } from './advertisement-create.service';
@@ -70,7 +70,7 @@ export class AdvertisementBoostService {
     }
 
     // ── Validate package price ───────────────────────
-    const pkg = BOOST_PACKAGES[dto.package];
+    const pkg = BOOST_PACKAGES[dto.package as keyof typeof BOOST_PACKAGES];
     if (!pkg) {
       throw new BadRequestException('Invalid boost package');
     }

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { FirebaseService } from '../../config/firebase.service';
-import { COLLECTIONS, UserDoc } from '../../common/types';
+import { FirebaseService } from '../config/firebase.service';
+import { COLLECTIONS, UserDoc } from '../common/types';
 
 @Injectable()
 export class UsersService {

@@ -8,7 +8,7 @@ import {
   Max,
   IsPositive,
 } from 'class-validator';
-import { AdStatus } from '../interfaces/advertisement.interface';
+import type { AdStatus } from '../interfaces/advertisement.interface';
 
 export class UpdateAdDto {
   @IsString()

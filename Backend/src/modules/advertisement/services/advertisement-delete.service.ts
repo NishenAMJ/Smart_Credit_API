@@ -4,7 +4,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import { getFirestore } from '../../../config/firebase.config';
+import { getFirestore } from 'firebase-admin/firestore';
 import { Advertisement } from '../interfaces/advertisement.interface';
 
 @Injectable()

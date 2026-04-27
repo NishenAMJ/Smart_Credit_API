@@ -13,13 +13,13 @@ export class BoostAdDto {
   @IsEnum(['7days', '14days', '30days'], {
     message: 'Package must be 7days, 14days or 30days',
   })
-  package?: BoostPackage;
+  package!: BoostPackage;
 
   @IsNumber()
   @IsPositive({ message: 'Amount must be positive' })
-  amount?: number;
+  amount!: number;
 
   @IsString()
   @IsNotEmpty({ message: 'Payment reference is required' })
-  paymentReference?: string;
+  paymentReference!: string;
 }

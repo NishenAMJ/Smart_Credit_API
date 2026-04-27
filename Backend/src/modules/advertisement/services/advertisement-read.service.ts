@@ -3,7 +3,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import { getFirestore } from '../../../config/firebase.config';
+import { getFirestore } from 'firebase-admin/firestore';
 import {
   Advertisement,
   AdvertisementResponse,
@@ -59,20 +59,20 @@ export class AdvertisementReadService {
     // Filter by purpose
     if (filters?.purpose) {
       ads = ads.filter((ad) =>
-        ad.preferredPurposes.includes(filters.purpose)
+        ad.preferredPurposes.includes(filters.purpose!)
       );
     }
 
     // Filter by amount range
-    if (filters?.minAmount) {
+    if (filters?.minAmount !== undefined) {
       ads = ads.filter((ad) =>
-        ad.maxAmount >= filters.minAmount
+        ad.maxAmount >= filters.minAmount!
       );
     }
 
-    if (filters?.maxAmount) {
+    if (filters?.maxAmount !== undefined) {
       ads = ads.filter((ad) =>
-        ad.minAmount <= filters.maxAmount
+        ad.minAmount <= filters.maxAmount!
       );
     }
 

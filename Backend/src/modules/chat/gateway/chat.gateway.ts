@@ -11,32 +11,32 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger, UseFilters } from '@nestjs/common';
 import { IsString, IsBoolean, IsOptional } from 'class-validator';
-import { FirebaseService } from '../../config/firebase.service';
+import { FirebaseService } from '../config/firebase.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { BlocksService } from '../users/blocks.service';
 import { UsersService } from '../users/users.service';
-import { WsExceptionFilter } from '../../common/filters/ws-exception.filter';
+import { WsExceptionFilter } from '../common/filters/ws-exception.filter';
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
 class JoinRoomDto {
-  @IsString() conversationId: string;
+  @IsString() conversationId!: string;
 }
 
 class SendMessageDto {
-  @IsString() conversationId: string;
-  @IsString() text: string;
+  @IsString() conversationId!: string;
+  @IsString() text!: string;
 }
 
 class TypingDto {
-  @IsString() conversationId: string;
-  @IsBoolean() isTyping: boolean;
+  @IsString() conversationId!: string;
+  @IsBoolean() isTyping!: boolean;
 }
 
 class ReadReceiptDto {
-  @IsString() conversationId: string;
-  @IsString() messageId: string;
+  @IsString() conversationId!: string;
+  @IsString() messageId!: string;
 }
 
 // ── Gateway ───────────────────────────────────────────────────────────────────

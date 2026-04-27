@@ -1,6 +1,6 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { FirebaseService } from '../../config/firebase.service';
-import { COLLECTIONS, BlockDoc } from '../../common/types';
+import { FirebaseService } from '../config/firebase.service';
+import { COLLECTIONS, BlockDoc } from '../common/types';
 
 @Injectable()
 export class BlocksService {

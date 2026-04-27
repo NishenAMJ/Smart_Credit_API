@@ -3,8 +3,8 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { FirebaseService } from '../../config/firebase.service';
-import { COLLECTIONS, ConversationDoc } from '../../common/types';
+import { FirebaseService } from '../config/firebase.service';
+import { COLLECTIONS, ConversationDoc } from '../common/types';
 
 @Injectable()
 export class ConversationsService {
@@ -75,7 +75,7 @@ export class ConversationsService {
       throw new ForbiddenException('Not a participant');
     }
 
-    return { id: snap.id, ...data };
+    return { ...data, id: snap.id };
   }
 
   // ── Mute / unmute ────────────────────────────────────────────────────────────
