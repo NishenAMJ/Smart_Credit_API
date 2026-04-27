@@ -180,21 +180,4 @@ export default function AdAnalyticsScreen({ route, navigation }: any) {
       </ScrollView>
     </SafeAreaView>
   );
-        <Text>Applications: {data.applicationCount}</Text>
-        <Text>Funded Loans: {data.fundedLoansCount}</Text>
-        <Text>Click-Through Rate: {data.clickThroughRate}</Text>
-        <Text>Conversion Rate: {data.conversionRate}</Text>
-        <Text>Funding Rate: {data.fundingRate}</Text>
-
-        {data.boostAmount > 0 && (
-          <Text>Boost Spent: LKR {data.boostAmount}</Text>
-        )}
-
-        <Text>
-          Expires: {new Date(data.expiresAt).toLocaleDateString()}
-        </Text>
-
-      </ScrollView>
-    </SafeAreaView>
-  );
 }
