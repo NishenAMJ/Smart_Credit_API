@@ -11,3 +11,7 @@ apps/*/.env
 apps/*/.env.local
 apps/backend/firebase-service-account.json
 apps/backend/your-service-account-key.json
+Backend/firebase-service-account.json
+Backend/your-service-account-key.json
+Backend/.env
+Backend/.env.local

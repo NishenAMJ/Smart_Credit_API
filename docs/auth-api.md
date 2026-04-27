@@ -24,8 +24,9 @@ Supported roles in this auth MVP:
 
 - `borrower`
 - `lender`
+- `admin`
 
-Role protection is enforced on role-specific dashboard endpoints.
+Public registration only allows borrower and lender accounts. Admin accounts must be created through the backend script, then they can log in through the same login endpoint.
 
 ## Endpoints
 
@@ -132,6 +133,10 @@ Protected route for borrower tokens only.
 
 Protected route for lender tokens only.
 
+### `GET /auth/admin/dashboard`
+
+Protected route for admin tokens only. This gives Manujaya's admin side a review workspace for user and KYC state.
+
 ### `GET /auth/dashboard`
 
 Generic protected dashboard endpoint. The web app currently prefers the role-specific route after confirming the session role.
@@ -158,6 +163,20 @@ Example:
 }
 ```
 
+## Admin Account Creation
+
+Create admin accounts with the backend script instead of the public register form:
+
+```bash
+cd Backend && npm run create:admin -- --email=admin@smartcredit.lk --password=StrongPass123 --full-name="System Admin" --phone=+94770000000
+```
+
+The current demo admin account created for local testing is:
+
+```text
+admin@smartcredit.lk
+```
+
 ## Seeded Firestore Accounts
 
 Existing seeded users were backfilled with auth fields.
@@ -178,7 +197,7 @@ Verified examples:
 Import this collection:
 
 ```text
-apps/backend/Smart_Credit_Auth.postman_collection.json
+Backend/Smart_Credit_Auth.postman_collection.json
 ```
 
 Set collection variable:

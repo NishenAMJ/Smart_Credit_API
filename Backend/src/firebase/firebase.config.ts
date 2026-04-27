@@ -1,0 +1,72 @@
+import { ServiceAccount } from 'firebase-admin';
+import * as path from 'path';
+import * as fs from 'fs';
+
+function parseServiceAccountJson(): ServiceAccount | null {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+  if (!serviceAccountJson) {
+    return null;
+  }
+
+  return JSON.parse(serviceAccountJson) as ServiceAccount;
+}
+
+function resolveServiceAccountPath(): string {
+  const explicitPath =
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  const candidateNames = [
+    explicitPath,
+    'firebase-service-account.json',
+    'your-service-account-key.json',
+    'service-account.json',
+    'serviceAccountKey.json',
+  ].filter(Boolean) as string[];
+  const candidateDirs = [process.cwd(), path.resolve(__dirname, '../../')];
+
+  for (const dir of candidateDirs) {
+    for (const fileName of candidateNames) {
+      const fullPath = path.isAbsolute(fileName)
+        ? fileName
+        : path.resolve(dir, fileName);
+
+      if (fs.existsSync(fullPath)) {
+        console.log('Firebase service account found at: ' + fullPath);
+        return fullPath;
+      }
+    }
+  }
+
+  throw new Error(
+    'Firebase service account not found. Tried: ' + candidateNames.join(', '),
+  );
+}
+
+function loadFirebaseConfig(): ServiceAccount {
+  const serviceAccountFromJson = parseServiceAccountJson();
+
+  if (serviceAccountFromJson) {
+    return serviceAccountFromJson;
+  }
+
+  try {
+    const serviceAccountPath = resolveServiceAccountPath();
+    return JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8')) as ServiceAccount;
+  } catch (error) {
+    console.error(
+      error instanceof Error
+        ? error.message
+        : 'Failed to load Firebase service account.',
+    );
+
+    return {
+      projectId: process.env.FIREBASE_PROJECT_ID || 'undefined',
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL || 'undefined',
+      privateKey:
+        process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n') || 'undefined',
+    };
+  }
+}
+
+export const firebaseConfig = loadFirebaseConfig();

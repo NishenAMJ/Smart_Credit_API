@@ -1,62 +1,47 @@
-# Smart Credit+ Auth MVP
+# Smart Credit+ Auth Integration
 
-This workspace contains the first authentication milestone for Smart Credit+:
+This branch now follows the team folder structure:
 
-- `apps/backend` - NestJS API for register, login, and `me`
-- `apps/web-admin` - React + Vite web app with a combined register/login page
+- `Backend` - NestJS API with JWT auth, role guards, Firestore users, and admin login support
+- `Frontend/mobile-app` - team React Native app restored from `origin/dev`
+- `docs` - auth API handoff notes for teammates
 
-## What This MVP Does
+## Backend Quick Start
 
-- Creates users in Firestore inside the `users` collection
-- Keeps the seed-script shape and adds auth fields like `passwordHash`
-- Lets users register as `borrower` or `lender`
-- Lets users log in with email or phone plus a selected role
-- Returns a JWT from the backend
-- Shows a simple success state in the web app after login
-
-## Quick Start
-
-1. Install dependencies from the repo root:
+1. Install backend dependencies:
 
 ```bash
+cd Backend
 npm install
 ```
 
-2. Copy the example env files and fill them in:
+2. Copy the backend env file and fill Firebase/JWT values:
 
 ```bash
-cp apps/backend/.env.example apps/backend/.env
-cp apps/web-admin/.env.example apps/web-admin/.env
+cp .env.example .env
 ```
 
 3. Start the backend:
 
 ```bash
-npm run dev:backend
+npm run start:dev
 ```
 
-4. Start the web app in a second terminal:
+Local API base URL:
 
-```bash
-npm run dev:web
+```text
+http://127.0.0.1:3000/api
 ```
 
-## Firebase Setup
+## Auth Features
 
-The backend uses Firebase Admin SDK. Configure one of these in `apps/backend/.env`:
-
-- `FIREBASE_SERVICE_ACCOUNT_PATH`
-- `FIREBASE_SERVICE_ACCOUNT_JSON`
-
-You also need a `JWT_SECRET`.
-
-## Useful Scripts
-
-- `npm run dev:backend`
-- `npm run dev:web`
-- `npm run build:backend`
-- `npm run build:web`
-- `npm run build`
+- Public registration for `borrower` and `lender`
+- Login for `borrower`, `lender`, and `admin`
+- Password hashing with bcrypt
+- JWT access tokens
+- Firestore `users` collection compatibility
+- Role guards for borrower, lender, and admin routes
+- Admin dashboard endpoint for account and KYC review visibility
 
 ## Role-Protected Auth Routes
 
@@ -67,19 +52,29 @@ You also need a `JWT_SECRET`.
 - `GET /api/auth/dashboard`
 - `GET /api/auth/borrower/dashboard` - borrower token only
 - `GET /api/auth/lender/dashboard` - lender token only
+- `GET /api/auth/admin/dashboard` - admin token only
 
-Detailed teammate docs:
+## Useful Backend Scripts
 
-- `docs/auth-api.md`
-- `apps/backend/Smart_Credit_Auth.postman_collection.json`
-
-## Seeded User Login Backfill
-
-If the existing Firestore `users` collection was created before this auth flow,
-run the backfill script once so those accounts get the required auth fields:
+Create an admin account intentionally, not through public registration:
 
 ```bash
-npm --workspace apps/backend run backfill:auth-users
+cd Backend
+npm run create:admin -- --email=admin@smartcredit.lk --password=StrongPass123 --full-name="System Admin" --phone=+94770000000
+```
+
+Backfill seeded Firestore users with auth fields:
+
+```bash
+cd Backend
+npm run backfill:auth-users
+```
+
+Dry run:
+
+```bash
+cd Backend
+npm run backfill:auth-users -- --dry-run
 ```
 
 Default seeded-user password:
@@ -88,8 +83,7 @@ Default seeded-user password:
 SmartCredit@123
 ```
 
-Dry run:
+Detailed teammate docs:
 
-```bash
-npm --workspace apps/backend run backfill:auth-users -- --dry-run
-```
+- `docs/auth-api.md`
+- `Backend/Smart_Credit_Auth.postman_collection.json`
