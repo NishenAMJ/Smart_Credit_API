@@ -55,12 +55,12 @@ export class CreateLoanApplicationDto {
 
   @IsString()
   @IsOptional()
-  selectedLoanId?: string;
+  adId?: string;
 
   @IsNumber()
   @Min(10000) // Min LKR 10,000
   @Max(5000000) // Max LKR 5,000,000
-  loanAmount!: number;
+  amount!: number;
 
   @IsEnum(LoanPurpose)
   loanPurpose!: LoanPurpose;
@@ -72,7 +72,7 @@ export class CreateLoanApplicationDto {
   @IsNumber()
   @Min(3)
   @Max(60) // 3 to 60 months
-  loanTermMonths!: number;
+  tenureMonths!: number;
 
   @IsEnum(RepaymentMethod)
   preferredRepaymentMethod!: RepaymentMethod;
@@ -94,7 +94,7 @@ export class UpdateLoanApplicationDto {
   @Min(10000)
   @Max(5000000)
   @IsOptional()
-  loanAmount?: number;
+  amount?: number;
 
   @IsEnum(LoanPurpose)
   @IsOptional()
@@ -108,7 +108,7 @@ export class UpdateLoanApplicationDto {
   @Min(3)
   @Max(60)
   @IsOptional()
-  loanTermMonths?: number;
+  tenureMonths?: number;
 
   @IsEnum(RepaymentMethod)
   @IsOptional()

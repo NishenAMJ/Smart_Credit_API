@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { CreateBorrowerProfileDto } from './dto/create-profile.dto';
@@ -38,7 +39,8 @@ type TimestampLike =
 export class BorrowerService {
   // Firestore collection names used by borrower workflows.
   private readonly BORROWERS_COL = 'borrowers';
-  private readonly LOAN_APPS_COL = 'loan_applications';
+  private readonly LOAN_APPS_COL = 'loanRequests';
+
   private readonly LOANS_COL = 'loans';
   private readonly REPAYMENTS_COL = 'repayments';
 
@@ -46,6 +48,100 @@ export class BorrowerService {
 
   private get db() {
     return this.firebaseService.db;
+  }
+
+  // ==================== DASHBOARD ====================
+
+  async getDashboard(borrowerId: string) {
+    if (!borrowerId) {
+      throw new BadRequestException('Borrower ID is required');
+    }
+
+    try {
+      const userDoc = await this.db.collection('users').doc(borrowerId).get();
+      const profileData = userDoc.exists ? userDoc.data() : {};
+
+      const loansSnapshot = await this.db
+        .collection('loans')
+        .where('borrowerId', '==', borrowerId)
+        .where('status', '==', 'active')
+        .get();
+
+      let activeLoansCount = 0;
+      let totalOutstanding = 0;
+      let nextPaymentAmount = 0;
+      let nextPaymentDate = null;
+
+      loansSnapshot.forEach((doc) => {
+        activeLoansCount++;
+        const loan = doc.data();
+        totalOutstanding += loan.outstandingBalance || 0;
+        
+        if (!nextPaymentDate && loan.nextDueDate) {
+          nextPaymentDate = loan.nextDueDate;
+          nextPaymentAmount = loan.monthlyInstallment || 0;
+        }
+      });
+
+      const appsSnapshot = await this.db
+        .collection('loanRequests')
+        .where('borrowerId', '==', borrowerId)
+        .where('status', 'in', ['pending', 'PENDING', 'draft', 'DRAFT'])
+        .get();
+
+      const dashboard = {
+        profile: profileData,
+        activeLoans: activeLoansCount,
+        pendingApplications: appsSnapshot.size,
+        totalOutstanding,
+        nextPaymentDate,
+        nextPaymentAmount,
+        creditScore: profileData?.creditScore || 0,
+        totalBorrowed: profileData?.totalBorrowed || 0,
+        totalRepaid: profileData?.totalRepaid || 0,
+      };
+
+      return {
+        statusCode: 200,
+        message: 'Dashboard data retrieved successfully',
+        data: dashboard,
+      };
+    } catch (error) {
+      console.error('Error fetching dashboard:', error);
+      throw new InternalServerErrorException('Failed to fetch dashboard data');
+    }
+  }
+
+  async getMyLoans(borrowerId: string, status?: string) {
+    if (!borrowerId) {
+      throw new BadRequestException('Borrower ID is required');
+    }
+
+    try {
+      let query: any = this.db
+        .collection('loans')
+        .where('borrowerId', '==', borrowerId);
+
+      if (status) {
+        query = query.where('status', '==', status);
+      }
+
+      const snapshot = await query.get();
+      const loans = snapshot.docs.map((doc) => ({
+        loanId: doc.id,
+        ...doc.data(),
+      }));
+
+      return {
+        statusCode: 200,
+        message: 'Loans retrieved successfully',
+        total: loans.length,
+        data: loans,
+      };
+    } catch (error) {
+      console.error('Error fetching loans:', error);
+      throw new InternalServerErrorException('Failed to fetch loans');
+    }
   }
 
   private removeUndefinedDeep<T>(value: T): T {
@@ -241,10 +337,18 @@ export class BorrowerService {
     const appRef = this.db.collection(this.LOAN_APPS_COL).doc();
 
     const applicationData = {
-      applicationId: appRef.id,
+      requestId: appRef.id,
       ...plainDto,
-      // New applications are always created as drafts and must be submitted explicitly.
-      status: LoanApplicationStatus.DRAFT,
+
+      // Denormalized fields for Mahinsa's Lender UI
+      borrowerName: profile.fullName || 'Unknown',
+      borrowerPhotoURL: (profile as any).photoURL || '',
+      borrowerRating: (profile as any).rating || 0,
+      smartScore: profile.creditScore || 0,
+      borrowerCreditScore: profile.creditScore || 0,
+
+      // Status as lowercase to match Mahinsa's schema
+      status: LoanApplicationStatus.PENDING,
       createdAt: now,
       updatedAt: now,
     };
@@ -473,9 +577,9 @@ export class BorrowerService {
     const term = loan.loanTermMonths;
 
     const disbursedAt =
-      loan.disbursedAt instanceof Date
-        ? loan.disbursedAt
-        : loan.disbursedAt.toDate();
+      loan.startDate instanceof Date
+        ? loan.startDate
+        : loan.startDate.toDate();
 
     const schedule: Array<{
       installmentNumber: number;

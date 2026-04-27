@@ -40,13 +40,13 @@ export interface BorrowerProfile {
  * Firestore document shape for `loan_applications` records.
  */
 export interface LoanApplication {
-  applicationId: string;
+  requestId: string;
   borrowerId: string;
-  selectedLoanId?: string;
-  loanAmount: number;
+  adId?: string;
+  amount: number;
   loanPurpose: LoanPurpose;
   purposeDescription?: string;
-  loanTermMonths: number;
+  tenureMonths: number;
   requestedInterestRate?: number; // Optional requested rate
   preferredRepaymentMethod: RepaymentMethod;
   collateralDetails?: string[];
@@ -75,7 +75,7 @@ export enum LoanStatus {
  */
 export interface Loan {
   loanId: string;
-  applicationId: string;
+  requestId: string;
   borrowerId: string;
   lenderId: string;
   lenderName?: string;
@@ -86,9 +86,9 @@ export interface Loan {
   outstandingBalance: number;
   totalInterest: number;
   status: LoanStatus;
-  disbursedAt: FirebaseFirestore.Timestamp;
+  startDate: FirebaseFirestore.Timestamp;
   nextPaymentDate: FirebaseFirestore.Timestamp;
-  maturityDate: FirebaseFirestore.Timestamp;
+  endDate: FirebaseFirestore.Timestamp;
   repaymentsMade: number;
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt: FirebaseFirestore.Timestamp;

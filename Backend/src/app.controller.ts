@@ -14,17 +14,11 @@ export class AppController {
   @Get('firebase-status')
   async getFirebaseStatus() {
     try {
-      // Test Firestore connection by reading a test document
-      const testRef = this.firebaseService.db
-        .collection('_test')
-        .doc('connection');
-
-      const testData = {
-        timestamp: new Date(),
-        status: 'connected',
-      };
-      await testRef.set(testData, { merge: true });
-      await testRef.get();
+      // Read-only connectivity probe: no writes, no side effects.
+      await this.firebaseService.db
+        .collection('_healthcheck')
+        .doc('ping')
+        .get();
 
       return {
         status: 'ok',
@@ -36,10 +30,13 @@ export class AppController {
         timestamp: new Date(),
       };
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+
       return {
         status: 'error',
         message: 'Firebase connection failed',
-        error: error.message,
+        error: errorMessage,
       };
     }
   }

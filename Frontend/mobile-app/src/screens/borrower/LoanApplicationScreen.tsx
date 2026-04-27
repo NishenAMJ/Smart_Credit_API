@@ -224,8 +224,8 @@ export default function LoanApplicationScreen({
     try {
       setLoading(true);
       const createdApplication = await createApplication({
-        loanId: loan.loanId,
-        requestedAmount,
+        adId: loan.loanId,
+        amount: requestedAmount,
         purpose: normalizedLoanCategory,
         description: [
           `Loan Purpose: ${loanPurpose.trim()}`,
@@ -233,13 +233,13 @@ export default function LoanApplicationScreen({
           `Monthly Income: LKR ${monthlyIncome.trim()}`,
           `Preferred Interest Rate: ${normalizedPreferredRate}%`,
         ].join(" | "),
-        loanTermMonths: duration,
+        tenureMonths: duration,
         preferredRepaymentMethod: "qr_payment",
       });
 
-      const applicationId = createdApplication?.data?.applicationId;
-      if (applicationId) {
-        await applicationService.submitApplication(applicationId);
+      const requestId = createdApplication?.data?.requestId;
+      if (requestId) {
+        await applicationService.submitApplication(requestId);
       }
 
       Alert.alert("Success", "Application submitted successfully.", [

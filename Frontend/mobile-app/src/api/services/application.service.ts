@@ -16,11 +16,11 @@ type ApplicationListResponse = {
 };
 
 export interface CreateApplicationPayload {
-  loanId?: string;
-  requestedAmount: number;
+  adId?: string;
+  amount: number;
   purpose: string;
   description?: string;
-  loanTermMonths?: number;
+  tenureMonths?: number;
   preferredRepaymentMethod?: "bank_transfer" | "qr_payment" | "cash";
   collateralDetails?: string[];
   additionalNotes?: string;
@@ -38,7 +38,7 @@ function normalizeApplication(
     createdAt: toIsoDate(application.createdAt),
     updatedAt: toIsoDate(application.updatedAt),
     loanTitle: `${titleCase(application.loanPurpose)} Loan`,
-    requestedAmount: application.loanAmount,
+    requestedAmount: application.amount,
     purpose:
       application.purposeDescription ?? titleCase(application.loanPurpose),
   };

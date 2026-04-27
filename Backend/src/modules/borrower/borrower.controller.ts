@@ -30,6 +30,7 @@ import {
 export class BorrowerController {
   constructor(private readonly borrowerService: BorrowerService) {}
 
+
   /**
    * Uses the supplied borrower id, falling back to demo data for mobile screens.
    */
@@ -224,17 +225,17 @@ export class BorrowerController {
   }
 
   /**
-   * GET /borrower/applications/:applicationId
+   * GET /borrower/applications/:requestId
    * Returns details for one borrower-owned loan application.
    */
-  @Get('applications/:applicationId')
+  @Get('applications/:requestId')
   async getApplicationDetails(
-    @Param('applicationId') applicationId: string,
+    @Param('requestId') requestId: string,
     @Query('borrowerId') borrowerId?: string,
   ) {
     const id = this.resolveBorrowerId(borrowerId);
     const application = await this.borrowerService.getLoanApplicationById(
-      applicationId,
+      requestId,
       id,
     );
 
@@ -253,13 +254,13 @@ export class BorrowerController {
   async createApplication(
     @Body()
     payload: {
-      requestedAmount?: number;
+      amount?: number;
       purpose?: string;
       description?: string;
-      loanTermMonths?: number;
+      tenureMonths?: number;
       preferredRepaymentMethod?: string;
       borrowerId?: string;
-      loanId?: string;
+      adId?: string;
     },
     @Query('borrowerId') borrowerId?: string,
   ) {
@@ -274,14 +275,14 @@ export class BorrowerController {
 
     const application = await this.borrowerService.createLoanApplication({
       borrowerId: id,
-      selectedLoanId: payload.loanId,
-      loanAmount: Number(
-        payload.requestedAmount ?? BORROWER_DEFAULTS.APPLICATION_AMOUNT,
+      adId: payload.adId,
+      amount: Number(
+        payload.amount ?? BORROWER_DEFAULTS.APPLICATION_AMOUNT,
       ),
       loanPurpose,
       purposeDescription: payload.description,
-      loanTermMonths: Number(
-        payload.loanTermMonths ?? BORROWER_DEFAULTS.APPLICATION_TERM_MONTHS,
+      tenureMonths: Number(
+        payload.tenureMonths ?? BORROWER_DEFAULTS.APPLICATION_TERM_MONTHS,
       ),
       preferredRepaymentMethod:
         (payload.preferredRepaymentMethod as RepaymentMethod) ??
@@ -295,24 +296,24 @@ export class BorrowerController {
   }
 
   /**
-   * PUT /borrower/applications/:applicationId
+   * PUT /borrower/applications/:requestId
    * Updates an existing borrower loan application.
    */
-  @Put('applications/:applicationId')
+  @Put('applications/:requestId')
   async updateApplication(
-    @Param('applicationId') applicationId: string,
+    @Param('requestId') requestId: string,
     @Body() payload: Record<string, unknown>,
     @Query('borrowerId') borrowerId?: string,
   ) {
     const id = this.resolveBorrowerId(borrowerId);
     // Map mobile payload keys to backend update DTO fields.
     const application = await this.borrowerService.updateLoanApplication(
-      applicationId,
+      requestId,
       id,
       {
-        loanAmount: payload.requestedAmount as number | undefined,
+        amount: payload.amount as number | undefined,
         purposeDescription: payload.description as string | undefined,
-        loanTermMonths: payload.loanTermMonths as number | undefined,
+        tenureMonths: payload.tenureMonths as number | undefined,
       },
     );
 
@@ -322,14 +323,14 @@ export class BorrowerController {
     };
   }
 
-  @Post('applications/:applicationId/submit')
+  @Post('applications/:requestId/submit')
   async submitApplication(
-    @Param('applicationId') applicationId: string,
+    @Param('requestId') requestId: string,
     @Query('borrowerId') borrowerId?: string,
   ) {
     const id = this.resolveBorrowerId(borrowerId);
     const application = await this.borrowerService.submitLoanApplication(
-      applicationId,
+      requestId,
       id,
     );
 
@@ -340,18 +341,18 @@ export class BorrowerController {
   }
 
   /**
-   * DELETE /borrower/applications/:applicationId
+   * DELETE /borrower/applications/:requestId
    * Deletes a borrower loan application (draft-only in service layer).
    */
-  @Delete('applications/:applicationId')
+  @Delete('applications/:requestId')
   async deleteApplication(
-    @Param('applicationId') applicationId: string,
+    @Param('requestId') requestId: string,
     @Query('borrowerId') borrowerId?: string,
   ) {
     const id = this.resolveBorrowerId(borrowerId);
     // Delete is allowed only for draft applications (enforced in service).
     const result = await this.borrowerService.deleteLoanApplication(
-      applicationId,
+      requestId,
       id,
     );
 
@@ -522,13 +523,13 @@ export class BorrowerController {
     });
 
     const disbursementTransactions = loans
-      .filter((loan) => loan.disbursedAt)
+      .filter((loan) => loan.startDate)
       .map((loan) => ({
         transactionId: loan.loanId,
         loanId: loan.loanId,
         amount: loan.loanAmount,
         status: 'COMPLETED',
-        paidAt: loan.disbursedAt,
+        paidAt: loan.startDate,
         createdAt: loan.createdAt,
         type: 'disbursement',
         lenderName: lenderNames.get(loan.lenderId) ?? 'Lender',

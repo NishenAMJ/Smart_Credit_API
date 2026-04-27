@@ -28,7 +28,7 @@ export interface BorrowerAddress {
 
 export interface BorrowerLoan {
   loanId: string;
-  applicationId?: string;
+  requestId?: string;
   lenderId?: string;
   lenderName?: string;
   lenderLocation?: string;
@@ -47,6 +47,8 @@ export interface BorrowerLoan {
   isFeatured?: boolean;
   interestRate?: number;
   status?: LoanStatus;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface BorrowerTransaction {
@@ -79,15 +81,21 @@ export interface BorrowerRepayment {
 }
 
 export interface BorrowerApplication {
-  applicationId?: string;
+  requestId?: string;
+  adId?: string;
   status?: ApplicationStatus;
   createdAt?: string;
   updatedAt?: string;
   loanTitle?: string;
+  amount?: number;
   requestedAmount?: number;
+  tenureMonths?: number;
   purpose?: string;
   loanPurpose?: string;
   purposeDescription?: string;
+  borrowerName?: string;
+  borrowerPhotoURL?: string;
+  smartScore?: number;
 }
 
 export interface BorrowerProfile {
