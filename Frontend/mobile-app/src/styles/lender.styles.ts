@@ -264,7 +264,7 @@ export const commonStyles = StyleSheet.create({
 
   // Empty space
   spacer8: { height: 8 },
-  spacer12: { height: 12 },
+  spacer12: { marginVertical: 6 },
   spacer16: { height: 16 },
   spacer24: { height: 24 },
   spacer32: { height: 32 },
