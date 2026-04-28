@@ -104,6 +104,7 @@ export class RecentTransactionsService {
     pageSize = 30,
     cursor?: string | null,
     includeSummary = true,
+    includeSearchCount = true,
     search?: string | null,
   ): Promise<RecentTransactionsResponse> {
     const safePageSize = this.clamp(pageSize, 8, 60);
@@ -153,7 +154,7 @@ export class RecentTransactionsService {
       loanIdsList,
       includeSummary,
     );
-    const searchResultCount = normalizedSearch
+    const searchResultCount = normalizedSearch && includeSearchCount
       ? await this.getSearchResultCount(lenderId, context, normalizedSearch)
       : null;
 

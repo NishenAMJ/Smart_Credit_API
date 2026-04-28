@@ -1842,6 +1842,61 @@
   font-weight: var(--font-weight-semibold);
 }
 
+.active-ads-list,
+.active-ads-request-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.active-ads-list__item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.82);
+  text-align: left;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.active-ads-list__item:hover,
+.active-ads-list__item:focus-visible,
+.active-ads-list__item--selected {
+  border-color: rgba(20, 98, 84, 0.35);
+  box-shadow: 0 20px 40px rgba(21, 53, 47, 0.08);
+  transform: translateY(-1px);
+}
+
+.active-ads-list__title,
+.active-ads-list__subtitle,
+.active-ads-list__meta p {
+  margin: 0;
+}
+
+.active-ads-list__title {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: var(--font-weight-bold);
+}
+
+.active-ads-list__subtitle,
+.active-ads-list__meta p {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-13);
+}
+
+.active-ads-list__meta {
+  display: grid;
+  justify-items: end;
+  gap: 0.45rem;
+}
+
 .borrowers-card {
   display: flex;
   flex-direction: column;

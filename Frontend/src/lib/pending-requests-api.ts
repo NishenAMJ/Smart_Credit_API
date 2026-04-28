@@ -51,14 +51,43 @@ export type PendingRequestsResponse = {
   generatedAt: string
 }
 
+export type FetchPendingRequestsOptions = {
+  limit?: number
+  cursor?: string | null
+  adId?: string | null
+  includeSummary?: boolean
+  includeAllStatuses?: boolean
+}
+
 export async function fetchPendingRequests(
   lenderId: string,
-  limit = 30,
+  options: number | FetchPendingRequestsOptions = 30,
 ): Promise<PendingRequestsResponse> {
+  const normalizedOptions: FetchPendingRequestsOptions =
+    typeof options === 'number' ? { limit: options } : options
+  const searchParams = new URLSearchParams({
+    lenderId,
+    limit: String(normalizedOptions.limit ?? 30),
+  })
+
+  if (normalizedOptions.cursor) {
+    searchParams.set('cursor', normalizedOptions.cursor)
+  }
+
+  if (normalizedOptions.adId) {
+    searchParams.set('adId', normalizedOptions.adId)
+  }
+
+  if (normalizedOptions.includeSummary === false) {
+    searchParams.set('includeSummary', 'false')
+  }
+
+  if (normalizedOptions.includeAllStatuses === true) {
+    searchParams.set('includeAllStatuses', 'true')
+  }
+
   const response = await fetch(
-    `${API_BASE_URL}/loan-requests/pending?lenderId=${encodeURIComponent(
-      lenderId,
-    )}&limit=${limit}`,
+    `${API_BASE_URL}/loan-requests/pending?${searchParams.toString()}`,
   )
 
   if (!response.ok) {

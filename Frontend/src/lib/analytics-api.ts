@@ -1,3 +1,7 @@
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
+  'http://localhost:3000'
+
 export type AnalyticsRange = {
   key: string
   label: string
@@ -100,4 +104,36 @@ export type AnalyticsDrilldownResponse = {
     hasMore: boolean
     nextCursor: string | null
   }
+}
+
+export async function fetchAnalyticsDrilldown(
+  lenderId: string,
+  type: string,
+  range: string,
+  options?: {
+    pageSize?: number
+    cursor?: string | null
+  },
+): Promise<AnalyticsDrilldownResponse> {
+  const searchParams = new URLSearchParams({
+    lenderId,
+    type,
+    range,
+  })
+
+  if (options?.pageSize) {
+    searchParams.set('pageSize', String(options.pageSize))
+  }
+
+  if (options?.cursor) {
+    searchParams.set('cursor', options.cursor)
+  }
+
+  const response = await fetch(`${API_BASE_URL}/analytics/drilldown?${searchParams.toString()}`)
+
+  if (!response.ok) {
+    throw new Error(`Analytics drilldown failed with status ${response.status}`)
+  }
+
+  return response.json()
 }

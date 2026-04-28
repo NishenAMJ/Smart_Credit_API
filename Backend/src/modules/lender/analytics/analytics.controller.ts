@@ -13,7 +13,7 @@ export class AnalyticsController {
   @Get('summary')
   getSummary(
     @Query('lenderId') lenderId?: string,
-    @Query('range', new DefaultValuePipe('30d')) range?: string,
+    @Query('range', new DefaultValuePipe('90d')) range?: string,
   ): Promise<AnalyticsSummaryResponse> {
     if (!lenderId || lenderId.trim().length === 0) {
       throw new BadRequestException('lenderId is required.');
@@ -25,7 +25,7 @@ export class AnalyticsController {
   @Get('overview')
   getOverview(
     @Query('lenderId') lenderId?: string,
-    @Query('range', new DefaultValuePipe('30d')) range?: string,
+    @Query('range', new DefaultValuePipe('90d')) range?: string,
   ): Promise<AnalyticsOverviewResponse> {
     if (!lenderId || lenderId.trim().length === 0) {
       throw new BadRequestException('lenderId is required.');
@@ -38,7 +38,7 @@ export class AnalyticsController {
   getDrilldown(
     @Query('lenderId') lenderId?: string,
     @Query('type') type?: string,
-    @Query('range', new DefaultValuePipe('30d')) range?: string,
+    @Query('range', new DefaultValuePipe('90d')) range?: string,
     @Query('pageSize') pageSize?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,

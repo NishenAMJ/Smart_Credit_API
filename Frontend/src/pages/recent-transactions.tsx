@@ -118,6 +118,7 @@ export default function RecentTransactionsPage({
         pageSize: PAGE_SIZE,
         cursor: options?.cursor ?? activeCursor,
         includeSummary: false,
+        includeSearchCount: false,
         search: options?.search ?? debouncedSearchQuery,
       })
       setResponse(data)
@@ -165,6 +166,7 @@ export default function RecentTransactionsPage({
           pageSize: PAGE_SIZE,
           cursor: activeCursor,
           includeSummary: false,
+          includeSearchCount: false,
           search: debouncedSearchQuery,
         })
 
@@ -356,9 +358,6 @@ export default function RecentTransactionsPage({
   const visibleEnd = response?.transactions.length
     ? visibleStart + response.transactions.length - 1
     : 0
-  const isSearchActive = debouncedSearchQuery.trim().length > 0
-  const matchedPaymentsCount =
-    response?.searchResultCount ?? (isSearchActive ? transactions.length : 0)
 
   function goToPreviousPage() {
     setCurrentPage((page) => Math.max(1, page - 1))
@@ -387,13 +386,13 @@ export default function RecentTransactionsPage({
         <header className="page-header">
           <div>
             <p className="eyebrow">Lender cash flow</p>
-            <h1 className="page-title">Loans</h1>
+            <h1 className="page-title">Payments</h1>
             <p className="page-subtitle">
               Review your loan activity ledger with lender-owned payments,
               installment progress, and remaining balances in one place.
             </p>
             <p className="dashboard-context-pill">
-              Loan ledger: {session.displayName} - {session.lenderId}
+              Payment ledger: {session.displayName} - {session.lenderId}
             </p>
           </div>
         </header>
@@ -438,25 +437,6 @@ export default function RecentTransactionsPage({
                   />
                 </label>
               </div>
-
-              {isSearchActive ? (
-                <section className="summary-grid" aria-label="Loan search summary">
-                  <article className="card metric-card">
-                    <div className="metric-icon metric-icon--primary" aria-hidden="true">
-                      PM
-                    </div>
-                    <div className="metric-copy">
-                      <p className="metric-label">Total Payments</p>
-                      <p className="metric-value">
-                        {isLoading ? '...' : String(matchedPaymentsCount)}
-                      </p>
-                      <p className="metric-caption">
-                        Total matched payment rows across all pages for this search
-                      </p>
-                    </div>
-                  </article>
-                </section>
-              ) : null}
 
               <div className="table-container">
                 <table className="dashboard-table">
@@ -568,9 +548,7 @@ export default function RecentTransactionsPage({
 
               <div className="table-footer">
                 <p>
-                  {isSearchActive
-                    ? `Showing ${visibleStart}-${visibleEnd} of ${matchedPaymentsCount} matched payment row(s) on page ${currentPage}.`
-                    : `Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
+                  {`Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
                 </p>
 
                 <div className="pagination">

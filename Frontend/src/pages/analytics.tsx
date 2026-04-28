@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { LenderView } from '../components/common/LenderSidebar'
 import type {
   AnalyticsDrilldownResponse,
   AnalyticsBreakdownPoint,
@@ -177,11 +178,12 @@ function StatusBreakdown({
 
 type AnalyticsPageProps = {
   session: LenderSession
+  onNavigate: (view: LenderView) => void
 }
 
-export default function AnalyticsPage({ session }: AnalyticsPageProps) {
+export default function AnalyticsPage({ session, onNavigate }: AnalyticsPageProps) {
   const [selectedRange, setSelectedRange] =
-    useState<(typeof RANGE_OPTIONS)[number]['key']>('30d')
+    useState<(typeof RANGE_OPTIONS)[number]['key']>('90d')
   const [summaryData, setSummaryData] = useState<AnalyticsSummaryResponse | null>(null)
   const [overview, setOverview] = useState<AnalyticsOverviewResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -571,7 +573,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   <button
                     type="button"
                     className="analytics-mini-card analytics-mini-card--interactive"
-                    onClick={() => handleOpenDrilldown('active-ads')}
+                    onClick={() => onNavigate('active-ads-requests')}
                   >
                     <p className="analytics-mini-card__label">Active Ads</p>
                     <p className="analytics-mini-card__value">

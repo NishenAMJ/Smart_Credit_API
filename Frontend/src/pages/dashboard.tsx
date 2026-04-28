@@ -338,24 +338,28 @@ export default function DashboardPage({
       value: summary ? String(summary.totalBorrowers) : '--',
       caption: 'Borrowers who already borrowed from you',
       accent: 'BR',
+      route: null,
     },
     {
       label: "Today's Collection",
       value: summary ? formatCurrency(summary.todaysCollection) : '--',
       caption: 'Repayments recorded today from your loans',
       accent: 'LKR',
+      route: null,
     },
     {
       label: 'Overdue Payments',
       value: summary ? String(summary.overduePayments) : '--',
       caption: 'Overdue installments inside your loan book',
       accent: 'OD',
+      route: null,
     },
     {
       label: 'Active Ads',
       value: summary ? String(summary.activeAds) : '--',
       caption: 'Approved ads owned by this lender',
       accent: 'AD',
+      route: 'active-ads-requests' as const,
     },
   ]
 
@@ -486,19 +490,41 @@ export default function DashboardPage({
           <>
             <section className="summary-grid" aria-label="Dashboard summary">
               {summaryCards.map((card, index) => (
-                <article className="card metric-card" key={card.label}>
-                  <div
-                    className={`metric-icon metric-icon--${getMetricTone(index)}`}
-                    aria-hidden="true"
+                card.route ? (
+                  <button
+                    key={card.label}
+                    type="button"
+                    className="card metric-card analytics-drilldown-card analytics-drilldown-card--interactive"
+                    onClick={() => onNavigate(card.route)}
                   >
-                    {card.accent}
-                  </div>
-                  <div className="metric-copy">
-                    <p className="metric-label">{card.label}</p>
-                    <p className="metric-value">{card.value}</p>
-                    <p className="metric-caption">{card.caption}</p>
-                  </div>
-                </article>
+                    <div
+                      className={`metric-icon metric-icon--${getMetricTone(index)}`}
+                      aria-hidden="true"
+                    >
+                      {card.accent}
+                    </div>
+                    <div className="metric-copy">
+                      <p className="metric-label">{card.label}</p>
+                      <p className="metric-value">{card.value}</p>
+                      <p className="metric-caption">{card.caption}</p>
+                    </div>
+                    <span className="analytics-drilldown-card__hint">View</span>
+                  </button>
+                ) : (
+                  <article className="card metric-card" key={card.label}>
+                    <div
+                      className={`metric-icon metric-icon--${getMetricTone(index)}`}
+                      aria-hidden="true"
+                    >
+                      {card.accent}
+                    </div>
+                    <div className="metric-copy">
+                      <p className="metric-label">{card.label}</p>
+                      <p className="metric-value">{card.value}</p>
+                      <p className="metric-caption">{card.caption}</p>
+                    </div>
+                  </article>
+                )
               ))}
             </section>
 

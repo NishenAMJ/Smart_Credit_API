@@ -3,6 +3,7 @@ import LenderLayout from './components/layout/LenderLayout'
 import type { LenderView } from './components/common/LenderSidebar'
 import { useState } from 'react'
 import AnalyticsPage from './pages/analytics'
+import ActiveAdsRequestsPage from './pages/active-ads-requests'
 import CreateAdPage from './pages/create-ad'
 import DashboardPage from './pages/dashboard'
 import AuthPage from './pages/auth'
@@ -79,7 +80,9 @@ function App() {
         ) : activeView === 'recent-transactions' ? (
           <RecentTransactionsPage session={session} />
         ) : activeView === 'analytics' ? (
-          <AnalyticsPage session={session} />
+          <AnalyticsPage session={session} onNavigate={setActiveView} />
+        ) : activeView === 'active-ads-requests' ? (
+          <ActiveAdsRequestsPage session={session} onNavigate={setActiveView} />
         ) : activeView === 'create-ad' ? (
           <CreateAdPage session={session} />
         ) : activeView === 'pending-requests' ? (

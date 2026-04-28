@@ -62,6 +62,7 @@ type LoanRecord = {
 
 type AdRecord = {
   id: string;
+  title: string;
   status: string;
   expiresAt: Date | null;
 };
@@ -114,7 +115,7 @@ export class AnalyticsService {
 
   async getSummary(
     lenderId: string,
-    rangeKey = '30d',
+    rangeKey = '90d',
   ): Promise<AnalyticsSummaryResponse> {
     const range = this.resolveRange(rangeKey);
     const context = await this.loadSummaryContext(lenderId);
@@ -124,7 +125,7 @@ export class AnalyticsService {
 
   async getOverview(
     lenderId: string,
-    rangeKey = '30d',
+    rangeKey = '90d',
   ): Promise<AnalyticsOverviewResponse> {
     const range = this.resolveRange(rangeKey);
     const context = await this.loadSummaryContext(lenderId);
@@ -338,7 +339,7 @@ export class AnalyticsService {
   async getDrilldown(
     lenderId: string,
     type: string,
-    rangeKey = '30d',
+    rangeKey = '90d',
     pageSize = 30,
     cursor?: string | null,
   ): Promise<AnalyticsDrilldownResponse> {
@@ -514,7 +515,7 @@ export class AnalyticsService {
     rangeKey: string,
   ): RangeConfig & { start: Date; end: Date } {
     const normalizedKey = (
-      rangeKey in RANGE_CONFIGS ? rangeKey : '30d'
+      rangeKey in RANGE_CONFIGS ? rangeKey : '90d'
     ) as SupportedRangeKey;
     const config = RANGE_CONFIGS[normalizedKey];
     const end = new Date();
@@ -560,6 +561,10 @@ export class AnalyticsService {
 
     return {
       id: doc.id,
+      title:
+        typeof data.title === 'string' && data.title.trim().length > 0
+          ? data.title
+          : `Ad ${doc.id}`,
       status: getAdStatus(data),
       expiresAt: this.toDate(data.expiresAt),
     };
@@ -1107,8 +1112,8 @@ export class AnalyticsService {
       })
       .map((ad) => ({
         id: ad.id,
-        title: `Ad ${ad.id}`,
-        subtitle: 'Lender ad performance',
+        title: ad.title,
+        subtitle: `Ad ID: ${ad.id}`,
         status: ad.status,
         metric: ad.expiresAt
           ? `Expires: ${this.formatDate(ad.expiresAt.toISOString())}`

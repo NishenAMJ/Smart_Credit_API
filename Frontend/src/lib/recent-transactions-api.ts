@@ -91,6 +91,7 @@ export type FetchRecentTransactionsOptions = {
   pageSize?: number
   cursor?: string | null
   includeSummary?: boolean
+  includeSearchCount?: boolean
   search?: string | null
 }
 
@@ -125,6 +126,10 @@ export async function fetchRecentTransactions(
 
   if (options.includeSummary === false) {
     params.set('includeSummary', 'false')
+  }
+
+  if (options.includeSearchCount === false) {
+    params.set('includeSearchCount', 'false')
   }
 
   if (options.search && options.search.trim().length > 0) {

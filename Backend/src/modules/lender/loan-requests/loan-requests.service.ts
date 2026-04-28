@@ -69,6 +69,8 @@ export class LoanRequestsService {
     pageSize = 30,
     cursor?: string | null,
     includeSummary = true,
+    adId?: string | null,
+    includeAllStatuses = false,
   ): Promise<PendingRequestsResponse> {
     const safePageSize = Math.min(Math.max(pageSize, 8), 60);
     const db = this.firebaseService.getDb();
@@ -86,7 +88,15 @@ export class LoanRequestsService {
       }),
     );
     const adIds = new Set(adTitleMap.keys());
-    const pagedRequests = await this.getRequestsPage(db, lenderId, adIds, safePageSize, cursor);
+    const pagedRequests = await this.getRequestsPage(
+      db,
+      lenderId,
+      adIds,
+      safePageSize,
+      cursor,
+      adId,
+      includeAllStatuses,
+    );
     const prioritizedRequests = pagedRequests.items.slice(0, safePageSize);
 
     const borrowerIds = Array.from(
@@ -134,7 +144,13 @@ export class LoanRequestsService {
     });
 
     const summary = includeSummary
-      ? await this.buildSummary(db, lenderId, adIds)
+      ? await this.buildSummary(
+          db,
+          lenderId,
+          adIds,
+          adId,
+          includeAllStatuses,
+        )
       : this.buildSummaryFromRequests(prioritizedRequests);
 
     return {
@@ -152,6 +168,8 @@ export class LoanRequestsService {
     adIds: Set<string>,
     pageSize: number,
     cursor?: string | null,
+    adId?: string | null,
+    includeAllStatuses = false,
   ): Promise<{ items: RawLoanRequest[] }> {
     return scanQueryPage({
       pageSize,
@@ -170,11 +188,11 @@ export class LoanRequestsService {
       mapDoc: async (doc) => {
         const request = this.mapLoanRequest(doc);
 
-        if (!this.isRequestVisibleToLender(request, lenderId, adIds)) {
+        if (!this.isRequestVisibleToLender(request, lenderId, adIds, adId)) {
           return null;
         }
 
-        if (!PENDING_STATUSES.has(request.status)) {
+        if (!this.isStatusIncluded(request.status, includeAllStatuses)) {
           return null;
         }
 
@@ -187,6 +205,8 @@ export class LoanRequestsService {
     db: Firestore,
     lenderId: string,
     adIds: Set<string>,
+    adId?: string | null,
+    includeAllStatuses = false,
   ) {
     const requests: RawLoanRequest[] = [];
     let cursor: string | null = null;
@@ -204,8 +224,8 @@ export class LoanRequestsService {
         const request = this.mapLoanRequest(doc);
 
         if (
-          this.isRequestVisibleToLender(request, lenderId, adIds) &&
-          PENDING_STATUSES.has(request.status)
+          this.isRequestVisibleToLender(request, lenderId, adIds, adId) &&
+          this.isStatusIncluded(request.status, includeAllStatuses)
         ) {
           requests.push(request);
         }
@@ -245,12 +265,24 @@ export class LoanRequestsService {
     request: RawLoanRequest,
     lenderId: string,
     adIds: Set<string>,
+    adId?: string | null,
   ): boolean {
+    if (adId) {
+      return request.adId === adId && adIds.has(adId);
+    }
+
     return Boolean(
       request.targetLenderId === lenderId ||
         request.matchedLenderIds.includes(lenderId) ||
         (request.adId && adIds.has(request.adId)),
     );
+  }
+
+  private isStatusIncluded(
+    status: string,
+    includeAllStatuses: boolean,
+  ): boolean {
+    return includeAllStatuses || PENDING_STATUSES.has(status);
   }
 
   private mapLoanRequest(

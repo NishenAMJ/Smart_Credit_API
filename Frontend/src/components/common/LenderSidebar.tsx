@@ -5,6 +5,7 @@ type LenderView =
   | 'dashboard'
   | 'recent-transactions'
   | 'analytics'
+  | 'active-ads-requests'
   | 'create-ad'
   | 'pending-requests'
   | 'settings'
@@ -71,7 +72,7 @@ function SidebarToggleIcon() {
 
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
-  { id: 'recent-transactions', label: 'Loans', icon: TransactionsIcon },
+  { id: 'recent-transactions', label: 'Payments', icon: TransactionsIcon },
   { id: 'analytics', label: 'Analytics', icon: AnalyticsIcon },
   { id: 'create-ad', label: 'Create Ad', icon: CreateAdIcon },
 ]

@@ -28,6 +28,7 @@ export class RecentTransactionsController {
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
     @Query('includeSummary') includeSummary?: string,
+    @Query('includeSearchCount') includeSearchCount?: string,
     @Query('search') search?: string,
   ): Promise<RecentTransactionsResponse> {
     const normalizedLenderId = lenderId?.trim();
@@ -41,6 +42,7 @@ export class RecentTransactionsController {
       this.toNumber(pageSize) ?? this.toNumber(limit) ?? 30,
       cursor?.trim() || null,
       includeSummary !== 'false',
+      includeSearchCount !== 'false',
       search?.trim() || null,
     );
   }

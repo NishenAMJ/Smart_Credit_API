@@ -17,7 +17,9 @@ export class LoanRequestsController {
     @Query('pageSize') pageSize?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('adId') adId?: string,
     @Query('includeSummary') includeSummary?: string,
+    @Query('includeAllStatuses') includeAllStatuses?: string,
   ): Promise<PendingRequestsResponse> {
     if (!lenderId?.trim()) {
       throw new BadRequestException('lenderId is required.');
@@ -28,6 +30,8 @@ export class LoanRequestsController {
       this.toNumber(pageSize) ?? this.toNumber(limit) ?? 30,
       cursor?.trim() || null,
       includeSummary !== 'false',
+      adId?.trim() || null,
+      includeAllStatuses === 'true',
     );
   }
 
