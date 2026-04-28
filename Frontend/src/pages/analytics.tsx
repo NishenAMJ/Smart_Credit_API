@@ -3,6 +3,7 @@ import type {
   AnalyticsDrilldownResponse,
   AnalyticsBreakdownPoint,
   AnalyticsOverviewResponse,
+  AnalyticsSummaryResponse,
   AnalyticsTrendPoint,
 } from '../lib/analytics-api'
 import type { LenderSession } from '../lib/lender-session'
@@ -70,6 +71,23 @@ async function fetchAnalyticsOverview(
 
   if (!response.ok) {
     throw new Error(`Analytics request failed with status ${response.status}`)
+  }
+
+  return response.json()
+}
+
+async function fetchAnalyticsSummary(
+  lenderId: string,
+  range: string,
+): Promise<AnalyticsSummaryResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/summary?lenderId=${encodeURIComponent(
+      lenderId,
+    )}&range=${encodeURIComponent(range)}`,
+  )
+
+  if (!response.ok) {
+    throw new Error(`Analytics summary failed with status ${response.status}`)
   }
 
   return response.json()
@@ -163,9 +181,11 @@ type AnalyticsPageProps = {
 
 export default function AnalyticsPage({ session }: AnalyticsPageProps) {
   const [selectedRange, setSelectedRange] =
-    useState<(typeof RANGE_OPTIONS)[number]['key']>('90d')
+    useState<(typeof RANGE_OPTIONS)[number]['key']>('30d')
+  const [summaryData, setSummaryData] = useState<AnalyticsSummaryResponse | null>(null)
   const [overview, setOverview] = useState<AnalyticsOverviewResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isOverviewLoading, setIsOverviewLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [drilldownType, setDrilldownType] = useState<string | null>(null)
   const [drilldown, setDrilldown] = useState<AnalyticsDrilldownResponse | null>(null)
@@ -178,11 +198,14 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
     const loadAnalytics = async () => {
       try {
         setIsLoading(true)
+        setIsOverviewLoading(false)
         setError(null)
-        const data = await fetchAnalyticsOverview(session.lenderId, selectedRange)
+        setSummaryData(null)
+        setOverview(null)
+        const data = await fetchAnalyticsSummary(session.lenderId, selectedRange)
 
         if (isMounted) {
-          setOverview(data)
+          setSummaryData(data)
         }
       } catch (loadError) {
         if (isMounted) {
@@ -205,6 +228,39 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
       isMounted = false
     }
   }, [selectedRange, session.lenderId])
+
+  useEffect(() => {
+    if (!summaryData) {
+      return
+    }
+
+    let isMounted = true
+
+    const loadOverview = async () => {
+      try {
+        setIsOverviewLoading(true)
+        const data = await fetchAnalyticsOverview(session.lenderId, selectedRange)
+
+        if (isMounted) {
+          setOverview(data)
+        }
+      } catch {
+        if (isMounted) {
+          setOverview(null)
+        }
+      } finally {
+        if (isMounted) {
+          setIsOverviewLoading(false)
+        }
+      }
+    }
+
+    void loadOverview()
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedRange, session.lenderId, summaryData])
 
   useEffect(() => {
     if (!drilldownType) {
@@ -264,41 +320,41 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
   }, [drilldownType])
 
   const summaryCards = useMemo(() => {
-    if (!overview) {
+    if (!summaryData) {
       return []
     }
 
     return [
       {
         label: 'Total Lent',
-        value: formatCurrency(overview.summary.totalLent),
+        value: formatCurrency(summaryData.summary.totalLent),
         caption: 'Lending volume in selected period',
         tone: 'primary',
         drilldownType: 'total-lent',
       },
       {
         label: 'Total Collected',
-        value: formatCurrency(overview.summary.totalCollected),
+        value: formatCurrency(summaryData.summary.totalCollected),
         caption: 'Repayments captured in selected period',
         tone: 'success',
         drilldownType: 'total-collected',
       },
       {
         label: 'Active Loans',
-        value: String(overview.summary.activeLoans),
+        value: String(summaryData.summary.activeLoans),
         caption: 'Loans currently in active status',
         tone: 'warning',
         drilldownType: 'active-loans',
       },
       {
         label: 'Repayment Success',
-        value: formatPercent(overview.summary.repaymentSuccessRate),
+        value: formatPercent(summaryData.summary.repaymentSuccessRate),
         caption: 'Completed vs defaulted closed loans',
         tone: 'danger',
         drilldownType: null,
       },
     ]
-  }, [overview])
+  }, [summaryData])
 
   function handleOpenDrilldown(type: string) {
     setDrilldownType(type)
@@ -359,7 +415,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
               data exists in Firebase.
             </p>
           </section>
-        ) : overview ? (
+        ) : summaryData ? (
           <>
             <section className="summary-grid" aria-label="Analytics summary">
               {summaryCards.map((card) => {
@@ -409,10 +465,16 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                     </p>
                   </div>
                 </div>
-                <TrendBars
-                  data={overview.trends.lendingByMonth}
-                  colorClassName="analytics-bars__fill--primary"
-                />
+                {overview ? (
+                  <TrendBars
+                    data={overview.trends.lendingByMonth}
+                    colorClassName="analytics-bars__fill--primary"
+                  />
+                ) : (
+                  <p className="analytics-empty-copy">
+                    {isOverviewLoading ? 'Loading lending trend...' : 'Trend data is not available yet.'}
+                  </p>
+                )}
               </article>
 
               <article className="card analytics-card">
@@ -424,7 +486,13 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                     </p>
                   </div>
                 </div>
-                <StatusBreakdown data={overview.breakdowns.loanStatus} />
+                {overview ? (
+                  <StatusBreakdown data={overview.breakdowns.loanStatus} />
+                ) : (
+                  <p className="analytics-empty-copy">
+                    {isOverviewLoading ? 'Loading loan status mix...' : 'Loan status data is not available yet.'}
+                  </p>
+                )}
               </article>
             </section>
 
@@ -438,10 +506,16 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                     </p>
                   </div>
                 </div>
-                <TrendBars
-                  data={overview.trends.collectionByMonth}
-                  colorClassName="analytics-bars__fill--success"
-                />
+                {overview ? (
+                  <TrendBars
+                    data={overview.trends.collectionByMonth}
+                    colorClassName="analytics-bars__fill--success"
+                  />
+                ) : (
+                  <p className="analytics-empty-copy">
+                    {isOverviewLoading ? 'Loading collection trend...' : 'Collection trend data is not available yet.'}
+                  </p>
+                )}
               </article>
 
               <article className="card analytics-card">
@@ -457,25 +531,25 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   <article className="analytics-mini-card">
                     <p className="analytics-mini-card__label">Outstanding Amount</p>
                     <p className="analytics-mini-card__value">
-                      {formatCurrency(overview.portfolio.outstandingAmount)}
+                      {formatCurrency(summaryData.portfolio.outstandingAmount)}
                     </p>
                   </article>
                   <article className="analytics-mini-card">
                     <p className="analytics-mini-card__label">Average Loan Size</p>
                     <p className="analytics-mini-card__value">
-                      {formatCurrency(overview.portfolio.averageLoanSize)}
+                      {formatCurrency(summaryData.portfolio.averageLoanSize)}
                     </p>
                   </article>
                   <article className="analytics-mini-card">
                     <p className="analytics-mini-card__label">Average Interest</p>
                     <p className="analytics-mini-card__value">
-                      {overview.portfolio.averageInterestRate.toFixed(1)}%
+                      {summaryData.portfolio.averageInterestRate.toFixed(1)}%
                     </p>
                   </article>
                   <article className="analytics-mini-card">
                     <p className="analytics-mini-card__label">Average Tenure</p>
                     <p className="analytics-mini-card__value">
-                      {overview.portfolio.averageTenureMonths.toFixed(1)} months
+                      {summaryData.portfolio.averageTenureMonths.toFixed(1)} months
                     </p>
                   </article>
                 </div>
@@ -501,7 +575,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   >
                     <p className="analytics-mini-card__label">Active Ads</p>
                     <p className="analytics-mini-card__value">
-                      {overview.performance.activeAds}
+                      {summaryData.performance.activeAds}
                     </p>
                   </button>
                   <button
@@ -511,7 +585,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   >
                     <p className="analytics-mini-card__label">Requests Received</p>
                     <p className="analytics-mini-card__value">
-                      {overview.performance.requestsReceived}
+                      {summaryData.performance.requestsReceived}
                     </p>
                   </button>
                   <button
@@ -521,13 +595,13 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   >
                     <p className="analytics-mini-card__label">Accepted Requests</p>
                     <p className="analytics-mini-card__value">
-                      {overview.performance.acceptedRequests}
+                      {summaryData.performance.acceptedRequests}
                     </p>
                   </button>
                   <article className="analytics-mini-card">
                     <p className="analytics-mini-card__label">Conversion Rate</p>
                     <p className="analytics-mini-card__value">
-                      {formatPercent(overview.performance.requestToLoanConversionRate)}
+                      {formatPercent(summaryData.performance.requestToLoanConversionRate)}
                     </p>
                   </article>
                 </div>
@@ -550,7 +624,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   >
                     <p className="analytics-mini-card__label">Overdue Loans</p>
                     <p className="analytics-mini-card__value">
-                      {overview.risk.overdueLoans}
+                      {summaryData.risk.overdueLoans}
                     </p>
                   </button>
                   <button
@@ -560,7 +634,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   >
                     <p className="analytics-mini-card__label">Defaulted Loans</p>
                     <p className="analytics-mini-card__value">
-                      {overview.risk.defaultedLoans}
+                      {summaryData.risk.defaultedLoans}
                     </p>
                   </button>
                   <button
@@ -570,7 +644,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   >
                     <p className="analytics-mini-card__label">Open Disputes</p>
                     <p className="analytics-mini-card__value">
-                      {overview.risk.openDisputes}
+                      {summaryData.risk.openDisputes}
                     </p>
                   </button>
                   <article className="analytics-mini-card">
@@ -578,8 +652,8 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                       Avg Borrower Credit Score
                     </p>
                     <p className="analytics-mini-card__value">
-                      {overview.risk.averageBorrowerCreditScore !== null
-                        ? overview.risk.averageBorrowerCreditScore.toFixed(0)
+                      {summaryData.risk.averageBorrowerCreditScore !== null
+                        ? summaryData.risk.averageBorrowerCreditScore.toFixed(0)
                         : 'N/A'}
                     </p>
                   </article>
@@ -598,13 +672,15 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                 </div>
               </div>
               <div className="analytics-insights">
-                {overview.insights.length > 0 ? (
+                {overview?.insights.length ? (
                   overview.insights.map((insight) => (
                     <article className="analytics-insight" key={insight}>
                       <span className="analytics-insight__dot" aria-hidden="true" />
                       <p>{insight}</p>
                     </article>
                   ))
+                ) : isOverviewLoading ? (
+                  <p className="analytics-empty-copy">Loading insights...</p>
                 ) : (
                   <p className="analytics-empty-copy">
                     Insights will appear when enough lender data is available.

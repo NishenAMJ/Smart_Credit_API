@@ -10,7 +10,7 @@ function createDoc(id: string, data: Record<string, unknown>) {
 }
 
 describe('AnalyticsService', () => {
-  it('computes overview from seed-shaped loans and ads', async () => {
+  it('computes summary from seed-shaped loans and ads', async () => {
     const db = {
       collection: jest.fn((name: string) => ({
         where: jest.fn().mockReturnValue({
@@ -47,13 +47,13 @@ describe('AnalyticsService', () => {
       .mockResolvedValue(12000);
     jest.spyOn(service as any, 'getRequestsForLender').mockResolvedValue([]);
     jest
-      .spyOn(service as any, 'getTransactionsForLoanIds')
+      .spyOn(service as any, 'getTransactionsForLender')
       .mockResolvedValue([]);
-    jest.spyOn(service as any, 'getDisputesForLoanIds').mockResolvedValue([]);
+    jest.spyOn(service as any, 'getDisputesForLender').mockResolvedValue([]);
     jest.spyOn(service as any, 'countOverdueLoans').mockResolvedValue(0);
     jest.spyOn(service as any, 'getBorrowerCreditScores').mockResolvedValue([]);
 
-    const result = await service.getOverview('lender_1', '30d');
+    const result = await service.getSummary('lender_1', '30d');
 
     expect(result.summary.totalLent).toBe(50000);
     expect(result.performance.activeAds).toBe(1);

@@ -12,6 +12,30 @@ export type AnalyticsSummary = {
   repaymentSuccessRate: number
 }
 
+export type AnalyticsSummaryResponse = {
+  lenderId: string
+  range: AnalyticsRange
+  summary: AnalyticsSummary
+  performance: {
+    activeAds: number
+    requestsReceived: number
+    acceptedRequests: number
+    requestToLoanConversionRate: number
+  }
+  portfolio: {
+    outstandingAmount: number
+    averageLoanSize: number
+    averageInterestRate: number
+    averageTenureMonths: number
+  }
+  risk: {
+    overdueLoans: number
+    defaultedLoans: number
+    openDisputes: number
+    averageBorrowerCreditScore: number | null
+  }
+}
+
 export type AnalyticsTrendPoint = {
   label: string
   value: number

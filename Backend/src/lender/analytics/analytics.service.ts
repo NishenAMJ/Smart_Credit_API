@@ -26,6 +26,7 @@ import {
   AnalyticsDrilldownItem,
   AnalyticsDrilldownResponse,
   AnalyticsOverviewResponse,
+  AnalyticsSummaryResponse,
   AnalyticsTrendPoint,
 } from './analytics.types';
 
@@ -92,6 +93,15 @@ type DisputeRecord = {
   createdAt: Date | null;
 };
 
+type AnalyticsSummaryContext = {
+  loans: LoanRecord[];
+  ads: AdRecord[];
+  requests: RequestRecord[];
+  transactions: TransactionRecord[];
+  disputes: DisputeRecord[];
+  borrowerScores: number[];
+};
+
 const RANGE_CONFIGS: Record<SupportedRangeKey, RangeConfig> = {
   '30d': { key: '30d', label: 'Last 30 days', days: 30 },
   '90d': { key: '90d', label: 'Last 90 days', days: 90 },
@@ -102,13 +112,80 @@ const RANGE_CONFIGS: Record<SupportedRangeKey, RangeConfig> = {
 export class AnalyticsService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
+  async getSummary(
+    lenderId: string,
+    rangeKey = '30d',
+  ): Promise<AnalyticsSummaryResponse> {
+    const range = this.resolveRange(rangeKey);
+    const context = await this.loadSummaryContext(lenderId);
+
+    return this.buildSummaryResponse(lenderId, range, context);
+  }
+
   async getOverview(
     lenderId: string,
-    rangeKey = '90d',
+    rangeKey = '30d',
   ): Promise<AnalyticsOverviewResponse> {
-    const db = this.firebaseService.getDb();
     const range = this.resolveRange(rangeKey);
+    const context = await this.loadSummaryContext(lenderId);
+    const summaryResponse = await this.buildSummaryResponse(
+      lenderId,
+      range,
+      context,
+    );
+    const rangeLoans = context.loans.filter((loan) =>
+      this.isWithinRange(loan.createdAt, range),
+    );
+    const rangeTransactions = context.transactions.filter((transaction) =>
+      this.isWithinRange(transaction.createdAt, range),
+    );
 
+    const response: AnalyticsOverviewResponse = {
+      lenderId,
+      range: summaryResponse.range,
+      summary: summaryResponse.summary,
+      trends: {
+        lendingByMonth: this.buildMonthlySeries(
+          range,
+          rangeLoans,
+          (loan) => loan.createdAt,
+          (loan) => loan.amount,
+        ),
+        collectionByMonth: this.buildMonthlySeries(
+          range,
+          rangeTransactions.filter(
+            (transaction) => transaction.type === 'repayment',
+          ),
+          (transaction) => transaction.createdAt,
+          (transaction) => transaction.amount,
+        ),
+      },
+      breakdowns: {
+        loanStatus: this.buildLoanStatusBreakdown(context.loans),
+      },
+      performance: summaryResponse.performance,
+      portfolio: summaryResponse.portfolio,
+      risk: summaryResponse.risk,
+      insights: this.buildInsights({
+        summary: summaryResponse.summary,
+        activeAds: summaryResponse.performance.activeAds,
+        rangeRequestsCount: summaryResponse.performance.requestsReceived,
+        conversionRate: summaryResponse.performance.requestToLoanConversionRate,
+        overdueLoans: summaryResponse.risk.overdueLoans,
+        defaultedLoans: summaryResponse.risk.defaultedLoans,
+        openDisputes: summaryResponse.risk.openDisputes,
+        averageBorrowerCreditScore:
+          summaryResponse.risk.averageBorrowerCreditScore,
+      }),
+    };
+
+    return response;
+  }
+
+  private async loadSummaryContext(
+    lenderId: string,
+  ): Promise<AnalyticsSummaryContext> {
+    const db = this.firebaseService.getDb();
     const [loanSnapshot, adSnapshot] = await Promise.all([
       db.collection('loans').where('lenderId', '==', lenderId).get(),
       db.collection('ads').where('lenderId', '==', lenderId).get(),
@@ -129,34 +206,52 @@ export class AnalyticsService {
       ),
     );
 
-    const [requests, transactions, disputes, overdueLoans, borrowerScores] =
+    const [requests, transactions, disputes, borrowerScores] =
       await Promise.all([
         this.getRequestsForLender(db, lenderId, adIds),
-        this.getTransactionsForLoanIds(db, loanIds),
-        this.getDisputesForLoanIds(db, loanIds),
-        loanIds.size > 0
-          ? this.countOverdueLoans(db, lenderId, loans)
-          : Promise.resolve(0),
+        this.getTransactionsForLender(db, lenderId, loanIds),
+        this.getDisputesForLender(db, lenderId, loanIds),
         borrowerIds.length > 0
           ? this.getBorrowerCreditScores(db, borrowerIds)
           : Promise.resolve([]),
       ]);
-    const scopedRequests = requests;
-    const rangeLoans = loans.filter((loan) => this.isWithinRange(loan.createdAt, range));
-    const rangeTransactions = transactions.filter((transaction) =>
+
+    return {
+      loans,
+      ads,
+      requests,
+      transactions,
+      disputes,
+      borrowerScores,
+    };
+  }
+
+  private async buildSummaryResponse(
+    lenderId: string,
+    range: RangeConfig & { start: Date; end: Date },
+    context: AnalyticsSummaryContext,
+  ): Promise<AnalyticsSummaryResponse> {
+    const rangeLoans = context.loans.filter((loan) =>
+      this.isWithinRange(loan.createdAt, range),
+    );
+    const rangeTransactions = context.transactions.filter((transaction) =>
       this.isWithinRange(transaction.createdAt, range),
     );
-    const rangeRequests = scopedRequests.filter((request) =>
+    const rangeRequests = context.requests.filter((request) =>
       this.isWithinRange(request.createdAt, range),
     );
-
-    const activeAds = ads.filter((ad) => this.isActiveAd(ad, range.end)).length;
-    const activeLoans = loans.filter((loan) => loan.status === 'active').length;
-    const completedLoans = loans.filter((loan) => loan.status === 'completed').length;
-    const defaultedLoans = loans.filter((loan) => loan.status === 'defaulted').length;
+    const activeLoans = context.loans.filter(
+      (loan) => loan.status === 'active',
+    ).length;
+    const completedLoans = context.loans.filter(
+      (loan) => loan.status === 'completed',
+    ).length;
+    const defaultedLoans = context.loans.filter(
+      (loan) => loan.status === 'defaulted',
+    ).length;
     const closedLoanOutcomes = completedLoans + defaultedLoans;
     const convertedRequestIds = new Set(
-      loans
+      context.loans
         .map((loan) => loan.requestId)
         .filter((requestId): requestId is string => Boolean(requestId)),
     );
@@ -166,9 +261,17 @@ export class AnalyticsService {
     const convertedRequests = rangeRequests.filter((request) =>
       convertedRequestIds.has(request.id),
     ).length;
-    const openDisputes = disputes.filter((dispute) =>
+    const openDisputes = context.disputes.filter((dispute) =>
       ['open', 'under_review'].includes(dispute.status),
     ).length;
+    const overdueLoans =
+      context.loans.length > 0
+        ? await this.countOverdueLoans(
+            this.firebaseService.getDb(),
+            lenderId,
+            context.loans,
+          )
+        : 0;
 
     const summary = {
       totalLent: this.sum(rangeLoans.map((loan) => loan.amount)),
@@ -182,21 +285,7 @@ export class AnalyticsService {
         closedLoanOutcomes > 0 ? completedLoans / closedLoanOutcomes : 0,
     };
 
-    const portfolio = {
-      outstandingAmount: this.sum(loans.map((loan) => loan.remainingAmount)),
-      averageLoanSize:
-        loans.length > 0 ? summary.totalLent / Math.max(rangeLoans.length, 1) : 0,
-      averageInterestRate:
-        loans.length > 0
-          ? this.sum(loans.map((loan) => loan.interestRate)) / loans.length
-          : 0,
-      averageTenureMonths:
-        loans.length > 0
-          ? this.sum(loans.map((loan) => loan.tenureMonths)) / loans.length
-          : 0,
-    };
-
-    const response: AnalyticsOverviewResponse = {
+    return {
       lenderId,
       range: {
         key: range.key,
@@ -205,63 +294,51 @@ export class AnalyticsService {
         endDate: range.end.toISOString(),
       },
       summary,
-      trends: {
-        lendingByMonth: this.buildMonthlySeries(
-          range,
-          rangeLoans,
-          (loan) => loan.createdAt,
-          (loan) => loan.amount,
-        ),
-        collectionByMonth: this.buildMonthlySeries(
-          range,
-          rangeTransactions.filter((transaction) => transaction.type === 'repayment'),
-          (transaction) => transaction.createdAt,
-          (transaction) => transaction.amount,
-        ),
-      },
-      breakdowns: {
-        loanStatus: this.buildLoanStatusBreakdown(loans),
-      },
       performance: {
-        activeAds,
+        activeAds: context.ads.filter((ad) => this.isActiveAd(ad, range.end))
+          .length,
         requestsReceived: rangeRequests.length,
         acceptedRequests,
         requestToLoanConversionRate:
-          rangeRequests.length > 0 ? convertedRequests / rangeRequests.length : 0,
+          rangeRequests.length > 0
+            ? convertedRequests / rangeRequests.length
+            : 0,
       },
-      portfolio,
+      portfolio: {
+        outstandingAmount: this.sum(
+          context.loans.map((loan) => loan.remainingAmount),
+        ),
+        averageLoanSize:
+          context.loans.length > 0
+            ? summary.totalLent / Math.max(rangeLoans.length, 1)
+            : 0,
+        averageInterestRate:
+          context.loans.length > 0
+            ? this.sum(context.loans.map((loan) => loan.interestRate)) /
+              context.loans.length
+            : 0,
+        averageTenureMonths:
+          context.loans.length > 0
+            ? this.sum(context.loans.map((loan) => loan.tenureMonths)) /
+              context.loans.length
+            : 0,
+      },
       risk: {
         overdueLoans,
         defaultedLoans,
         openDisputes,
         averageBorrowerCreditScore:
-          borrowerScores.length > 0
-            ? this.sum(borrowerScores) / borrowerScores.length
+          context.borrowerScores.length > 0
+            ? this.sum(context.borrowerScores) / context.borrowerScores.length
             : null,
       },
-      insights: this.buildInsights({
-        summary,
-        activeAds,
-        rangeRequestsCount: rangeRequests.length,
-        conversionRate:
-          rangeRequests.length > 0 ? convertedRequests / rangeRequests.length : 0,
-        overdueLoans,
-        defaultedLoans,
-        openDisputes,
-        averageBorrowerCreditScore:
-          borrowerScores.length > 0
-            ? this.sum(borrowerScores) / borrowerScores.length
-            : null,
-      }),
     };
-
-    return response;
   }
 
   async getDrilldown(
     lenderId: string,
     type: string,
-    rangeKey = '90d',
+    rangeKey = '30d',
     pageSize = 30,
     cursor?: string | null,
   ): Promise<AnalyticsDrilldownResponse> {
@@ -280,7 +357,9 @@ export class AnalyticsService {
     const openDisputes = context.disputes.filter((dispute) =>
       ['open', 'under_review'].includes(dispute.status),
     );
-    const activeAds = context.ads.filter((ad) => this.isActiveAd(ad, range.end));
+    const activeAds = context.ads.filter((ad) =>
+      this.isActiveAd(ad, range.end),
+    );
     const overdueLoanIds = await this.findOverdueLoanIds(
       this.firebaseService.getDb(),
       lenderId,
@@ -319,9 +398,12 @@ export class AnalyticsService {
         response = {
           ...base,
           title: 'Repayment Collections',
-          description: 'Repayment transactions recorded in the selected period.',
+          description:
+            'Repayment transactions recorded in the selected period.',
           items: this.buildTransactionItems(
-            rangeTransactions.filter((transaction) => transaction.type === 'repayment'),
+            rangeTransactions.filter(
+              (transaction) => transaction.type === 'repayment',
+            ),
             context.loanMap,
             context.borrowerNameMap,
           ),
@@ -352,7 +434,8 @@ export class AnalyticsService {
         response = {
           ...base,
           title: 'Requests Received',
-          description: 'Loan requests linked to the lender or one of the lender ads.',
+          description:
+            'Loan requests linked to the lender or one of the lender ads.',
           items: this.buildRequestItems(rangeRequests, context.borrowerNameMap),
         };
         break;
@@ -399,7 +482,8 @@ export class AnalyticsService {
         response = {
           ...base,
           title: 'Open Disputes',
-          description: 'Disputes still open or under review for lender-linked loans.',
+          description:
+            'Disputes still open or under review for lender-linked loans.',
           items: this.buildDisputeItems(
             openDisputes,
             context.loanMap,
@@ -426,8 +510,12 @@ export class AnalyticsService {
     };
   }
 
-  private resolveRange(rangeKey: string): RangeConfig & { start: Date; end: Date } {
-    const normalizedKey = (rangeKey in RANGE_CONFIGS ? rangeKey : '90d') as SupportedRangeKey;
+  private resolveRange(
+    rangeKey: string,
+  ): RangeConfig & { start: Date; end: Date } {
+    const normalizedKey = (
+      rangeKey in RANGE_CONFIGS ? rangeKey : '30d'
+    ) as SupportedRangeKey;
     const config = RANGE_CONFIGS[normalizedKey];
     const end = new Date();
     const start = new Date(end);
@@ -557,16 +645,14 @@ export class AnalyticsService {
     ]);
 
     const borrowerIds = Array.from(
-      new Set(
-        [
-          ...loans
-            .map((loan) => loan.borrowerId)
-            .filter((borrowerId): borrowerId is string => Boolean(borrowerId)),
-          ...scopedRequests
-            .map((request) => request.borrowerId)
-            .filter((borrowerId): borrowerId is string => Boolean(borrowerId)),
-        ],
-      ),
+      new Set([
+        ...loans
+          .map((loan) => loan.borrowerId)
+          .filter((borrowerId): borrowerId is string => Boolean(borrowerId)),
+        ...scopedRequests
+          .map((request) => request.borrowerId)
+          .filter((borrowerId): borrowerId is string => Boolean(borrowerId)),
+      ]),
     );
     const borrowerNameMap = await this.getBorrowerNameMap(db, borrowerIds);
 
@@ -587,8 +673,14 @@ export class AnalyticsService {
     adIds: Set<string>,
   ): Promise<RequestRecord[]> {
     const scopedSnapshots = await Promise.all([
-      db.collection('loanRequests').where('targetLenderId', '==', lenderId).get(),
-      db.collection('loanRequests').where('matchedLenderIds', 'array-contains', lenderId).get(),
+      db
+        .collection('loanRequests')
+        .where('targetLenderId', '==', lenderId)
+        .get(),
+      db
+        .collection('loanRequests')
+        .where('matchedLenderIds', 'array-contains', lenderId)
+        .get(),
       ...chunkValues(Array.from(adIds), 10).map((adIdChunk) =>
         db.collection('loanRequests').where('adId', 'in', adIdChunk).get(),
       ),
@@ -673,6 +765,29 @@ export class AnalyticsService {
     return this.getNestedPaymentTransactions(db, Array.from(loanIds));
   }
 
+  private async getTransactionsForLender(
+    db: Firestore,
+    lenderId: string,
+    loanIds: Set<string>,
+  ): Promise<TransactionRecord[]> {
+    if (loanIds.size === 0) {
+      return [];
+    }
+
+    try {
+      const snapshot = await db
+        .collection('transactions')
+        .where('lenderId', '==', lenderId)
+        .get();
+
+      if (snapshot.size > 0) {
+        return snapshot.docs.map((doc) => this.mapTransaction(doc));
+      }
+    } catch {}
+
+    return this.getTransactionsForLoanIds(db, loanIds);
+  }
+
   private async getDisputesForLoanIds(
     db: Firestore,
     loanIds: Set<string>,
@@ -694,12 +809,37 @@ export class AnalyticsService {
     );
   }
 
+  private async getDisputesForLender(
+    db: Firestore,
+    lenderId: string,
+    loanIds: Set<string>,
+  ): Promise<DisputeRecord[]> {
+    if (loanIds.size === 0) {
+      return [];
+    }
+
+    try {
+      const snapshot = await db
+        .collection('disputes')
+        .where('lenderId', '==', lenderId)
+        .get();
+
+      if (snapshot.size > 0) {
+        return snapshot.docs.map((doc) => this.mapDispute(doc));
+      }
+    } catch {}
+
+    return this.getDisputesForLoanIds(db, loanIds);
+  }
+
   private async getBorrowerCreditScores(
     db: Firestore,
     borrowerIds: string[],
   ): Promise<number[]> {
     const snapshots = await db.getAll(
-      ...borrowerIds.map((borrowerId) => db.collection('users').doc(borrowerId)),
+      ...borrowerIds.map((borrowerId) =>
+        db.collection('users').doc(borrowerId),
+      ),
     );
 
     return snapshots
@@ -719,14 +859,18 @@ export class AnalyticsService {
     }
 
     const snapshots = await db.getAll(
-      ...borrowerIds.map((borrowerId) => db.collection('users').doc(borrowerId)),
+      ...borrowerIds.map((borrowerId) =>
+        db.collection('users').doc(borrowerId),
+      ),
     );
 
     return new Map(
       snapshots.map((snapshot) => {
         const data = snapshot.data();
         const fullName =
-          data && typeof data.fullName === 'string' && data.fullName.trim().length > 0
+          data &&
+          typeof data.fullName === 'string' &&
+          data.fullName.trim().length > 0
             ? data.fullName
             : snapshot.id;
 
@@ -742,7 +886,11 @@ export class AnalyticsService {
     getValue: (item: T) => number,
   ): AnalyticsTrendPoint[] {
     const buckets = new Map<string, number>();
-    const cursor = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
+    const cursor = new Date(
+      range.start.getFullYear(),
+      range.start.getMonth(),
+      1,
+    );
     const end = new Date(range.end.getFullYear(), range.end.getMonth(), 1);
 
     while (cursor <= end) {
@@ -830,7 +978,9 @@ export class AnalyticsService {
         'Portfolio risk needs attention because overdue or defaulted loans are already present.',
       );
     } else {
-      insights.push('Portfolio risk looks controlled with no overdue or defaulted loan flags.');
+      insights.push(
+        'Portfolio risk looks controlled with no overdue or defaulted loan flags.',
+      );
     }
 
     if (input.openDisputes > 0) {
@@ -898,9 +1048,12 @@ export class AnalyticsService {
         return rightTime - leftTime;
       })
       .map((transaction) => {
-        const loan = transaction.loanId ? loanMap.get(transaction.loanId) : undefined;
-        const borrowerName =
-          loan?.borrowerId ? borrowerNameMap.get(loan.borrowerId) : null;
+        const loan = transaction.loanId
+          ? loanMap.get(transaction.loanId)
+          : undefined;
+        const borrowerName = loan?.borrowerId
+          ? borrowerNameMap.get(loan.borrowerId)
+          : null;
 
         return {
           id: `${transaction.loanId ?? 'unknown'}-${transaction.createdAt?.toISOString() ?? 'no-date'}`,
@@ -911,7 +1064,9 @@ export class AnalyticsService {
           secondaryMetric: loan
             ? `Remaining: ${this.formatCurrency(loan.remainingAmount)}`
             : null,
-          date: transaction.createdAt ? transaction.createdAt.toISOString() : null,
+          date: transaction.createdAt
+            ? transaction.createdAt.toISOString()
+            : null,
         };
       });
   }
@@ -929,7 +1084,9 @@ export class AnalyticsService {
       })
       .map((request) => ({
         id: request.id,
-        title: borrowerNameMap.get(request.borrowerId ?? '') ?? `Request ${request.id}`,
+        title:
+          borrowerNameMap.get(request.borrowerId ?? '') ??
+          `Request ${request.id}`,
         subtitle: request.purpose
           ? `${request.purpose} request`
           : `Request ${request.id}`,
@@ -975,13 +1132,16 @@ export class AnalyticsService {
       })
       .map((dispute) => {
         const loan = dispute.loanId ? loanMap.get(dispute.loanId) : undefined;
-        const borrowerName =
-          loan?.borrowerId ? borrowerNameMap.get(loan.borrowerId) : null;
+        const borrowerName = loan?.borrowerId
+          ? borrowerNameMap.get(loan.borrowerId)
+          : null;
 
         return {
           id: dispute.id,
           title: borrowerName ?? `Dispute ${dispute.id}`,
-          subtitle: dispute.loanId ? `Loan ${dispute.loanId}` : `Dispute ${dispute.id}`,
+          subtitle: dispute.loanId
+            ? `Loan ${dispute.loanId}`
+            : `Dispute ${dispute.id}`,
           status: dispute.status,
           metric: `Type: ${this.formatStatus(dispute.type)}`,
           secondaryMetric: null,
@@ -1056,7 +1216,9 @@ export class AnalyticsService {
 
         const paymentGroups = await Promise.all(
           installmentsSnapshot.docs.map(async (installmentDoc) => {
-            const paymentsSnapshot = await installmentDoc.ref.collection('payments').get();
+            const paymentsSnapshot = await installmentDoc.ref
+              .collection('payments')
+              .get();
 
             return paymentsSnapshot.docs.map((paymentDoc) => {
               const data = paymentDoc.data();

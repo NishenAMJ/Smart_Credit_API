@@ -36,7 +36,7 @@ const DEFAULT_LENDING_SETTINGS = {
 
 const DEFAULT_WORKSPACE_SETTINGS = {
   defaultLandingPage: 'dashboard' as LenderLandingPage,
-  defaultAnalyticsRange: '90d' as AnalyticsRangeKey,
+  defaultAnalyticsRange: '30d' as AnalyticsRangeKey,
   pendingRequestsPageSize: 30,
   borrowerTablePageSize: 8,
 };

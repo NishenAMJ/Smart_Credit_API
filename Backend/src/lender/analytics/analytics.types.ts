@@ -43,6 +43,15 @@ export interface AnalyticsRisk {
   averageBorrowerCreditScore: number | null;
 }
 
+export interface AnalyticsSummaryResponse {
+  lenderId: string;
+  range: AnalyticsRangeResponse;
+  summary: AnalyticsSummary;
+  performance: AnalyticsPerformance;
+  portfolio: AnalyticsPortfolio;
+  risk: AnalyticsRisk;
+}
+
 export interface AnalyticsOverviewResponse {
   lenderId: string;
   range: AnalyticsRangeResponse;
