@@ -3,6 +3,7 @@ import type { LenderView } from '../components/common/LenderSidebar'
 import type {
   BorrowerDetails,
   DashboardBorrower,
+  DashboardBorrowersResponse,
   DashboardSummary,
 } from '../lib/dashboard-api'
 import {
@@ -13,7 +14,6 @@ import {
 import type { LenderSession } from '../lib/lender-session'
 
 const ITEMS_PER_PAGE = 8
-const BORROWER_FETCH_LIMIT = 24
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', {
   style: 'currency',
@@ -131,47 +131,53 @@ export default function DashboardPage({
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
+  const [borrowersPageInfo, setBorrowersPageInfo] =
+    useState<DashboardBorrowersResponse['pageInfo']>({
+      pageSize: ITEMS_PER_PAGE,
+      hasMore: false,
+      nextCursor: null,
+    })
+  const [isSummaryLoading, setIsSummaryLoading] = useState(true)
+  const [isBorrowersLoading, setIsBorrowersLoading] = useState(true)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [borrowersError, setBorrowersError] = useState<string | null>(null)
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null)
   const [selectedBorrower, setSelectedBorrower] = useState<BorrowerDetails | null>(
     null,
   )
   const [isBorrowerLoading, setIsBorrowerLoading] = useState(false)
   const [borrowerError, setBorrowerError] = useState<string | null>(null)
+  const activeCursor = pageCursors[currentPage - 1] ?? null
 
   useEffect(() => {
     let isMounted = true
 
-    const loadDashboard = async () => {
+    const loadSummary = async () => {
       try {
-        setIsLoading(true)
-        setError(null)
-        const [summaryData, borrowersData] = await Promise.all([
-          fetchDashboardSummary(session.lenderId),
-          fetchDashboardBorrowers(session.lenderId, BORROWER_FETCH_LIMIT),
-        ])
+        setIsSummaryLoading(true)
+        setSummaryError(null)
+        const summaryData = await fetchDashboardSummary(session.lenderId)
 
         if (isMounted) {
           setSummary(summaryData.summary)
-          setBorrowers(borrowersData.borrowers)
         }
-      } catch (loadError) {
+      } catch (summaryLoadError) {
         if (isMounted) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : 'Failed to load dashboard data.',
+          setSummaryError(
+            summaryLoadError instanceof Error
+              ? summaryLoadError.message
+              : 'Failed to load dashboard summary.',
           )
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false)
+          setIsSummaryLoading(false)
         }
       }
     }
 
-    void loadDashboard()
+    void loadSummary()
 
     return () => {
       isMounted = false
@@ -180,7 +186,67 @@ export default function DashboardPage({
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery])
+    setPageCursors([null])
+    setBorrowers([])
+    setBorrowersPageInfo({
+      pageSize: ITEMS_PER_PAGE,
+      hasMore: false,
+      nextCursor: null,
+    })
+    setSummary(null)
+    setSummaryError(null)
+    setBorrowersError(null)
+    setSearchQuery('')
+  }, [session.lenderId])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadBorrowers = async () => {
+      try {
+        setIsBorrowersLoading(true)
+        setBorrowersError(null)
+        setBorrowers([])
+        const borrowersData = await fetchDashboardBorrowers(session.lenderId, {
+          pageSize: ITEMS_PER_PAGE,
+          cursor: activeCursor,
+        })
+
+        if (isMounted) {
+          setBorrowers(borrowersData.borrowers)
+          setBorrowersPageInfo(borrowersData.pageInfo)
+
+          if (borrowersData.pageInfo.nextCursor) {
+            setPageCursors((current) => {
+              if (current[currentPage] === borrowersData.pageInfo.nextCursor) {
+                return current
+              }
+
+              return [...current.slice(0, currentPage), borrowersData.pageInfo.nextCursor]
+            })
+          }
+        }
+      } catch (borrowersLoadError) {
+        if (isMounted) {
+          setBorrowersError(
+            borrowersLoadError instanceof Error
+              ? borrowersLoadError.message
+              : 'Failed to load dashboard borrowers.',
+          )
+        }
+      } finally {
+        if (isMounted) {
+          setIsBorrowersLoading(false)
+        }
+      }
+    }
+
+    void loadBorrowers()
+
+    return () => {
+      isMounted = false
+    }
+  }, [activeCursor, currentPage, session.lenderId])
 
   useEffect(() => {
     if (!selectedBorrowerId) {
@@ -258,17 +324,13 @@ export default function DashboardPage({
     })
   }, [borrowers, searchQuery])
 
-  const totalPages = Math.max(1, Math.ceil(filteredBorrowers.length / ITEMS_PER_PAGE))
-  const visibleBorrowers = filteredBorrowers.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE,
-  )
   const visibleStart =
-    visibleBorrowers.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1
-  const visibleEnd = Math.min(
-    currentPage * ITEMS_PER_PAGE,
-    filteredBorrowers.length,
-  )
+    borrowers.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1
+  const visibleEnd = borrowers.length === 0 ? 0 : visibleStart + borrowers.length - 1
+  const isInitialLoading =
+    (isSummaryLoading || isBorrowersLoading) && !summary && borrowers.length === 0
+  const hasBlockingError =
+    !summary && borrowers.length === 0 && Boolean(summaryError || borrowersError)
 
   const summaryCards = [
     {
@@ -407,14 +469,14 @@ export default function DashboardPage({
           </div>
         </header>
 
-        {isLoading ? (
+        {isInitialLoading ? (
           <section className="card loading-card">
             <p>Loading dashboard data...</p>
           </section>
-        ) : error ? (
+        ) : hasBlockingError ? (
           <section className="card error-card">
             <h2>Dashboard data is not available yet</h2>
-            <p>{error}</p>
+            <p>{borrowersError ?? summaryError ?? 'Failed to load dashboard data.'}</p>
             <p>
               Check whether the Nest API is running, Firebase credentials are
               valid, and the lender has loan records.
@@ -457,7 +519,7 @@ export default function DashboardPage({
                   <input
                     className="input"
                     type="search"
-                    placeholder="Search name, email, KYC, score, loan status"
+                    placeholder="Search borrowers on this page"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                   />
@@ -477,8 +539,20 @@ export default function DashboardPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleBorrowers.length > 0 ? (
-                      visibleBorrowers.map((borrower) => (
+                    {borrowersError ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          {borrowersError}
+                        </td>
+                      </tr>
+                    ) : isBorrowersLoading ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          Loading borrowers...
+                        </td>
+                      </tr>
+                    ) : filteredBorrowers.length > 0 ? (
+                      filteredBorrowers.map((borrower) => (
                         <tr
                           key={borrower.id}
                           className="dashboard-table__row"
@@ -522,7 +596,7 @@ export default function DashboardPage({
                       <tr>
                         <td className="table-empty" colSpan={6}>
                           {searchQuery
-                            ? `No borrowers found for "${searchQuery}".`
+                            ? `No borrowers found on this page for "${searchQuery}".`
                             : 'No lender-linked borrower data available yet.'}
                         </td>
                       </tr>
@@ -533,8 +607,9 @@ export default function DashboardPage({
 
               <div className="table-footer">
                 <p>
-                  Showing {visibleStart}-{visibleEnd} of {filteredBorrowers.length}{' '}
-                  lender-linked borrowers
+                  {searchQuery
+                    ? `Showing ${filteredBorrowers.length} of ${borrowers.length} borrowers loaded for page ${currentPage}.`
+                    : `Showing ${visibleStart}-${visibleEnd} lender-linked borrowers on page ${currentPage}.`}
                 </p>
 
                 <div className="pagination">
@@ -542,22 +617,20 @@ export default function DashboardPage({
                     type="button"
                     className="pagination-button"
                     onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                    disabled={currentPage === 1}
+                    disabled={currentPage === 1 || isBorrowersLoading}
                   >
                     Previous
                   </button>
 
                   <span className="pagination-status">
-                    Page {currentPage} of {totalPages}
+                    Page {currentPage}
                   </span>
 
                   <button
                     type="button"
                     className="pagination-button"
-                    onClick={() =>
-                      setCurrentPage((page) => Math.min(totalPages, page + 1))
-                    }
-                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((page) => page + 1)}
+                    disabled={!borrowersPageInfo.hasMore || isBorrowersLoading}
                   >
                     Next
                   </button>

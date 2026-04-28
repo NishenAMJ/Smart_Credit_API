@@ -87,8 +87,14 @@ type LenderLedgerContext = {
 @Injectable()
 export class RecentTransactionsService {
   private readonly cacheTtlMs = 60_000;
-  private readonly lenderContextCache = new Map<string, CachedValue<LenderLedgerContext>>();
-  private readonly summaryCache = new Map<string, CachedValue<RecentTransactionsSummary>>();
+  private readonly lenderContextCache = new Map<
+    string,
+    CachedValue<LenderLedgerContext>
+  >();
+  private readonly summaryCache = new Map<
+    string,
+    CachedValue<RecentTransactionsSummary>
+  >();
   private readonly searchCountCache = new Map<string, CachedValue<number>>();
 
   constructor(private readonly firebaseService: FirebaseService) {}
@@ -139,26 +145,35 @@ export class RecentTransactionsService {
           .filter((loanId): loanId is string => Boolean(loanId)),
       ),
     );
-    const installmentSummaries = await this.getInstallmentSummaries(activeLoanIds);
-    const summary = await this.getSummaryForLender(lenderId, loanIds, loanIdsList, includeSummary);
+    const installmentSummaries =
+      await this.getInstallmentSummaries(activeLoanIds);
+    const summary = await this.getSummaryForLender(
+      lenderId,
+      loanIds,
+      loanIdsList,
+      includeSummary,
+    );
     const searchResultCount = normalizedSearch
       ? await this.getSearchResultCount(lenderId, context, normalizedSearch)
       : null;
 
     const transactions: RecentTransactionListItem[] = visibleTransactions.map(
       (transaction) => {
-        const loan = transaction.loanId ? loanMap.get(transaction.loanId) : undefined;
-        const borrower =
-          loan?.borrowerId ? borrowerMap.get(loan.borrowerId) : undefined;
-        const installmentSummary =
-          (transaction.loanId ? installmentSummaries.get(transaction.loanId) : undefined) ??
-          {
-            totalInstallments: 0,
-            paidInstallments: 0,
-            overdueInstallments: 0,
-            nextDueDate: null,
-            latestInstallmentStatus: 'unknown',
-          };
+        const loan = transaction.loanId
+          ? loanMap.get(transaction.loanId)
+          : undefined;
+        const borrower = loan?.borrowerId
+          ? borrowerMap.get(loan.borrowerId)
+          : undefined;
+        const installmentSummary = (transaction.loanId
+          ? installmentSummaries.get(transaction.loanId)
+          : undefined) ?? {
+          totalInstallments: 0,
+          paidInstallments: 0,
+          overdueInstallments: 0,
+          nextDueDate: null,
+          latestInstallmentStatus: 'unknown',
+        };
 
         return {
           transactionId: transaction.id,
@@ -170,7 +185,9 @@ export class RecentTransactionsService {
           amount: transaction.amount,
           type: transaction.type,
           status: transaction.status,
-          createdAt: transaction.createdAt ? transaction.createdAt.toISOString() : null,
+          createdAt: transaction.createdAt
+            ? transaction.createdAt.toISOString()
+            : null,
           loanStatus: loan?.status ?? 'unknown',
           remainingAmount: loan?.remainingAmount ?? 0,
           source: transaction.source,
@@ -208,7 +225,11 @@ export class RecentTransactionsService {
       return null;
     }
 
-    const loan = await this.mapLoanSnapshot(db, loanSnapshot.id, loanSnapshot.data() ?? {});
+    const loan = await this.mapLoanSnapshot(
+      db,
+      loanSnapshot.id,
+      loanSnapshot.data() ?? {},
+    );
 
     if (!loan || loanSnapshot.get('lenderId') !== lenderId) {
       return null;
@@ -225,7 +246,9 @@ export class RecentTransactionsService {
   ): Promise<LoanLedgerDetailsResponse | null> {
     const db = this.firebaseService.getDb();
     const loanRef = db.collection('loans').doc(loanId);
-    const installmentRef = loanRef.collection('installments').doc(installmentId);
+    const installmentRef = loanRef
+      .collection('installments')
+      .doc(installmentId);
     const parsedPaidAt =
       input.paidAt && input.paidAt.trim().length > 0
         ? this.toDate(input.paidAt)
@@ -236,7 +259,9 @@ export class RecentTransactionsService {
     }
 
     if (input.amount <= 0) {
-      throw new BadRequestException('Payment amount must be greater than zero.');
+      throw new BadRequestException(
+        'Payment amount must be greater than zero.',
+      );
     }
 
     const details = await db.runTransaction(async (transaction) => {
@@ -253,7 +278,11 @@ export class RecentTransactionsService {
         return null;
       }
 
-      const loan = await this.mapLoanSnapshot(db, loanSnapshot.id, loanSnapshot.data() ?? {});
+      const loan = await this.mapLoanSnapshot(
+        db,
+        loanSnapshot.id,
+        loanSnapshot.data() ?? {},
+      );
       const installment = this.mapInstallmentSnapshot(
         installmentSnapshot.id,
         installmentSnapshot.data() ?? {},
@@ -266,7 +295,9 @@ export class RecentTransactionsService {
       );
 
       if (installmentOutstanding <= 0) {
-        throw new BadRequestException('This installment is already fully paid.');
+        throw new BadRequestException(
+          'This installment is already fully paid.',
+        );
       }
 
       if (input.amount > installmentOutstanding) {
@@ -281,9 +312,16 @@ export class RecentTransactionsService {
         installment.amount,
         nextPaidAmount,
       );
-      const nextRemainingAmount = Math.max(0, loan.remainingAmount - input.amount);
+      const nextRemainingAmount = Math.max(
+        0,
+        loan.remainingAmount - input.amount,
+      );
       const loanStatus =
-        nextRemainingAmount <= 0 ? 'completed' : loan.status === 'completed' ? 'active' : loan.status;
+        nextRemainingAmount <= 0
+          ? 'completed'
+          : loan.status === 'completed'
+            ? 'active'
+            : loan.status;
       const paymentRef = installmentRef.collection('payments').doc();
       const transactionRef = db.collection('transactions').doc();
       const paymentTimestamp = Timestamp.fromDate(parsedPaidAt);
@@ -358,11 +396,17 @@ export class RecentTransactionsService {
     return this.buildLoanLedgerDetails(
       lenderId,
       refreshedLoanSnapshot.id,
-      await this.mapLoanSnapshot(db, refreshedLoanSnapshot.id, refreshedLoanSnapshot.data() ?? {}),
+      await this.mapLoanSnapshot(
+        db,
+        refreshedLoanSnapshot.id,
+        refreshedLoanSnapshot.data() ?? {},
+      ),
     );
   }
 
-  private async getLenderContext(lenderId: string): Promise<LenderLedgerContext> {
+  private async getLenderContext(
+    lenderId: string,
+  ): Promise<LenderLedgerContext> {
     const cached = this.getCachedValue(this.lenderContextCache, lenderId);
 
     if (cached) {
@@ -412,10 +456,13 @@ export class RecentTransactionsService {
     }
 
     const allScopedTransactions = await this.getAllRecentPayments(loanIds);
-    const installmentSummaries = await this.getInstallmentSummaries(loanIdsList);
+    const installmentSummaries =
+      await this.getInstallmentSummaries(loanIdsList);
     const summary = {
       totalTransactions: allScopedTransactions.length,
-      totalCollected: this.sum(allScopedTransactions.map((transaction) => transaction.amount)),
+      totalCollected: this.sum(
+        allScopedTransactions.map((transaction) => transaction.amount),
+      ),
       loansWithActivity: new Set(
         allScopedTransactions
           .map((transaction) => transaction.loanId)
@@ -444,7 +491,9 @@ export class RecentTransactionsService {
       return cached;
     }
 
-    const allScopedTransactions = await this.getAllRecentPayments(context.loanIds);
+    const allScopedTransactions = await this.getAllRecentPayments(
+      context.loanIds,
+    );
     const count = allScopedTransactions.filter((transaction) =>
       this.matchesSearch(transaction, context, search),
     ).length;
@@ -489,7 +538,9 @@ export class RecentTransactionsService {
 
           const payment = this.mapPayment(paymentDoc);
 
-          if (this.matchesTransactionFilters(payment, context, search ?? null)) {
+          if (
+            this.matchesTransactionFilters(payment, context, search ?? null)
+          ) {
             items.push(payment);
           }
         });
@@ -532,7 +583,10 @@ export class RecentTransactionsService {
     const db = this.firebaseService.getDb();
 
     try {
-      const snapshot = await db.collectionGroup('payments').orderBy('paidAt', 'desc').get();
+      const snapshot = await db
+        .collectionGroup('payments')
+        .orderBy('paidAt', 'desc')
+        .get();
 
       const payments = snapshot.docs
         .map((paymentDoc) => this.mapPayment(paymentDoc))
@@ -568,7 +622,10 @@ export class RecentTransactionsService {
       return [];
     }
 
-    return (await this.getRecentPaymentsPage(context, limit)).items.slice(0, limit);
+    return (await this.getRecentPaymentsPage(context, limit)).items.slice(
+      0,
+      limit,
+    );
   }
 
   private async buildLoanLedgerDetails(
@@ -582,12 +639,16 @@ export class RecentTransactionsService {
       .doc(loanId)
       .collection('installments')
       .get();
-    const topLevelTransactions = await this.getTopLevelRepaymentsByLoanIds(new Set([loanId]));
+    const topLevelTransactions = await this.getTopLevelRepaymentsByLoanIds(
+      new Set([loanId]),
+    );
 
     const installments = await Promise.all(
       installmentsSnapshot.docs.map(async (installmentDoc) => {
         const installment = this.mapInstallment(installmentDoc);
-        const paymentsSnapshot = await installmentDoc.ref.collection('payments').get();
+        const paymentsSnapshot = await installmentDoc.ref
+          .collection('payments')
+          .get();
         const payments = paymentsSnapshot.docs
           .map((paymentDoc) => this.mapPayment(paymentDoc))
           .filter((payment) => payment.amount > 0);
@@ -598,16 +659,20 @@ export class RecentTransactionsService {
             !transaction.paymentId,
         );
 
-        const mergedPayments = [...payments, ...fallbackTransactions].sort((left, right) => {
-          const leftTime = left.createdAt ? left.createdAt.getTime() : 0;
-          const rightTime = right.createdAt ? right.createdAt.getTime() : 0;
-          return rightTime - leftTime;
-        });
+        const mergedPayments = [...payments, ...fallbackTransactions].sort(
+          (left, right) => {
+            const leftTime = left.createdAt ? left.createdAt.getTime() : 0;
+            const rightTime = right.createdAt ? right.createdAt.getTime() : 0;
+            return rightTime - leftTime;
+          },
+        );
 
         return {
           id: installment.id,
           status: installment.status,
-          dueDate: installment.dueDate ? installment.dueDate.toISOString() : null,
+          dueDate: installment.dueDate
+            ? installment.dueDate.toISOString()
+            : null,
           amount: installment.amount,
           paidAmount:
             installment.paidAmount > 0
@@ -618,7 +683,9 @@ export class RecentTransactionsService {
             amount: payment.amount,
             status: payment.status,
             type: payment.type,
-            createdAt: payment.createdAt ? payment.createdAt.toISOString() : null,
+            createdAt: payment.createdAt
+              ? payment.createdAt.toISOString()
+              : null,
             source: payment.source,
             note: payment.note,
           })),
@@ -657,7 +724,9 @@ export class RecentTransactionsService {
 
     const db = this.firebaseService.getDb();
     const snapshots = await db.getAll(
-      ...borrowerIds.map((borrowerId) => db.collection('users').doc(borrowerId)),
+      ...borrowerIds.map((borrowerId) =>
+        db.collection('users').doc(borrowerId),
+      ),
     );
 
     return new Map(
@@ -668,10 +737,13 @@ export class RecentTransactionsService {
           snapshot.id,
           {
             fullName:
-              data && typeof data.fullName === 'string' && data.fullName.trim().length > 0
+              data &&
+              typeof data.fullName === 'string' &&
+              data.fullName.trim().length > 0
                 ? data.fullName
                 : snapshot.id,
-            email: data && typeof data.email === 'string' ? data.email : 'No email',
+            email:
+              data && typeof data.email === 'string' ? data.email : 'No email',
           } satisfies BorrowerProfile,
         ] as const;
       }),
@@ -688,7 +760,9 @@ export class RecentTransactionsService {
           .collection('installments')
           .get();
 
-        const installments = snapshot.docs.map((doc) => this.mapInstallment(doc));
+        const installments = snapshot.docs.map((doc) =>
+          this.mapInstallment(doc),
+        );
         const nextDue = installments
           .filter(
             (installment) =>
@@ -696,17 +770,19 @@ export class RecentTransactionsService {
               !['paid', 'completed'].includes(installment.status),
           )
           .sort((left, right) => {
-            const leftTime = left.dueDate ? left.dueDate.getTime() : Number.MAX_SAFE_INTEGER;
-            const rightTime = right.dueDate ? right.dueDate.getTime() : Number.MAX_SAFE_INTEGER;
+            const leftTime = left.dueDate
+              ? left.dueDate.getTime()
+              : Number.MAX_SAFE_INTEGER;
+            const rightTime = right.dueDate
+              ? right.dueDate.getTime()
+              : Number.MAX_SAFE_INTEGER;
             return leftTime - rightTime;
           })[0];
-        const latestInstallment = installments
-          .slice()
-          .sort((left, right) => {
-            const leftTime = left.dueDate ? left.dueDate.getTime() : 0;
-            const rightTime = right.dueDate ? right.dueDate.getTime() : 0;
-            return rightTime - leftTime;
-          })[0];
+        const latestInstallment = installments.slice().sort((left, right) => {
+          const leftTime = left.dueDate ? left.dueDate.getTime() : 0;
+          const rightTime = right.dueDate ? right.dueDate.getTime() : 0;
+          return rightTime - leftTime;
+        })[0];
 
         return [
           loanId,
@@ -718,7 +794,9 @@ export class RecentTransactionsService {
             overdueInstallments: installments.filter(
               (installment) => installment.status === 'overdue',
             ).length,
-            nextDueDate: nextDue?.dueDate ? nextDue.dueDate.toISOString() : null,
+            nextDueDate: nextDue?.dueDate
+              ? nextDue.dueDate.toISOString()
+              : null,
             latestInstallmentStatus: latestInstallment?.status ?? 'unknown',
           },
         ] as const;
@@ -774,7 +852,9 @@ export class RecentTransactionsService {
     };
   }
 
-  private async getNestedPayments(loanIds: string[]): Promise<TransactionRecord[]> {
+  private async getNestedPayments(
+    loanIds: string[],
+  ): Promise<TransactionRecord[]> {
     if (loanIds.length === 0) {
       return [];
     }
@@ -825,10 +905,15 @@ export class RecentTransactionsService {
     const loanIdChunks = chunkValues(Array.from(loanIds), 10);
     const snapshots = await Promise.all(
       loanIdChunks.map((loanIdChunk) => {
-        let query = db.collection('transactions').where('loanId', 'in', loanIdChunk);
+        let query = db
+          .collection('transactions')
+          .where('loanId', 'in', loanIdChunk);
 
         if (pageSize) {
-          query = applyDateCursor(orderByDateAndId(query, 'createdAt'), cursor).limit(pageSize + 1);
+          query = applyDateCursor(
+            orderByDateAndId(query, 'createdAt'),
+            cursor,
+          ).limit(pageSize + 1);
           return query.get();
         }
 
@@ -842,7 +927,9 @@ export class RecentTransactionsService {
       .filter((transaction) =>
         transaction.loanId ? loanIds.has(transaction.loanId) : false,
       )
-      .filter((transaction) => this.isRepaymentLike(transaction.type, transaction.status))
+      .filter((transaction) =>
+        this.isRepaymentLike(transaction.type, transaction.status),
+      )
       .sort((left, right) => {
         const leftTime = left.createdAt ? left.createdAt.getTime() : 0;
         const rightTime = right.createdAt ? right.createdAt.getTime() : 0;
@@ -874,8 +961,12 @@ export class RecentTransactionsService {
 
         const installmentPayments = await Promise.all(
           installmentsSnapshot.docs.map(async (installmentDoc) => {
-            const paymentsSnapshot = await installmentDoc.ref.collection('payments').get();
-            return paymentsSnapshot.docs.map((paymentDoc) => this.mapPayment(paymentDoc));
+            const paymentsSnapshot = await installmentDoc.ref
+              .collection('payments')
+              .get();
+            return paymentsSnapshot.docs.map((paymentDoc) =>
+              this.mapPayment(paymentDoc),
+            );
           }),
         );
 
@@ -906,7 +997,8 @@ export class RecentTransactionsService {
       ? allPayments.findIndex(
           (payment) =>
             payment.id === decodedCursor.id &&
-            payment.createdAt?.toISOString() === decodedCursor.date.toISOString(),
+            payment.createdAt?.toISOString() ===
+              decodedCursor.date.toISOString(),
         ) + 1
       : 0;
     const safeStartIndex = startIndex > 0 ? startIndex : 0;
@@ -914,7 +1006,9 @@ export class RecentTransactionsService {
     return allPayments.slice(safeStartIndex, safeStartIndex + pageSize + 1);
   }
 
-  private mapPayment(doc: QueryDocumentSnapshot<DocumentData>): TransactionRecord {
+  private mapPayment(
+    doc: QueryDocumentSnapshot<DocumentData>,
+  ): TransactionRecord {
     const data = doc.data();
     const ancestors = getPaymentAncestorData(doc);
     const rawType =
@@ -923,7 +1017,9 @@ export class RecentTransactionsService {
         : typeof data.paymentType === 'string'
           ? data.paymentType
           : 'payment';
-    const normalizedType = this.isSeedPaymentMethod(rawType) ? 'repayment' : rawType;
+    const normalizedType = this.isSeedPaymentMethod(rawType)
+      ? 'repayment'
+      : rawType;
 
     return {
       id: doc.id,
@@ -947,7 +1043,10 @@ export class RecentTransactionsService {
     return this.mapInstallmentSnapshot(doc.id, data);
   }
 
-  private mapInstallmentSnapshot(id: string, data: DocumentData): InstallmentRecord {
+  private mapInstallmentSnapshot(
+    id: string,
+    data: DocumentData,
+  ): InstallmentRecord {
     const normalized = getNormalizedInstallment(data);
     return {
       id,
@@ -1011,7 +1110,9 @@ export class RecentTransactionsService {
       return true;
     }
 
-    return ['paid', 'completed', 'success', 'successful'].includes(normalizedStatus);
+    return ['paid', 'completed', 'success', 'successful'].includes(
+      normalizedStatus,
+    );
   }
 
   private matchesTransactionFilters(
@@ -1042,9 +1143,12 @@ export class RecentTransactionsService {
       return true;
     }
 
-    const loan = transaction.loanId ? context.loanMap.get(transaction.loanId) : undefined;
-    const borrower =
-      loan?.borrowerId ? context.borrowerMap.get(loan.borrowerId) : undefined;
+    const loan = transaction.loanId
+      ? context.loanMap.get(transaction.loanId)
+      : undefined;
+    const borrower = loan?.borrowerId
+      ? context.borrowerMap.get(loan.borrowerId)
+      : undefined;
     const values = [
       transaction.id,
       transaction.loanId,
@@ -1058,7 +1162,8 @@ export class RecentTransactionsService {
 
     return values.some(
       (value) =>
-        typeof value === 'string' && value.toLowerCase().includes(normalizedSearch),
+        typeof value === 'string' &&
+        value.toLowerCase().includes(normalizedSearch),
     );
   }
 

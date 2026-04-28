@@ -26,8 +26,15 @@ export interface DashboardSummaryResponse {
   generatedAt: string;
 }
 
+export interface CursorPageInfo {
+  pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 export interface DashboardBorrowersResponse {
   borrowers: DashboardBorrower[];
+  pageInfo: CursorPageInfo;
   generatedAt: string;
 }
 

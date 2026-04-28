@@ -42,9 +42,13 @@ describe('AnalyticsService', () => {
     };
     const service = new AnalyticsService({ getDb: () => db } as any);
 
-    jest.spyOn(seedUtils, 'computeLoanRemainingAmount').mockResolvedValue(12000);
+    jest
+      .spyOn(seedUtils, 'computeLoanRemainingAmount')
+      .mockResolvedValue(12000);
     jest.spyOn(service as any, 'getRequestsForLender').mockResolvedValue([]);
-    jest.spyOn(service as any, 'getTransactionsForLoanIds').mockResolvedValue([]);
+    jest
+      .spyOn(service as any, 'getTransactionsForLoanIds')
+      .mockResolvedValue([]);
     jest.spyOn(service as any, 'getDisputesForLoanIds').mockResolvedValue([]);
     jest.spyOn(service as any, 'countOverdueLoans').mockResolvedValue(0);
     jest.spyOn(service as any, 'getBorrowerCreditScores').mockResolvedValue([]);
@@ -67,7 +71,9 @@ describe('AnalyticsService', () => {
         tenureMonths: 10,
         remainingAmount: 14000 - index * 100,
         status: 'active',
-        createdAt: new Date(`2026-04-${String(21 - index).padStart(2, '0')}T00:00:00.000Z`),
+        createdAt: new Date(
+          `2026-04-${String(21 - index).padStart(2, '0')}T00:00:00.000Z`,
+        ),
       })),
       ads: [],
       requests: [],
@@ -81,9 +87,16 @@ describe('AnalyticsService', () => {
       ),
       loanMap: new Map(),
     });
-    jest.spyOn(service as any, 'findOverdueLoanIds').mockResolvedValue(new Set());
+    jest
+      .spyOn(service as any, 'findOverdueLoanIds')
+      .mockResolvedValue(new Set());
 
-    const result = await service.getDrilldown('lender_1', 'active-loans', '90d', 10);
+    const result = await service.getDrilldown(
+      'lender_1',
+      'active-loans',
+      '90d',
+      10,
+    );
 
     expect(result.items).toHaveLength(10);
     expect(result.pageInfo.hasMore).toBe(true);

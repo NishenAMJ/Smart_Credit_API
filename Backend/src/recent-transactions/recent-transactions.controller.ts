@@ -8,9 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  RecentTransactionsResponse,
-} from './recent-transactions.types';
+import { RecentTransactionsResponse } from './recent-transactions.types';
 import type {
   LoanLedgerDetailsResponse,
   RecordInstallmentPaymentInput,
@@ -64,7 +62,9 @@ export class RecentTransactionsController {
     );
 
     if (!details) {
-      throw new NotFoundException(`Loan ${loanId} was not found for this lender.`);
+      throw new NotFoundException(
+        `Loan ${loanId} was not found for this lender.`,
+      );
     }
 
     return details;
@@ -83,16 +83,21 @@ export class RecentTransactionsController {
       throw new BadRequestException('lenderId is required.');
     }
 
-    if (!body || typeof body.amount !== 'number' || !Number.isFinite(body.amount)) {
+    if (
+      !body ||
+      typeof body.amount !== 'number' ||
+      !Number.isFinite(body.amount)
+    ) {
       throw new BadRequestException('A valid payment amount is required.');
     }
 
-    const details = await this.recentTransactionsService.recordInstallmentPayment(
-      normalizedLenderId,
-      loanId,
-      installmentId,
-      body,
-    );
+    const details =
+      await this.recentTransactionsService.recordInstallmentPayment(
+        normalizedLenderId,
+        loanId,
+        installmentId,
+        body,
+      );
 
     if (!details) {
       throw new NotFoundException(

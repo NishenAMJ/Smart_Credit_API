@@ -33,13 +33,19 @@ export class DashboardController {
   @Get('borrowers')
   getBorrowers(
     @Query('lenderId') lenderId: string | undefined,
-    @Query('limit', new DefaultValuePipe(24), ParseIntPipe) limit: number,
+    @Query('pageSize', new DefaultValuePipe(8), ParseIntPipe) pageSize: number,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
   ): Promise<DashboardBorrowersResponse> {
     if (!lenderId?.trim()) {
       throw new BadRequestException('lenderId is required.');
     }
 
-    return this.dashboardService.getBorrowers(lenderId.trim(), limit);
+    return this.dashboardService.getBorrowers(
+      lenderId.trim(),
+      Number.isFinite(Number(limit)) ? Number(limit) : pageSize,
+      cursor?.trim() || null,
+    );
   }
 
   @Get('borrowers/:id')

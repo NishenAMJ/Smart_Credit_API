@@ -7,7 +7,12 @@ import {
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
 import {
+  applyDateCursor,
+  buildPageInfo,
+  decodeCursor,
   hasRole,
+  encodeCursor,
+  orderByDateAndId,
   readDate,
   readNumber,
   readString,
@@ -26,6 +31,7 @@ import {
   BorrowerDetailsResponse,
   DashboardBorrower,
   DashboardBorrowersResponse,
+  CursorPageInfo,
   DashboardSummaryResponse,
 } from './dashboard.types';
 
@@ -38,6 +44,11 @@ type DashboardLoanRecord = {
   tenureMonths: number;
   status: string;
   createdAt: Date | null;
+};
+
+type DashboardBorrowerPageItem = DashboardBorrower & {
+  cursorDate: Date | null;
+  cursorId: string;
 };
 
 function isDashboardBorrower(
@@ -83,20 +94,23 @@ export class DashboardService {
 
   async getBorrowers(
     lenderId: string,
-    limit = 24,
+    pageSize = 8,
+    cursor?: string | null,
   ): Promise<DashboardBorrowersResponse> {
     const db = this.firebaseService.getDb();
-    const safeLimit = this.clamp(limit, 8, 50);
+    const safePageSize = this.clamp(pageSize, 8, 50);
 
     const relationBorrowers = await this.getBorrowersFromRelations(
       db,
       lenderId,
-      safeLimit,
+      safePageSize,
+      cursor,
     );
 
-    if (relationBorrowers.length > 0) {
+    if (relationBorrowers) {
       return {
-        borrowers: relationBorrowers,
+        borrowers: relationBorrowers.borrowers,
+        pageInfo: relationBorrowers.pageInfo,
         generatedAt: new Date().toISOString(),
       };
     }
@@ -110,7 +124,7 @@ export class DashboardService {
     );
 
     return {
-      borrowers: await this.getRecentBorrowers(db, lenderLoans, safeLimit),
+      ...(await this.getRecentBorrowers(db, lenderLoans, safePageSize, cursor)),
       generatedAt: new Date().toISOString(),
     };
   }
@@ -326,13 +340,20 @@ export class DashboardService {
   private async getRecentBorrowers(
     db: Firestore,
     loans: DashboardLoanRecord[],
-    limit: number,
-  ): Promise<DashboardBorrower[]> {
+    pageSize: number,
+    cursor?: string | null,
+  ): Promise<{
+    borrowers: DashboardBorrower[];
+    pageInfo: CursorPageInfo;
+  }> {
     const borrowerLoanMap = this.groupLoansByBorrower(loans);
     const borrowerIds = Array.from(borrowerLoanMap.keys());
 
     if (borrowerIds.length === 0) {
-      return [];
+      return {
+        borrowers: [],
+        pageInfo: this.createEmptyPageInfo(pageSize),
+      };
     }
 
     const userRefs = borrowerIds.map((borrowerId) =>
@@ -340,7 +361,7 @@ export class DashboardService {
     );
     const snapshots = await db.getAll(...userRefs);
 
-    return snapshots
+    const borrowers = snapshots
       .map((snapshot) =>
         this.mapBorrower(
           snapshot.id,
@@ -359,55 +380,94 @@ export class DashboardService {
 
         return rightTime - leftTime;
       })
-      .slice(0, limit);
+      .map((borrower) => ({
+        ...borrower,
+        cursorDate: borrower.latestLoanCreatedAt
+          ? new Date(borrower.latestLoanCreatedAt)
+          : null,
+        cursorId: borrower.id,
+      }));
+
+    return this.paginateBorrowerItems(borrowers, pageSize, cursor);
   }
 
   private async getBorrowersFromRelations(
     db: Firestore,
     lenderId: string,
-    limit: number,
-  ): Promise<DashboardBorrower[]> {
+    pageSize: number,
+    cursor?: string | null,
+  ): Promise<{
+    borrowers: DashboardBorrower[];
+    pageInfo: CursorPageInfo;
+  } | null> {
     try {
-      const snapshot = await db
+      const query = db
         .collection('lenderBorrowers')
-        .where('lenderId', '==', lenderId)
-        .get();
+        .where('lenderId', '==', lenderId);
+      const batchSize = Math.max(pageSize * 2, pageSize);
+      let currentCursor = cursor ?? null;
+      let exhausted = false;
+      const items: DashboardBorrowerPageItem[] = [];
 
-      if (snapshot.empty) {
-        return [];
+      while (items.length < pageSize + 1 && !exhausted) {
+        const snapshot = await applyDateCursor(
+          orderByDateAndId(query, 'latestLoanCreatedAt'),
+          currentCursor,
+        )
+          .limit(batchSize)
+          .get();
+
+        if (snapshot.empty) {
+          return cursor ? this.createBorrowerPage([], pageSize, false) : null;
+        }
+
+        const borrowerIds = Array.from(
+          new Set(
+            snapshot.docs
+              .map((doc) => readString(doc.data().borrowerId))
+              .filter((id): id is string => Boolean(id)),
+          ),
+        );
+        const userDataById = await this.getUsersByIds(db, borrowerIds);
+
+        for (const doc of snapshot.docs) {
+          const mapped = this.mapBorrowerFromRelation(doc.data(), userDataById);
+
+          if (!mapped) {
+            continue;
+          }
+
+          items.push({
+            ...mapped,
+            cursorDate: readDate(doc.get('latestLoanCreatedAt')),
+            cursorId: doc.id,
+          });
+
+          if (items.length >= pageSize + 1) {
+            break;
+          }
+        }
+
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        currentCursor = encodeCursor(
+          readDate(lastDoc.get('latestLoanCreatedAt')),
+          lastDoc.id,
+        );
+        exhausted = snapshot.docs.length < batchSize || !currentCursor;
       }
 
-      const borrowerIds = Array.from(
-        new Set(
-          snapshot.docs
-            .map((doc) => readString(doc.data().borrowerId))
-            .filter((id): id is string => Boolean(id)),
-        ),
+      return this.createBorrowerPage(
+        items.slice(0, pageSize),
+        pageSize,
+        items.length > pageSize,
       );
-
-      const userDataById = await this.getUsersByIds(db, borrowerIds);
-
-      return snapshot.docs
-        .map((doc) => this.mapBorrowerFromRelation(doc.data(), userDataById))
-        .filter(isDashboardBorrower)
-        .sort((left, right) => {
-          const leftTime = left.latestLoanCreatedAt
-            ? new Date(left.latestLoanCreatedAt).getTime()
-            : 0;
-          const rightTime = right.latestLoanCreatedAt
-            ? new Date(right.latestLoanCreatedAt).getTime()
-            : 0;
-
-          return rightTime - leftTime;
-        })
-        .slice(0, limit);
     } catch (error) {
       this.logFallback(
         'borrowers:lender-relations',
         'Falling back from lenderBorrowers borrower list query.',
         error,
       );
-      return [];
+      return null;
     }
   }
 
@@ -652,6 +712,69 @@ export class DashboardService {
 
   private sum(values: number[]): number {
     return values.reduce((total, value) => total + value, 0);
+  }
+
+  private paginateBorrowerItems(
+    borrowers: DashboardBorrowerPageItem[],
+    pageSize: number,
+    cursor?: string | null,
+  ): {
+    borrowers: DashboardBorrower[];
+    pageInfo: CursorPageInfo;
+  } {
+    const decodedCursor = decodeCursor(cursor);
+    const startIndex = decodedCursor
+      ? borrowers.findIndex((borrower) =>
+          this.isBorrowerAfterCursor(borrower, decodedCursor),
+        )
+      : 0;
+    const safeStartIndex = startIndex < 0 ? borrowers.length : startIndex;
+    const pagedBorrowers = borrowers.slice(safeStartIndex, safeStartIndex + pageSize + 1);
+
+    return this.createBorrowerPage(
+      pagedBorrowers.slice(0, pageSize),
+      pageSize,
+      pagedBorrowers.length > pageSize,
+    );
+  }
+
+  private createBorrowerPage(
+    borrowers: DashboardBorrowerPageItem[],
+    pageSize: number,
+    hasMore: boolean,
+  ): {
+    borrowers: DashboardBorrower[];
+    pageInfo: CursorPageInfo;
+  } {
+    return {
+      borrowers: borrowers.map(
+        ({ cursorDate: _cursorDate, cursorId: _cursorId, ...borrower }) =>
+          borrower,
+      ),
+      pageInfo: buildPageInfo(borrowers, pageSize, hasMore),
+    };
+  }
+
+  private createEmptyPageInfo(pageSize: number): CursorPageInfo {
+    return {
+      pageSize,
+      hasMore: false,
+      nextCursor: null,
+    };
+  }
+
+  private isBorrowerAfterCursor(
+    borrower: DashboardBorrowerPageItem,
+    cursor: { date: Date; id: string },
+  ): boolean {
+    const borrowerTime = borrower.cursorDate ? borrower.cursorDate.getTime() : 0;
+    const cursorTime = cursor.date.getTime();
+
+    if (borrowerTime !== cursorTime) {
+      return borrowerTime < cursorTime;
+    }
+
+    return borrower.cursorId.localeCompare(cursor.id) < 0;
   }
 
   private async sumNestedPaymentsForDateRange(

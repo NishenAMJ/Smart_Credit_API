@@ -26,8 +26,15 @@ export type DashboardSummaryResponse = {
   generatedAt: string
 }
 
+export type CursorPageInfo = {
+  pageSize: number
+  hasMore: boolean
+  nextCursor: string | null
+}
+
 export type DashboardBorrowersResponse = {
   borrowers: DashboardBorrower[]
+  pageInfo: CursorPageInfo
   generatedAt: string
 }
 
@@ -97,12 +104,22 @@ export async function fetchDashboardSummary(
 
 export async function fetchDashboardBorrowers(
   lenderId: string,
-  limit = 24,
+  options: {
+    pageSize?: number
+    cursor?: string | null
+  } = {},
 ): Promise<DashboardBorrowersResponse> {
+  const params = new URLSearchParams({
+    lenderId,
+    pageSize: String(options.pageSize ?? 8),
+  })
+
+  if (options.cursor) {
+    params.set('cursor', options.cursor)
+  }
+
   const response = await fetch(
-    `${API_BASE_URL}/dashboard/borrowers?lenderId=${encodeURIComponent(
-      lenderId,
-    )}&limit=${limit}`,
+    `${API_BASE_URL}/dashboard/borrowers?${params.toString()}`,
   )
 
   if (!response.ok) {

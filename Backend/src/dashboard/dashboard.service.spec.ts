@@ -42,6 +42,52 @@ describe('DashboardService', () => {
     expect(result.generatedAt).toEqual(expect.any(String));
   });
 
+  it('returns paged borrowers with cursor page info from lender relations', async () => {
+    const db = {
+      collection: jest.fn(() => ({
+        where: jest.fn(() => ({
+          get: jest.fn().mockResolvedValue({ docs: [] }),
+        })),
+      })),
+    };
+    const service = new DashboardService({ getDb: () => db } as any);
+
+    jest.spyOn(service as any, 'getBorrowersFromRelations').mockResolvedValue({
+      borrowers: [
+        {
+          id: 'borrower_1',
+          fullName: 'Borrower One',
+          email: 'borrower1@example.com',
+          creditScore: 720,
+          kycStatus: 'verified',
+          loanCount: 2,
+          activeLoansCount: 1,
+          totalBorrowedAmount: 100000,
+          outstandingAmount: 40000,
+          latestLoanStatus: 'active',
+          latestLoanCreatedAt: '2026-04-01T00:00:00.000Z',
+          isActive: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      pageInfo: {
+        pageSize: 8,
+        hasMore: true,
+        nextCursor: 'cursor_1',
+      },
+    });
+
+    const result = await service.getBorrowers('lender_1', 8, null);
+
+    expect(result.borrowers).toHaveLength(1);
+    expect(result.pageInfo).toEqual({
+      pageSize: 8,
+      hasMore: true,
+      nextCursor: 'cursor_1',
+    });
+    expect(result.generatedAt).toEqual(expect.any(String));
+  });
+
   it('falls back overdue count to nested installments when aggregate query fails', async () => {
     const overdueInstallment = createDoc('inst_overdue', { status: 'overdue' });
     const nonOverdueInstallment = createDoc('inst_paid', { status: 'paid' });
