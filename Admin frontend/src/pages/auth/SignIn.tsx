@@ -85,7 +85,7 @@ export default function SignIn() {
               <input
                 type="email"
                 className="input"
-                placeholder="sarah.admin@example.com"
+                placeholder="admin@smartcredit.lk"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -141,10 +141,6 @@ export default function SignIn() {
             </Link>
           </p>
 
-          <div style={styles.demoBox}>
-            <span style={styles.demoLabel}>Test credentials</span>
-            <span style={styles.demoValue}>sarah.admin@example.com / admin123</span>
-          </div>
         </div>
       </div>
     </div>

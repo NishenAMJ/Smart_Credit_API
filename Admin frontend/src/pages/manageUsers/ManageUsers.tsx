@@ -84,6 +84,21 @@ function RoleBadge({ role }: { role: AdminUserRole }) {
   );
 }
 
+function iconButton(color: string, bg: string): CSSProperties {
+  return {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    border: "none",
+    background: bg,
+    color,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+  };
+}
+
 // Keeps user moderation logic and view state together on a single screen.
 export default function ManageUsers() {
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -262,15 +277,15 @@ export default function ManageUsers() {
                   <td><StatusBadge status={user.status} /></td>
                   <td>
                     <div style={S.actionRow}>
-                      <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedUser(user)} title="View">
+                      <button style={iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedUser(user)} title="View">
                         <Eye size={14} />
                       </button>
                       {user.status === "suspended" ? (
-                        <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleActivate(user.id)} title="Activate">
+                        <button style={iconButton("#10B981", "#ECFDF5")} onClick={() => void handleActivate(user.id)} title="Activate">
                           <CheckCircle size={14} />
                         </button>
                       ) : (
-                        <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleSuspend(user.id)} title="Suspend">
+                        <button style={iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleSuspend(user.id)} title="Suspend">
                           <Ban size={14} />
                         </button>
                       )}
@@ -323,7 +338,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)> = {
+const S: Record<string, CSSProperties> = {
   pendingChip: {
     background: "#FEF3C7",
     color: "#92400E",
@@ -396,18 +411,6 @@ const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSPrope
     gap: 6,
     justifyContent: "center",
   },
-  iconButton: (color: string, bg: string) => ({
-    width: 30,
-    height: 30,
-    borderRadius: 6,
-    border: "none",
-    background: bg,
-    color,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-  }),
   modalOverlay: {
     position: "fixed",
     inset: 0,

@@ -11,16 +11,18 @@ describe('AdsService', () => {
   const whereGetMock = jest.fn();
   const nestedWhereGetMock = jest.fn();
   const secondWhereMock = jest.fn(() => ({ get: nestedWhereGetMock }));
-  const whereMock = jest.fn((field: string, op: string, value: string | null) => {
-    if (field === 'lenderId' && op === '!=' && value === null) {
-      return {
-        get: whereGetMock,
-        where: secondWhereMock,
-      };
-    }
+  const whereMock = jest.fn(
+    (field: string, op: string, value: string | null) => {
+      if (field === 'lenderId' && op === '!=' && value === null) {
+        return {
+          get: whereGetMock,
+          where: secondWhereMock,
+        };
+      }
 
-    return { get: whereGetMock };
-  });
+      return { get: whereGetMock };
+    },
+  );
   const docMock = jest.fn(() => ({
     get: getMock,
     update: updateMock,
@@ -59,7 +61,11 @@ describe('AdsService', () => {
       docs: [
         {
           id: 'ad-1',
-          data: () => ({ lenderId: 'lender-1', status: 'approved', title: 'Lender ad' }),
+          data: () => ({
+            lenderId: 'lender-1',
+            status: 'approved',
+            title: 'Lender ad',
+          }),
         },
       ],
     });
@@ -78,7 +84,9 @@ describe('AdsService', () => {
       id: 'ad-2',
     });
 
-    await expect(service.getAdById('ad-2')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.getAdById('ad-2')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('moves an approved lender ad back to pending review', async () => {

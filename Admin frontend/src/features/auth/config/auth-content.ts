@@ -28,14 +28,13 @@ export const authContent: Record<AuthVariant, AuthContent> = {
     heroTitleEnd: "is here.",
     heroDescription: "Manage your platform with full control and real-time insights.",
     subtitle: "Sign in to your admin account",
-    emailPlaceholder: "sarah.admin@example.com",
+    emailPlaceholder: "admin@smartcredit.lk",
     passwordPlaceholder: "Enter your password",
     supportCopy: "Forgot password?",
     primaryAction: "Sign In",
     footerPrompt: "Don't have an account?",
     footerAction: "Create account",
     footerTo: "/signup",
-    demoCredentials: "sarah.admin@example.com / admin123",
     stats: [
       { value: "API", label: "Live Backend" },
       { value: "JWT", label: "Secure Access" },
@@ -57,7 +56,6 @@ export const authContent: Record<AuthVariant, AuthContent> = {
     footerPrompt: "Need an account?",
     footerAction: "Contact admin",
     footerTo: "/signin",
-    demoCredentials: "Use your assigned Smart Credit friends account",
     stats: [
       { value: "LIVE", label: "Realtime Updates" },
       { value: "SAFE", label: "Protected Access" },

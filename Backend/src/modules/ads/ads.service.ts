@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { FieldValue } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { Ad } from './interfaces/ad.interface';
@@ -10,7 +14,11 @@ type ModerationStatus = 'pending' | 'approved' | 'rejected';
 export class AdsService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
-  private mapAd(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot): Ad {
+  private mapAd(
+    doc:
+      | FirebaseFirestore.QueryDocumentSnapshot
+      | FirebaseFirestore.DocumentSnapshot,
+  ): Ad {
     return {
       id: doc.id,
       ...doc.data(),
@@ -31,7 +39,10 @@ export class AdsService {
   async getAllAds(): Promise<{ success: boolean; count: number; ads: Ad[] }> {
     try {
       const db = this.firebaseService.db;
-      const snapshot = await db.collection('ads').where('lenderId', '!=', null).get();
+      const snapshot = await db
+        .collection('ads')
+        .where('lenderId', '!=', null)
+        .get();
 
       const ads: Ad[] = snapshot.docs.map((doc) => this.mapAd(doc));
 
@@ -152,7 +163,12 @@ export class AdsService {
     adId: string,
     status: ModerationStatus,
     options: { reason?: string; notes?: string } = {},
-  ): Promise<{ success: boolean; message: string; adId: string; status: ModerationStatus }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    adId: string;
+    status: ModerationStatus;
+  }> {
     try {
       if (status === 'rejected' && !options.reason?.trim()) {
         throw new BadRequestException('Rejection reason is required');
@@ -187,7 +203,8 @@ export class AdsService {
         updateData.approvedAt = FieldValue.delete();
         updateData.rejectedAt = FieldValue.delete();
         updateData.rejectionReason = FieldValue.delete();
-        updateData.notes = options.notes?.trim() || 'Moved back to pending review by admin';
+        updateData.notes =
+          options.notes?.trim() || 'Moved back to pending review by admin';
       }
 
       await adRef.update(updateData);
@@ -199,7 +216,10 @@ export class AdsService {
         status,
       };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       rethrowFirebaseError(error, 'Failed to update ad status');

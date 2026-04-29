@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
+const bcrypt = require('bcrypt');
 
 const USERS_COLLECTION = 'users';
 const ADS_COLLECTION = 'ads';
@@ -33,6 +34,12 @@ const PAYMENT_TYPES = ['qr', 'receipt', 'manual'];
 const DISPUTE_CATEGORIES = ['payment', 'fraud', 'service', 'other'];
 const DISPUTE_PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const DISPUTE_STATUSES = ['open', 'in-progress', 'escalated', 'resolved'];
+const DISPUTE_CATEGORY_CODES = {
+  payment: 'PAY',
+  fraud: 'FRD',
+  service: 'SRV',
+  other: 'OTH'
+};
 const DISPUTE_REASON_BY_CATEGORY = {
   payment: 'Borrower says repayment was made but lender has not acknowledged it.',
   fraud: 'Borrower reported suspicious lender behavior during the loan process.',
@@ -54,7 +61,7 @@ const LAST_NAMES = [
 /**
  * @typedef {Object} UserDoc
  * @property {string} uid
- * @property {string[]} role
+ * @property {string|string[]} role
  * @property {string} fullName
  * @property {string} photoURL
  * @property {string} phone
@@ -65,6 +72,9 @@ const LAST_NAMES = [
  * @property {number} totalAmountLent
  * @property {number} totalAmountBorrowed
  * @property {"approved"} kycStatus
+ * @property {"active"|"pending"|"suspended"=} status
+ * @property {string=} adminRole
+ * @property {string=} passwordHash
  * @property {FirebaseFirestore.Timestamp} createdAt
  * @property {FirebaseFirestore.Timestamp} updatedAt
  */
@@ -323,6 +333,30 @@ function createUsers(db, now, rng) {
   /** @type {Map<string, UserDoc>} */
   const borrowers = new Map();
   const writes = [];
+
+  const adminUid = 'admin_001';
+  const adminCreatedAt = addDays(now, -30);
+  /** @type {UserDoc} */
+  const adminUser = {
+    uid: adminUid,
+    role: 'admin',
+    fullName: 'System Admin',
+    photoURL: photoURL(adminUid),
+    phone: '+94770000000',
+    email: 'admin@gmail.com',
+    creditScore: 0,
+    rating: 0,
+    totalLoansCompleted: 0,
+    totalAmountLent: 0,
+    totalAmountBorrowed: 0,
+    kycStatus: 'approved',
+    status: 'active',
+    adminRole: 'Super Admin',
+    passwordHash: bcrypt.hashSync('Admin123', 10),
+    createdAt: ts(adminCreatedAt),
+    updatedAt: ts(addDays(adminCreatedAt, 1))
+  };
+  writes.push({ ref: db.collection(USERS_COLLECTION).doc(adminUid), data: adminUser });
 
   for (let i = 1; i <= 15; i += 1) {
     const uid = `lender_${pad(i, 3)}`;
@@ -719,8 +753,9 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
   });
 
   disputeCandidates.slice(0, 12).forEach((candidate, index) => {
-    const disputeRef = db.collection(DISPUTES_COLLECTION).doc();
     const category = DISPUTE_CATEGORIES[index % DISPUTE_CATEGORIES.length];
+    const disputeCode = `DSP-${DISPUTE_CATEGORY_CODES[category]}-${now.getFullYear()}-${pad(index + 1, 3)}`;
+    const disputeRef = db.collection(DISPUTES_COLLECTION).doc(disputeCode);
     const status = DISPUTE_STATUSES[index % DISPUTE_STATUSES.length];
     const priority = DISPUTE_PRIORITIES[(index + 1) % DISPUTE_PRIORITIES.length];
     const createdAt = addDays(now, -randomInt(rng, 1, 45));
@@ -729,8 +764,8 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
 
     /** @type {DisputeDoc} */
     const disputeDoc = {
-      disputeId: disputeRef.id,
-      disputeCode: `DSP-${now.getFullYear()}-${pad(index + 1, 3)}`,
+      disputeId: disputeCode,
+      disputeCode,
       transactionId: candidate.paymentWrite.data.paymentId,
       loanId: candidate.loanId,
       lenderId: candidate.lender.uid,

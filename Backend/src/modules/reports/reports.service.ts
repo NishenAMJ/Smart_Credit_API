@@ -13,7 +13,9 @@ import {
 export class ReportsService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
-  private getPrimaryRole(role: unknown): 'admin' | 'borrower' | 'lender' | null {
+  private getPrimaryRole(
+    role: unknown,
+  ): 'admin' | 'borrower' | 'lender' | null {
     if (Array.isArray(role)) {
       const firstRole = role[0];
       return typeof firstRole === 'string'
@@ -302,14 +304,19 @@ export class ReportsService {
     try {
       const db = this.firebaseService.db;
 
-      const [usersSnapshot, loansSnapshot, requestsSnapshot, disputesSnapshot, txnSnapshot] =
-        await Promise.all([
-          db.collection('users').get(),
-          db.collection('loans').get(),
-          db.collection('loanRequests').get(),
-          db.collection('disputes').get(),
-          db.collection('transactions').get(),
-        ]);
+      const [
+        usersSnapshot,
+        loansSnapshot,
+        requestsSnapshot,
+        disputesSnapshot,
+        txnSnapshot,
+      ] = await Promise.all([
+        db.collection('users').get(),
+        db.collection('loans').get(),
+        db.collection('loanRequests').get(),
+        db.collection('disputes').get(),
+        db.collection('transactions').get(),
+      ]);
 
       let activeDisputes = 0;
       let disputesResolvedToday = 0;
@@ -359,7 +366,9 @@ export class ReportsService {
         }
 
         if (txn.amount) {
-          totalRevenue += Number(txn.platformFee || txn.fee || txn.amount * 0.02);
+          totalRevenue += Number(
+            txn.platformFee || txn.fee || txn.amount * 0.02,
+          );
         }
       });
 

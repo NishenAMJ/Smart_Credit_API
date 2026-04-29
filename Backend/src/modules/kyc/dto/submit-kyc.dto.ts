@@ -1,4 +1,10 @@
-import { IsEmail, IsNotEmpty, IsIn, IsOptional, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsIn,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class SubmitKycDto {
   @IsString()

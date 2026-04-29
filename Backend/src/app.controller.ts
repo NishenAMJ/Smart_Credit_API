@@ -19,10 +19,7 @@ export class AppController {
   @Get('firebase-status')
   async getFirebaseStatus() {
     try {
-      await this.firebaseService.db
-        .collection('_test')
-        .doc('connection')
-        .get();
+      await this.firebaseService.db.collection('_test').doc('connection').get();
 
       return {
         status: 'ok',

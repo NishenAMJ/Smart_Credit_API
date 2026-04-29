@@ -44,6 +44,21 @@ function StatusBadge({ status }: { status: KycStatus }) {
   return <span className={className}>{status}</span>;
 }
 
+function iconButton(color: string, bg: string): CSSProperties {
+  return {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    border: "none",
+    background: bg,
+    color,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+  };
+}
+
 // Keeps KYC review state and moderation actions together on one page.
 export default function KYCApprovals() {
   const [records, setRecords] = useState<KycRow[]>([]);
@@ -198,15 +213,15 @@ export default function KYCApprovals() {
                   <td><StatusBadge status={record.status} /></td>
                   <td>
                     <div style={S.actionRow}>
-                      <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedRecord(record)} title="View">
+                      <button style={iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedRecord(record)} title="View">
                         <Eye size={14} />
                       </button>
                       {record.status === "pending" && (
                         <>
-                          <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleApprove(record.id)} title="Approve">
+                          <button style={iconButton("#10B981", "#ECFDF5")} onClick={() => void handleApprove(record.id)} title="Approve">
                             <Check size={14} />
                           </button>
-                          <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleReject(record.id)} title="Reject">
+                          <button style={iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleReject(record.id)} title="Reject">
                             <X size={14} />
                           </button>
                         </>
@@ -255,7 +270,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)> = {
+const S: Record<string, CSSProperties> = {
   pendingChip: {
     background: "#FEF3C7",
     color: "#92400E",
@@ -309,18 +324,6 @@ const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSPrope
     gap: 6,
     justifyContent: "center",
   },
-  iconButton: (color: string, bg: string) => ({
-    width: 30,
-    height: 30,
-    borderRadius: 6,
-    border: "none",
-    background: bg,
-    color,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-  }),
   modalOverlay: {
     position: "fixed",
     inset: 0,

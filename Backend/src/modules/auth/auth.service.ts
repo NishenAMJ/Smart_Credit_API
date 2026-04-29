@@ -23,7 +23,9 @@ type OtpSession = {
   contact: string;
   otpCode: string;
   userId?: string;
-  registrationPayload?: Omit<RegisterDto, 'password'> & { passwordHash: string };
+  registrationPayload?: Omit<RegisterDto, 'password'> & {
+    passwordHash: string;
+  };
   expiresAt: Timestamp;
   consumedAt?: FirebaseFirestore.FieldValue | FirebaseFirestore.Timestamp;
   createdAt: FirebaseFirestore.FieldValue | FirebaseFirestore.Timestamp;
@@ -107,7 +109,9 @@ export class AuthService {
     const fromNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER');
 
     if (!accountSid || !authToken || !fromNumber) {
-      console.warn(`Twilio is not configured. OTP for ${phoneNumber}: ${otpCode}`);
+      console.warn(
+        `Twilio is not configured. OTP for ${phoneNumber}: ${otpCode}`,
+      );
       return { channel: 'console', contact: phoneNumber };
     }
 
@@ -172,7 +176,9 @@ export class AuthService {
     try {
       const existingUser = await this.getUserByIdentifier(dto.email);
       if (existingUser) {
-        throw new ConflictException('An account with this email already exists');
+        throw new ConflictException(
+          'An account with this email already exists',
+        );
       }
 
       const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -202,14 +208,19 @@ export class AuthService {
     try {
       const user = await this.getUserByIdentifier(dto.identifier);
       if (!user) {
-        throw new NotFoundException('No user found for that email or phone number');
+        throw new NotFoundException(
+          'No user found for that email or phone number',
+        );
       }
 
       if (!user.passwordHash) {
         throw new UnauthorizedException('Password is not set for this account');
       }
 
-      const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
+      const passwordMatch = await bcrypt.compare(
+        dto.password,
+        user.passwordHash,
+      );
       if (!passwordMatch) {
         throw new UnauthorizedException('Invalid credentials');
       }
@@ -230,7 +241,9 @@ export class AuthService {
 
   async resendOtp(otpSessionId: string) {
     try {
-      const sessionRef = this.db.collection('authOtpSessions').doc(otpSessionId);
+      const sessionRef = this.db
+        .collection('authOtpSessions')
+        .doc(otpSessionId);
       const sessionSnapshot = await sessionRef.get();
 
       if (!sessionSnapshot.exists) {
@@ -259,7 +272,9 @@ export class AuthService {
         throw new BadRequestException('otpSessionId is required');
       }
 
-      const sessionRef = this.db.collection('authOtpSessions').doc(dto.otpSessionId);
+      const sessionRef = this.db
+        .collection('authOtpSessions')
+        .doc(dto.otpSessionId);
       const sessionSnapshot = await sessionRef.get();
 
       if (!sessionSnapshot.exists) {
@@ -287,7 +302,9 @@ export class AuthService {
 
       if (dto.purpose === 'login') {
         if (!session.userId) {
-          throw new BadRequestException('Login session is missing user information');
+          throw new BadRequestException(
+            'Login session is missing user information',
+          );
         }
 
         const userRef = this.db.collection('users').doc(session.userId);

@@ -21,6 +21,15 @@ const SEVERITY_META: Record<AuditSeverity, { color: string; bg: string }> = {
   critical: { color: "#991B1B", bg: "#FEE2E2" },
 };
 
+function splitDateTime(dateTime: string) {
+  if (!dateTime || dateTime === "N/A") {
+    return { date: "N/A", time: "" };
+  }
+
+  const [date, time] = dateTime.split(" ");
+  return { date: date || dateTime, time: time || "" };
+}
+
 // Keeps audit filtering and export logic close to the data it operates on.
 export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
@@ -142,7 +151,7 @@ export default function AuditLogs() {
               <th>Description</th>
               <th>Performed By</th>
               <th>Target</th>
-              <th>Date</th>
+              <th style={S.dateHeader}>Date</th>
               <th>Severity</th>
               <th style={{ textAlign: "center" }}>Details</th>
             </tr>
@@ -159,6 +168,7 @@ export default function AuditLogs() {
                 const action = ACTION_META[log.actionType] || ACTION_META.system_event;
                 const Icon = action.icon;
                 const severity = SEVERITY_META[log.severity];
+                const dateParts = splitDateTime(log.dateTime);
 
                 return (
                   <tr key={log.id}>
@@ -178,7 +188,10 @@ export default function AuditLogs() {
                         <div style={{ fontSize: 11, color: "#9CA3AF" }}>{log.targetType}</div>
                       </div>
                     </td>
-                    <td>{log.dateTime}</td>
+                    <td style={S.dateCell}>
+                      <div style={S.dateText}>{dateParts.date}</div>
+                      {dateParts.time && <div style={S.timeText}>{dateParts.time}</div>}
+                    </td>
                     <td>
                       <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, color: severity.color, background: severity.bg }}>
                         {log.severity}
@@ -229,7 +242,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)> = {
+const S: Record<string, CSSProperties> = {
   errorCard: {
     marginBottom: 16,
     color: "#991B1B",
@@ -260,6 +273,26 @@ const S: Record<string, CSSProperties | ((color: string, bg: string) => CSSPrope
     textAlign: "center",
     padding: 40,
     color: "#6B7280",
+  },
+  dateHeader: {
+    minWidth: 118,
+  },
+  dateCell: {
+    minWidth: 118,
+    whiteSpace: "nowrap",
+  },
+  dateText: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
+  },
+  timeText: {
+    color: "#6B7280",
+    fontSize: 12,
+    fontWeight: 500,
+    fontVariantNumeric: "tabular-nums",
+    marginTop: 3,
   },
   viewButton: {
     border: "1px solid #E5E7EB",

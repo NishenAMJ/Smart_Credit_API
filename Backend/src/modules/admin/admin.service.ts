@@ -6,12 +6,7 @@ import {
 import * as admin from 'firebase-admin';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
-import {
-  FirestoreTimestampLike,
-  User,
-  UserRole,
-  UserStatus,
-} from './interfaces/user.interface';
+import { User, UserRole, UserStatus } from './interfaces/user.interface';
 import { QueryUsersDto } from './dto/query-users.dto';
 
 @Injectable()
@@ -24,7 +19,7 @@ export class AdminService {
 
   private getPrimaryRole(role?: User['role']): UserRole {
     if (Array.isArray(role)) {
-      return (role[0] as UserRole) ?? 'borrower';
+      return role[0] ?? 'borrower';
     }
 
     return role ?? 'borrower';
@@ -56,17 +51,34 @@ export class AdminService {
 
   // Removes sensitive fields before user records are returned to the client.
   private sanitizeUser(id: string, data: FirebaseFirestore.DocumentData): User {
-    const { passwordHash, ...sanitizedData } = data;
-    const { firstName, lastName } = this.splitName(sanitizedData.fullName);
+    const sanitizedData = { ...data } as Partial<User> &
+      Record<string, unknown>;
+    delete sanitizedData.passwordHash;
+
+    const storedFullName =
+      typeof sanitizedData.fullName === 'string'
+        ? sanitizedData.fullName
+        : undefined;
+    const storedFirstName =
+      typeof sanitizedData.firstName === 'string'
+        ? sanitizedData.firstName
+        : undefined;
+    const storedLastName =
+      typeof sanitizedData.lastName === 'string'
+        ? sanitizedData.lastName
+        : undefined;
+    const storedUid =
+      typeof sanitizedData.uid === 'string' ? sanitizedData.uid : id;
+    const { firstName, lastName } = this.splitName(storedFullName);
 
     return {
       id,
-      uid: sanitizedData.uid ?? id,
+      uid: storedUid,
       role: this.getPrimaryRole(sanitizedData.role),
       status: this.getDerivedStatus(sanitizedData),
-      fullName: sanitizedData.fullName,
-      firstName: sanitizedData.firstName ?? firstName,
-      lastName: sanitizedData.lastName ?? lastName,
+      fullName: storedFullName,
+      firstName: storedFirstName ?? firstName,
+      lastName: storedLastName ?? lastName,
       ...sanitizedData,
     } as User;
   }
@@ -227,6 +239,7 @@ export class AdminService {
 
       await userRef.update({
         status: 'active',
+        activatedAt: admin.firestore.FieldValue.serverTimestamp(),
         suspendedAt: admin.firestore.FieldValue.delete(),
         suspensionReason: admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),

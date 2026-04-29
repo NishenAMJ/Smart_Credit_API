@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { KycDocument } from './interfaces/kyc-document.interface';
@@ -17,7 +14,9 @@ export class KycService {
   }
 
   private mapUserToKycDocument(
-    doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot,
+    doc:
+      | FirebaseFirestore.QueryDocumentSnapshot
+      | FirebaseFirestore.DocumentSnapshot,
   ): KycDocument {
     const data = doc.data() ?? {};
 

@@ -98,7 +98,9 @@ export class AuthService {
         .get();
 
       if (!existingUser.empty) {
-        throw new ConflictException('An account with this email already exists');
+        throw new ConflictException(
+          'An account with this email already exists',
+        );
       }
 
       const passwordHash = await bcrypt.hash(dto.password, 10);
