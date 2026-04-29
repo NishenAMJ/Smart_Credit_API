@@ -12,6 +12,13 @@ function normalizeProfile(profile: Partial<BorrowerProfile>): BorrowerProfile {
     fullName: String(profile.fullName ?? ""),
     email: String(profile.email ?? ""),
     phone: String(profile.phone ?? ""),
+    photoURL: String(profile.photoURL ?? ""),
+    profilePicture: String(profile.profilePicture ?? ""),
+    profilePictureUrl: String(profile.profilePictureUrl ?? ""),
+    profilePicUrl: String(profile.profilePicUrl ?? ""),
+    profilePhotoUrl: String(profile.profilePhotoUrl ?? ""),
+    imageUrl: String(profile.imageUrl ?? ""),
+    avatarUrl: String(profile.avatarUrl ?? ""),
     nic: String(profile.nic ?? ""),
     dateOfBirth: String(profile.dateOfBirth ?? ""),
     createdAt: toIsoDate(profile.createdAt),
@@ -34,7 +41,8 @@ export const profileService = {
     if (!userId) throw new Error("User session expired. Please log in again.");
 
     const response = await apiClient.get(ENDPOINTS.profile.get(userId));
-    return normalizeProfile(response.data ?? {});
+    const profilePayload = response.data?.data?.data ?? response.data?.data ?? response.data ?? {};
+    return normalizeProfile(profilePayload);
   },
 
   updateMyProfile: async (data: {

@@ -53,7 +53,7 @@ export default function CreditScoreScreen({
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size='large' color='#007AFF' />
       </View>
     );
   }
@@ -64,11 +64,11 @@ export default function CreditScoreScreen({
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name="arrow-left" size={24} color="#FFFFFF" />
+          <Feather name='arrow-left' size={24} color='#FFFFFF' />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Smart Credit Score</Text>
         <TouchableOpacity onPress={() => navigation.navigate("CreditHistory")}>
-          <Feather name="clock" size={20} color="#FFFFFF" />
+          <Feather name='clock' size={20} color='#FFFFFF' />
         </TouchableOpacity>
       </View>
 
@@ -87,7 +87,7 @@ export default function CreditScoreScreen({
             {[1, 2, 3, 4].map((star) => (
               <Feather
                 key={star}
-                name="star"
+                name='star'
                 size={20}
                 color={
                   (creditData?.smartScore || 0) >= star * 200
@@ -97,13 +97,6 @@ export default function CreditScoreScreen({
               />
             ))}
           </View>
-        </View>
-
-        <View style={styles.limitCard}>
-          <Text style={styles.limitLabel}>Credit Limit</Text>
-          <Text style={styles.limitAmount}>
-            LKR {creditData?.creditLimit?.toLocaleString() || "0"}
-          </Text>
         </View>
 
         <View style={styles.breakdownCard}>
@@ -143,15 +136,15 @@ export default function CreditScoreScreen({
         <View style={styles.tipsCard}>
           <Text style={styles.sectionTitle}>Tips to Improve</Text>
           <View style={styles.tip}>
-            <Feather name="check-circle" size={20} color="#10B981" />
+            <Feather name='check-circle' size={20} color='#10B981' />
             <Text style={styles.tipText}>Pay all loans on time</Text>
           </View>
           <View style={styles.tip}>
-            <Feather name="check-circle" size={20} color="#10B981" />
+            <Feather name='check-circle' size={20} color='#10B981' />
             <Text style={styles.tipText}>Maintain low balance</Text>
           </View>
           <View style={styles.tip}>
-            <Feather name="check-circle" size={20} color="#10B981" />
+            <Feather name='check-circle' size={20} color='#10B981' />
             <Text style={styles.tipText}>Avoid multiple loan applications</Text>
           </View>
         </View>
@@ -226,29 +219,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  limitCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 15,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  limitLabel: {
-    fontSize: 15,
-    color: "#6B7280",
-  },
-  limitAmount: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1A1A1A",
-  },
+
   breakdownCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,

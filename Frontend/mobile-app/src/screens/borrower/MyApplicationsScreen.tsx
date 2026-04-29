@@ -130,7 +130,9 @@ export default function MyApplicationsScreen({
       <FlatList
         data={filteredApplications}
         renderItem={renderApplication}
-        keyExtractor={(item, index) => item.applicationId ?? String(index)}
+        keyExtractor={(item, index) =>
+          item.requestId ?? item.applicationId ?? String(index)
+        }
         contentContainerStyle={styles.listContainer}
         refreshControl={
           <RefreshControl

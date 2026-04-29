@@ -11,7 +11,10 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
-import type { BorrowerApplication, ApplicationStatus } from "../../types/borrower";
+import type {
+  BorrowerApplication,
+  ApplicationStatus,
+} from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
 
 type ApplicationDetailsScreenProps = {
@@ -23,22 +26,26 @@ type ApplicationDetailsScreenProps = {
   navigation: BorrowerNavigation;
 };
 
-const STATUS_STEPS: { key: ApplicationStatus | string; label: string; icon: string }[] = [
-  { key: "draft",        label: "Draft",        icon: "edit-3" },
-  { key: "pending",      label: "Submitted",    icon: "send" },
+const STATUS_STEPS: {
+  key: ApplicationStatus | string;
+  label: string;
+  icon: string;
+}[] = [
+  { key: "draft", label: "Draft", icon: "edit-3" },
+  { key: "pending", label: "Submitted", icon: "send" },
   { key: "under_review", label: "Under Review", icon: "eye" },
-  { key: "approved",     label: "Approved",     icon: "check-circle" },
-  { key: "funded",       label: "Funded",       icon: "dollar-sign" },
+  { key: "approved", label: "Approved", icon: "check-circle" },
+  { key: "funded", label: "Funded", icon: "dollar-sign" },
 ];
 
 const STATUS_COLOR: Record<string, string> = {
-  draft:        "#9CA3AF",
-  pending:      "#F59E0B",
+  draft: "#9CA3AF",
+  pending: "#F59E0B",
   under_review: "#3B82F6",
-  approved:     "#10B981",
-  funded:       "#059669",
-  rejected:     "#EF4444",
-  cancelled:    "#6B7280",
+  approved: "#10B981",
+  funded: "#059669",
+  rejected: "#EF4444",
+  cancelled: "#6B7280",
 };
 
 function getStatusLabel(status?: string) {
@@ -73,17 +80,24 @@ export default function ApplicationDetailsScreen({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="arrow-left" size={22} color="#FFFFFF" />
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Feather name='arrow-left' size={22} color='#FFFFFF' />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Application Details</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Status Badge */}
-        <View style={[styles.statusBadgeCard, { borderLeftColor: statusColor }]}>
+        <View
+          style={[styles.statusBadgeCard, { borderLeftColor: statusColor }]}
+        >
           <View>
             <Text style={styles.statusBadgeLabel}>Application Status</Text>
             <Text style={[styles.statusBadgeValue, { color: statusColor }]}>
@@ -108,8 +122,8 @@ export default function ApplicationDetailsScreen({
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Requested Amount</Text>
             <Text style={styles.infoValue}>
-              {application?.requestedAmount
-                ? `LKR ${application.requestedAmount.toLocaleString()}`
+              {application?.amount
+                ? `LKR ${application.amount.toLocaleString()}`
                 : "—"}
             </Text>
           </View>
@@ -117,13 +131,17 @@ export default function ApplicationDetailsScreen({
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Submitted On</Text>
-            <Text style={styles.infoValue}>{formatDate(application?.createdAt)}</Text>
+            <Text style={styles.infoValue}>
+              {formatDate(application?.createdAt)}
+            </Text>
           </View>
           <View style={styles.divider} />
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Last Updated</Text>
-            <Text style={styles.infoValue}>{formatDate(application?.updatedAt)}</Text>
+            <Text style={styles.infoValue}>
+              {formatDate(application?.updatedAt)}
+            </Text>
           </View>
 
           {application?.purposeDescription ? (
@@ -131,7 +149,12 @@ export default function ApplicationDetailsScreen({
               <View style={styles.divider} />
               <View style={styles.infoColumn}>
                 <Text style={styles.infoLabel}>Description</Text>
-                <Text style={[styles.infoValue, { marginTop: 4, textAlign: "left" }]}>
+                <Text
+                  style={[
+                    styles.infoValue,
+                    { marginTop: 4, textAlign: "left" },
+                  ]}
+                >
                   {application.purposeDescription}
                 </Text>
               </View>
@@ -145,7 +168,7 @@ export default function ApplicationDetailsScreen({
 
           {isRejected ? (
             <View style={styles.rejectedBanner}>
-              <Feather name="x-circle" size={20} color="#EF4444" />
+              <Feather name='x-circle' size={20} color='#EF4444' />
               <Text style={styles.rejectedText}>
                 This application was {getStatusLabel(status).toLowerCase()}.
               </Text>
@@ -176,7 +199,9 @@ export default function ApplicationDetailsScreen({
                       <View
                         style={[
                           styles.timelineLine,
-                          isCompleted && index < currentStep && styles.timelineLineDone,
+                          isCompleted &&
+                            index < currentStep &&
+                            styles.timelineLineDone,
                         ]}
                       />
                     )}
@@ -206,7 +231,7 @@ export default function ApplicationDetailsScreen({
             style={styles.editButton}
             onPress={() => navigation.goBack()}
           >
-            <Feather name="edit-2" size={16} color="#FFFFFF" />
+            <Feather name='edit-2' size={16} color='#FFFFFF' />
             <Text style={styles.editButtonText}>Continue Editing</Text>
           </TouchableOpacity>
         )}
@@ -244,7 +269,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
   },
-  statusBadgeLabel: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 },
+  statusBadgeLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
   statusBadgeValue: { fontSize: 18, fontWeight: "700" },
   statusDot: { width: 12, height: 12, borderRadius: 6 },
   card: {

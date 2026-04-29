@@ -6,6 +6,8 @@ import {
   ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { CreateBorrowerProfileDto } from './dto/create-profile.dto';
 import { UpdateBorrowerProfileDto } from './dto/update-profile.dto';
@@ -24,7 +26,7 @@ import {
   RepaymentStatus,
   BorrowerDashboard,
 } from './interfaces/borrower.interface';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { instanceToPlain } from 'class-transformer';
 import { BORROWER_DEFAULTS, BORROWER_FLOW } from './borrower.constants';
 
@@ -35,16 +37,31 @@ type TimestampLike =
   | null
   | undefined;
 
+type QrTokenPayload = {
+  loanId: string;
+  borrowerId: string;
+  amount: number;
+  nonce: string;
+  issuedAt: number;
+};
+
 @Injectable()
 export class BorrowerService {
   // Firestore collection names used by borrower workflows.
+  private readonly USERS_COL = 'users';
   private readonly BORROWERS_COL = 'borrowers';
   private readonly LOAN_APPS_COL = 'loanRequests';
 
   private readonly LOANS_COL = 'loans';
+  private readonly ADS_COL = 'ads';
   private readonly REPAYMENTS_COL = 'repayments';
+  private readonly QR_NONCES_COL = 'qrNonces';
 
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
 
   private get db() {
     return this.firebaseService.db;
@@ -58,28 +75,61 @@ export class BorrowerService {
     }
 
     try {
-      const userDoc = await this.db.collection('users').doc(borrowerId).get();
-      const profileData = userDoc.exists ? userDoc.data() : {};
+      const profileDoc = await this.db
+        .collection(this.BORROWERS_COL)
+        .doc(borrowerId)
+        .get();
+      // Fallback to 'users' collection if borrower profile doesn't exist yet
+      let profileData = profileDoc.exists ? profileDoc.data() : null;
+
+      if (!profileData) {
+        const userDoc = await this.db.collection('users').doc(borrowerId).get();
+        profileData = userDoc.exists ? userDoc.data() : {};
+      }
 
       const loansSnapshot = await this.db
         .collection('loans')
         .where('borrowerId', '==', borrowerId)
-        .where('status', '==', 'active')
         .get();
 
       let activeLoansCount = 0;
       let totalOutstanding = 0;
+      let totalBorrowed = 0;
+      let totalRepaid = 0;
       let nextPaymentAmount = 0;
-      let nextPaymentDate = null;
+      let nextDueDate: TimestampLike = null;
 
       loansSnapshot.forEach((doc) => {
-        activeLoansCount++;
-        const loan = doc.data();
-        totalOutstanding += loan.outstandingBalance || 0;
-        
-        if (!nextPaymentDate && loan.nextDueDate) {
-          nextPaymentDate = loan.nextDueDate;
-          nextPaymentAmount = loan.monthlyInstallment || 0;
+        const data = doc.data();
+        const loan = this.normalizeLoanDocument(data, doc.id);
+
+        // Sum total principal ever borrowed
+        totalBorrowed += loan.principalAmount || 0;
+
+        // Calculate total repaid (Total Repayable - Current Outstanding)
+        const totalRepayable =
+          (loan.principalAmount || 0) + this.toNumber(data.totalInterest);
+        const repaidOnThisLoan = Math.max(
+          0,
+          totalRepayable - (loan.outstandingBalance || 0),
+        );
+        totalRepaid += repaidOnThisLoan;
+
+        if (data.status === 'active') {
+          activeLoansCount++;
+          totalOutstanding += loan.outstandingBalance || 0;
+
+          if (loan.nextDueDate) {
+            const loanDate = new Date(this.timestampToMillis(loan.nextDueDate));
+            const currentNextDate = nextDueDate
+              ? new Date(this.timestampToMillis(nextDueDate))
+              : null;
+
+            if (!currentNextDate || loanDate < currentNextDate) {
+              nextDueDate = loan.nextDueDate;
+              nextPaymentAmount = loan.monthlyInstallment || 0;
+            }
+          }
         }
       });
 
@@ -94,11 +144,11 @@ export class BorrowerService {
         activeLoans: activeLoansCount,
         pendingApplications: appsSnapshot.size,
         totalOutstanding,
-        nextPaymentDate,
+        nextDueDate,
         nextPaymentAmount,
         creditScore: profileData?.creditScore || 0,
-        totalBorrowed: profileData?.totalBorrowed || 0,
-        totalRepaid: profileData?.totalRepaid || 0,
+        totalBorrowed,
+        totalRepaid,
       };
 
       return {
@@ -127,10 +177,9 @@ export class BorrowerService {
       }
 
       const snapshot = await query.get();
-      const loans = snapshot.docs.map((doc) => ({
-        loanId: doc.id,
-        ...doc.data(),
-      }));
+      const loans = snapshot.docs.map((doc) =>
+        this.normalizeLoanDocument(doc.data(), doc.id),
+      );
 
       return {
         statusCode: 200,
@@ -167,7 +216,6 @@ export class BorrowerService {
   }
 
   private timestampToMillis(value: TimestampLike): number {
-    // Normalize Firestore timestamps and Date values for stable sorting.
     if (!value) {
       return 0;
     }
@@ -187,6 +235,140 @@ export class BorrowerService {
     return 0;
   }
 
+  private toNumber(value: unknown, fallback = 0): number {
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback;
+  }
+
+  private toTimestamp(value: unknown): FirebaseFirestore.Timestamp | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      if ('toDate' in value && typeof value.toDate === 'function') {
+        const date = value.toDate();
+        if (date instanceof Date) {
+          return Timestamp.fromDate(date);
+        }
+      }
+    }
+
+    if (value instanceof Date) {
+      return Timestamp.fromDate(value);
+    }
+
+    return undefined;
+  }
+
+  private normalizeLoanStatus(value: unknown): LoanStatus {
+    const status = String(value ?? '').toLowerCase();
+
+    if (Object.values(LoanStatus).includes(status as LoanStatus)) {
+      return status as LoanStatus;
+    }
+
+    return LoanStatus.ACTIVE;
+  }
+
+  private normalizeLoanDocument(
+    data: FirebaseFirestore.DocumentData,
+    documentId?: string,
+  ): Loan {
+    const now = Timestamp.now();
+    const status = this.normalizeLoanStatus(data.status);
+    const createdAt = this.toTimestamp(data.createdAt) ?? now;
+    const updatedAt = this.toTimestamp(data.updatedAt) ?? createdAt;
+    const startDate = this.toTimestamp(data.startDate) ?? createdAt;
+    const nextDueDate = this.toTimestamp(data.nextDueDate) ?? startDate;
+    const endDate = this.toTimestamp(data.endDate) ?? nextDueDate;
+
+    const principalAmount = this.toNumber(data.principalAmount);
+    const tenureMonths = this.toNumber(data.tenureMonths);
+    const totalRepayable = this.toNumber(
+      data.totalRepayable,
+      principalAmount + this.toNumber(data.totalInterest),
+    );
+    const monthlyInstallment = this.toNumber(
+      data.monthlyInstallment,
+      tenureMonths > 0 ? Math.round(totalRepayable / tenureMonths) : 0,
+    );
+    const outstandingBalance = this.toNumber(
+      data.outstandingBalance,
+      status === LoanStatus.COMPLETED ? 0 : totalRepayable || principalAmount,
+    );
+
+    return {
+      loanId: String(data.loanId ?? documentId ?? ''),
+      requestId: String(data.requestId ?? ''),
+      borrowerId: String(data.borrowerId ?? ''),
+      lenderId: String(data.lenderId ?? ''),
+      lenderName: data.lenderName ? String(data.lenderName) : undefined,
+      principalAmount,
+      interestRate: this.toNumber(data.interestRate),
+      tenureMonths,
+      monthlyInstallment,
+      outstandingBalance,
+      totalInterest: this.toNumber(
+        data.totalInterest,
+        Math.max(0, totalRepayable - principalAmount),
+      ),
+      status,
+      startDate,
+      nextDueDate,
+      endDate,
+      repaymentsMade: this.toNumber(data.repaymentsMade),
+      createdAt,
+      updatedAt,
+    };
+  }
+
+  private normalizeAdDocument(
+    data: FirebaseFirestore.DocumentData,
+    documentId?: string,
+  ): Partial<Loan> & Record<string, unknown> {
+    const adId = String(data.adId ?? documentId ?? '');
+    const maxAmount = this.toNumber(data.maxAmount);
+    const durationMonths = this.toNumber(
+      data.maxTenureMonths,
+      this.toNumber(data.tenureMonths),
+    );
+
+    return {
+      ...data,
+      adId,
+      loanId: adId,
+      lenderId: data.lenderId,
+      lenderName: data.lenderName,
+      lenderLocation: data.location,
+      principalAmount: maxAmount,
+      maxAmount,
+      minAmount: this.toNumber(data.minAmount),
+      amount: maxAmount,
+      interestRate: this.toNumber(data.preferredInterestRate),
+      durationMonths,
+      tenureMonths: durationMonths,
+      isFeatured: data.status === 'active',
+    };
+  }
+
+  private readDisplayName(
+    data?: FirebaseFirestore.DocumentData,
+  ): string | null {
+    const name =
+      typeof data?.fullName === 'string' && data.fullName.trim().length > 0
+        ? data.fullName
+        : typeof data?.displayName === 'string' &&
+            data.displayName.trim().length > 0
+          ? data.displayName
+          : typeof data?.name === 'string' && data.name.trim().length > 0
+            ? data.name
+            : null;
+
+    return name?.trim() ?? null;
+  }
+
   /**
    * Batch-fetches lender display names from the borrowers collection.
    * Returns a Map of lenderId → fullName.
@@ -197,21 +379,44 @@ export class BorrowerService {
 
     if (unique.length === 0) return nameMap;
 
+    await Promise.all(
+      unique.map(async (lenderId) => {
+        const doc = await this.db
+          .collection(this.USERS_COL)
+          .doc(lenderId)
+          .get();
+        if (!doc?.exists) return;
+
+        const name = this.readDisplayName(doc.data());
+        if (name) {
+          nameMap.set(lenderId, name);
+        }
+      }),
+    );
+
     // Firestore `in` queries support max 30 values; chunk if needed.
-    const chunks: string[][] = [];
-    for (let i = 0; i < unique.length; i += 30) {
-      chunks.push(unique.slice(i, i + 30));
-    }
+    for (const field of ['uid', 'userId']) {
+      const missing = unique.filter((lenderId) => !nameMap.has(lenderId));
+      if (missing.length === 0) break;
 
-    for (const chunk of chunks) {
-      const snapshot = await this.db
-        .collection(this.BORROWERS_COL)
-        .where('userId', 'in', chunk)
-        .get();
+      for (let i = 0; i < missing.length; i += 30) {
+        const chunk = missing.slice(i, i + 30);
+        const snapshot = await this.db
+          .collection(this.USERS_COL)
+          .where(field, 'in', chunk)
+          .get();
 
-      for (const doc of snapshot.docs) {
-        const data = doc.data() as BorrowerProfile;
-        nameMap.set(data.userId, data.fullName ?? 'Lender');
+        for (const doc of snapshot?.docs ?? []) {
+          const data = doc.data() as {
+            uid?: string;
+            userId?: string;
+          };
+          const lenderId = data.uid ?? data.userId ?? doc.id;
+          const name = this.readDisplayName(data);
+          if (name) {
+            nameMap.set(lenderId, name);
+          }
+        }
       }
     }
 
@@ -260,6 +465,19 @@ export class BorrowerService {
       .doc(plainDto.userId)
       .set(profileData);
 
+    // Sync back to 'users' collection to ensure identity consistency
+    try {
+      await this.db.collection('users').doc(plainDto.userId).update({
+        fullName: plainDto.fullName,
+        email: plainDto.email,
+        updatedAt: now,
+      });
+    } catch (e) {
+      console.warn(
+        `[BorrowerService] Could not sync back to users collection during creation: ${e}`,
+      );
+    }
+
     const created = await this.db
       .collection(this.BORROWERS_COL)
       .doc(plainDto.userId)
@@ -269,7 +487,10 @@ export class BorrowerService {
   }
 
   async getProfile(userId: string): Promise<BorrowerProfile> {
-    const doc = await this.db.collection(this.BORROWERS_COL).doc(userId).get();
+    const [doc, userDoc] = await Promise.all([
+      this.db.collection(this.BORROWERS_COL).doc(userId).get(),
+      this.db.collection('users').doc(userId).get(),
+    ]);
 
     if (!doc.exists) {
       throw new NotFoundException(
@@ -277,7 +498,48 @@ export class BorrowerService {
       );
     }
 
-    return { userId: doc.id, ...doc.data() } as BorrowerProfile;
+    const profileData = doc.data() ?? {};
+    const userData = userDoc.data() ?? {};
+    const pickProfileImageUrl = (
+      ...values: unknown[]
+    ): string => {
+      const value = values.find(
+        (item) => typeof item === 'string' && item.trim().length > 0,
+      );
+
+      return typeof value === 'string' ? value.trim() : '';
+    };
+    const photoURL =
+      pickProfileImageUrl(
+        profileData.photoURL,
+        profileData.profilePictureUrl,
+        profileData.profilePicUrl,
+        profileData.profilePhotoUrl,
+        profileData.profilePicture,
+        profileData.imageUrl,
+        profileData.avatarUrl,
+        userData.photoURL,
+        userData.profilePictureUrl,
+        userData.profilePicUrl,
+        userData.profilePhotoUrl,
+        userData.profilePicture,
+        userData.imageUrl,
+        userData.avatarUrl,
+      );
+
+    return {
+      userId: doc.id,
+      ...profileData,
+      photoURL,
+      profilePicture: profileData.profilePicture ?? userData.profilePicture,
+      profilePictureUrl:
+        profileData.profilePictureUrl ?? userData.profilePictureUrl,
+      profilePicUrl: profileData.profilePicUrl ?? userData.profilePicUrl,
+      profilePhotoUrl:
+        profileData.profilePhotoUrl ?? userData.profilePhotoUrl,
+      imageUrl: profileData.imageUrl ?? userData.imageUrl,
+      avatarUrl: profileData.avatarUrl ?? userData.avatarUrl,
+    } as BorrowerProfile;
   }
 
   async updateProfile(
@@ -300,6 +562,21 @@ export class BorrowerService {
     };
 
     await this.db.collection(this.BORROWERS_COL).doc(userId).update(updateData);
+
+    // Sync to 'users' collection if name changed
+    const userUpdate: Record<string, any> = {};
+    if (dto.fullName) userUpdate.fullName = dto.fullName;
+
+    if (Object.keys(userUpdate).length > 0) {
+      try {
+        await this.db.collection('users').doc(userId).update(userUpdate);
+      } catch (e) {
+        // Ignore if user doc doesn't exist or isn't updatable
+        console.warn(
+          `[BorrowerService] Could not sync to users collection: ${e}`,
+        );
+      }
+    }
 
     return this.getProfile(userId);
   }
@@ -339,16 +616,16 @@ export class BorrowerService {
     const applicationData = {
       requestId: appRef.id,
       ...plainDto,
+      purpose: plainDto.loanPurpose,
 
-      // Denormalized fields for Mahinsa's Lender UI
       borrowerName: profile.fullName || 'Unknown',
       borrowerPhotoURL: (profile as any).photoURL || '',
       borrowerRating: (profile as any).rating || 0,
       smartScore: profile.creditScore || 0,
       borrowerCreditScore: profile.creditScore || 0,
 
-      // Status as lowercase to match Mahinsa's schema
-      status: LoanApplicationStatus.PENDING,
+      // Start as draft so mobile can save first and submit explicitly.
+      status: LoanApplicationStatus.DRAFT,
       createdAt: now,
       updatedAt: now,
     };
@@ -490,7 +767,7 @@ export class BorrowerService {
     }
 
     await this.db.collection(this.LOAN_APPS_COL).doc(applicationId).update({
-      status: LoanApplicationStatus.PENDING,
+      status: LoanApplicationStatus.OPEN,
       submittedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -511,12 +788,34 @@ export class BorrowerService {
     }
 
     const snapshot = await query.get();
-    const loans = snapshot.docs.map((doc) => ({ ...doc.data() }) as Loan);
+    const loans = snapshot.docs.map((doc) =>
+      this.normalizeLoanDocument(doc.data(), doc.id),
+    );
 
     return loans.sort(
       (a, b) =>
         this.timestampToMillis(b.createdAt) -
         this.timestampToMillis(a.createdAt),
+    );
+  }
+
+  /**
+   * Lists active lender ads for borrower loan discovery.
+   */
+  async getActiveLoanAds() {
+    const snapshot = await this.db
+      .collection(this.ADS_COL)
+      .where('status', '==', 'active')
+      .get();
+
+    const ads = snapshot.docs.map((doc) =>
+      this.normalizeAdDocument(doc.data(), doc.id),
+    );
+
+    return ads.sort(
+      (a, b) =>
+        this.timestampToMillis(b.createdAt as TimestampLike) -
+        this.timestampToMillis(a.createdAt as TimestampLike),
     );
   }
 
@@ -530,7 +829,7 @@ export class BorrowerService {
       throw new NotFoundException(`Loan ${loanId} not found`);
     }
 
-    const loan = doc.data() as Loan;
+    const loan = this.normalizeLoanDocument(doc.data() ?? {}, doc.id);
 
     if (loan.borrowerId !== borrowerId) {
       throw new ForbiddenException('Access denied to this loan');
@@ -573,13 +872,11 @@ export class BorrowerService {
 
     // Amortization schedule calculation
     const monthlyRate = loan.interestRate / 100 / 12;
-    const principal = loan.loanAmount;
-    const term = loan.loanTermMonths;
+    const principal = loan.principalAmount;
+    const term = loan.tenureMonths;
 
     const disbursedAt =
-      loan.startDate instanceof Date
-        ? loan.startDate
-        : loan.startDate.toDate();
+      loan.startDate instanceof Date ? loan.startDate : loan.startDate.toDate();
 
     const schedule: Array<{
       installmentNumber: number;
@@ -671,7 +968,7 @@ export class BorrowerService {
       transactionReference: dto.transactionReference ?? null,
       paymentProofUrl: dto.paymentProofUrl ?? null,
       status: RepaymentStatus.COMPLETED,
-      dueDate: loan.nextPaymentDate,
+      dueDate: loan.nextDueDate,
       paidAt: now,
       installmentNumber,
       createdAt: now,
@@ -683,15 +980,15 @@ export class BorrowerService {
     batch.set(repaymentRef, repaymentData);
 
     const isFullyRepaid = newOutstanding === 0;
-    const nextPaymentDate = new Date();
-    nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+    const nextDueDate = new Date();
+    nextDueDate.setMonth(nextDueDate.getMonth() + 1);
 
     // Keep loan progress and borrower aggregates in sync in the same batch.
     batch.update(this.db.collection(this.LOANS_COL).doc(dto.loanId), {
       outstandingBalance: newOutstanding,
       repaymentsMade: FieldValue.increment(1),
       status: isFullyRepaid ? LoanStatus.COMPLETED : loan.status,
-      nextPaymentDate: isFullyRepaid ? null : nextPaymentDate,
+      nextDueDate: isFullyRepaid ? null : nextDueDate,
       updatedAt: now,
     });
 
@@ -708,6 +1005,109 @@ export class BorrowerService {
 
     const created = await repaymentRef.get();
     return { ...created.data() } as Repayment;
+  }
+
+  /**
+   * Generates a signed short-lived QR token for a borrower repayment flow.
+   */
+  async generateQrToken(loanId: string, borrowerId: string, amount?: number) {
+    const loan = await this.getLoanById(loanId, borrowerId);
+
+    if (loan.status === LoanStatus.COMPLETED) {
+      throw new BadRequestException('Cannot generate QR for a completed loan.');
+    }
+
+    const preferredAmount =
+      typeof amount === 'number' && amount > 0
+        ? amount
+        : loan.monthlyInstallment || BORROWER_DEFAULTS.REPAYMENT_AMOUNT;
+
+    const safeAmount = Math.min(preferredAmount, loan.outstandingBalance);
+    const now = Date.now();
+    const expiresAt = now + 5 * 60 * 1000;
+    const nonce = this.db.collection(this.QR_NONCES_COL).doc().id;
+
+    const payload: QrTokenPayload = {
+      loanId,
+      borrowerId,
+      amount: Math.max(0, Math.round(safeAmount * 100) / 100),
+      nonce,
+      issuedAt: now,
+    };
+
+    const token = await this.jwtService.signAsync(payload);
+
+    await this.db.collection(this.QR_NONCES_COL).doc(nonce).set({
+      nonce,
+      loanId,
+      borrowerId,
+      amount: payload.amount,
+      issuedAt: now,
+      expiresAt,
+      used: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      token,
+      expiresAt,
+      loanId,
+      borrowerId,
+      amount: payload.amount,
+    };
+  }
+
+  /**
+   * Verifies signed QR token integrity and marks nonce as used.
+   */
+  async verifyQrToken(token: string) {
+    let payload: QrTokenPayload;
+
+    try {
+      payload = await this.jwtService.verifyAsync<QrTokenPayload>(token);
+    } catch {
+      throw new BadRequestException('QR code is invalid or expired.');
+    }
+
+    if (!payload?.nonce || !payload.loanId || !payload.borrowerId) {
+      throw new BadRequestException('QR code payload is invalid.');
+    }
+
+    const nonceRef = this.db.collection(this.QR_NONCES_COL).doc(payload.nonce);
+
+    await this.db.runTransaction(async (tx) => {
+      const nonceDoc = await tx.get(nonceRef);
+      if (!nonceDoc.exists) {
+        throw new BadRequestException('QR nonce not found.');
+      }
+
+      const nonceData = nonceDoc.data() as
+        | { used?: boolean; expiresAt?: number }
+        | undefined;
+
+      if (nonceData?.used) {
+        throw new BadRequestException('QR code has already been used.');
+      }
+
+      if (
+        typeof nonceData?.expiresAt === 'number' &&
+        nonceData.expiresAt < Date.now()
+      ) {
+        throw new BadRequestException('QR code is expired.');
+      }
+
+      tx.update(nonceRef, {
+        used: true,
+        usedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    await this.getLoanById(payload.loanId, payload.borrowerId);
+
+    return {
+      valid: true,
+      payload,
+    };
   }
 
   /**
@@ -739,7 +1139,7 @@ export class BorrowerService {
   /**
    * Returns aggregated borrower profile, loan, and recent activity data.
    */
-  async getDashboard(userId: string): Promise<BorrowerDashboard> {
+  async getDashboardDetailed(userId: string): Promise<BorrowerDashboard> {
     const profile = await this.getProfile(userId);
 
     // Fetch active loans
@@ -768,8 +1168,8 @@ export class BorrowerService {
 
     // Find the nearest next payment
     const sortedByNextPayment = [...activeLoans].sort((a, b) => {
-      const aDate = a.nextPaymentDate?.toDate?.() ?? new Date(0);
-      const bDate = b.nextPaymentDate?.toDate?.() ?? new Date(0);
+      const aDate = a.nextDueDate?.toDate?.() ?? new Date(0);
+      const bDate = b.nextDueDate?.toDate?.() ?? new Date(0);
       return aDate.getTime() - bDate.getTime();
     });
 
@@ -811,7 +1211,7 @@ export class BorrowerService {
       activeLoans: activeLoans.length,
       pendingApplications: pendingAppsSnapshot.size,
       totalOutstanding: Math.round(totalOutstanding * 100) / 100,
-      nextPaymentDate: nextLoan?.nextPaymentDate,
+      nextDueDate: nextLoan?.nextDueDate,
       nextPaymentAmount: nextLoan?.monthlyInstallment,
       creditScore: profile.creditScore,
       totalBorrowed: profile.totalBorrowed,

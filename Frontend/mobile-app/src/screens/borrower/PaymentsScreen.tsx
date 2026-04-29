@@ -14,7 +14,10 @@ import {
 } from "react-native";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
-import { getPayments, paymentService } from "../../api/services/payment.service";
+import {
+  getPayments,
+  paymentService,
+} from "../../api/services/payment.service";
 import { getTransactions } from "../../api/services/transaction.service";
 import { dashboardService } from "../../api/services/dashboard.service";
 import EmptyState from "../../components/common/EmptyState";
@@ -28,7 +31,7 @@ import { BORDER_RADIUS } from "../../constants/borderRadius";
 import type { BorrowerNavigation } from "../../types/navigation";
 import type { BorrowerRepayment } from "../../types/borrower";
 import type { RouteProp } from "@react-navigation/native";
-import TransactionDetailsScreen from "../../screens/borrower/TransactionDetailsScreen";
+//import TransactionDetailsScreen from "../../screens/borrower/TransactionDetailsScreen";
 
 type PaymentsScreenProps = {
   navigation: BorrowerNavigation;
@@ -52,7 +55,10 @@ type PaymentMethodConfig =
 /**
  * Manages borrower payment workflows for upcoming and past repayments.
  */
-export default function PaymentsScreen({ navigation, route }: PaymentsScreenProps) {
+export default function PaymentsScreen({
+  navigation,
+  route,
+}: PaymentsScreenProps) {
   const [activeTab, setActiveTab] = useState<"Upcoming" | "History">(
     route?.params?.tab ?? "Upcoming",
   );
@@ -61,6 +67,7 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
   const [dashboardNextPayment, setDashboardNextPayment] = useState<{
     amount?: number;
     dueDate?: string;
+    loanId?: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,9 +75,12 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<PaymentMethod>("Card");
   const [error, setError] = useState<string | null>(null);
-  const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(null);
+  const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(
+    null,
+  );
   const [qrModalVisible, setQrModalVisible] = useState(false);
-  const [selectedQRPayment, setSelectedQRPayment] = useState<BorrowerRepayment | null>(null);
+  const [selectedQRPayment, setSelectedQRPayment] =
+    useState<BorrowerRepayment | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [generatingQr, setGeneratingQr] = useState(false);
 
@@ -83,18 +93,21 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
   const fetchPayments = async () => {
     try {
       setError(null);
-      const [paymentsData, transactionsData, dashboardData] = await Promise.all([
-        getPayments(),
-        getTransactions(),
-        dashboardService.getDashboard().catch(() => null),
-      ]);
+      const [paymentsData, transactionsData, dashboardData] = await Promise.all(
+        [
+          getPayments(),
+          getTransactions(),
+          dashboardService.getDashboard().catch(() => null),
+        ],
+      );
       setPayments(paymentsData ?? []);
       setTransactions(transactionsData ?? []);
       const dash = dashboardData?.data ?? dashboardData ?? null;
       if (dash?.nextPaymentAmount) {
         setDashboardNextPayment({
           amount: dash.nextPaymentAmount,
-          dueDate: dash.nextPaymentDate,
+          dueDate: dash.nextDueDate,
+          loanId: dash.loanId ?? dash.nextPaymentLoanId,
         });
       } else {
         setDashboardNextPayment(null);
@@ -140,6 +153,7 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
             amount: dashboardNextPayment.amount,
             status: "PENDING",
             dueDate: dashboardNextPayment.dueDate,
+            loanId: dashboardNextPayment.loanId,
             lenderName: "Lender",
           } as BorrowerRepayment,
         ];
@@ -168,6 +182,7 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
       paidAt: t.paidAt ?? t.timestamp,
       timestamp: t.timestamp,
       type: t.type,
+      paymentMethod: t.paymentMethod,
       lenderName: t.lenderName,
     }));
 
@@ -176,8 +191,27 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
     const merged: BorrowerRepayment[] = [];
     for (const item of [...paidRepayments, ...txAsRepayments]) {
       const id = item.paymentId ?? item.transactionId ?? item.repaymentId;
-      if (id && seen.has(id)) continue;
-      if (id) seen.add(id);
+      if (id && seen.has(id)) {
+        const existingIndex = merged.findIndex(
+          (entry) =>
+            (entry.paymentId ?? entry.transactionId ?? entry.repaymentId) ===
+            id,
+        );
+        if (
+          existingIndex >= 0 &&
+          !merged[existingIndex].lenderName &&
+          item.lenderName
+        ) {
+          merged[existingIndex] = {
+            ...merged[existingIndex],
+            lenderName: item.lenderName,
+          };
+        }
+        continue;
+      }
+      if (id) {
+        seen.add(id);
+      }
       merged.push(item);
     }
 
@@ -189,14 +223,17 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
     });
   }, [activeTab, payments, transactions]);
 
+  //Generate QR
   const generateQRCodeToken = async (payment: BorrowerRepayment) => {
     try {
       if (!payment.loanId) return;
       setGeneratingQr(true);
       setQrToken(null);
+
       const data = await paymentService.generateQr(payment.loanId);
-      if (data?.qrCode) {
-        setQrToken(data.qrCode);
+
+      if (data?.token) {
+        setQrToken(data.token);
       } else {
         throw new Error("Invalid response");
       }
@@ -210,17 +247,42 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
   };
 
   const handlePay = (payment: BorrowerRepayment) => {
+    // Validate payment data before proceeding
+    if (!payment.amount || payment.amount <= 0) {
+      Alert.alert(
+        "Invalid Payment Amount",
+        "Payment amount must be greater than 0. Please contact support if this is unexpected.",
+      );
+      return;
+    }
+
+    if (!payment.loanId) {
+      Alert.alert(
+        "Missing Loan Information",
+        "This payment cannot be processed because loan information is missing. Please try again or contact support.",
+      );
+      return;
+    }
+
     const formattedAmount = new Intl.NumberFormat("en-LK", {
       style: "currency",
       currency: "LKR",
     }).format(payment.amount ?? 0);
 
-    let paymentMethodApi: "bank_transfer" | "qr_payment" | "cash" = "bank_transfer";
-    if (selectedPaymentMethod === "Card") paymentMethodApi = "bank_transfer";
-    if (selectedPaymentMethod === "Bank Transfer") paymentMethodApi = "bank_transfer";
+    let paymentMethodApi: "bank_transfer" | "qr_payment" | "card";
+    if (selectedPaymentMethod === "Card") paymentMethodApi = "card";
+    if (selectedPaymentMethod === "Bank Transfer")
+      paymentMethodApi = "bank_transfer";
     if (selectedPaymentMethod === "Cash (QR)") paymentMethodApi = "qr_payment";
 
     if (selectedPaymentMethod === "Cash (QR)") {
+      if (!payment.loanId) {
+        Alert.alert(
+          "Invalid Payment",
+          "This payment cannot be completed via QR code. Please try another payment method.",
+        );
+        return;
+      }
       setSelectedQRPayment(payment);
       setQrModalVisible(true);
       generateQRCodeToken(payment);
@@ -232,32 +294,43 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
       `Proceeding with ${selectedPaymentMethod} for ${formattedAmount}.`,
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Pay Now", 
+        {
+          text: "Pay Now",
           onPress: async () => {
+            const { amount, loanId, paymentId } = payment;
+
+            if (!amount || amount <= 0 || !loanId) {
+              Alert.alert(
+                "Error",
+                "Invalid payment amount or missing Loan ID.",
+              );
+              return;
+            }
             try {
-              if (!payment.loanId) {
-                Alert.alert("Error", "Loan ID is missing for this payment.");
-                return;
-              }
               setProcessingPaymentId(payment.paymentId || null);
-              
+
               await paymentService.makeRepayment({
-                loanId: payment.loanId,
-                amount: payment.amount ?? 0,
+                loanId: loanId,
+                amount: amount,
                 paymentMethod: paymentMethodApi,
-                transactionReference: `TXN-${Date.now()}`
+                transactionReference: `TXN-${Date.now()}`,
               });
 
-              Alert.alert("Success", "Payment submitted successfully and is pending verification.");
+              Alert.alert(
+                "Success",
+                "Payment submitted successfully and is pending verification.",
+              );
               void fetchPayments();
             } catch (err) {
               console.error("Payment error:", err);
-              Alert.alert("Error", "Failed to process payment. Please try again.");
+              Alert.alert(
+                "Error",
+                "Failed to process payment. Please try again.",
+              );
             } finally {
               setProcessingPaymentId(null);
             }
-          }
+          },
         },
       ],
     );
@@ -269,7 +342,8 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
         // Navigate to TransactionDetailsScreen with the item mapped as a BorrowerTransaction
         navigation.navigate("TransactionDetails", {
           transaction: {
-            transactionId: item.transactionId ?? item.repaymentId ?? item.paymentId,
+            transactionId:
+              item.transactionId ?? item.repaymentId ?? item.paymentId,
             repaymentId: item.repaymentId,
             loanId: item.loanId,
             type: item.type ?? "repayment",
@@ -278,6 +352,7 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
             timestamp: item.timestamp,
             createdAt: (item as any).createdAt,
             amount: item.amount,
+            paymentMethod: item.paymentMethod,
             lenderName: item.lenderName,
           },
         });
@@ -301,7 +376,11 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => setSidebarVisible(true)}>
-            <Feather name="menu" size={24} color={COLORS.surface || "#FFFFFF"} />
+            <Feather
+              name='menu'
+              size={24}
+              color={COLORS.surface || "#FFFFFF"}
+            />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Payments</Text>
         </View>
@@ -310,7 +389,11 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
             style={styles.iconButton}
             onPress={() => navigation.navigate("Notifications")}
           >
-            <Feather name="bell" size={20} color={COLORS.surface || "#FFFFFF"} />
+            <Feather
+              name='bell'
+              size={20}
+              color={COLORS.surface || "#FFFFFF"}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -343,7 +426,6 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
             History
           </Text>
         </TouchableOpacity>
-
       </View>
 
       {activeTab === "Upcoming" && (
@@ -366,13 +448,21 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
                       <Feather
                         name={method.icon}
                         size={14}
-                        color={isActive ? (COLORS.surface || "#FFFFFF") : COLORS.primary}
+                        color={
+                          isActive
+                            ? COLORS.surface || "#FFFFFF"
+                            : COLORS.primary
+                        }
                       />
                     ) : (
                       <MaterialCommunityIcons
                         name={method.icon}
                         size={14}
-                        color={isActive ? (COLORS.surface || "#FFFFFF") : COLORS.primary}
+                        color={
+                          isActive
+                            ? COLORS.surface || "#FFFFFF"
+                            : COLORS.primary
+                        }
                       />
                     )}
                     <Text
@@ -391,19 +481,22 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
         </View>
       )}
 
-      {activeTab === "Upcoming" && payments.some((p) => p.status === "PENDING") && (
-        <View style={styles.pendingBanner}>
-          <Feather name="clock" size={16} color="#B45309" />
-          <Text style={styles.pendingBannerText}>
-            You have payments pending verification.
-          </Text>
-        </View>
-      )}
+      {activeTab === "Upcoming" &&
+        payments.some((p) => p.status === "PENDING") && (
+          <View style={styles.pendingBanner}>
+            <Feather name='clock' size={16} color='#B45309' />
+            <Text style={styles.pendingBannerText}>
+              You have payments pending verification.
+            </Text>
+          </View>
+        )}
 
       <FlatList
         data={filteredPayments}
         renderItem={renderPaymentCard}
-        keyExtractor={(item, index) => item.paymentId ?? item.transactionId ?? String(index)}
+        keyExtractor={(item, index) =>
+          item.paymentId ?? item.transactionId ?? String(index)
+        }
         contentContainerStyle={styles.paymentList}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -418,11 +511,18 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
             <Loader />
           ) : error ? (
             <View style={styles.errorContainer}>
-              <Feather name="alert-circle" size={48} color={COLORS.error || "#EF4444"} />
+              <Feather
+                name='alert-circle'
+                size={48}
+                color={COLORS.error || "#EF4444"}
+              />
               <Text style={styles.errorText}>
                 {typeof error === "string" ? error : "Failed to load"}
               </Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchPayments}>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={fetchPayments}
+              >
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
@@ -438,45 +538,77 @@ export default function PaymentsScreen({ navigation, route }: PaymentsScreenProp
       <Modal
         visible={qrModalVisible}
         transparent
-        animationType="fade"
+        animationType='fade'
         onRequestClose={() => setQrModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setQrModalVisible(false)} />
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setQrModalVisible(false)}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Cash Payment</Text>
-              <TouchableOpacity onPress={() => setQrModalVisible(false)} style={styles.modalCloseBtn}>
-                <Feather name="x" size={24} color={COLORS.textSecondary || "#6B7280"} />
+              <TouchableOpacity
+                onPress={() => setQrModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Feather
+                  name='x'
+                  size={24}
+                  color={COLORS.textSecondary || "#6B7280"}
+                />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.modalInstructions}>
-              Show this QR code to your lender. They will scan it to instantly verify and record your cash payment of{" "}
+              Show this QR code to your lender. They will scan it to instantly
+              verify and record your cash payment of{" "}
               <Text style={{ fontWeight: "700", color: COLORS.textPrimary }}>
                 LKR {selectedQRPayment?.amount?.toLocaleString() ?? "0"}
-              </Text>.
+              </Text>
+              .
             </Text>
 
             {generatingQr ? (
               <View style={styles.qrPlaceholderBox}>
                 <Loader />
-                <Text style={styles.qrPlaceholderText}>Generating QR Code...</Text>
+                <Text style={styles.qrPlaceholderText}>
+                  Generating QR Code...
+                </Text>
               </View>
             ) : qrToken ? (
               <View style={styles.qrPlaceholderBox}>
-                <QRCode value={qrToken} size={200} backgroundColor="#F3F4F6" color={COLORS.primary} />
+                <QRCode
+                  value={qrToken}
+                  size={200}
+                  backgroundColor='#F3F4F6'
+                  color={COLORS.primary}
+                />
               </View>
             ) : (
               <View style={styles.qrPlaceholderBox}>
-                <MaterialCommunityIcons name="qrcode-scan" size={64} color={COLORS.primary || "#007AFF"} />
-                <Text style={styles.qrPlaceholderText}>QR Code automatically generates here</Text>
+                <MaterialCommunityIcons
+                  name='qrcode-scan'
+                  size={64}
+                  color={COLORS.primary || "#007AFF"}
+                />
+                <Text style={styles.qrPlaceholderText}>
+                  QR Code automatically generates here
+                </Text>
               </View>
             )}
 
             <View style={styles.qrInfoBox}>
-              <Feather name="info" size={16} color={COLORS.primary || "#007AFF"} />
-              <Text style={styles.qrInfoText}>Do not close this screen until the lender has successfully scanned it.</Text>
+              <Feather
+                name='info'
+                size={16}
+                color={COLORS.primary || "#007AFF"}
+              />
+              <Text style={styles.qrInfoText}>
+                Do not close this screen until the lender has successfully
+                scanned it.
+              </Text>
             </View>
           </View>
         </View>

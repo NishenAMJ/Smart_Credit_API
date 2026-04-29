@@ -40,14 +40,22 @@ export default function PaymentCard({
         </View>
         <View style={styles.info}>
           <Text style={styles.title}>
-            {payment.type === "disbursement" ? "Loan Received" : payment.status === "PAID" ? "Payment Made" : "Next Payment"}
+            {payment.type === "disbursement"
+              ? "Loan Received"
+              : payment.status === "PAID"
+                ? "Payment Made"
+                : "Next Payment"}
+          </Text>
+          <Text style={styles.lenderName}>
+            {payment.lenderName?.trim() || "Lender"}
           </Text>
           <Text style={styles.date}>
             {(() => {
-              const dateVal = payment.timestamp ?? payment.paidAt ?? payment.dueDate;
+              const dateVal =
+                payment.timestamp ?? payment.paidAt ?? payment.dueDate;
               return dateVal
                 ? typeof dateVal === "object"
-                  ? "Invalid Date"
+                  ? "-"
                   : new Date(dateVal).toLocaleDateString("en-US", {
                       month: "long",
                       day: "numeric",
@@ -60,7 +68,9 @@ export default function PaymentCard({
         {payment.status !== "PAID" && payment.type !== "disbursement" && (
           <TouchableOpacity style={styles.payButton} onPress={onPay}>
             <Text style={styles.payButtonText}>
-              {paymentMethod === "Cash (QR)" ? "Generate Cash Code" : `Pay via ${methodLabel}`}
+              {paymentMethod === "Cash (QR)"
+                ? "Generate Cash Code"
+                : `Pay via ${methodLabel}`}
             </Text>
           </TouchableOpacity>
         )}
@@ -74,9 +84,6 @@ export default function PaymentCard({
         </Text>
         {payment.status !== "PAID" && payment.type !== "disbursement" && (
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.partialButton} onPress={onPay}>
-              <Text style={styles.partialText}>Partial</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.payActionButton} onPress={onPay}>
               <Text style={styles.payActionText}>
                 {paymentMethod === "Cash (QR)" ? "Show QR" : "Pay"}
@@ -127,6 +134,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     color: "#1A1A1A",
+    marginBottom: 2,
+  },
+  lenderName: {
+    fontSize: 13,
+    color: "#374151",
     marginBottom: 4,
   },
   date: {

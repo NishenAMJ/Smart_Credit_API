@@ -48,7 +48,9 @@ describe('BorrowerController', () => {
     it('should return a user profile successfully', async () => {
       // Arrange
       const mockProfile = { userId: 'user_1', fullName: 'John Doe' };
-      jest.spyOn(service, 'getProfile').mockResolvedValueOnce(mockProfile as any);
+      jest
+        .spyOn(service, 'getProfile')
+        .mockResolvedValueOnce(mockProfile as any);
 
       // Act
       const result = await controller.getProfile('user_1');
@@ -69,10 +71,10 @@ describe('BorrowerController', () => {
           status: 'active',
           outstandingBalance: 1000,
           monthlyInstallment: 500,
-          nextPaymentDate: new Date('2025-05-01T00:00:00Z'),
+          nextDueDate: new Date('2025-05-01T00:00:00Z'),
         },
       ];
-      
+
       const mockLenderMap = new Map();
       mockLenderMap.set('lender_1', 'Global Bank');
 
@@ -81,8 +83,12 @@ describe('BorrowerController', () => {
       ];
 
       jest.spyOn(service, 'getLoans').mockResolvedValueOnce(mockLoans as any);
-      jest.spyOn(service, 'getLenderNamesMap').mockResolvedValueOnce(mockLenderMap);
-      jest.spyOn(service, 'getRepaymentHistory').mockResolvedValueOnce(mockHistory as any);
+      jest
+        .spyOn(service, 'getLenderNamesMap')
+        .mockResolvedValueOnce(mockLenderMap);
+      jest
+        .spyOn(service, 'getRepaymentHistory')
+        .mockResolvedValueOnce(mockHistory as any);
 
       // Act
       const result = await controller.getMyPayments('user_1');
@@ -90,9 +96,11 @@ describe('BorrowerController', () => {
       // Assert
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(2); // 1 upcoming + 1 history
-      
+
       // Verify upcoming payment generation
-      const upcoming = result.data.find((p) => p.paymentId === 'upcoming-loan_1');
+      const upcoming = result.data.find(
+        (p) => p.paymentId === 'upcoming-loan_1',
+      );
       expect(upcoming).toBeDefined();
       expect(upcoming.lenderName).toBe('Global Bank'); // injected from map
       expect(upcoming.status).toBe('PENDING');
@@ -111,7 +119,7 @@ describe('BorrowerController', () => {
           status: 'active',
           outstandingBalance: 1000,
           monthlyInstallment: 500,
-          nextPaymentDate: new Date('2025-06-01T00:00:00Z'), // June
+          nextDueDate: new Date('2025-06-01T00:00:00Z'), // June
         },
         {
           loanId: 'loan_earliest',
@@ -119,7 +127,7 @@ describe('BorrowerController', () => {
           status: 'active',
           outstandingBalance: 1000,
           monthlyInstallment: 500,
-          nextPaymentDate: new Date('2025-05-01T00:00:00Z'), // May
+          nextDueDate: new Date('2025-05-01T00:00:00Z'), // May
         },
       ];
 

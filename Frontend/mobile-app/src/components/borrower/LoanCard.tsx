@@ -48,11 +48,16 @@ export default function LoanCard({
         </Text>
       </View>
 
-      {loan.isFeatured ? (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>High Smart Score</Text>
+      <View style={styles.badgeRow}>
+        <View style={[styles.badge, styles.sponsoredBadge]}>
+          <Text style={styles.sponsoredBadgeText}>SPONSORED</Text>
         </View>
-      ) : null}
+        {loan.isFeatured ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>High Smart Score</Text>
+          </View>
+        ) : null}
+      </View>
 
       {showApplyNow ? (
         <View style={styles.footer}>
@@ -117,13 +122,29 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1A1A1A",
   },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   badge: {
     backgroundColor: "#E0F2FE",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
     alignSelf: "flex-start",
-    marginBottom: 12,
+    marginRight: 8,
+  },
+  sponsoredBadge: {
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+  },
+  sponsoredBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#C2410C",
+    letterSpacing: 0.5,
   },
   badgeText: {
     fontSize: 12,

@@ -6,7 +6,6 @@ import { Feather } from "@expo/vector-icons";
 
 type CreditScoreWidgetProps = {
   score?: number;
-  creditLimit?: number;
   onPress?: () => void;
 };
 
@@ -15,7 +14,6 @@ type CreditScoreWidgetProps = {
  */
 export default function CreditScoreWidget({
   score = 0,
-  creditLimit = 0,
   onPress,
 }: CreditScoreWidgetProps) {
   const getScoreLevel = (value: number) => {
@@ -31,7 +29,7 @@ export default function CreditScoreWidget({
     <TouchableOpacity style={styles.container} onPress={onPress}>
       <View style={styles.header}>
         <Text style={styles.title}>Smart Credit Score</Text>
-        <Feather name="chevron-right" size={20} color="#6B7280" />
+        <Feather name='chevron-right' size={20} color='#6B7280' />
       </View>
 
       <View style={styles.scoreContainer}>
@@ -46,7 +44,7 @@ export default function CreditScoreWidget({
           {[1, 2, 3, 4].map((star) => (
             <Feather
               key={star}
-              name="star"
+              name='star'
               size={16}
               color={score >= star * 200 ? "#F59E0B" : "#E5E7EB"}
             />
@@ -55,13 +53,6 @@ export default function CreditScoreWidget({
       </View>
 
       <View style={styles.divider} />
-
-      <View style={styles.footer}>
-        <Text style={styles.limitLabel}>Credit Limit</Text>
-        <Text style={styles.limitAmount}>
-          LKR {creditLimit.toLocaleString()}
-        </Text>
-      </View>
     </TouchableOpacity>
   );
 }
@@ -126,14 +117,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-  },
-  limitLabel: {
-    fontSize: 14,
-    color: "#6B7280",
-  },
-  limitAmount: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1A1A1A",
   },
 });

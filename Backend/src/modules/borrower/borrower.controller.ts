@@ -25,11 +25,11 @@ import {
   BORROWER_FILTER_LIMITS,
   BORROWER_FLOW,
 } from './borrower.constants';
+import { PaymentMethod } from './dto/create-payment.dto';
 
 @Controller('borrower')
 export class BorrowerController {
   constructor(private readonly borrowerService: BorrowerService) {}
-
 
   /**
    * Uses the supplied borrower id, falling back to demo data for mobile screens.
@@ -90,16 +90,13 @@ export class BorrowerController {
    * Returns a compact list of active loans for discovery cards.
    */
   @Get('loans/featured')
-  async getFeaturedLoans(@Query('borrowerId') borrowerId?: string) {
-    const id = this.resolveBorrowerId(borrowerId);
-    const loans = await this.borrowerService.getLoans(id);
+  async getFeaturedLoans() {
+    const ads = await this.borrowerService.getActiveLoanAds();
 
     return {
       success: true,
-      // Keep featured cards focused on active loans and cap payload size for mobile.
-      data: loans
-        .filter((loan) => loan.status === LoanStatus.ACTIVE)
-        .slice(0, BORROWER_FLOW.FEATURED_LOAN_LIMIT),
+      // Loan discovery is backed by active lender ads from the shared lender schema.
+      data: ads.slice(0, BORROWER_FLOW.FEATURED_LOAN_LIMIT),
     };
   }
 
@@ -108,21 +105,24 @@ export class BorrowerController {
    * Searches loans using a keyword against common identifier fields.
    */
   @Get('loans/search')
-  async searchLoans(
-    @Query('keyword') keyword = '',
-    @Query('borrowerId') borrowerId?: string,
-  ) {
-    const id = this.resolveBorrowerId(borrowerId);
-    const loans = await this.borrowerService.getLoans(id);
+  async searchLoans(@Query('keyword') keyword = '') {
+    const ads = await this.borrowerService.getActiveLoanAds();
     const normalized = keyword.trim().toLowerCase();
 
     const filtered =
       normalized.length === 0
-        ? loans
-        : loans.filter((loan) => {
-            // Search across all fields in the loan object dynamically
-            const haystack = JSON.stringify(loan).toLowerCase();
-            return haystack.includes(normalized);
+        ? ads
+        : ads.filter((loan) => {
+            const nameMatch = String(loan.lenderName ?? '')
+              .toLowerCase()
+              .includes(normalized);
+            const locationMatch = String(loan.lenderLocation ?? '')
+              .toLowerCase()
+              .includes(normalized);
+            const purposeMatch = String(loan.purpose ?? '')
+              .toLowerCase()
+              .includes(normalized);
+            return nameMatch || locationMatch || purposeMatch;
           });
 
     return {
@@ -191,7 +191,7 @@ export class BorrowerController {
 
     const filtered = loans.filter((loan) => {
       const amountMatch =
-        loan.loanAmount >= minAmount && loan.loanAmount <= maxAmount;
+        loan.principalAmount >= minAmount && loan.principalAmount <= maxAmount;
       const statusMatch = status ? loan.status === status : true;
       return amountMatch && statusMatch;
     });
@@ -276,9 +276,7 @@ export class BorrowerController {
     const application = await this.borrowerService.createLoanApplication({
       borrowerId: id,
       adId: payload.adId,
-      amount: Number(
-        payload.amount ?? BORROWER_DEFAULTS.APPLICATION_AMOUNT,
-      ),
+      amount: Number(payload.amount ?? BORROWER_DEFAULTS.APPLICATION_AMOUNT),
       loanPurpose,
       purposeDescription: payload.description,
       tenureMonths: Number(
@@ -371,10 +369,6 @@ export class BorrowerController {
     const id = this.resolveBorrowerId(borrowerId);
     const loans = await this.borrowerService.getLoans(id);
 
-    // Batch-fetch real lender names
-    const lenderIds = loans.map((l) => l.lenderId);
-    const lenderNames = await this.borrowerService.getLenderNamesMap(lenderIds);
-
     // Aggregate repayment history per-loan — catch per-loan errors so one bad loan
     // doesn't prevent the full list from returning.
     const histories = await Promise.all(
@@ -386,22 +380,44 @@ export class BorrowerController {
     );
 
     const repayments = histories.flat();
+    const loanById = new Map(loans.map((loan) => [loan.loanId, loan]));
+
+    // Collect all unique lender IDs from both loans and repayments
+    const allLenderIds = [
+      ...loans.map((l) => l.lenderId),
+      ...repayments.map((r) => r.lenderId ?? loanById.get(r.loanId)?.lenderId),
+    ];
+    const lenderNames =
+      await this.borrowerService.getLenderNamesMap(allLenderIds);
 
     // Build upcoming payment stubs from active loans with outstanding balance.
     const upcomingPayments = loans
       .filter((l) => l.status === 'active' && l.outstandingBalance > 0)
       .map((l) => {
-        const rawDate = l.nextPaymentDate as any;
-        const dueDate = rawDate?.toDate ? rawDate.toDate().toISOString() : rawDate ?? null;
+        const rawDate = l.nextDueDate as any;
+        const dueDate = rawDate?.toDate
+          ? rawDate.toDate().toISOString()
+          : (rawDate ?? null);
         return {
           paymentId: `upcoming-${l.loanId}`,
           loanId: l.loanId,
           amount: l.monthlyInstallment,
           status: 'PENDING',
           dueDate,
-          lenderName: lenderNames.get(l.lenderId) ?? 'Lender',
+          lenderName: lenderNames.get(l.lenderId) ?? l.lenderName ?? 'Lender',
         };
       });
+
+    // Enrich repayments with lender names
+    const enrichedRepayments = repayments.map((r) => {
+      const loan = loanById.get(r.loanId);
+      const lenderId = r.lenderId ?? loan?.lenderId;
+      return {
+        ...r,
+        lenderName:
+          lenderNames.get(lenderId ?? '') ?? loan?.lenderName ?? 'Lender',
+      };
+    });
 
     // Sort upcoming payments ascending (earliest due date first)
     upcomingPayments.sort((a, b) => {
@@ -412,7 +428,7 @@ export class BorrowerController {
 
     return {
       success: true,
-      data: [...upcomingPayments, ...repayments],
+      data: [...upcomingPayments, ...enrichedRepayments],
     };
   }
 
@@ -456,19 +472,31 @@ export class BorrowerController {
    */
   @Post('payments/generate-qr')
   async generateQr(
-    @Body() payload: { loanId: string; borrowerId?: string },
+    @Body() payload: { loanId: string; amount?: number; borrowerId?: string },
     @Query('borrowerId') borrowerId?: string,
   ) {
     const id = this.resolveBorrowerId(payload.borrowerId ?? borrowerId);
+    const qr = await this.borrowerService.generateQrToken(
+      payload.loanId,
+      id,
+      payload.amount,
+    );
 
     return {
       success: true,
-      data: {
-        borrowerId: id,
-        loanId: payload.loanId,
-        // Temporary QR token generation until integrated with a payment provider.
-        qrCode: `${BORROWER_FLOW.QR_CODE_PREFIX}-${payload.loanId}-${Date.now()}`,
-      },
+      data: qr,
+    };
+  }
+
+  /**
+   * POST /borrower/payments/verify-qr
+   * Verifies a scanned QR token and returns safe payload details.
+   */
+  @Post('payments/verify-qr')
+  async verifyQr(@Body() payload: { token: string }) {
+    return {
+      success: true,
+      data: await this.borrowerService.verifyQrToken(payload.token),
     };
   }
 
@@ -496,6 +524,7 @@ export class BorrowerController {
   async getMyTransactions(@Query('borrowerId') borrowerId?: string) {
     const id = this.resolveBorrowerId(borrowerId);
     const loans = await this.borrowerService.getLoans(id);
+    const loanById = new Map(loans.map((loan) => [loan.loanId, loan]));
 
     // Batch-fetch real lender names
     const lenderIds = loans.map((l) => l.lenderId);
@@ -509,7 +538,7 @@ export class BorrowerController {
     );
 
     const repaymentTransactions = histories.flat().map((repayment) => {
-      const loan = loans.find((l) => l.loanId === repayment.loanId);
+      const loan = loanById.get(repayment.loanId);
       return {
         transactionId: repayment.repaymentId,
         loanId: repayment.loanId,
@@ -517,8 +546,10 @@ export class BorrowerController {
         status: repayment.status,
         paidAt: repayment.paidAt,
         createdAt: repayment.createdAt,
+        paymentMethod: repayment.paymentMethod,
         type: 'repayment',
-        lenderName: lenderNames.get(loan?.lenderId ?? '') ?? 'Lender',
+        lenderName:
+          lenderNames.get(loan?.lenderId ?? '') ?? loan?.lenderName ?? 'Lender',
       };
     });
 
@@ -527,19 +558,35 @@ export class BorrowerController {
       .map((loan) => ({
         transactionId: loan.loanId,
         loanId: loan.loanId,
-        amount: loan.loanAmount,
+        amount: loan.principalAmount,
         status: 'COMPLETED',
         paidAt: loan.startDate,
         createdAt: loan.createdAt,
         type: 'disbursement',
-        lenderName: lenderNames.get(loan.lenderId) ?? 'Lender',
+        lenderName:
+          lenderNames.get(loan.lenderId) ?? loan.lenderName ?? 'Lender',
       }));
 
-    const transactions = [...repaymentTransactions, ...disbursementTransactions];
+    const transactions = [
+      ...repaymentTransactions,
+      ...disbursementTransactions,
+    ];
 
     transactions.sort((a, b) => {
-      const timeA = a.paidAt ? (typeof (a.paidAt as any).toMillis === 'function' ? (a.paidAt as any).toMillis() : (a.paidAt instanceof Date ? a.paidAt.getTime() : 0)) : 0;
-      const timeB = b.paidAt ? (typeof (b.paidAt as any).toMillis === 'function' ? (b.paidAt as any).toMillis() : (b.paidAt instanceof Date ? b.paidAt.getTime() : 0)) : 0;
+      const timeA = a.paidAt
+        ? typeof (a.paidAt as any).toMillis === 'function'
+          ? (a.paidAt as any).toMillis()
+          : a.paidAt instanceof Date
+            ? a.paidAt.getTime()
+            : 0
+        : 0;
+      const timeB = b.paidAt
+        ? typeof (b.paidAt as any).toMillis === 'function'
+          ? (b.paidAt as any).toMillis()
+          : b.paidAt instanceof Date
+            ? b.paidAt.getTime()
+            : 0
+        : 0;
       return timeB - timeA;
     });
 

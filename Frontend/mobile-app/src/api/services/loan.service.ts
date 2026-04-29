@@ -15,16 +15,34 @@ type LoanListResponse = {
 };
 
 function normalizeLoan(loan: Partial<BorrowerLoan>): BorrowerLoan {
+  const principalAmount = loan.principalAmount ?? loan.amount;
+  const durationMonths = loan.durationMonths ?? loan.tenureMonths;
+  const interestRate = loan.interestRate;
+
   return {
     ...loan,
-    loanId: String(loan.loanId ?? ""),
+    loanId: String(loan.loanId ?? loan.adId ?? ""),
     lenderName:
       loan.lenderName ??
       titleCase(String(loan.lenderId ?? FALLBACK_LENDER_NAME)),
-    minAmount: loan.minAmount ?? loan.loanAmount,
-    maxAmount: loan.maxAmount ?? loan.loanAmount,
-    durationMonths: loan.durationMonths ?? loan.loanTermMonths,
-    amount: loan.amount ?? loan.loanAmount,
+    principalAmount,
+    minAmount: loan.minAmount ?? principalAmount,
+    maxAmount: loan.maxAmount ?? principalAmount,
+    durationMonths,
+    tenureMonths: loan.tenureMonths ?? durationMonths,
+    amount: loan.amount ?? principalAmount,
+    interestRate,
+    monthlyInstallment:
+      loan.monthlyInstallment ??
+      (loan.totalRepayable && durationMonths
+        ? Math.round(loan.totalRepayable / durationMonths)
+        : undefined),
+    outstandingBalance:
+      loan.outstandingBalance ??
+      (loan.status === "completed"
+        ? 0
+        : (loan.totalRepayable ?? principalAmount)),
+    nextDueDate: loan.nextDueDate,
     isFeatured: loan.isFeatured ?? loan.status === ACTIVE_LOAN_STATUS,
   };
 }
@@ -104,6 +122,25 @@ export const loanService = {
     return {
       ...response.data,
       data: normalizeLoan(response.data?.data ?? {}),
+    };
+  },
+
+  getAvailableLoans: async () => {
+    const borrowerId = await getUserId();
+    if (!borrowerId)
+      throw new Error("User session expired. Please log in again.");
+
+    const response = await apiClient.get<LoanListResponse>(
+      ENDPOINTS.loans.filter,
+      {
+        params: { borrowerId },
+      },
+    );
+    return {
+      ...response.data,
+      data: Array.isArray(response.data?.data)
+        ? response.data.data.map(normalizeLoan)
+        : [],
     };
   },
 };

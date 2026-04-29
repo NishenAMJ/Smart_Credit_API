@@ -1,4 +1,3 @@
-
 import {
   LoanPurpose,
   RepaymentMethod,
@@ -13,6 +12,13 @@ export interface BorrowerProfile {
   fullName: string;
   email: string;
   phone: string;
+  photoURL?: string;
+  profilePicture?: string;
+  profilePictureUrl?: string;
+  profilePicUrl?: string;
+  profilePhotoUrl?: string;
+  imageUrl?: string;
+  avatarUrl?: string;
   dateOfBirth: string;
   nic: string;
   address: {
@@ -45,6 +51,7 @@ export interface LoanApplication {
   adId?: string;
   amount: number;
   loanPurpose: LoanPurpose;
+  purpose?: string;
   purposeDescription?: string;
   tenureMonths: number;
   requestedInterestRate?: number; // Optional requested rate
@@ -79,15 +86,15 @@ export interface Loan {
   borrowerId: string;
   lenderId: string;
   lenderName?: string;
-  loanAmount: number;
+  principalAmount: number;
   interestRate: number;
-  loanTermMonths: number;
+  tenureMonths: number;
   monthlyInstallment: number;
   outstandingBalance: number;
   totalInterest: number;
   status: LoanStatus;
   startDate: FirebaseFirestore.Timestamp;
-  nextPaymentDate: FirebaseFirestore.Timestamp;
+  nextDueDate: FirebaseFirestore.Timestamp;
   endDate: FirebaseFirestore.Timestamp;
   repaymentsMade: number;
   createdAt: FirebaseFirestore.Timestamp;
@@ -133,7 +140,7 @@ export interface BorrowerDashboard {
   activeLoans: number;
   pendingApplications: number;
   totalOutstanding: number;
-  nextPaymentDate?: FirebaseFirestore.Timestamp;
+  nextDueDate?: FirebaseFirestore.Timestamp;
   nextPaymentAmount?: number;
   creditScore: number;
   totalBorrowed: number;

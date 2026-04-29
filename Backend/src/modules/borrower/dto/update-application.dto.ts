@@ -11,7 +11,7 @@ export class UpdateApplicationDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  requestedAmount?: number;
+  amount?: number;
 
   @IsOptional()
   @IsString()

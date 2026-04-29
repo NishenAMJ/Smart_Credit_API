@@ -157,9 +157,15 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
   const fetchFeaturedLoans = async () => {
     try {
       const response = await loanService.getFeaturedLoans();
-      setLoans(response.data ?? []);
+      const loans = response.data ?? [];
+
+      if (loans.length === 0) {
+        console.warn("No available loans returned from API");
+      }
+
+      setLoans(loans);
     } catch (error) {
-      console.error("Error fetching loans:", error);
+      console.error("Error fetching available loans:", error);
       setLoans([]);
     } finally {
       setLoading(false);
@@ -303,7 +309,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
         <TouchableOpacity style={styles.searchIcon} onPress={handleSearch}>
           <Feather name='search' size={20} color='#007AFF' />
         </TouchableOpacity>
-        
+
         <TextInput
           style={styles.searchInput}
           placeholder='Search loans...'
@@ -318,7 +324,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
           onSubmitEditing={handleSearch}
           returnKeyType='search'
         />
-        
+
         {searchQuery.length > 0 && (
           <TouchableOpacity
             style={styles.filterIcon}
@@ -373,7 +379,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#007AFF"
+            tintColor='#007AFF'
           />
         }
         ListEmptyComponent={

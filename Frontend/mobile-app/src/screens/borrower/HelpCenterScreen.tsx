@@ -63,7 +63,7 @@ export default function HelpCenterScreen({
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={24} color="#FFFFFF" />
+            <Feather name='arrow-left' size={24} color='#FFFFFF' />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Help Center</Text>
         </View>
@@ -75,13 +75,13 @@ export default function HelpCenterScreen({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.searchContainer}>
-          <Feather name="search" size={18} color="#6B7280" />
+          <Feather name='search' size={18} color='#6B7280' />
           <TextInput
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search for help topics..."
-            placeholderTextColor="#9CA3AF"
+            placeholder='Search for help topics...'
+            placeholderTextColor='#9CA3AF'
           />
         </View>
 
@@ -117,7 +117,7 @@ export default function HelpCenterScreen({
         <View style={styles.faqCard}>
           {filteredFaqs.length === 0 ? (
             <View style={styles.emptyState}>
-              <Feather name="help-circle" size={30} color="#9CA3AF" />
+              <Feather name='help-circle' size={30} color='#9CA3AF' />
               <Text style={styles.emptyStateTitle}>No matching FAQ found</Text>
               <Text style={styles.emptyStateText}>
                 Try another keyword or open Support chat for help.
@@ -141,7 +141,7 @@ export default function HelpCenterScreen({
                     <Feather
                       name={isExpanded ? "chevron-up" : "chevron-down"}
                       size={18}
-                      color="#6B7280"
+                      color='#6B7280'
                     />
                   </View>
 
@@ -156,9 +156,9 @@ export default function HelpCenterScreen({
 
         <TouchableOpacity
           style={styles.contactButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.navigate("ContactSupport")}
         >
-          <Feather name="message-circle" size={16} color="#FFFFFF" />
+          <Feather name='message-circle' size={16} color='#FFFFFF' />
           <Text style={styles.contactButtonText}>
             Still need help? Contact Support
           </Text>

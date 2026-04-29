@@ -9,7 +9,7 @@ import type { BorrowerRepayment } from "../../types/borrower";
 export interface MakeRepaymentPayload {
   loanId: string;
   amount: number;
-  paymentMethod: "bank_transfer" | "qr_payment" | "cash";
+  paymentMethod: "bank_transfer" | "qr_payment" | "card";
   transactionReference?: string;
   paymentProofUrl?: string;
 }
@@ -72,7 +72,13 @@ export const paymentService = {
 
     const response = await apiClient.post<{
       success?: boolean;
-      data?: { qrCode: string; borrowerId: string; loanId: string };
+      data?: {
+        token: string;
+        expiresAt: number;
+        borrowerId: string;
+        loanId: string;
+        amount: number;
+      };
     }>(
       ENDPOINTS.repayments.generateQr,
       { loanId, borrowerId },

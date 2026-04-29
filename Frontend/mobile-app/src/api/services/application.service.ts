@@ -18,9 +18,9 @@ type ApplicationListResponse = {
 export interface CreateApplicationPayload {
   adId?: string;
   amount: number;
-  purpose: string;
+  purpose?: string;
   description?: string;
-  tenureMonths?: number;
+  tenureMonths: number;
   preferredRepaymentMethod?: "bank_transfer" | "qr_payment" | "cash";
   collateralDetails?: string[];
   additionalNotes?: string;
@@ -28,7 +28,6 @@ export interface CreateApplicationPayload {
 
 function normalizeApplication(
   application: Partial<BorrowerApplication> & {
-    loanAmount?: number;
     loanPurpose?: string;
     purposeDescription?: string;
   },
@@ -38,7 +37,6 @@ function normalizeApplication(
     createdAt: toIsoDate(application.createdAt),
     updatedAt: toIsoDate(application.updatedAt),
     loanTitle: `${titleCase(application.loanPurpose)} Loan`,
-    requestedAmount: application.amount,
     purpose:
       application.purposeDescription ?? titleCase(application.loanPurpose),
   };
@@ -153,19 +151,19 @@ export const applicationService = {
   },
 };
 export async function createApplication(payload: {
-  loanId: string;
-  requestedAmount: number;
+  adId: string;
+  amount: number;
   purpose: string;
   description?: string;
-  loanTermMonths?: number;
+  tenureMonths?: number;
   preferredRepaymentMethod?: "bank_transfer" | "qr_payment" | "cash";
 }) {
   return applicationService.createApplication({
-    loanId: payload.loanId,
-    requestedAmount: payload.requestedAmount,
+    adId: payload.adId,
+    amount: payload.amount,
     purpose: payload.purpose,
     description: payload.description,
-    loanTermMonths: payload.loanTermMonths,
+    tenureMonths: payload.tenureMonths ?? 12,
     preferredRepaymentMethod: payload.preferredRepaymentMethod,
   });
 }

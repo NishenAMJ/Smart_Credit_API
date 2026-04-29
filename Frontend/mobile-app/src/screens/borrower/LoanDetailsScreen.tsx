@@ -53,7 +53,9 @@ export default function LoanDetailsScreen({
   const pastPayments = payments.filter((p) => p.status === "PAID");
 
   const totalPaid = pastPayments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
-  const outstanding = (loan?.loanAmount ?? loan?.amount ?? 0) - totalPaid;
+  const outstanding =
+    loan?.outstandingBalance ??
+    (loan?.principalAmount ?? loan?.amount ?? 0) - totalPaid;
 
   const renderActiveView = () => (
     <>
@@ -74,28 +76,38 @@ export default function LoanDetailsScreen({
         <Text style={styles.sectionTitle}>Repayment Schedule</Text>
 
         {loading ? (
-          <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 20 }} />
+          <ActivityIndicator
+            size='small'
+            color={COLORS.primary}
+            style={{ marginTop: 20 }}
+          />
         ) : upcomingPayments.length > 0 ? (
           upcomingPayments.map((payment, index) => (
             <PaymentCard
               key={payment.paymentId ?? `up-${index}`}
               payment={payment}
-              paymentMethod="Card"
+              paymentMethod='Card'
               onPay={() => navigateToBorrowerTab(navigation, "Payments")}
             />
           ))
         ) : (
-          <EmptyState title="No upcoming payments" />
+          <EmptyState title='No upcoming payments' />
         )}
 
         {pastPayments.length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { marginTop: SPACING.lg }]}>Past Payments</Text>
+            <Text style={[styles.sectionTitle, { marginTop: SPACING.lg }]}>
+              Past Payments
+            </Text>
             {pastPayments.map((payment, index) => (
               <PaymentCard
                 key={payment.paymentId ?? `past-${index}`}
                 payment={payment}
-                onPay={() => navigateToBorrowerTab(navigation, "Payments", { tab: "History" })}
+                onPay={() =>
+                  navigateToBorrowerTab(navigation, "Payments", {
+                    tab: "History",
+                  })
+                }
               />
             ))}
           </>
@@ -107,7 +119,7 @@ export default function LoanDetailsScreen({
   return (
     <View style={styles.container}>
       <LoanDetailsHeader
-        title="Active Loan"
+        title='Active Loan'
         onBack={() => navigation.goBack()}
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>

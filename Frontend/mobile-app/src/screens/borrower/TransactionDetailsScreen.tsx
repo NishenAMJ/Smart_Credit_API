@@ -14,6 +14,7 @@ import { SPACING } from "../../constants/spacing";
 import { formatCurrency } from "../../utils/formatters";
 import type { BorrowerTransaction } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
+import { formatPaymentMethod } from "../../utils/formatPaymentMethods";
 
 type TransactionDetailsScreenProps = {
   route: {
@@ -58,22 +59,33 @@ export default function TransactionDetailsScreen({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="arrow-left" size={22} color="#FFFFFF" />
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Feather name='arrow-left' size={22} color='#FFFFFF' />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Transaction Details</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Amount Hero Card */}
         <View style={styles.amountCard}>
           <View style={[styles.amountIcon, { backgroundColor: statusCfg.bg }]}>
-            <Feather name={statusCfg.icon as any} size={28} color={statusCfg.color} />
+            <Feather
+              name={statusCfg.icon as any}
+              size={28}
+              color={statusCfg.color}
+            />
           </View>
           <Text style={styles.amountLabel}>Transaction Amount</Text>
-          <Text style={styles.amountValue}>{formatCurrency(transaction?.amount)}</Text>
+          <Text style={styles.amountValue}>
+            {formatCurrency(transaction?.amount)}
+          </Text>
           <View style={[styles.statusPill, { backgroundColor: statusCfg.bg }]}>
             <Text style={[styles.statusText, { color: statusCfg.color }]}>
               {rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1)}
@@ -98,6 +110,24 @@ export default function TransactionDetailsScreen({
           <View style={styles.divider} />
 
           <View style={styles.row}>
+            <Text style={styles.rowLabel}>Payment Method</Text>
+            <Text style={styles.rowValue}>
+              {formatPaymentMethod(transaction?.paymentMethod)}
+            </Text>
+          </View>
+          <View style={styles.divider} />
+
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>
+              {transaction?.type === "disbursement" ? "From" : "To"}
+            </Text>
+            <Text style={styles.rowValue}>
+              {transaction?.lenderName ?? "—"}
+            </Text>
+          </View>
+          <View style={styles.divider} />
+
+          <View style={styles.row}>
             <Text style={styles.rowLabel}>Transaction ID</Text>
             <Text style={[styles.rowValue, styles.monoText]}>
               {transaction?.transactionId ?? transaction?.repaymentId ?? "—"}
@@ -116,17 +146,19 @@ export default function TransactionDetailsScreen({
         {/* Status banners */}
         {rawStatus === "pending" && (
           <View style={styles.infoBanner}>
-            <Feather name="info" size={16} color="#D97706" />
+            <Feather name='info' size={16} color='#D97706' />
             <Text style={styles.infoBannerText}>
-              This transaction is pending verification. It may take up to 24 hours to complete.
+              This transaction is pending verification. It may take up to 24
+              hours to complete.
             </Text>
           </View>
         )}
         {rawStatus === "failed" && (
           <View style={[styles.infoBanner, { backgroundColor: "#FEE2E2" }]}>
-            <Feather name="alert-triangle" size={16} color="#DC2626" />
+            <Feather name='alert-triangle' size={16} color='#DC2626' />
             <Text style={[styles.infoBannerText, { color: "#DC2626" }]}>
-              This transaction failed. Please contact support if the issue persists.
+              This transaction failed. Please contact support if the issue
+              persists.
             </Text>
           </View>
         )}

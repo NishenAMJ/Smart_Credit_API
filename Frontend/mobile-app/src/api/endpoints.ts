@@ -39,6 +39,7 @@ export const ENDPOINTS = {
     list: "/borrower/payments",
     make: "/borrower/payments",
     generateQr: "/borrower/payments/generate-qr",
+    verifyQr: "/borrower/payments/verify-qr",
     uploadReceipt: "/borrower/payments/upload-receipt",
   },
 

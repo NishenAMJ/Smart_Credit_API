@@ -1,6 +1,12 @@
 /** @format */
 
-import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -15,10 +21,13 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import LoanCard from "../../components/borrower/LoanCard";
 import TransactionCard from "../../components/borrower/TransactionCard";
+import CreditScoreWidget from "../../components/borrower/CreditScoreWidget";
 import SidebarMenu from "../../components/common/SidebarMenu";
 import { dashboardService } from "../../api/services/dashboard.service";
 import { getMyLoans } from "../../api/services/loan.service";
 import { transactionService } from "../../api/services/transaction.service";
+import { profileService } from "../../api/services/profile.service";
+import { creditScoreService } from "../../api/services/creditScore.service";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { TYPOGRAPHY } from "../../constants/typography";
@@ -36,7 +45,7 @@ type DashboardSummary = {
   activeLoans?: number;
   pendingApplications?: number;
   totalOutstanding?: number;
-  nextPaymentDate?: string;
+  nextDueDate?: string;
   nextPaymentAmount?: number;
   creditScore?: number;
   totalBorrowed?: number;
@@ -90,14 +99,65 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
   const fetchData = async () => {
     try {
-      const [dashboardResponse, loanData, transactionResponse] =
+      const [dashboardResponse, loanData, transactionResponse, creditResponse] =
         await Promise.all([
           dashboardService.getDashboard(),
           getMyLoans("active"),
           transactionService.getMyTransactions(),
+          creditScoreService.getMyCreditScore().catch(() => null),
         ]);
 
-      setDashboard(dashboardResponse?.data ?? null);
+      let dashData = dashboardResponse;
+      // If the service returned the wrapper instead of the metrics, unwrap it
+      if (dashData && dashData.data && !dashData.totalOutstanding) {
+        dashData = dashData.data;
+      }
+
+      // If dashboard doesn't include profile, fetch it separately
+      if (dashData && !dashData.profile?.fullName) {
+        try {
+          const profile = await profileService.getMyProfile();
+          if (profile) {
+            dashData = {
+              ...dashData,
+              profile,
+            };
+          }
+        } catch (profileError) {
+          console.warn("Could not fetch profile separately:", profileError);
+        }
+      }
+
+      // Merge credit score data if dashboard is missing it
+      if (
+        dashData &&
+        (!dashData.creditScore || dashData.creditScore === 0) &&
+        creditResponse
+      ) {
+        dashData = {
+          ...dashData,
+          creditScore: creditResponse.data?.creditScore ?? dashData.creditScore,
+        };
+      }
+
+      // Calculate total outstanding from active loans if dashboard doesn't have it
+      if (
+        dashData &&
+        (!dashData.totalOutstanding || dashData.totalOutstanding === 0) &&
+        loanData?.length > 0
+      ) {
+        const totalOutstanding = loanData.reduce((sum, loan) => {
+          return sum + (loan.outstandingBalance ?? 0);
+        }, 0);
+        if (totalOutstanding > 0) {
+          dashData = {
+            ...dashData,
+            totalOutstanding,
+          };
+        }
+      }
+
+      setDashboard(dashData);
       setLoans(loanData ?? []);
       setTransactions(transactionResponse?.data ?? []);
     } catch (error) {
@@ -121,7 +181,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
       return () => {
         isActive = false;
       };
-    }, [])
+    }, []),
   );
 
   const onRefresh = useCallback(async () => {
@@ -174,7 +234,8 @@ export default function Home({ navigation }: MyLoansScreenProps) {
     {
       label: "Pay Now",
       icon: "credit-card" as const,
-      onPress: () => navigateToBorrowerTab(navigation, "Payments"),
+      onPress: () =>
+        navigateToBorrowerTab(navigation, "Payments", { tab: "Upcoming" }),
     },
     {
       label: "Find Loans",
@@ -191,23 +252,38 @@ export default function Home({ navigation }: MyLoansScreenProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size='large' color={COLORS.primary} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.hero, { height: HEADER_MAX_HEIGHT, transform: [{ translateY: headerTranslateY }] }]}>
-        <Animated.View style={[styles.heroTopRow, { transform: [{ translateY: topRowTranslateY }], zIndex: 20 }]}>
+      <Animated.View
+        style={[
+          styles.hero,
+          {
+            height: HEADER_MAX_HEIGHT,
+            transform: [{ translateY: headerTranslateY }],
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.heroTopRow,
+            { transform: [{ translateY: topRowTranslateY }], zIndex: 20 },
+          ]}
+        >
           <TouchableOpacity
             style={styles.heroIconButton}
             onPress={() => setSidebarVisible(true)}
           >
-            <Feather name="menu" size={22} color="#FFFFFF" />
+            <Feather name='menu' size={22} color='#FFFFFF' />
           </TouchableOpacity>
 
-          <Animated.Text style={[styles.heroTopTitle, { opacity: topTitleOpacity }]}>
+          <Animated.Text
+            style={[styles.heroTopTitle, { opacity: topTitleOpacity }]}
+          >
             Welcome back, {borrowerName}
           </Animated.Text>
 
@@ -215,14 +291,22 @@ export default function Home({ navigation }: MyLoansScreenProps) {
             style={styles.heroIconButton}
             onPress={() => navigation.navigate("Notifications")}
           >
-            <Feather name="bell" size={20} color="#FFFFFF" />
+            <Feather name='bell' size={20} color='#FFFFFF' />
           </TouchableOpacity>
         </Animated.View>
 
-        <Animated.View style={{ opacity: metricsOpacity, flex: 1, justifyContent: "flex-end", paddingBottom: SPACING.md }}>
+        <Animated.View
+          style={{
+            opacity: metricsOpacity,
+            flex: 1,
+            justifyContent: "flex-end",
+            paddingBottom: SPACING.md,
+          }}
+        >
           <Text style={styles.heroTitle}>Welcome back, {borrowerName}</Text>
           <Text style={styles.heroSubtitle}>
-            Track dues, monitor progress, and move quickly on your next loan step.
+            Track dues, monitor progress, and move quickly on your next loan
+            step.
           </Text>
 
           <View style={styles.heroMetricsRow}>
@@ -245,11 +329,14 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
       <Animated.ScrollView
         style={styles.content}
-        contentContainerStyle={[styles.contentContainer, { paddingTop: HEADER_MAX_HEIGHT + 10 }]}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingTop: HEADER_MAX_HEIGHT + 10 },
+        ]}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          { useNativeDriver: true },
         )}
         scrollEventThrottle={16}
         refreshControl={
@@ -313,6 +400,14 @@ export default function Home({ navigation }: MyLoansScreenProps) {
         </View>
 
         <View style={styles.section}>
+          <CreditScoreWidget
+            score={Number(dashboard?.creditScore ?? 0)}
+            creditLimit={Number((dashboard as any)?.profile?.creditLimit ?? 0)}
+            onPress={() => navigation.navigate("CreditScore")}
+          />
+        </View>
+
+        <View style={styles.section}>
           <View style={styles.nextPaymentCard}>
             <View style={styles.nextPaymentHeader}>
               <View>
@@ -323,7 +418,11 @@ export default function Home({ navigation }: MyLoansScreenProps) {
               </View>
               <TouchableOpacity
                 style={styles.primaryActionButton}
-                onPress={() => navigateToBorrowerTab(navigation, "Payments", { tab: "Upcoming" })}
+                onPress={() =>
+                  navigateToBorrowerTab(navigation, "Payments", {
+                    tab: "Upcoming",
+                  })
+                }
               >
                 <Text style={styles.primaryActionText}>Pay Now</Text>
               </TouchableOpacity>
@@ -331,17 +430,21 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
             <View style={styles.nextPaymentMetaRow}>
               <View style={styles.metaPill}>
-                <Feather name="calendar" size={14} color={COLORS.primary} />
+                <Feather name='calendar' size={14} color={COLORS.primary} />
                 <Text style={styles.metaPillText}>
-                  {formatDateLabel(dashboard?.nextPaymentDate)}
+                  {formatDateLabel(dashboard?.nextDueDate)}
                 </Text>
               </View>
 
               <TouchableOpacity
                 style={styles.metaPill}
-                onPress={() => navigateToBorrowerTab(navigation, "Payments", { tab: "History" })}
+                onPress={() =>
+                  navigateToBorrowerTab(navigation, "Payments", {
+                    tab: "History",
+                  })
+                }
               >
-                <Feather name="clock" size={14} color={COLORS.primary} />
+                <Feather name='clock' size={14} color={COLORS.primary} />
                 <Text style={styles.metaPillText}>View History</Text>
               </TouchableOpacity>
             </View>
@@ -404,7 +507,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
               <Text style={styles.secondaryActionText}>
                 {loans.length - ACTIVE_LOAN_PREVIEW_LIMIT} more active loans
               </Text>
-              <Feather name="arrow-right" size={16} color={COLORS.primary} />
+              <Feather name='arrow-right' size={16} color={COLORS.primary} />
             </TouchableOpacity>
           ) : null}
 
@@ -429,7 +532,11 @@ export default function Home({ navigation }: MyLoansScreenProps) {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
             <TouchableOpacity
-              onPress={() => navigateToBorrowerTab(navigation, "Payments", { tab: "History" })}
+              onPress={() =>
+                navigateToBorrowerTab(navigation, "Payments", {
+                  tab: "History",
+                })
+              }
             >
               <Text style={styles.sectionLink}>See All</Text>
             </TouchableOpacity>

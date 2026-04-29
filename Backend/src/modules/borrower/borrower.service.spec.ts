@@ -3,6 +3,8 @@ import { BorrowerService } from './borrower.service';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { LoanStatus } from './interfaces/borrower.interface';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 /**
  * Baseline wiring tests for `BorrowerService`.
@@ -33,7 +35,7 @@ describe('BorrowerService', () => {
   };
 
   const mockCollection = jest.fn().mockReturnValue(mockCollectionRef);
-  
+
   // Support for .doc().get() and .doc().update()
   mockDoc.mockReturnValue({ get: mockGet, update: mockUpdate, set: mockSet });
 
@@ -55,6 +57,19 @@ describe('BorrowerService', () => {
           provide: FirebaseService,
           useValue: mockFirebaseService, //use mock instead of the real FirebaseService
         },
+        {
+          provide: JwtService,
+          useValue: {
+            signAsync: jest.fn(),
+            verifyAsync: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -69,11 +84,15 @@ describe('BorrowerService', () => {
   });
 
   describe('getLoanById', () => {
-    it('should return the loan if exists', async () => { //Setup our mock database
+    it('should return the loan if exists', async () => {
+      //Setup our mock database
       const mockLoanData = {
         loanId: 'loan_1',
         borrowerId: 'borrower_1',
         status: LoanStatus.ACTIVE,
+        principalAmount: 100000,
+        tenureMonths: 10,
+        totalRepayable: 120000,
       };
       mockGet.mockResolvedValueOnce({
         exists: true,
@@ -83,7 +102,15 @@ describe('BorrowerService', () => {
       //Call the method we are testing
       const result = await service.getLoanById('loan_1', 'borrower_1');
       //verify the results
-      expect(result).toEqual(mockLoanData);
+      expect(result).toMatchObject({
+        loanId: 'loan_1',
+        borrowerId: 'borrower_1',
+        status: LoanStatus.ACTIVE,
+        principalAmount: 100000,
+        tenureMonths: 10,
+        monthlyInstallment: 12000,
+        outstandingBalance: 120000,
+      });
       expect(mockCollection).toHaveBeenCalledWith('loans');
 
       expect(mockDoc).toHaveBeenCalledWith('loan_1');
@@ -113,7 +140,7 @@ describe('BorrowerService', () => {
         ForbiddenException,
       );
     });
-    });
+  });
 
   describe('getLoans', () => {
     it('should query loans collection by borrowerId', async () => {
@@ -131,7 +158,9 @@ describe('BorrowerService', () => {
       expect(mockCollection).toHaveBeenCalledWith('loans');
       expect(mockWhere).toHaveBeenCalledWith('borrowerId', '==', 'b_1');
       expect(result).toHaveLength(2);
-      expect(result[0].loanId).toBe('1');
+      expect(result.map((loan) => loan.loanId)).toEqual(
+        expect.arrayContaining(['1', '2']),
+      );
     });
 
     it('should chain a status filter if provided', async () => {
@@ -156,22 +185,30 @@ describe('BorrowerService', () => {
 
     it('should fetch and map lender names', async () => {
       // Arrange
-      const mockDocs = [
-        { data: () => ({ userId: 'lender_1', fullName: 'Bank A' }) },
-        { data: () => ({ userId: 'lender_2', fullName: 'Bank B' }) },
-      ];
-      mockGet.mockResolvedValueOnce({ docs: mockDocs });
+      mockGet
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({ userId: 'lender_1', fullName: 'Bank A' }),
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({ userId: 'lender_2', fullName: 'Bank B' }),
+        });
 
       // Act
-      const result = await service.getLenderNamesMap(['lender_1', 'lender_2', 'lender_1']);
+      const result = await service.getLenderNamesMap([
+        'lender_1',
+        'lender_2',
+        'lender_1',
+      ]);
 
       // Assert
-      expect(mockCollection).toHaveBeenCalledWith('borrowers');
+      expect(mockCollection).toHaveBeenCalledWith('users');
       // Should deduplicate the array
-      expect(mockWhere).toHaveBeenCalledWith('userId', 'in', ['lender_1', 'lender_2']);
+      expect(mockDoc).toHaveBeenCalledWith('lender_1');
+      expect(mockDoc).toHaveBeenCalledWith('lender_2');
       expect(result.get('lender_1')).toBe('Bank A');
       expect(result.get('lender_2')).toBe('Bank B');
     });
   });
-
 });

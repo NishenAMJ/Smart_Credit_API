@@ -10,6 +10,6 @@ export const dashboardService = {
     if (!userId) throw new Error("User session expired. Please log in again.");
 
     const response = await apiClient.get(ENDPOINTS.dashboard.get(userId));
-    return response.data;
+    return response.data?.data?.data ?? response.data?.data ?? response.data;
   },
 };

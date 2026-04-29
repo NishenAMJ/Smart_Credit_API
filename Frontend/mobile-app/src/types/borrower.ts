@@ -28,6 +28,7 @@ export interface BorrowerAddress {
 
 export interface BorrowerLoan {
   loanId: string;
+  adId?: string;
   requestId?: string;
   lenderId?: string;
   lenderName?: string;
@@ -38,16 +39,24 @@ export interface BorrowerLoan {
   province?: string;
   branchAddress?: string;
   address?: string;
-  loanAmount?: number;
+  principalAmount?: number;
   minAmount?: number;
   maxAmount?: number;
   durationMonths?: number;
-  loanTermMonths?: number;
+  tenureMonths?: number;
+  minTenureMonths?: number;
+  maxTenureMonths?: number;
+  preferredPurposes?: string[];
   amount?: number;
   isFeatured?: boolean;
   interestRate?: number;
+  preferredInterestRate?: number;
+  totalRepayable?: number;
+  monthlyInstallment?: number;
+  outstandingBalance?: number;
   status?: LoanStatus;
   startDate?: string;
+  nextDueDate?: string;
   endDate?: string;
 }
 
@@ -60,6 +69,7 @@ export interface BorrowerTransaction {
   timestamp?: string;
   paidAt?: string;
   createdAt?: string;
+  paymentMethod?: string;
   lenderName?: string;
   amount?: number;
 }
@@ -75,12 +85,14 @@ export interface BorrowerRepayment {
   paidAt?: string;
   transactionReference?: string;
   paymentProofUrl?: string;
+  paymentMethod?: string;
   type?: string;
   timestamp?: string;
   lenderName?: string;
 }
 
 export interface BorrowerApplication {
+  applicationId?: string;
   requestId?: string;
   adId?: string;
   status?: ApplicationStatus;
@@ -88,7 +100,6 @@ export interface BorrowerApplication {
   updatedAt?: string;
   loanTitle?: string;
   amount?: number;
-  requestedAmount?: number;
   tenureMonths?: number;
   purpose?: string;
   loanPurpose?: string;
@@ -103,6 +114,13 @@ export interface BorrowerProfile {
   fullName: string;
   email: string;
   phone: string;
+  photoURL?: string;
+  profilePicture?: string;
+  profilePictureUrl?: string;
+  profilePicUrl?: string;
+  profilePhotoUrl?: string;
+  imageUrl?: string;
+  avatarUrl?: string;
   nic: string;
   dateOfBirth: string;
   createdAt?: string;

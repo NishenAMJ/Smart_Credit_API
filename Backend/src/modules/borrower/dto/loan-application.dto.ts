@@ -37,6 +37,7 @@ export enum RepaymentMethod {
  */
 export enum LoanApplicationStatus {
   DRAFT = 'draft',
+  OPEN = 'open',
   PENDING = 'pending',
   UNDER_REVIEW = 'under_review',
   APPROVED = 'approved',

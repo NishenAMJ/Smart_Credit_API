@@ -9,7 +9,7 @@ type ApplicationCardProps = {
     status?: string;
     createdAt?: string;
     loanTitle?: string;
-    requestedAmount?: number;
+    amount?: number;
     purpose?: string;
   };
   onPress?: () => void;
@@ -56,13 +56,13 @@ export default function ApplicationCard({
         {application.loanTitle || "Loan Application"}
       </Text>
       <Text style={styles.amount}>
-        LKR {application.requestedAmount?.toLocaleString() ?? "0"}
+        LKR {application.amount?.toLocaleString() ?? "0"}
       </Text>
       <Text style={styles.purpose}>{application.purpose ?? "-"}</Text>
 
       <View style={styles.footer}>
         <Text style={styles.viewDetails}>View Details</Text>
-        <Feather name="chevron-right" size={20} color="#6B7280" />
+        <Feather name='chevron-right' size={20} color='#6B7280' />
       </View>
     </TouchableOpacity>
   );

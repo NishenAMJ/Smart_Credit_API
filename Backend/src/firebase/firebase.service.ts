@@ -16,4 +16,8 @@ export class FirebaseService {
   async saveData(collection: string, data: Record<string, unknown>) {
     return this.db.collection(collection).add(data);
   }
+
+  getDb(): Firestore {
+    return this.db;
+  }
 }

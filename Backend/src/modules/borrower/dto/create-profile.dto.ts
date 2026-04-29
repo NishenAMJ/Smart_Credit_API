@@ -38,8 +38,6 @@ export class AddressDto {
   province!: string;
 }
 
-
-
 /**
  * Validates payloads for creating a borrower profile record.
  */

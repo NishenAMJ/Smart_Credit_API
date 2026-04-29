@@ -50,8 +50,8 @@ export default function LoanApplicationScreen({
   const [loanAmount, setLoanAmount] = useState(String(minimumLoanAmount));
   const [employmentStatus, setEmploymentStatus] =
     useState("Full-Time Employee");
-  const [loanPurpose, setLoanPurpose] = useState("Car Repair");
-  const [monthlyIncome, setMonthlyIncome] = useState("5000.00");
+  const [loanPurpose, setLoanPurpose] = useState("");
+  const [monthlyIncome, setMonthlyIncome] = useState("");
   const [repaymentDuration, setRepaymentDuration] = useState(
     String(loan?.durationMonths ?? 12),
   );
@@ -63,6 +63,9 @@ export default function LoanApplicationScreen({
   const [loading, setLoading] = useState(false);
   const [checkingEligibility, setCheckingEligibility] = useState(true);
   const [kycVerified, setKycVerified] = useState(false);
+  const [hasProfileEmploymentStatus, setHasProfileEmploymentStatus] =
+    useState(false);
+  const [hasProfileMonthlyIncome, setHasProfileMonthlyIncome] = useState(false);
 
   useEffect(() => {
     setLoanAmount(String(minimumLoanAmount));
@@ -76,6 +79,15 @@ export default function LoanApplicationScreen({
         const profile = await profileService.getMyProfile();
         if (isMounted) {
           setKycVerified(Boolean(profile.kycVerified));
+          // Prefill employment status and monthly income from profile
+          if (profile.employmentStatus) {
+            setEmploymentStatus(profile.employmentStatus);
+            setHasProfileEmploymentStatus(true);
+          }
+          if (profile.monthlyIncome) {
+            setMonthlyIncome(String(profile.monthlyIncome));
+            setHasProfileMonthlyIncome(true);
+          }
         }
       } catch (error) {
         console.error("Error checking borrower eligibility:", error);
@@ -114,7 +126,7 @@ export default function LoanApplicationScreen({
   }, [loanPurpose]);
 
   const handleSubmit = async () => {
-    if (!loan?.loanId) {
+    if (!(loan?.adId ?? loan?.loanId)) {
       Alert.alert(
         "Missing Loan",
         "Please choose a loan before submitting an application.",
@@ -164,7 +176,8 @@ export default function LoanApplicationScreen({
       return;
     }
 
-    if (!employmentStatus.trim()) {
+    // Employment status is required only if not prefilled from profile
+    if (!hasProfileEmploymentStatus && !employmentStatus.trim()) {
       Alert.alert(
         "Missing employment status",
         "Please enter your employment status.",
@@ -172,7 +185,8 @@ export default function LoanApplicationScreen({
       return;
     }
 
-    if (!isValidAmount(monthlyIncome)) {
+    // Monthly income is required only if not prefilled from profile
+    if (!hasProfileMonthlyIncome && !isValidAmount(monthlyIncome)) {
       Alert.alert("Invalid income", "Please enter a valid monthly income.");
       return;
     }
@@ -186,45 +200,41 @@ export default function LoanApplicationScreen({
       return;
     }
 
-    const normalizedPreferredRate = preferredInterestRate.trim();
-    if (normalizedPreferredRate.length === 0) {
-      Alert.alert(
-        "Missing preferred rate",
-        "Please enter a preferred interest rate.",
-      );
-      return;
-    }
+    const normalizedPreferredRate = preferredInterestRate.trim() || "";
+    const hasPreferredRate = normalizedPreferredRate.length > 0;
 
-    const preferredRate = Number.parseFloat(normalizedPreferredRate);
-    if (Number.isNaN(preferredRate)) {
-      Alert.alert(
-        "Invalid preferred rate",
-        "Please enter a valid preferred interest rate.",
-      );
-      return;
-    }
+    if (hasPreferredRate) {
+      const preferredRate = Number.parseFloat(normalizedPreferredRate);
+      if (Number.isNaN(preferredRate)) {
+        Alert.alert(
+          "Invalid preferred rate",
+          "Please enter a valid preferred interest rate.",
+        );
+        return;
+      }
 
-    const loanInterestRate = Number(loan.interestRate);
-    if (!Number.isFinite(loanInterestRate) || loanInterestRate <= 0) {
-      Alert.alert(
-        "Loan interest unavailable",
-        "Unable to validate preferred rate because loan interest rate is missing.",
-      );
-      return;
-    }
+      const loanInterestRate = Number(loan.interestRate);
+      if (!Number.isFinite(loanInterestRate) || loanInterestRate <= 0) {
+        Alert.alert(
+          "Loan interest unavailable",
+          "Unable to validate preferred rate because loan interest rate is missing.",
+        );
+        return;
+      }
 
-    if (preferredRate >= loanInterestRate) {
-      Alert.alert(
-        "Preferred rate too high",
-        `Preferred interest rate must be lower than ${loanInterestRate}%.`,
-      );
-      return;
+      if (preferredRate >= loanInterestRate) {
+        Alert.alert(
+          "Preferred rate too high",
+          `Preferred interest rate must be lower than ${loanInterestRate}%.`,
+        );
+        return;
+      }
     }
 
     try {
       setLoading(true);
       const createdApplication = await createApplication({
-        adId: loan.loanId,
+        adId: loan.adId ?? loan.loanId ?? "",
         amount: requestedAmount,
         purpose: normalizedLoanCategory,
         description: [

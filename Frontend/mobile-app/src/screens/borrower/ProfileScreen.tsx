@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -228,6 +229,15 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+  const profileImageUri =
+    profile?.photoURL ||
+    profile?.profilePictureUrl ||
+    profile?.profilePicUrl ||
+    profile?.profilePhotoUrl ||
+    profile?.profilePicture ||
+    profile?.imageUrl ||
+    profile?.avatarUrl ||
+    "";
 
   return (
     <View style={styles.container}>
@@ -270,7 +280,15 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         >
           <View style={styles.profileCard}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{avatarText || "B"}</Text>
+              {profileImageUri ? (
+                <Image
+                  source={{ uri: profileImageUri }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={styles.avatarText}>{avatarText || "B"}</Text>
+              )}
             </View>
             <Text style={styles.name}>{editableProfile.fullName || "-"}</Text>
             <Text style={styles.subText}>Borrower Account</Text>
@@ -292,13 +310,27 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Financial Snapshot</Text>
             {financeRows.map((row) => (
-              <View key={row.label} style={styles.detailRow}>
+              <TouchableOpacity
+                key={row.label}
+                style={styles.detailRow}
+                activeOpacity={row.label === "Credit Score" ? 0.75 : 1}
+                onPress={() => {
+                  if (row.label === "Credit Score") {
+                    navigation.navigate("CreditScore");
+                  }
+                }}
+              >
                 <View style={styles.rowLeft}>
                   <Feather name={row.icon} size={16} color="#007AFF" />
                   <Text style={styles.detailLabel}>{row.label}</Text>
                 </View>
-                <Text style={styles.detailValue}>{row.value}</Text>
-              </View>
+                <View style={styles.financeValueRow}>
+                  <Text style={styles.detailValue}>{row.value}</Text>
+                  {row.label === "Credit Score" ? (
+                    <Feather name="chevron-right" size={16} color="#9CA3AF" />
+                  ) : null}
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
 
@@ -459,6 +491,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 10,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarText: {
     fontSize: 20,
@@ -504,6 +541,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
+  },
+  financeValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginLeft: 8,
   },
   detailLabel: {
     marginLeft: 8,
