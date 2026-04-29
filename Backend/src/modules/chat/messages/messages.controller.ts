@@ -1,3 +1,6 @@
+// Messages controller handles sending and retrieving messages in conversations
+// Supports text messages and media uploads (images, videos)
+
 import {
   Controller,
   Get,
@@ -23,7 +26,8 @@ class SendMessageDto {
 export class MessagesController {
   constructor(private messagesService: MessagesService) {}
 
-  // GET /conversations/:conversationId/messages?page=0&limit=30
+  // Get paginated list of messages from a conversation
+  // Use page=0 for first batch, page=1 for second, etc
   @Get()
   list(
     @Param('conversationId') conversationId: string,
@@ -39,7 +43,7 @@ export class MessagesController {
     );
   }
 
-  // POST /conversations/:conversationId/messages
+  // Send a text message to the conversation
   @Post()
   sendText(
     @Param('conversationId') conversationId: string,
@@ -49,7 +53,7 @@ export class MessagesController {
     return this.messagesService.sendText(conversationId, userId, dto.text);
   }
 
-  // POST /conversations/:conversationId/messages/upload
+  // Upload and send media (image or video) to the conversation
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   uploadMedia(

@@ -1,3 +1,6 @@
+// This service handles creating new lending ads
+// It validates the input, creates search keywords for finding ads, and saves to Firebase
+
 import { Injectable, BadRequestException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -14,20 +17,21 @@ export class AdvertisementCreateService {
     dto: CreateAdDto,
   ): Promise<AdvertisementResponse> {
 
-    // ── Validate amounts ────────────────────────────
+    // Check that minimum amount is less than maximum amount
     if (dto.minAmount >= dto.maxAmount) {
       throw new BadRequestException(
         'Maximum amount must be greater than minimum amount',
       );
     }
 
+    // Check that minimum tenure is less than maximum tenure
     if (dto.minTenureMonths > dto.maxTenureMonths) {
       throw new BadRequestException(
         'Maximum tenure must be greater than or equal to minimum tenure',
       );
     }
 
-    // ── Get lender info from users collection ───────
+    // Get lender's info from the users collection
     const lenderDoc = await this.db
       .collection('users')
       .doc(lenderId)
@@ -39,12 +43,12 @@ export class AdvertisementCreateService {
 
     const lenderData = lenderDoc.data()!;
 
-    // ── Check lender role ────────────────────────────
+    // Make sure user actually has lender role
     if (!lenderData.role?.includes('lender')) {
       throw new BadRequestException('User is not a lender');
     }
 
-    // ── Build search keywords ────────────────────────
+    // Build search keywords so ads can be found easily
     const keywords = dto.searchKeywords || [];
     const locationKeyword = dto.location.toLowerCase();
     const purposeKeywords = dto.preferredPurposes.map((p) => p.toLowerCase());
@@ -62,7 +66,7 @@ export class AdvertisementCreateService {
       ]),
     ];
 
-    // ── Build ad document ────────────────────────────
+    // Create the ad document with all details
     const now = admin.firestore.Timestamp.now();
     const expiresAt = admin.firestore.Timestamp.fromDate(
       new Date(dto.expiresAt),
@@ -104,13 +108,13 @@ export class AdvertisementCreateService {
       source:                'lender_created',
     };
 
-    // ── Save to Firestore ────────────────────────────
+    // Save to Firestore database
     await adRef.set(adData);
 
     return this.toResponse(adData);
   }
 
-  // ── Convert Firestore doc to API response ─────────
+  // Convert database document to format we send to users
   toResponse(data: Advertisement): AdvertisementResponse {
     return {
       adId:                  data.adId,

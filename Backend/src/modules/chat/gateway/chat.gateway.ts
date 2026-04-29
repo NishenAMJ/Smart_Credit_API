@@ -1,3 +1,6 @@
+// Chat gateway handles real-time WebSocket communication
+// Manages connections, rooms, messaging, typing indicators, and user presence
+
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -18,8 +21,7 @@ import { BlocksService } from '../users/blocks.service';
 import { UsersService } from '../users/users.service';
 import { WsExceptionFilter } from '../common/filters/ws-exception.filter';
 
-// ── DTOs ──────────────────────────────────────────────────────────────────────
-
+// Data classes for validating incoming socket messages
 class JoinRoomDto {
   @IsString() conversationId!: string;
 }
@@ -39,8 +41,7 @@ class ReadReceiptDto {
   @IsString() messageId!: string;
 }
 
-// ── Gateway ───────────────────────────────────────────────────────────────────
-
+// WebSocket gateway for real-time chat
 @UseFilters(WsExceptionFilter)
 @WebSocketGateway({
   cors: {
@@ -53,7 +54,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Server;
   private readonly logger = new Logger(ChatGateway.name);
 
-  // userId → Set of socketIds (one user can have multiple tabs/devices)
+  // Keep track of which sockets are connected for each user
+  // A user can have multiple devices connected at once
   private userSockets = new Map<string, Set<string>>();
 
   constructor(
@@ -64,39 +66,35 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private users: UsersService,
   ) {}
 
-  // ── Connection lifecycle ──────────────────────────────────────────────────────
-
+  // Handle new socket connection
   async handleConnection(client: Socket) {
-    // The parent project's auth middleware must set userId on the handshake.
-    // Adjust the key to match your auth system:
-    //   client.handshake.auth.userId  (if using socket.io auth option)
-    //   client.handshake.headers['x-user-id']  (if using headers)
+    // Get userId from socket auth or headers
     const userId =
       client.handshake.auth?.userId ??
       client.handshake.headers['x-user-id'] as string;
 
     if (!userId) {
-      this.logger.warn(`[${client.id}] connection rejected — no userId`);
+      this.logger.warn(`[${client.id}] connection rejected - no userId`);
       client.disconnect();
       return;
     }
 
-    // Attach to socket for later retrieval
+    // Store userId on the socket for later use
     client.data.userId = userId;
 
-    // Track socket
+    // Track this socket connection for the user
     if (!this.userSockets.has(userId)) {
       this.userSockets.set(userId, new Set());
     }
     this.userSockets.get(userId)!.add(client.id);
 
-    // Set user online in Firestore
+    // Update user as online in database
     await this.users.setOnlineStatus(userId, true);
 
-    // Notify contacts that this user is online
+    // Notify contacts that user came online
     this.broadcastPresence(userId, true);
 
-    this.logger.log(`[${client.id}] connected — userId: ${userId}`);
+    this.logger.log(`[${client.id}] connected - userId: ${userId}`);
   }
 
   async handleDisconnect(client: Socket) {

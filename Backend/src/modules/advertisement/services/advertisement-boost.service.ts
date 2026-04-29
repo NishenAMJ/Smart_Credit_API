@@ -26,7 +26,8 @@ export class AdvertisementBoostService {
     private createService: AdvertisementCreateService,
   ) {}
 
-  // ── Apply boost to an ad ─────────────────────────
+  // Apply boost package to an ad to increase visibility
+  // Verifies ownership, validates payment amount, calculates expiry date based on package duration
   async boostAd(
     adId: string,
     lenderId: string,
@@ -42,21 +43,21 @@ export class AdvertisementBoostService {
 
     const data = docSnap.data() as Advertisement;
 
-    // ── Check ownership ──────────────────────────────
+    // Only the ad owner can boost their own ad
     if (data.lenderId !== lenderId) {
       throw new ForbiddenException(
         'You can only boost your own ads',
       );
     }
 
-    // ── Check ad is active ───────────────────────────
+    // Can't boost ads that are paused, completed, or deleted
     if (data.status !== 'active') {
       throw new BadRequestException(
         'Only active ads can be boosted',
       );
     }
 
-    // ── Check already boosted ────────────────────────
+    // Check if already boosted with active expiry - can't overlap boosts
     if (data.isBoosted) {
       const now = admin.firestore.Timestamp.now();
       if (
@@ -69,7 +70,7 @@ export class AdvertisementBoostService {
       }
     }
 
-    // ── Validate package price ───────────────────────
+    // Ensure the package exists and payment is sufficient
     const pkg = BOOST_PACKAGES[dto.package as keyof typeof BOOST_PACKAGES];
     if (!pkg) {
       throw new BadRequestException('Invalid boost package');
@@ -81,12 +82,12 @@ export class AdvertisementBoostService {
       );
     }
 
-    // ── Calculate boost expiry ───────────────────────
+    // Calculate when the boost will expire based on package duration
     const now         = admin.firestore.Timestamp.now();
     const boostExpiry = new Date(now.toDate());
     boostExpiry.setDate(boostExpiry.getDate() + pkg.days);
 
-    // ── Update ad with boost info ────────────────────
+    // Update the ad to mark it as boosted with expiry timestamp and payment info
     await docRef.update({
       isBoosted:   true,
       boostExpiry: admin.firestore.Timestamp.fromDate(boostExpiry),
@@ -95,8 +96,7 @@ export class AdvertisementBoostService {
       updatedAt:   now,
     });
 
-    // ── Create boost payment record ──────────────────
-    // This goes to admin for tracking revenue
+    // Create a payment record in admin collection for revenue tracking and refunds
     await this.db.collection('boostPayments').add({
       adId,
       lenderId,
@@ -109,14 +109,15 @@ export class AdvertisementBoostService {
       createdAt:        now,
     });
 
-    // ── Return updated ad ────────────────────────────
+    // Return the updated ad with all boost metadata
     const updated = await docRef.get();
     return this.createService.toResponse(
       updated.data() as Advertisement,
     );
   }
 
-  // ── Cancel boost ─────────────────────────────────
+  // Remove active boost from an ad before expiry date
+  // Clears the isBoosted flag and removes the expiry timestamp
   async cancelBoost(
     adId: string,
     lenderId: string,
@@ -131,14 +132,17 @@ export class AdvertisementBoostService {
 
     const data = docSnap.data() as Advertisement;
 
+    // Only the ad owner can cancel their own boost
     if (data.lenderId !== lenderId) {
       throw new ForbiddenException('You can only cancel your own boost');
     }
 
+    // Can't cancel a boost that doesn't exist
     if (!data.isBoosted) {
       throw new BadRequestException('This ad is not boosted');
     }
 
+    // Clear the boost status and expiry
     await docRef.update({
       isBoosted:   false,
       boostExpiry: null,

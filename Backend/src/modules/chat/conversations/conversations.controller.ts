@@ -1,3 +1,6 @@
+// Conversations controller handles all conversation-related HTTP requests
+// Users can list, create, find, mark as read, mute, and delete conversations
+
 import {
   Controller,
   Get,
@@ -25,13 +28,13 @@ class MuteDto {
 export class ConversationsController {
   constructor(private conversations: ConversationsService) {}
 
-  // GET /conversations
+  // Get all conversations for the current user
   @Get()
   list(@CurrentUser() userId: string) {
     return this.conversations.listForUser(userId);
   }
 
-  // POST /conversations  — get-or-create 1-on-1 conversation
+  // Start a new conversation or get existing one with another user
   @Post()
   start(
     @CurrentUser() userId: string,
@@ -40,7 +43,7 @@ export class ConversationsController {
     return this.conversations.getOrCreate(userId, dto.targetUserId);
   }
 
-  // GET /conversations/:id
+  // Get a single conversation by ID
   @Get(':id')
   findOne(
     @Param('id') id: string,
@@ -49,7 +52,7 @@ export class ConversationsController {
     return this.conversations.findOne(id, userId);
   }
 
-  // PATCH /conversations/:id/read
+  // Mark conversation as read (clears unread message count)
   @Patch(':id/read')
   markRead(
     @Param('id') id: string,
@@ -58,7 +61,7 @@ export class ConversationsController {
     return this.conversations.markAsRead(id, userId);
   }
 
-  // PATCH /conversations/:id/mute
+  // Mute or unmute notifications for a conversation
   @Patch(':id/mute')
   mute(
     @Param('id') id: string,
@@ -68,7 +71,7 @@ export class ConversationsController {
     return this.conversations.setMuted(id, userId, dto.muted);
   }
 
-  // DELETE /conversations/:id
+  // Delete a conversation entirely
   @Delete(':id')
   remove(
     @Param('id') id: string,

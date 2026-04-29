@@ -1,3 +1,6 @@
+// Conversations service handles all conversation logic
+// Creates, retrieves, mutes, marks as read, and deletes conversations
+
 import {
   Injectable,
   NotFoundException,
@@ -10,16 +13,17 @@ import { COLLECTIONS, ConversationDoc } from '../common/types';
 export class ConversationsService {
   constructor(private firebase: FirebaseService) {}
 
-  // ── Get or create a 1-on-1 conversation ─────────────────────────────────────
-  // Idempotent: calling this twice returns the same conversation.
-
+  // Get or create a 1-on-1 conversation between two users
+  // If it already exists, return existing. Otherwise create new one.
+  // Safe to call multiple times
   async getOrCreate(
     userA: string,
     userB: string,
   ): Promise<ConversationDoc> {
-    // Canonical participant order so we can query deterministically
+    // Sort IDs so we always search in the same order
     const participantIds = [userA, userB].sort() as [string, string];
 
+    // Check if conversation already exists
     const existing = await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
       .where('participantIds', '==', participantIds)
@@ -31,6 +35,7 @@ export class ConversationsService {
       return { id: d.id, ...d.data() } as ConversationDoc;
     }
 
+    // Create new conversation if not found
     const ref = await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
       .add({
@@ -45,8 +50,7 @@ export class ConversationsService {
     return { id: snap.id, ...snap.data() } as ConversationDoc;
   }
 
-  // ── List all conversations for a user ────────────────────────────────────────
-
+  // Get all conversations for a user sorted by newest first
   async listForUser(userId: string): Promise<ConversationDoc[]> {
     const snap = await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
@@ -60,8 +64,7 @@ export class ConversationsService {
     })) as ConversationDoc[];
   }
 
-  // ── Get single conversation (with access check) ──────────────────────────────
-
+  // Get a single conversation and check user has access
   async findOne(conversationId: string, userId: string): Promise<ConversationDoc> {
     const snap = await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
@@ -71,6 +74,7 @@ export class ConversationsService {
     if (!snap.exists) throw new NotFoundException('Conversation not found');
 
     const data = snap.data() as ConversationDoc;
+    // Make sure user is actually a participant in this conversation
     if (!data.participantIds.includes(userId)) {
       throw new ForbiddenException('Not a participant');
     }
@@ -78,8 +82,7 @@ export class ConversationsService {
     return { ...data, id: snap.id };
   }
 
-  // ── Mute / unmute ────────────────────────────────────────────────────────────
-
+  // Mute or unmute conversation notifications
   async setMuted(
     conversationId: string,
     userId: string,
@@ -95,8 +98,7 @@ export class ConversationsService {
       .update({ mutedBy: [...mutedBy] });
   }
 
-  // ── Mark all messages as read (reset unread count) ───────────────────────────
-
+  // Clear unread message count for user
   async markAsRead(conversationId: string, userId: string): Promise<void> {
     await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
@@ -104,12 +106,11 @@ export class ConversationsService {
       .update({ [`unreadCounts.${userId}`]: 0 });
   }
 
-  // ── Delete conversation ──────────────────────────────────────────────────────
-
+  // Delete entire conversation and all its messages
   async delete(conversationId: string, userId: string): Promise<void> {
-    await this.findOne(conversationId, userId); // access check
+    await this.findOne(conversationId, userId); // check user has access
 
-    // Delete subcollection messages in batches
+    // Delete all messages in this conversation
     const messagesRef = this.firebase.firestore.collection(
       COLLECTIONS.MESSAGES(conversationId),
     );
@@ -118,14 +119,14 @@ export class ConversationsService {
     msgs.docs.forEach((d) => batch.delete(d.ref));
     await batch.commit();
 
+    // Delete the conversation itself
     await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
       .doc(conversationId)
       .delete();
   }
 
-  // ── Internal: update last message snapshot ───────────────────────────────────
-
+  // Update last message preview and increment unread count for recipient
   async updateLastMessage(
     conversationId: string,
     senderId: string,
@@ -141,8 +142,8 @@ export class ConversationsService {
           senderId,
           createdAt: this.firebase.serverTimestamp(),
         },
+        // Increment recipient's unread count
         [`unreadCounts.${recipientId}`]:
-          // Firestore increment
           require('firebase-admin').firestore.FieldValue.increment(1),
       });
   }

@@ -1,3 +1,6 @@
+// Advertisement controller handles all HTTP requests for ads
+// Users can create ads, search ads, boost them, and view analytics
+
 import {
   Controller,
   Get,
@@ -20,11 +23,8 @@ import { AdvertisementDeleteService }   from './services/advertisement-delete.se
 import { AdvertisementBoostService }    from './services/advertisement-boost.service';
 import { AdvertisementAnalyticsService }    from './services/advertisement-analytics.service';
 
-// ── NOTE ──────────────────────────────────────────────
-// In production you would use JWT Guards to get lenderId
-// from the auth token instead of query params.
-// For now we pass lenderId as a query param for testing.
-// Example: ?lenderId=lender_001
+// Note: In production use JWT guards to get lenderId from auth token
+// Currently lenderId is passed as query param for testing
 
 @Controller('advertisements')
 export class AdvertisementController {
@@ -37,19 +37,13 @@ export class AdvertisementController {
     private readonly analyticsService: AdvertisementAnalyticsService,
   ) {}
 
-  
-  // GET /advertisements/boost-packages
-  // Get available boost packages and prices
-  
+  // Get list of available boost packages with pricing
   @Get('boost-packages')
   getBoostPackages() {
     return this.boostService.getBoostPackages();
   }
 
-  
-  // GET /advertisements/analytics/summary
-  // Full analytics for all lender ads
-  
+  // Get full analytics for all ads by a lender
   @Get('analytics/summary')
   async getLenderAnalytics(
     @Query('lenderId') lenderId: string,
@@ -57,28 +51,19 @@ export class AdvertisementController {
     return this.analyticsService.getLenderAnalytics(lenderId);
   }
 
-  
-  // GET /advertisements/my
-  // Get lender's own ads — includes private stats
-  
+  // Get lender's own ads including view counts and click stats
   @Get('my')
   async getMyAds(@Query('lenderId') lenderId: string) {
     return this.readService.getMyAds(lenderId);
   }
 
-  
-  // GET /advertisements/lender/:lenderId
-  // Get public ads by lender — hides views/clicks
-  
+  // Get public ads from a lender (hides sensitive stats)
   @Get('lender/:lenderId')
   async getAdsByLender(@Param('lenderId') lenderId: string) {
     return this.readService.getAdsByLender(lenderId);
   }
 
-  
-  // GET /advertisements/:id/analytics
-  // Get analytics for lender's own ad
-  
+  // Get analytics for a specific ad (lender only)
   @Get(':id/analytics')
   async getAdAnalytics(
     @Param('id')             adId:     string,
@@ -87,10 +72,7 @@ export class AdvertisementController {
     return this.readService.getAdAnalytics(adId, lenderId);
   }
 
-  
-  // GET /advertisements/:id/analytics/full
-  // Full analytics for one specific ad
-  
+  // Get detailed analytics for one specific ad
   @Get(':id/analytics/full')
   async getFullAdAnalytics(
     @Param('id')       adId:     string,
@@ -99,20 +81,14 @@ export class AdvertisementController {
     return this.analyticsService.getAdAnalytics(adId, lenderId);
   }
 
-  
-  // GET /advertisements/:id
   // Get single ad by ID
-  
   @Get(':id')
   async getAdById(@Param('id') id: string) {
     return this.readService.getAdById(id);
   }
 
-  
-  // GET /advertisements
-  // Get all active ads — for borrowers to browse
-  // Supports filters: location, purpose, minAmount, maxAmount, search
-  
+  // Get all active ads with optional filtering
+  // Filters: location, purpose, minAmount, maxAmount, search keyword
   @Get()
   async getAllActiveAds(
     @Query('location')  location?:  string,
@@ -130,10 +106,7 @@ export class AdvertisementController {
     });
   }
 
-  
-  // POST /advertisements
-  // Create a new ad
-  
+  // Create a new lending ad
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async createAd(
@@ -143,10 +116,7 @@ export class AdvertisementController {
     return this.createService.createAd(lenderId, dto);
   }
 
-  
-  // POST /advertisements/:id/view
-  // Track when borrower views an ad
-  
+  // Track when a borrower views an ad (for analytics)
   @Post(':id/view')
   @HttpCode(HttpStatus.OK)
   async trackView(@Param('id') id: string) {

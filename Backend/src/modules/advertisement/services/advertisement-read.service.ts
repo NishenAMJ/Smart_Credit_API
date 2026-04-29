@@ -1,3 +1,6 @@
+// Advertisement read service handles searching and fetching ads
+// Supports filtering by location, purpose, amount, and search keywords
+
 import {
   Injectable,
   NotFoundException,
@@ -19,8 +22,8 @@ export class AdvertisementReadService {
     private createService: AdvertisementCreateService,
   ) {}
 
-  // ── Get all active ads (for borrowers) ───────────
-  // Boosted ads come first, then sorted by createdAt
+  // Get all active ads with optional filters
+  // Boosted ads appear first, then sorted by newest
   async getAllActiveAds(filters?: {
     location?: string;
     purpose?: string;
@@ -31,13 +34,13 @@ export class AdvertisementReadService {
 
     const now = admin.firestore.Timestamp.now();
 
-    // Base query — only active ads that haven't expired
+    // Start with only active, non-expired ads
     let query = this.db
       .collection(this.collection)
       .where('status', '==', 'active')
       .where('expiresAt', '>', now);
 
-    // Filter by location if provided
+    // Add location filter if provided
     if (filters?.location) {
       query = query.where('location', '==', filters.location);
     }
@@ -52,18 +55,15 @@ export class AdvertisementReadService {
       doc.data() as Advertisement
     );
 
-    // ── Client-side filters ──────────────────────────
-    // Firestore can't do all filters in one query
-    // so we filter in memory after fetching
-
-    // Filter by purpose
+    // Apply client-side filters that Firestore can't do efficiently
+    // Purpose filter - check if ad accepts this loan purpose
     if (filters?.purpose) {
       ads = ads.filter((ad) =>
         ad.preferredPurposes.includes(filters.purpose!)
       );
     }
 
-    // Filter by amount range
+    // Amount range filters - check if ad can handle this loan amount
     if (filters?.minAmount !== undefined) {
       ads = ads.filter((ad) =>
         ad.maxAmount >= filters.minAmount!
@@ -76,7 +76,7 @@ export class AdvertisementReadService {
       );
     }
 
-    // Filter by search keyword
+    // Search filter - match keywords, title, or location
     if (filters?.search) {
       const searchLower = filters.search.toLowerCase();
       ads = ads.filter((ad) =>
@@ -88,7 +88,7 @@ export class AdvertisementReadService {
       );
     }
 
-    // ── Sort: boosted ads first, then by createdAt ───
+    // Sort: boosted ads first, then by newest
     ads.sort((a, b) => {
       if (a.isBoosted && !b.isBoosted) return -1;
       if (!a.isBoosted && b.isBoosted) return 1;

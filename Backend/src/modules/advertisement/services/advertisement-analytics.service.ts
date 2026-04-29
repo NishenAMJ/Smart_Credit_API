@@ -12,7 +12,8 @@ export class AdvertisementAnalyticsService {
   private db         = getFirestore();
   private collection = 'ads';
 
-  // ── Get full analytics for one ad ────────────────
+  // Get detailed analytics for a single ad (views, clicks, applications, funded count, conversion rates)
+  // Calculate CTR, conversion rate, and funding rate percentages
   async getAdAnalytics(adId: string, lenderId: string) {
     const doc = await this.db
       .collection(this.collection)
@@ -31,16 +32,19 @@ export class AdvertisementAnalyticsService {
       );
     }
 
+    // Click-through rate = (clicks / views) * 100
     const ctr =
       data.views > 0
         ? ((data.clicks / data.views) * 100).toFixed(1)
         : '0';
 
+    // Conversion rate = (applications / clicks) * 100
     const conversionRate =
       data.clicks > 0
         ? ((data.applicationCount / data.clicks) * 100).toFixed(1)
         : '0';
 
+    // Funding rate = (funded loans / applications) * 100
     const fundingRate =
       data.applicationCount > 0
         ? (
@@ -70,7 +74,8 @@ export class AdvertisementAnalyticsService {
     };
   }
 
-  // ── Get analytics for ALL lender ads ─────────────
+  // Get aggregated analytics for all ads owned by a lender
+  // Calculates totals, counts, and average metrics across all their ads
   async getLenderAnalytics(lenderId: string) {
     const snapshot = await this.db
       .collection(this.collection)
@@ -98,12 +103,14 @@ export class AdvertisementAnalyticsService {
       (d) => d.data() as Advertisement,
     );
 
+    // Sum up metrics across all ads
     const totalViews        = ads.reduce((s, a) => s + a.views, 0);
     const totalClicks       = ads.reduce((s, a) => s + a.clicks, 0);
     const totalApplications = ads.reduce((s, a) => s + a.applicationCount, 0);
     const totalFunded       = ads.reduce((s, a) => s + a.fundedLoansCount, 0);
     const totalBoostSpent   = ads.reduce((s, a) => s + a.boostAmount, 0);
 
+    // Calculate average CTR across all ads
     const avgCTR =
       totalViews > 0
         ? ((totalClicks / totalViews) * 100).toFixed(1)
@@ -144,7 +151,7 @@ export class AdvertisementAnalyticsService {
     };
   }
 
-  // ── Track a view event ────────────────────────────
+  // Increment the view count when someone views the ad
   async trackView(adId: string): Promise<void> {
     await this.db
       .collection(this.collection)
@@ -155,7 +162,7 @@ export class AdvertisementAnalyticsService {
       });
   }
 
-  // ── Track a click event ───────────────────────────
+  // Increment the click count when someone clicks on the ad
   async trackClick(adId: string): Promise<void> {
     await this.db
       .collection(this.collection)
@@ -166,7 +173,7 @@ export class AdvertisementAnalyticsService {
       });
   }
 
-  // ── Increment application count ───────────────────
+  // Increment the application count when a borrower applies for this ad
   async trackApplication(adId: string): Promise<void> {
     await this.db
       .collection(this.collection)
@@ -177,7 +184,7 @@ export class AdvertisementAnalyticsService {
       });
   }
 
-  // ── Increment funded count ────────────────────────
+  // Increment the funded loans count when a loan from this ad is successfully funded
   async trackFunded(adId: string): Promise<void> {
     await this.db
       .collection(this.collection)
