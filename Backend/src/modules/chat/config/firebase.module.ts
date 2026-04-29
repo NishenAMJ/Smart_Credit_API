@@ -7,3 +7,6 @@ import { FirebaseService } from './firebase.service';
   exports: [FirebaseService],
 })
 export class FirebaseModule {}
+
+//providers- Registers FirebaseService so NestJS can create and inject it.
+//exports- Allows other modules to use FirebaseService.

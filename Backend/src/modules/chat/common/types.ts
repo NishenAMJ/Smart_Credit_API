@@ -1,15 +1,14 @@
 import * as admin from 'firebase-admin';
 
-// ── Firestore document shapes ────────────────────────────────────────────────
-// These mirror what is stored in Firestore.
-// All timestamps are Firestore Timestamps or null.
+// blueprint for how your database documents should look.
 
+//User Data
 export interface UserDoc {
   id: string;
   username: string;
   displayName: string;
   avatarUrl: string | null;
-  fcmToken: string | null;       // updated by the app on login
+  fcmToken: string | null;       // used for push notifications
   isOnline: boolean;
   lastSeen: admin.firestore.Timestamp | null;
   createdAt: admin.firestore.Timestamp;
@@ -23,7 +22,7 @@ export interface ConversationDoc {
     senderId: string;
     createdAt: admin.firestore.Timestamp;
   } | null;
-  unreadCounts: Record<string, number>; // { [userId]: count }
+  unreadCounts: Record<string, number>; 
   mutedBy: string[];                    // list of userIds who muted this conv
   createdAt: admin.firestore.Timestamp;
 }
@@ -40,6 +39,7 @@ export interface MessageDoc {
   createdAt: admin.firestore.Timestamp;
 }
 
+//block people
 export interface BlockDoc {
   id: string;
   blockerId: string;
@@ -47,7 +47,7 @@ export interface BlockDoc {
   createdAt: admin.firestore.Timestamp;
 }
 
-// ── Firestore collection paths ────────────────────────────────────────────────
+//Defines where data is stored in Firestore.
 export const COLLECTIONS = {
   USERS: 'users',
   CONVERSATIONS: 'conversations',
