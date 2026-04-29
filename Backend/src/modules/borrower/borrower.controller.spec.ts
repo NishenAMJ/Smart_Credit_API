@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BorrowerController } from './borrower.controller';
 import { BorrowerService } from './borrower.service';
+import { BorrowerApplicationsService } from './borrower-applications.service';
+import { BorrowerDashboardService } from './borrower-dashboard.service';
+import { BorrowerSupportService } from './borrower-support.service';
+import { CreditScoreService } from './credit-score.service';
 
 /**
  * Baseline wiring tests for `BorrowerController`.
@@ -19,6 +23,26 @@ describe('BorrowerController', () => {
       getLenderNamesMap: jest.fn(),
       getRepaymentHistory: jest.fn(),
     };
+    const mockCreditScoreService = {
+      getSummary: jest.fn(),
+      getScoreHistory: jest.fn(),
+      calculateCreditScore: jest.fn(),
+      getScoreRating: jest.fn(),
+    };
+    const mockBorrowerApplicationsService = {
+      createLoanApplication: jest.fn(),
+      getLoanApplications: jest.fn(),
+      getLoanApplicationById: jest.fn(),
+      updateLoanApplication: jest.fn(),
+      submitLoanApplication: jest.fn(),
+      deleteLoanApplication: jest.fn(),
+    };
+    const mockBorrowerDashboardService = {
+      getDashboard: jest.fn(),
+    };
+    const mockBorrowerSupportService = {
+      getSupportStatus: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [BorrowerController],
@@ -26,6 +50,22 @@ describe('BorrowerController', () => {
         {
           provide: BorrowerService,
           useValue: mockBorrowerService,
+        },
+        {
+          provide: BorrowerApplicationsService,
+          useValue: mockBorrowerApplicationsService,
+        },
+        {
+          provide: BorrowerDashboardService,
+          useValue: mockBorrowerDashboardService,
+        },
+        {
+          provide: BorrowerSupportService,
+          useValue: mockBorrowerSupportService,
+        },
+        {
+          provide: CreditScoreService,
+          useValue: mockCreditScoreService,
         },
       ],
     }).compile();

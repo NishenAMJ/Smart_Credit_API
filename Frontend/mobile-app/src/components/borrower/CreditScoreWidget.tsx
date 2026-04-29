@@ -3,9 +3,11 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { getScoreColor, getScoreRating } from "../../utils/scoreUtils";
 
 type CreditScoreWidgetProps = {
   score?: number;
+  creditLimit?: number;
   onPress?: () => void;
 };
 
@@ -16,14 +18,8 @@ export default function CreditScoreWidget({
   score = 0,
   onPress,
 }: CreditScoreWidgetProps) {
-  const getScoreLevel = (value: number) => {
-    if (value >= 750) return { text: "EXCELLENT", color: "#10B981" };
-    if (value >= 650) return { text: "GOOD", color: "#3B82F6" };
-    if (value >= 550) return { text: "FAIR", color: "#F59E0B" };
-    return { text: "POOR", color: "#EF4444" };
-  };
-
-  const scoreLevel = getScoreLevel(score);
+  const rating = getScoreRating(score).toUpperCase();
+  const scoreColor = getScoreColor(score);
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress}>
@@ -35,8 +31,8 @@ export default function CreditScoreWidget({
       <View style={styles.scoreContainer}>
         <View style={styles.scoreCircle}>
           <Text style={styles.scoreNumber}>{score}</Text>
-          <Text style={[styles.scoreLevel, { color: scoreLevel.color }]}>
-            {scoreLevel.text}
+          <Text style={[styles.scoreLevel, { color: scoreColor }]}>
+            {rating}
           </Text>
         </View>
 

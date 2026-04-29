@@ -26,10 +26,20 @@ import {
   BORROWER_FLOW,
 } from './borrower.constants';
 import { PaymentMethod } from './dto/create-payment.dto';
+import { BorrowerApplicationsService } from './borrower-applications.service';
+import { BorrowerDashboardService } from './borrower-dashboard.service';
+import { BorrowerSupportService } from './borrower-support.service';
+import { CreditScoreService } from './credit-score.service';
 
 @Controller('borrower')
 export class BorrowerController {
-  constructor(private readonly borrowerService: BorrowerService) {}
+  constructor(
+    private readonly borrowerService: BorrowerService,
+    private readonly borrowerApplicationsService: BorrowerApplicationsService,
+    private readonly borrowerDashboardService: BorrowerDashboardService,
+    private readonly borrowerSupportService: BorrowerSupportService,
+    private readonly creditScoreService: CreditScoreService,
+  ) {}
 
   /**
    * Uses the supplied borrower id, falling back to demo data for mobile screens.
@@ -81,7 +91,7 @@ export class BorrowerController {
     return {
       success: true,
       // Compose dashboard metrics from profile, loans, and recent activity.
-      data: await this.borrowerService.getDashboard(userId),
+      data: await this.borrowerDashboardService.getDashboard(userId),
     };
   }
 
@@ -213,7 +223,7 @@ export class BorrowerController {
   ) {
     const id = this.resolveBorrowerId(borrowerId);
     // Status filter supports list views like drafts, pending, and approved.
-    const applications = await this.borrowerService.getLoanApplications(
+    const applications = await this.borrowerApplicationsService.getLoanApplications(
       id,
       status,
     );
@@ -234,7 +244,7 @@ export class BorrowerController {
     @Query('borrowerId') borrowerId?: string,
   ) {
     const id = this.resolveBorrowerId(borrowerId);
-    const application = await this.borrowerService.getLoanApplicationById(
+    const application = await this.borrowerApplicationsService.getLoanApplicationById(
       requestId,
       id,
     );
@@ -273,7 +283,7 @@ export class BorrowerController {
         : LoanPurpose.BUSINESS
     ) as LoanPurpose;
 
-    const application = await this.borrowerService.createLoanApplication({
+    const application = await this.borrowerApplicationsService.createLoanApplication({
       borrowerId: id,
       adId: payload.adId,
       amount: Number(payload.amount ?? BORROWER_DEFAULTS.APPLICATION_AMOUNT),
@@ -305,7 +315,7 @@ export class BorrowerController {
   ) {
     const id = this.resolveBorrowerId(borrowerId);
     // Map mobile payload keys to backend update DTO fields.
-    const application = await this.borrowerService.updateLoanApplication(
+    const application = await this.borrowerApplicationsService.updateLoanApplication(
       requestId,
       id,
       {
@@ -327,7 +337,7 @@ export class BorrowerController {
     @Query('borrowerId') borrowerId?: string,
   ) {
     const id = this.resolveBorrowerId(borrowerId);
-    const application = await this.borrowerService.submitLoanApplication(
+    const application = await this.borrowerApplicationsService.submitLoanApplication(
       requestId,
       id,
     );
@@ -349,7 +359,7 @@ export class BorrowerController {
   ) {
     const id = this.resolveBorrowerId(borrowerId);
     // Delete is allowed only for draft applications (enforced in service).
-    const result = await this.borrowerService.deleteLoanApplication(
+    const result = await this.borrowerApplicationsService.deleteLoanApplication(
       requestId,
       id,
     );
@@ -624,16 +634,10 @@ export class BorrowerController {
   @Get('credit-score')
   async getCreditScore(@Query('borrowerId') borrowerId?: string) {
     const id = this.resolveBorrowerId(borrowerId);
-    const profile = await this.borrowerService.getProfile(id);
 
     return {
       success: true,
-      data: {
-        // Keep credit response minimal for score widgets.
-        score: profile.creditScore,
-        kycVerified: profile.kycVerified,
-        profileComplete: profile.profileComplete,
-      },
+      data: await this.creditScoreService.getSummary(id),
     };
   }
 
@@ -644,22 +648,29 @@ export class BorrowerController {
   @Get('credit-score/history')
   async getCreditScoreHistory(@Query('borrowerId') borrowerId?: string) {
     const id = this.resolveBorrowerId(borrowerId);
-    const profile = await this.borrowerService.getProfile(id);
-
-    // Synthetic trend data used for dashboard visualization.
-    const history = BORROWER_DEFAULTS.CREDIT_HISTORY_OFFSETS.map(
-      (decrease, index) => ({
-        month: `2026-0${index + 2}`,
-        score: Math.max(
-          BORROWER_DEFAULTS.STARTING_CREDIT_SCORE,
-          profile.creditScore - decrease,
-        ),
-      }),
-    );
 
     return {
       success: true,
-      data: history,
+      data: await this.creditScoreService.getScoreHistory(id),
+    };
+  }
+
+  /**
+   * POST /borrower/credit-score/recalculate
+   * Recalculates and persists the borrower credit score.
+   */
+  @Post('credit-score/recalculate')
+  async recalculateCreditScore(@Query('borrowerId') borrowerId?: string) {
+    const id = this.resolveBorrowerId(borrowerId);
+    const score = await this.creditScoreService.calculateCreditScore(id);
+
+    return {
+      success: true,
+      data: {
+        score,
+        rating: this.creditScoreService.getScoreRating(score),
+        message: 'Credit score recalculated successfully.',
+      },
     };
   }
 
@@ -672,7 +683,7 @@ export class BorrowerController {
     const id = this.resolveBorrowerId(borrowerId);
     return {
       success: true,
-      data: await this.borrowerService.getSupportStatus(id),
+      data: await this.borrowerSupportService.getSupportStatus(id),
     };
   }
 }

@@ -13,6 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { creditScoreService } from "../../api/services/creditScore.service";
 import type { CreditScoreSummary } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
+import { getScoreColor, getScoreRating } from "../../utils/scoreUtils";
 
 type CreditScoreScreenProps = {
   navigation: BorrowerNavigation;
@@ -43,13 +44,6 @@ export default function CreditScoreScreen({
     }
   };
 
-  const getScoreLevel = (score: number) => {
-    if (score >= 750) return { text: "EXCELLENT", color: "#10B981" };
-    if (score >= 650) return { text: "GOOD", color: "#3B82F6" };
-    if (score >= 550) return { text: "FAIR", color: "#F59E0B" };
-    return { text: "POOR", color: "#EF4444" };
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -58,7 +52,12 @@ export default function CreditScoreScreen({
     );
   }
 
-  const scoreLevel = getScoreLevel(creditData?.smartScore || 0);
+  const score = creditData?.smartScore || 0;
+  const scoreLevel = {
+    text: getScoreRating(score).toUpperCase(),
+    color: getScoreColor(score),
+  };
+  const breakdown = Object.entries(creditData?.breakdown ?? {});
 
   return (
     <View style={styles.container}>
@@ -102,35 +101,29 @@ export default function CreditScoreScreen({
         <View style={styles.breakdownCard}>
           <Text style={styles.sectionTitle}>Score Breakdown</Text>
 
-          <View style={styles.breakdownItem}>
-            <View style={styles.breakdownHeader}>
-              <Text style={styles.breakdownLabel}>Payment History</Text>
-              <Text style={styles.breakdownValue}>90%</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: "90%" }]} />
-            </View>
-          </View>
+          {breakdown.length > 0 ? (
+            breakdown.map(([key, item]) => {
+              const value = Math.max(0, Math.min(100, item.subScore));
 
-          <View style={styles.breakdownItem}>
-            <View style={styles.breakdownHeader}>
-              <Text style={styles.breakdownLabel}>Loan Diversity</Text>
-              <Text style={styles.breakdownValue}>80%</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: "80%" }]} />
-            </View>
-          </View>
-
-          <View style={styles.breakdownItem}>
-            <View style={styles.breakdownHeader}>
-              <Text style={styles.breakdownLabel}>Credit Utilization</Text>
-              <Text style={styles.breakdownValue}>70%</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: "70%" }]} />
-            </View>
-          </View>
+              return (
+                <View key={key} style={styles.breakdownItem}>
+                  <View style={styles.breakdownHeader}>
+                    <Text style={styles.breakdownLabel}>{item.label}</Text>
+                    <Text style={styles.breakdownValue}>{value}%</Text>
+                  </View>
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[styles.progressFill, { width: `${value}%` }]}
+                    />
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.emptyBreakdownText}>
+              Your score breakdown will appear after the first calculation.
+            </Text>
+          )}
         </View>
 
         <View style={styles.tipsCard}>
@@ -253,6 +246,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#1A1A1A",
+  },
+  emptyBreakdownText: {
+    fontSize: 13,
+    color: "#6B7280",
+    lineHeight: 19,
   },
   progressBar: {
     height: 8,

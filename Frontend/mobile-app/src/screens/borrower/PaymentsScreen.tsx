@@ -31,6 +31,7 @@ import { BORDER_RADIUS } from "../../constants/borderRadius";
 import type { BorrowerNavigation } from "../../types/navigation";
 import type { BorrowerRepayment } from "../../types/borrower";
 import type { RouteProp } from "@react-navigation/native";
+import { isPaidPayment } from "../../utils/paymentCardUtils";
 //import TransactionDetailsScreen from "../../screens/borrower/TransactionDetailsScreen";
 
 type PaymentsScreenProps = {
@@ -337,36 +338,32 @@ export default function PaymentsScreen({
   };
 
   const renderPaymentCard = ({ item }: { item: BorrowerRepayment }) => {
-    const handlePress = () => {
-      if (activeTab === "History") {
-        // Navigate to TransactionDetailsScreen with the item mapped as a BorrowerTransaction
-        navigation.navigate("TransactionDetails", {
-          transaction: {
-            transactionId:
-              item.transactionId ?? item.repaymentId ?? item.paymentId,
-            repaymentId: item.repaymentId,
-            loanId: item.loanId,
-            type: item.type ?? "repayment",
-            status: item.status,
-            paidAt: item.paidAt,
-            timestamp: item.timestamp,
-            createdAt: (item as any).createdAt,
-            amount: item.amount,
-            paymentMethod: item.paymentMethod,
-            lenderName: item.lenderName,
-          },
-        });
-      } else {
-        handlePay(item);
-      }
+    const handleCardPress = () => {
+      // Navigate to TransactionDetailsScreen when paid payment card is tapped
+      navigation.navigate("TransactionDetails", {
+        transaction: {
+          transactionId:
+            item.transactionId ?? item.repaymentId ?? item.paymentId,
+          repaymentId: item.repaymentId,
+          loanId: item.loanId,
+          type: item.type ?? "repayment",
+          status: item.status,
+          paidAt: item.paidAt,
+          timestamp: item.timestamp,
+          createdAt: (item as any).createdAt,
+          amount: item.amount,
+          paymentMethod: item.paymentMethod,
+          lenderName: item.lenderName,
+        },
+      });
     };
 
     return (
       <PaymentCard
         payment={item}
         paymentMethod={selectedPaymentMethod}
-        onPay={handlePress}
-        onPress={handlePress}
+        onPay={() => handlePay(item)}
+        onPress={handleCardPress}
       />
     );
   };

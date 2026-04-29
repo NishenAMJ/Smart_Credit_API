@@ -47,9 +47,10 @@ export const profileService = {
 
   updateMyProfile: async (data: {
     fullName?: string;
+    email?: string;
+    password?: string;
     phone?: string;
     address?: string;
-    employment?: string;
     monthlyIncome?: string;
     occupation?: string;
   }) => {
@@ -79,8 +80,6 @@ export const profileService = {
       }
     }
 
-    const normalizedEmployment = data.employment?.trim();
-
     // --- Address: only send if we have all required fields ---
     const current = await profileService.getMyProfile();
     const line1 = data.address?.trim() || current.address?.line1 || "";
@@ -93,9 +92,10 @@ export const profileService = {
 
     const payload: Record<string, unknown> = {};
     if (data.fullName)           payload.fullName = data.fullName;
+    if (data.email)              payload.email = data.email.trim();
+    if (data.password)           payload.password = data.password;
     if (phone)                   payload.phone = phone;
     if (address)                 payload.address = address;
-    if (normalizedEmployment)    payload.employmentStatus = normalizedEmployment;
     if (data.monthlyIncome) {
       const income = Number(data.monthlyIncome.replace(/[^0-9.]/g, ""));
       if (!isNaN(income))        payload.monthlyIncome = income;

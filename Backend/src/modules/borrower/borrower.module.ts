@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { BorrowerController } from './borrower.controller';
 import { BorrowerService } from './borrower.service';
+import { BorrowerApplicationsService } from './borrower-applications.service';
+import { BorrowerDashboardService } from './borrower-dashboard.service';
+import { BorrowerSupportService } from './borrower-support.service';
+import { CreditScoreService } from './credit-score.service';
 import { FirebaseModule } from '../../firebase/firebase.module';
 
 /**
@@ -16,7 +20,19 @@ import { FirebaseModule } from '../../firebase/firebase.module';
     }),
   ],
   controllers: [BorrowerController],
-  providers: [BorrowerService],
-  exports: [BorrowerService],
+  providers: [
+    BorrowerService,
+    BorrowerApplicationsService,
+    BorrowerDashboardService,
+    BorrowerSupportService,
+    CreditScoreService,
+  ],
+  exports: [
+    BorrowerService,
+    BorrowerApplicationsService,
+    BorrowerDashboardService,
+    BorrowerSupportService,
+    CreditScoreService,
+  ],
 })
 export class BorrowerModule {}

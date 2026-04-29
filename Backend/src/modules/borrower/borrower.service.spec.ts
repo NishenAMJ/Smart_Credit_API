@@ -5,6 +5,7 @@ import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { LoanStatus } from './interfaces/borrower.interface';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { CreditScoreService } from './credit-score.service';
 
 /**
  * Baseline wiring tests for `BorrowerService`.
@@ -68,6 +69,12 @@ describe('BorrowerService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn(),
+          },
+        },
+        {
+          provide: CreditScoreService,
+          useValue: {
+            calculateCreditScore: jest.fn(),
           },
         },
       ],

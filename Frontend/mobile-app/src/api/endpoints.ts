@@ -50,6 +50,7 @@ export const ENDPOINTS = {
   creditScore: {
     get: "/borrower/credit-score",
     history: "/borrower/credit-score/history",
+    recalculate: "/borrower/credit-score/recalculate",
   },
 
   transactions: {

@@ -107,6 +107,17 @@ export interface BorrowerApplication {
   borrowerName?: string;
   borrowerPhotoURL?: string;
   smartScore?: number;
+  borrowerCreditScore?: number;
+  scoreRating?: string;
+  scoreSnapshotAt?: string;
+  scoreBreakdown?: Record<
+    string,
+    {
+      subScore: number;
+      weight: number;
+      label: string;
+    }
+  >;
 }
 
 export interface BorrowerProfile {
@@ -135,5 +146,19 @@ export interface BorrowerProfile {
 
 export interface CreditScoreSummary {
   smartScore?: number;
+  creditScore?: number;
+  creditRating?: string;
   creditLimit?: number;
+  kycVerified?: boolean;
+  profileComplete?: boolean;
+  canApplyForLoan?: boolean;
+  breakdown?: Record<
+    string,
+    {
+      subScore: number;
+      weight: number;
+      label: string;
+    }
+  >;
+  calculatedAt?: string;
 }

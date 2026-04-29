@@ -4,6 +4,7 @@ import apiClient from "../axios.config";
 import { ENDPOINTS } from "../endpoints";
 import { getUserId } from "../../utils/auth.storage";
 import type { CreditScoreSummary } from "../../types/borrower";
+import { getScoreRating } from "../../utils/scoreUtils";
 
 type CreditHistoryPoint = {
   month: string;
@@ -26,23 +27,19 @@ export const creditScoreService = {
       params: { borrowerId },
     });
     const payload = response.data?.data ?? {};
-    const creditScore = payload.score ?? 0;
-    const creditRating =
-      creditScore >= 750
-        ? "Excellent"
-        : creditScore >= 700
-          ? "Good"
-          : creditScore >= 650
-            ? "Fair"
-            : creditScore >= 600
-              ? "Poor"
-              : "Very Poor";
+    const creditScore = Number(payload.score ?? payload.creditScore ?? 0);
+    const creditRating = getScoreRating(creditScore);
 
     return {
       data: {
+        ...payload,
         smartScore: creditScore,
         creditScore,
         creditRating,
+        kycVerified: Boolean(payload.kycVerified),
+        profileComplete: Boolean(payload.profileComplete),
+        canApplyForLoan: Boolean(payload.canApplyForLoan),
+        breakdown: payload.breakdown ?? {},
         creditLimit: payload.creditLimit,
       },
     };
@@ -69,5 +66,21 @@ export const creditScoreService = {
           }))
         : [],
     };
+  },
+
+  recalculate: async (): Promise<{ score: number; rating: string }> => {
+    const borrowerId = await getUserId();
+    if (!borrowerId)
+      throw new Error("User session expired. Please log in again.");
+
+    const response = await apiClient.post(
+      ENDPOINTS.creditScore.recalculate,
+      {},
+      {
+        params: { borrowerId },
+      },
+    );
+
+    return response.data?.data;
   },
 };

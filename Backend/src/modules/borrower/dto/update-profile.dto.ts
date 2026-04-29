@@ -5,6 +5,7 @@ import {
   IsEnum,
   ValidateNested,
   Min,
+  MinLength,
   Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -17,6 +18,15 @@ export class UpdateBorrowerProfileDto {
   @IsString()
   @IsOptional()
   fullName?: string;
+
+  @IsString()
+  @IsOptional()
+  email?: string;
+
+  @IsString()
+  @MinLength(6)
+  @IsOptional()
+  password?: string;
 
   @IsString()
   @IsOptional()

@@ -29,6 +29,8 @@ import {
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { instanceToPlain } from 'class-transformer';
 import { BORROWER_DEFAULTS, BORROWER_FLOW } from './borrower.constants';
+import { CreditScoreService } from './credit-score.service';
+import { randomBytes, scryptSync } from 'crypto';
 
 type TimestampLike =
   | FirebaseFirestore.Timestamp
@@ -61,6 +63,7 @@ export class BorrowerService {
     private readonly firebaseService: FirebaseService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly creditScoreService: CreditScoreService,
   ) {}
 
   private get db() {
@@ -554,10 +557,12 @@ export class BorrowerService {
       );
     }
 
+    const plainDto = this.removeUndefinedDeep(
+      instanceToPlain(dto) as UpdateBorrowerProfileDto,
+    );
+    const { password, ...profileUpdateDto } = plainDto;
     const updateData = {
-      ...this.removeUndefinedDeep(
-        instanceToPlain(dto) as UpdateBorrowerProfileDto,
-      ),
+      ...profileUpdateDto,
       updatedAt: FieldValue.serverTimestamp(),
     };
 
@@ -566,6 +571,15 @@ export class BorrowerService {
     // Sync to 'users' collection if name changed
     const userUpdate: Record<string, any> = {};
     if (dto.fullName) userUpdate.fullName = dto.fullName;
+    if (dto.email) userUpdate.email = dto.email;
+    if (password) {
+      const passwordSalt = randomBytes(16).toString('hex');
+      userUpdate.passwordSalt = passwordSalt;
+      userUpdate.passwordHash = scryptSync(password, passwordSalt, 64).toString(
+        'hex',
+      );
+      userUpdate.passwordUpdatedAt = FieldValue.serverTimestamp();
+    }
 
     if (Object.keys(userUpdate).length > 0) {
       try {
@@ -610,6 +624,9 @@ export class BorrowerService {
       );
     }
 
+    const scoreSummary = await this.creditScoreService.getSummary(
+      plainDto.borrowerId,
+    );
     const now = FieldValue.serverTimestamp();
     const appRef = this.db.collection(this.LOAN_APPS_COL).doc();
 
@@ -621,8 +638,11 @@ export class BorrowerService {
       borrowerName: profile.fullName || 'Unknown',
       borrowerPhotoURL: (profile as any).photoURL || '',
       borrowerRating: (profile as any).rating || 0,
-      smartScore: profile.creditScore || 0,
-      borrowerCreditScore: profile.creditScore || 0,
+      smartScore: scoreSummary.score,
+      borrowerCreditScore: scoreSummary.score,
+      scoreRating: scoreSummary.rating,
+      scoreBreakdown: scoreSummary.breakdown,
+      scoreSnapshotAt: now,
 
       // Start as draft so mobile can save first and submit explicitly.
       status: LoanApplicationStatus.DRAFT,
@@ -766,8 +786,15 @@ export class BorrowerService {
       );
     }
 
+    const scoreSummary = await this.creditScoreService.getSummary(borrowerId);
+
     await this.db.collection(this.LOAN_APPS_COL).doc(applicationId).update({
       status: LoanApplicationStatus.OPEN,
+      smartScore: scoreSummary.score,
+      borrowerCreditScore: scoreSummary.score,
+      scoreRating: scoreSummary.rating,
+      scoreBreakdown: scoreSummary.breakdown,
+      scoreSnapshotAt: FieldValue.serverTimestamp(),
       submittedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -1002,6 +1029,12 @@ export class BorrowerService {
     });
 
     await batch.commit();
+
+    this.creditScoreService
+      .calculateCreditScore(dto.borrowerId)
+      .catch((error) =>
+        console.error('[CreditScore] Recalc failed after repayment:', error),
+      );
 
     const created = await repaymentRef.get();
     return { ...created.data() } as Repayment;

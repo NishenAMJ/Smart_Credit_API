@@ -54,6 +54,21 @@ export interface LoanApplication {
   purpose?: string;
   purposeDescription?: string;
   tenureMonths: number;
+  borrowerName?: string;
+  borrowerPhotoURL?: string;
+  borrowerRating?: number;
+  smartScore?: number;
+  borrowerCreditScore?: number;
+  scoreRating?: string;
+  scoreBreakdown?: Record<
+    string,
+    {
+      subScore: number;
+      weight: number;
+      label: string;
+    }
+  >;
+  scoreSnapshotAt?: FirebaseFirestore.Timestamp;
   requestedInterestRate?: number; // Optional requested rate
   preferredRepaymentMethod: RepaymentMethod;
   collateralDetails?: string[];

@@ -17,11 +17,28 @@ import { Feather } from "@expo/vector-icons";
 import SidebarMenu from "../../components/common/SidebarMenu";
 import { profileService } from "../../api/services/profile.service";
 import { PROFILE_UPDATE_VERIFICATION_CODE } from "../../constants/demo";
+import {
+  getScoreColor,
+  getScoreRating,
+  scoreToPercent,
+} from "../../utils/scoreUtils";
 import type { BorrowerProfile } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
 
 type ProfileScreenProps = {
   navigation: BorrowerNavigation;
+};
+
+const EMPTY_EDITABLE_PROFILE = {
+  fullName: "",
+  email: "",
+  newEmail: "",
+  phone: "",
+  address: "",
+  monthlyIncome: "",
+  occupation: "",
+  password: "",
+  confirmPassword: "",
 };
 
 /**
@@ -30,35 +47,36 @@ type ProfileScreenProps = {
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [profile, setProfile] = useState<BorrowerProfile | null>(null);
-  const [editableProfile, setEditableProfile] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    address: "",
-    employment: "employed",
-    monthlyIncome: "",
-    occupation: "",
-  });
+  const [editableProfile, setEditableProfile] = useState(
+    EMPTY_EDITABLE_PROFILE,
+  );
+  const [savedEditableProfile, setSavedEditableProfile] = useState(
+    EMPTY_EDITABLE_PROFILE,
+  );
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [verificationSent, setVerificationSent] = useState(false);
-  const [verificationCode, setVerificationCode] = useState("");
-  const [verifiedForSave, setVerifiedForSave] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  const toEditableProfile = (response: BorrowerProfile) => ({
+    fullName: response.fullName,
+    email: response.email,
+    newEmail: "",
+    phone: response.phone,
+    address: profileService.formatAddress(response.address),
+    monthlyIncome: String(response.monthlyIncome ?? ""),
+    occupation: response.occupation || "",
+    password: "",
+    confirmPassword: "",
+  });
 
   const fetchProfile = async () => {
     try {
       const response = await profileService.getMyProfile();
+      const editable = toEditableProfile(response);
       setProfile(response);
-      setEditableProfile({
-        fullName: response.fullName,
-        email: response.email,
-        phone: response.phone,
-        address: profileService.formatAddress(response.address),
-        employment: response.employmentStatus || "employed",
-        monthlyIncome: String(response.monthlyIncome ?? ""),
-        occupation: response.occupation || "",
-      });
+      setEditableProfile(editable);
+      setSavedEditableProfile(editable);
     } catch (error) {
       console.error("Error fetching profile:", error);
       Alert.alert("Error", "Failed to load profile details.");
@@ -100,15 +118,48 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     [profile],
   );
 
+  const profileCompletion = useMemo(() => {
+    if (!profile) {
+      return 0;
+    }
+
+    const checks = [
+      profile.fullName,
+      profile.phone,
+      profile.nic,
+      profile.dateOfBirth,
+      profileService.formatAddress(profile.address),
+      profile.monthlyIncome ? String(profile.monthlyIncome) : "",
+      profile.occupation,
+    ];
+    const filled = checks.filter((value) => String(value ?? "").trim()).length;
+
+    return Math.round((filled / checks.length) * 100);
+  }, [profile]);
+
+  const creditScore = Number(profile?.creditScore ?? 0);
+  const creditRating = getScoreRating(creditScore);
+  const creditScoreColor = getScoreColor(creditScore);
+  const creditScorePercent = scoreToPercent(creditScore);
+  const isDirty = useMemo(
+    () =>
+      JSON.stringify(editableProfile) !== JSON.stringify(savedEditableProfile),
+    [editableProfile, savedEditableProfile],
+  );
+  const emailChanged =
+    editableProfile.newEmail.trim().length > 0 &&
+    editableProfile.newEmail.trim() !== savedEditableProfile.email.trim();
+  const passwordChanged = editableProfile.password.trim().length > 0;
+  const sensitiveChanged = emailChanged || passwordChanged;
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verifiedForSensitiveSave, setVerifiedForSensitiveSave] =
+    useState(false);
+
   const financeRows = useMemo(
     () =>
       profile
         ? ([
-            {
-              label: "Credit Score",
-              value: String(profile.creditScore ?? 0),
-              icon: "award",
-            },
             {
               label: "KYC Status",
               value: profile.kycVerified ? "Verified" : "Pending",
@@ -123,18 +174,13 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     label: string;
     key: keyof typeof editableProfile;
     placeholder: string;
-    keyboardType?: "default" | "email-address" | "phone-pad";
+    keyboardType?: "default" | "email-address" | "phone-pad" | "numeric";
+    multiline?: boolean;
   }> = [
     {
       label: "Full Name",
       key: "fullName",
       placeholder: "Enter full name",
-    },
-    {
-      label: "Email",
-      key: "email",
-      placeholder: "Enter email address",
-      keyboardType: "email-address",
     },
     {
       label: "Phone",
@@ -145,17 +191,14 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     {
       label: "Address",
       key: "address",
-      placeholder: "Enter address",
-    },
-    {
-      label: "Employment Status",
-      key: "employment",
-      placeholder: "e.g. Software Engineer, Student, Freelancer",
+      placeholder: "Enter street address",
+      multiline: true,
     },
     {
       label: "Monthly Income (LKR)",
       key: "monthlyIncome",
       placeholder: "e.g. 85000",
+      keyboardType: "numeric",
     },
     {
       label: "Occupation / Job Title",
@@ -169,14 +212,48 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     value: string,
   ) => {
     setEditableProfile((previous) => ({ ...previous, [field]: value }));
-    if (verifiedForSave) {
-      setVerifiedForSave(false);
+    if (
+      field === "email" ||
+      field === "newEmail" ||
+      field === "password" ||
+      field === "confirmPassword"
+    ) {
+      setVerifiedForSensitiveSave(false);
     }
+  };
+
+  const onStartEditing = () => {
+    setEditing(true);
+  };
+
+  const onCancelEditing = () => {
+    if (isDirty) {
+      Alert.alert("Discard Changes?", "Your unsaved edits will be lost.", [
+        { text: "Keep Editing", style: "cancel" },
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: () => {
+            setEditableProfile(savedEditableProfile);
+            setEditing(false);
+            setVerificationSent(false);
+            setVerificationCode("");
+            setVerifiedForSensitiveSave(false);
+          },
+        },
+      ]);
+      return;
+    }
+
+    setEditing(false);
+    setVerificationSent(false);
+    setVerificationCode("");
+    setVerifiedForSensitiveSave(false);
   };
 
   const onSendVerificationCode = () => {
     setVerificationSent(true);
-    setVerifiedForSave(false);
+    setVerifiedForSensitiveSave(false);
     setVerificationCode("");
 
     Alert.alert(
@@ -185,7 +262,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     );
   };
 
-  const onVerify = () => {
+  const onVerifySensitiveChanges = () => {
     if (verificationCode.trim() !== PROFILE_UPDATE_VERIFICATION_CODE) {
       Alert.alert(
         "Invalid Code",
@@ -194,26 +271,50 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       return;
     }
 
-    setVerifiedForSave(true);
-    Alert.alert("Verified", "You can now save your updates.");
+    setVerifiedForSensitiveSave(true);
+    Alert.alert("Verified", "You can now save your sensitive changes.");
   };
 
   const onSaveChanges = async () => {
-    if (!verifiedForSave) {
+    if (!isDirty || saving) return;
+    if (passwordChanged && editableProfile.password.length < 6) {
+      Alert.alert("Weak Password", "Password must be at least 6 characters.");
+      return;
+    }
+    if (
+      passwordChanged &&
+      editableProfile.password !== editableProfile.confirmPassword
+    ) {
+      Alert.alert("Password Mismatch", "Please confirm the same password.");
+      return;
+    }
+    if (sensitiveChanged && !verifiedForSensitiveSave) {
       Alert.alert(
         "Verification Needed",
-        "Please verify your identity before saving changes.",
+        "Please verify before changing email or password.",
       );
       return;
     }
 
     try {
       setSaving(true);
-      const updated = await profileService.updateMyProfile(editableProfile);
+      const updated = await profileService.updateMyProfile({
+        fullName: editableProfile.fullName,
+        email: emailChanged ? editableProfile.newEmail.trim() : undefined,
+        phone: editableProfile.phone,
+        address: editableProfile.address,
+        monthlyIncome: editableProfile.monthlyIncome,
+        occupation: editableProfile.occupation,
+        password: passwordChanged ? editableProfile.password : undefined,
+      });
+      const editable = toEditableProfile(updated);
       setProfile(updated);
-      setVerifiedForSave(false);
+      setEditableProfile(editable);
+      setSavedEditableProfile(editable);
+      setEditing(false);
       setVerificationSent(false);
       setVerificationCode("");
+      setVerifiedForSensitiveSave(false);
       Alert.alert("Profile Updated", "Your changes were saved successfully.");
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -292,6 +393,22 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             </View>
             <Text style={styles.name}>{editableProfile.fullName || "-"}</Text>
             <Text style={styles.subText}>Borrower Account</Text>
+            <View style={styles.completionBlock}>
+              <View style={styles.completionHeader}>
+                <Text style={styles.completionLabel}>Profile completion</Text>
+                <Text style={styles.completionValue}>
+                  {profileCompletion}%
+                </Text>
+              </View>
+              <View style={styles.completionTrack}>
+                <View
+                  style={[
+                    styles.completionFill,
+                    { width: `${profileCompletion}%` },
+                  ]}
+                />
+              </View>
+            </View>
           </View>
 
           <View style={styles.sectionCard}>
@@ -309,16 +426,44 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Financial Snapshot</Text>
+            <TouchableOpacity
+              style={styles.scorePanel}
+              activeOpacity={0.75}
+              onPress={() => navigation.navigate("CreditScore")}
+            >
+              <View>
+                <Text style={styles.scoreLabel}>Credit Score</Text>
+                <View style={styles.scoreValueRow}>
+                  <Text style={[styles.scoreValue, { color: creditScoreColor }]}>
+                    {creditScore}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.scoreRating,
+                      { backgroundColor: `${creditScoreColor}18`, color: creditScoreColor },
+                    ]}
+                  >
+                    {creditRating}
+                  </Text>
+                </View>
+              </View>
+              <Feather name="chevron-right" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+            <View style={styles.scoreTrack}>
+              <View
+                style={[
+                  styles.scoreFill,
+                  {
+                    width: `${creditScorePercent}%`,
+                    backgroundColor: creditScoreColor,
+                  },
+                ]}
+              />
+            </View>
             {financeRows.map((row) => (
-              <TouchableOpacity
+              <View
                 key={row.label}
                 style={styles.detailRow}
-                activeOpacity={row.label === "Credit Score" ? 0.75 : 1}
-                onPress={() => {
-                  if (row.label === "Credit Score") {
-                    navigation.navigate("CreditScore");
-                  }
-                }}
               >
                 <View style={styles.rowLeft}>
                   <Feather name={row.icon} size={16} color="#007AFF" />
@@ -326,93 +471,263 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 </View>
                 <View style={styles.financeValueRow}>
                   <Text style={styles.detailValue}>{row.value}</Text>
-                  {row.label === "Credit Score" ? (
-                    <Feather name="chevron-right" size={16} color="#9CA3AF" />
-                  ) : null}
                 </View>
-              </TouchableOpacity>
+              </View>
             ))}
           </View>
 
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Update Information</Text>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionTitle}>Profile Information</Text>
+              {!editing ? (
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={onStartEditing}
+                >
+                  <Feather name="edit-2" size={14} color="#007AFF" />
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
             <Text style={styles.infoNote}>
-              You can edit only non-critical fields. NIC and Date of Birth are
-              locked.
+              NIC and Date of Birth are locked after registration.
             </Text>
 
-
-
-            {editableRows.map((row) => (
-              <View key={row.key} style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>{row.label}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editableProfile[row.key as keyof typeof editableProfile]}
-                  onChangeText={(value) =>
-                    onChangeEditableField(row.key, value)
-                  }
-                  placeholder={row.placeholder}
-                  placeholderTextColor="#9CA3AF"
-                  keyboardType={row.keyboardType ?? "default"}
-                  autoCapitalize={row.key === "email" ? "none" : "words"}
-                  editable={row.key !== "email"}
-                />
+            {!editing ? (
+              <View style={styles.readOnlyList}>
+                <View style={styles.readOnlyRow}>
+                  <Text style={styles.readOnlyLabel}>Full Name</Text>
+                  <Text style={styles.readOnlyValue}>
+                    {editableProfile.fullName || "-"}
+                  </Text>
+                </View>
+                <View style={styles.readOnlyRow}>
+                  <Text style={styles.readOnlyLabel}>Phone</Text>
+                  <Text style={styles.readOnlyValue}>
+                    {editableProfile.phone || "-"}
+                  </Text>
+                </View>
+                <View style={styles.readOnlyRow}>
+                  <Text style={styles.readOnlyLabel}>Email</Text>
+                  <Text style={styles.readOnlyValue}>
+                    {editableProfile.email || "-"}
+                  </Text>
+                </View>
+                <View style={styles.readOnlyRow}>
+                  <View style={styles.lockedLabelRow}>
+                    <Text style={styles.readOnlyLabel}>NIC</Text>
+                    <Feather name="lock" size={12} color="#DC2626" />
+                  </View>
+                  <Text style={styles.readOnlyValue}>{profile?.nic ?? "-"}</Text>
+                </View>
+                <View style={styles.readOnlyRow}>
+                  <View style={styles.lockedLabelRow}>
+                    <Text style={styles.readOnlyLabel}>Date of Birth</Text>
+                    <Feather name="lock" size={12} color="#DC2626" />
+                  </View>
+                  <Text style={styles.readOnlyValue}>
+                    {profile?.dateOfBirth ?? "-"}
+                  </Text>
+                </View>
+                <View style={styles.readOnlyRow}>
+                  <Text style={styles.readOnlyLabel}>Address</Text>
+                  <Text style={styles.readOnlyValue}>
+                    {editableProfile.address || "-"}
+                  </Text>
+                </View>
+                <View style={styles.readOnlyRow}>
+                  <Text style={styles.readOnlyLabel}>Monthly Income</Text>
+                  <Text style={styles.readOnlyValue}>
+                    {editableProfile.monthlyIncome
+                      ? `LKR ${Number(editableProfile.monthlyIncome).toLocaleString()}`
+                      : "-"}
+                  </Text>
+                </View>
+                <View style={styles.readOnlyRow}>
+                  <Text style={styles.readOnlyLabel}>Occupation</Text>
+                  <Text style={styles.readOnlyValue}>
+                    {editableProfile.occupation || "-"}
+                  </Text>
+                </View>
               </View>
-            ))}
+            ) : (
+              <>
+                {editableRows.map((row) => (
+                  <View key={row.key} style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>{row.label}</Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        row.multiline && styles.multilineInput,
+                      ]}
+                      value={
+                        editableProfile[
+                          row.key as keyof typeof editableProfile
+                        ]
+                      }
+                      onChangeText={(value) =>
+                        onChangeEditableField(row.key, value)
+                      }
+                      placeholder={row.placeholder}
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType={row.keyboardType ?? "default"}
+                      autoCapitalize={row.key === "email" ? "none" : "words"}
+                      multiline={row.multiline}
+                    />
+                  </View>
+                ))}
 
-            <View style={styles.lockedRow}>
-              <Feather name="lock" size={14} color="#DC2626" />
-              <Text style={styles.lockedText}>NIC: {profile?.nic ?? "-"}</Text>
-            </View>
-            <View style={styles.lockedRow}>
-              <Feather name="lock" size={14} color="#DC2626" />
-              <Text style={styles.lockedText}>
-                DOB: {profile?.dateOfBirth ?? "-"}
-              </Text>
-            </View>
+                <View style={styles.sensitiveBox}>
+                  <Text style={styles.sensitiveTitle}>Security Changes</Text>
+                  <Text style={styles.infoNote}>
+                    Changing email or password requires a code sent to your
+                    current email.
+                  </Text>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Current Email</Text>
+                    <TextInput
+                      style={[styles.input, styles.lockedSecurityInput]}
+                      value={editableProfile.email}
+                      editable={false}
+                      placeholder="Current email"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>New Email</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editableProfile.newEmail}
+                      onChangeText={(value) =>
+                        onChangeEditableField("newEmail", value)
+                      }
+                      placeholder="Leave blank to keep current email"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>New Password</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editableProfile.password}
+                      onChangeText={(value) =>
+                        onChangeEditableField("password", value)
+                      }
+                      placeholder="Leave blank to keep current password"
+                      placeholderTextColor="#9CA3AF"
+                      secureTextEntry
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Confirm New Password</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editableProfile.confirmPassword}
+                      onChangeText={(value) =>
+                        onChangeEditableField("confirmPassword", value)
+                      }
+                      placeholder="Confirm new password"
+                      placeholderTextColor="#9CA3AF"
+                      secureTextEntry
+                    />
+                  </View>
 
-            <TouchableOpacity
-              style={styles.verifyButton}
-              onPress={onSendVerificationCode}
-            >
-              <Text style={styles.verifyButtonText}>
-                Send Verification Code
-              </Text>
-            </TouchableOpacity>
+                  {sensitiveChanged ? (
+                    <View style={styles.verificationBox}>
+                      <View style={styles.sensitiveNotice}>
+                        <Feather name="shield" size={15} color="#1D4ED8" />
+                        <Text style={styles.sensitiveNoticeText}>
+                          Enter the code sent to {savedEditableProfile.email} to
+                          save these changes.
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.verifyButton}
+                        onPress={onSendVerificationCode}
+                      >
+                        <Text style={styles.verifyButtonText}>
+                          Send Verification Code
+                        </Text>
+                      </TouchableOpacity>
 
-            {verificationSent ? (
-              <View style={styles.verificationBox}>
-                <Text style={styles.inputLabel}>Verification Code</Text>
-                <TextInput
-                  style={styles.input}
-                  value={verificationCode}
-                  onChangeText={setVerificationCode}
-                  placeholder="Enter verification code"
-                  placeholderTextColor="#9CA3AF"
-                  keyboardType="number-pad"
-                />
-                <TouchableOpacity
-                  style={styles.confirmButton}
-                  onPress={onVerify}
-                >
-                  <Text style={styles.confirmButtonText}>Verify</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
+                      {verificationSent ? (
+                        <>
+                          <Text style={styles.inputLabel}>
+                            Verification Code
+                          </Text>
+                          <TextInput
+                            style={styles.input}
+                            value={verificationCode}
+                            onChangeText={setVerificationCode}
+                            placeholder="Enter verification code"
+                            placeholderTextColor="#9CA3AF"
+                            keyboardType="number-pad"
+                          />
+                          <TouchableOpacity
+                            style={styles.confirmButton}
+                            onPress={onVerifySensitiveChanges}
+                          >
+                            <Text style={styles.confirmButtonText}>
+                              Verify
+                            </Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : null}
 
-            <TouchableOpacity
-              style={[
-                styles.saveButton,
-                (!verifiedForSave || saving) && styles.saveButtonMuted,
-              ]}
-              onPress={() => void onSaveChanges()}
-              disabled={saving}
-            >
-              <Text style={styles.saveButtonText}>
-                {saving ? "Saving..." : "Save Changes"}
-              </Text>
-            </TouchableOpacity>
+                      {verifiedForSensitiveSave ? (
+                        <Text style={styles.verifiedText}>
+                          Sensitive changes verified.
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.lockedRow}>
+                  <Feather name="lock" size={14} color="#DC2626" />
+                  <Text style={styles.lockedText}>
+                    NIC: {profile?.nic ?? "-"}
+                  </Text>
+                </View>
+                <View style={styles.lockedRow}>
+                  <Feather name="lock" size={14} color="#DC2626" />
+                  <Text style={styles.lockedText}>
+                    DOB: {profile?.dateOfBirth ?? "-"}
+                  </Text>
+                </View>
+
+                <View style={styles.editActions}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={onCancelEditing}
+                    disabled={saving}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.saveButton,
+                      (!isDirty ||
+                        saving ||
+                        (sensitiveChanged && !verifiedForSensitiveSave)) &&
+                        styles.saveButtonMuted,
+                    ]}
+                    onPress={() => void onSaveChanges()}
+                    disabled={
+                      !isDirty ||
+                      saving ||
+                      (sensitiveChanged && !verifiedForSensitiveSave)
+                    }
+                  >
+                    <Text style={styles.saveButtonText}>
+                      {saving ? "Saving..." : "Save Changes"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </ScrollView>
       )}
@@ -512,6 +827,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#6B7280",
   },
+  completionBlock: {
+    width: "82%",
+    marginTop: 14,
+  },
+  completionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  completionLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  completionValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#007AFF",
+  },
+  completionTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "#E5E7EB",
+    overflow: "hidden",
+  },
+  completionFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "#007AFF",
+  },
   sectionCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
@@ -528,6 +872,65 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#111827",
     marginBottom: 6,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  editButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#EFF6FF",
+  },
+  editButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#007AFF",
+  },
+  scorePanel: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+  },
+  scoreLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  scoreValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  scoreValue: {
+    fontSize: 30,
+    fontWeight: "800",
+  },
+  scoreRating: {
+    overflow: "hidden",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  scoreTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "#E5E7EB",
+    overflow: "hidden",
+    marginBottom: 6,
+  },
+  scoreFill: {
+    height: "100%",
+    borderRadius: 999,
   },
   detailRow: {
     flexDirection: "row",
@@ -566,6 +969,35 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginBottom: 10,
   },
+  readOnlyList: {
+    marginTop: 2,
+  },
+  readOnlyRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  readOnlyLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  lockedLabelRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  readOnlyValue: {
+    flex: 1.4,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1F2937",
+    textAlign: "right",
+  },
   inputGroup: {
     marginBottom: 10,
   },
@@ -584,6 +1016,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#111827",
   },
+  multilineInput: {
+    minHeight: 78,
+    textAlignVertical: "top",
+  },
   lockedRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -594,6 +1030,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#B91C1C",
+  },
+  sensitiveBox: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    backgroundColor: "#FAFAFB",
+  },
+  sensitiveTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  lockedSecurityInput: {
+    color: "#6B7280",
+    backgroundColor: "#F3F4F6",
+  },
+  sensitiveNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 10,
+  },
+  sensitiveNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#1D4ED8",
+    lineHeight: 17,
   },
   verifyButton: {
     marginTop: 8,
@@ -610,6 +1076,12 @@ const styles = StyleSheet.create({
   verificationBox: {
     marginTop: 12,
   },
+  verifiedText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#047857",
+  },
   confirmButton: {
     marginTop: 8,
     backgroundColor: "#DBEAFE",
@@ -622,8 +1094,27 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1E40AF",
   },
-  saveButton: {
+  editActions: {
+    flexDirection: "row",
+    gap: 10,
     marginTop: 14,
+  },
+  cancelButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  saveButton: {
+    flex: 1,
     backgroundColor: "#007AFF",
     borderRadius: 10,
     paddingVertical: 12,
