@@ -2,7 +2,7 @@
 // Includes fetching users, searching, updating FCM tokens, and presence status
 
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { FirebaseService } from '../config/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import { COLLECTIONS, UserDoc } from '../common/types';
 
 @Injectable()

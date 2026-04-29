@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { FirebaseService } from '../config/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import { COLLECTIONS, BlockDoc } from '../common/types';
 
 @Injectable()

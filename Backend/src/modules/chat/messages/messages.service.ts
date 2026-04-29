@@ -1,16 +1,12 @@
-// Messages service handles all message-related logic in the chat system
-// Supports sending text messages, retrieving messages, and marking messages as read
+// Messages service handles sending and retrieving messages in conversations
+// Supports text messages and media uploads
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { ConversationsService } from '../conversations/conversations.service';
-import { COLLECTIONS, MessageDoc, ConversationDoc } from '../common/types';
+import { COLLECTIONS, MessageDoc } from '../common/types';
 
 import * as admin from 'firebase-admin';
-
-// Supported file types (currently defined but not used in this file yet)
-const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-const VIDEO_EXTS = ['.mp4', '.mov'];
 
 @Injectable()
 export class MessagesService {
@@ -19,24 +15,18 @@ export class MessagesService {
     private conversations: ConversationsService,
   ) {}
 
-  
-  // SEND TEXT MESSAGE
-  
+  // Send a text message to a conversation
   async sendText(
     conversationId: string,
     senderId: string,
     text: string,
   ): Promise<MessageDoc> {
-    // Check if conversation exists and user is part of it
+    // Verify conversation exists and user is a participant
     const conv = await this.conversations.findOne(conversationId, senderId);
+    const recipientId = conv.participantIds.find((id) => id !== senderId)!;
 
-    // Find recipient (other user in conversation)
-    const recipientId = conv.participantIds.find(
-      (id) => id !== senderId,
-    )!;
-
-    // Create new message in Firestore messages subcollection
-    const ref = await this.firebase.db
+    // ✅ FIXED: was this.firebase.db.collection(...) — db property does not exist
+    const ref = await this.firebase
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .add({
         conversationId,
@@ -49,7 +39,7 @@ export class MessagesService {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-    // Update conversation preview (last message + unread count)
+    // Update conversation with last message preview
     await this.conversations.updateLastMessage(
       conversationId,
       senderId,
@@ -57,63 +47,47 @@ export class MessagesService {
       recipientId,
     );
 
-    // Return saved message with generated ID
     const snap = await ref.get();
     return { id: snap.id, ...snap.data() } as MessageDoc;
   }
 
-  
-  // GET PAGINATED MESSAGES
-  
+  // Get paginated messages from a conversation (newest first)
   async getMessages(
     conversationId: string,
     userId: string,
     page: string | number,
     limit: string | number,
   ): Promise<MessageDoc[]> {
-    // Ensure user has access to this conversation
+    // Check user has access to this conversation
     await this.conversations.findOne(conversationId, userId);
 
-    // Convert query params to numbers
-    const pageNum =
-      typeof page === 'string' ? parseInt(page, 10) : page;
+    const pageNum = typeof page === 'string' ? parseInt(page, 10) : page;
+    const limitNum = typeof limit === 'string' ? parseInt(limit, 10) : limit;
 
-    const limitNum =
-      typeof limit === 'string' ? parseInt(limit, 10) : limit;
-
-    // Fetch messages in descending order (newest first)
-    // Pagination is handled using offset
-    const query = this.firebase.db
+    // ✅ FIXED: was this.firebase.db.collection(...)
+    const query = this.firebase
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .orderBy('createdAt', 'desc')
       .limit(limitNum)
       .offset(pageNum * limitNum);
 
     const snap = await query.get();
-
-    // Map Firestore docs to MessageDoc format
-    return snap.docs.map(
-      (d) => ({ id: d.id, ...d.data() } as MessageDoc),
-    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MessageDoc));
   }
 
-  
-  // MARK MESSAGE AS READ
-  
+  // Mark a message as read
   async markMessageRead(
     conversationId: string,
     messageId: string,
     userId: string,
   ): Promise<void> {
-    // Verify user belongs to conversation
+    // Verify user is in this conversation
     await this.conversations.findOne(conversationId, userId);
 
-    // Update message with read timestamp
-    await this.firebase.db
+    // 
+    await this.firebase
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .doc(messageId)
-      .update({
-        readAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      .update({ readAt: admin.firestore.FieldValue.serverTimestamp() });
   }
 }

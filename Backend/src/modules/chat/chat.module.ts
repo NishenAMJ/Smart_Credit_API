@@ -2,29 +2,31 @@
 // Includes conversations, messages, user presence, blocking, and WebSocket gateway
 
 import { Module } from '@nestjs/common';
-import { FirebaseModule } from './config/firebase.module';
-import { ChatGateway } from './gateway/chat.gateway';
-import { ConversationsService } from './conversations/conversations.service';
-import { MessagesService } from './messages/messages.service';
-import { UsersService } from './users/users.service';
-import { BlocksService } from './users/blocks.service';
+import { FirebaseModule } from '../../firebase/firebase.module';
+import { ConversationsModule } from './conversations/conversations.module';
+import { MessagesModule } from './messages/messages.module';
+import { UsersModule } from './users/users.module';
+import { BlocksModule } from './users/blocks.module';
+import { GatewayModule } from './gateway/gateway.module';
 
+// ✅ FIXED: previously listed raw providers (ChatGateway, ConversationsService, etc.)
+// which bypasses NestJS DI scoping and causes injection errors.
+// Now we import the proper feature modules which export their services correctly.
 @Module({
-  imports: [FirebaseModule],
-  providers: [
-    ChatGateway,
-    ConversationsService,
-    MessagesService,
-    UsersService,
-    BlocksService,
+  imports: [
+    FirebaseModule,
+    ConversationsModule,
+    MessagesModule,
+    UsersModule,
+    BlocksModule,
+    GatewayModule,
   ],
-  // Export services so other modules can use them
   exports: [
-    ChatGateway,
-    ConversationsService,
-    MessagesService,
-    UsersService,
-    BlocksService,
+    ConversationsModule,
+    MessagesModule,
+    UsersModule,
+    BlocksModule,
+    GatewayModule,
   ],
 })
 export class ChatModule {}

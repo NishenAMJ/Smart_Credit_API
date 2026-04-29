@@ -1,22 +1,26 @@
-import { Catch, ArgumentsHost, Logger } from '@nestjs/common';
-import { BaseWsExceptionFilter, WsException } from '@nestjs/websockets';
-import { Socket } from 'socket.io';
 
-@Catch()
-export class WsExceptionFilter extends BaseWsExceptionFilter {
-  private readonly logger = new Logger(WsExceptionFilter.name);
+// ✅ FIXED: This file was previously a copy-paste of WsExceptionFilter.
+// It is now a proper NestJS module that registers ChatGateway and imports
+// all services the gateway depends on.
 
-  catch(exception: WsException | Error, host: ArgumentsHost) {
-    const client: Socket = host.switchToWs().getClient();
-    const message =
-      exception instanceof WsException
-        ? exception.getError()
-        : exception.message;
+import { Module } from '@nestjs/common';
+import { ChatGateway } from './chat.gateway';
+import { ConversationsModule } from '../conversations/conversations.module';
+import { MessagesModule } from '../messages/messages.module';
+import { BlocksModule } from '../users/blocks.module';
+import { UsersModule } from '../users/users.module';
 
-    this.logger.error(`WS error [${client.id}]: ${message}`);
-    client.emit('error', { message });
-  }
-}
+@Module({
+  imports: [
+    ConversationsModule,
+    MessagesModule,
+    BlocksModule,
+    UsersModule,
+  ],
+  providers: [ChatGateway],
+  exports: [ChatGateway],
+})
+export class GatewayModule {}
 
 /*This file is used to handle errors that happen
  during WebSocket communication in the chat system.

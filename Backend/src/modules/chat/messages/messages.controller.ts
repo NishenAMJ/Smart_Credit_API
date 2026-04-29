@@ -1,38 +1,34 @@
 // Messages controller handles sending and retrieving messages in conversations
 // Supports text messages and media uploads (images, videos)
 
+
 import {
   Controller,
   Get,
   Post,
-  Delete,
   Param,
   Body,
   Query,
   UseInterceptors,
   UploadedFile,
+  NotImplementedException,
 } from '@nestjs/common';
-
 import { IsString } from 'class-validator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MessagesService } from './messages.service';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator'; // ✅ FIXED: correct path (plural, hyphen)
 
-// DTO for sending a text message
-// Ensures text is a valid string
 class SendMessageDto {
   @IsString()
   text!: string;
 }
 
-// Base route: /conversations/:conversationId/messages
 @Controller('conversations/:conversationId/messages')
 export class MessagesController {
   constructor(private messagesService: MessagesService) {}
 
-  // Get paginated messages from a conversation
-  // page → which batch of messages (0 = latest first batch)
-  // limit → number of messages per request (default 30)
+  // Get paginated list of messages from a conversation
+  // Use page=0 for first batch, page=1 for second, etc
   @Get()
   list(
     @Param('conversationId') conversationId: string,
@@ -48,39 +44,28 @@ export class MessagesController {
     );
   }
 
-  // Send a text message in a conversation
+  // Send a text message to the conversation
   @Post()
   sendText(
     @Param('conversationId') conversationId: string,
     @CurrentUser() userId: string,
     @Body() dto: SendMessageDto,
   ) {
-    return this.messagesService.sendText(
-      conversationId,
-      userId,
-      dto.text,
-    );
+    return this.messagesService.sendText(conversationId, userId, dto.text);
   }
 
-  // Upload and send media (image/video/file) in a conversation
-  // Uses FileInterceptor to handle file upload
+  // ✅ FIXED: was calling sendText(file.filename) which stores a local path as the message text.
+  // Throws NotImplementedException until a proper sendMedia method is built that
+  // uploads to Firebase Storage and saves a real mediaUrl.
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   uploadMedia(
-    @Param('conversationId') conversationId: string,
-    @CurrentUser() userId: string,
-    @UploadedFile() file: any,
+    @Param('conversationId') _conversationId: string,
+    @CurrentUser() _userId: string,
+    @UploadedFile() _file: Express.Multer.File,
   ) {
-    // Validate file existence
-    if (!file) {
-      throw new Error('No file provided');
-    }
-
-    // Send file (currently using filename as message content)
-    return this.messagesService.sendText(
-      conversationId,
-      userId,
-      file.filename,
+    throw new NotImplementedException(
+      'Media upload is not yet implemented. Implement a sendMedia() method in MessagesService that uploads to Firebase Storage first.',
     );
   }
 }

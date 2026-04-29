@@ -1,6 +1,3 @@
-// Conversations controller handles all conversation-related HTTP requests
-
-
 import {
   Controller,
   Get,
@@ -14,32 +11,46 @@ import { IsString, IsBoolean } from 'class-validator';
 import { ConversationsService } from './conversations.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
+/**
+ * DTOs — validated request bodies
+ */
 class StartConversationDto {
   @IsString()
-  targetUserId!: string;
+  targetUserId!: string; // The user you want to chat with
 }
-// Validates that targetUserId is a string
-// Represents the user you want to start chatting with
 
 class MuteDto {
   @IsBoolean()
-  muted!: boolean;
+  muted!: boolean; // true = mute, false = unmute
 }
-// DTO for muting/unmuting a conversation
-// Validates that muted is a boolean 
 
+/**
+ * ConversationsController
+ * ──────────────────────────────────────────────────────────────
+ * Base path: /conversations
+ *
+ * All routes require authentication — @CurrentUser() extracts the
+ * userId set by your JWT guard on req.user.id.
+ */
 @Controller('conversations')
 export class ConversationsController {
   constructor(private conversations: ConversationsService) {}
-  // Controller with base route: /conversations
 
-  // Get all conversations for the current user
+  /**
+   * GET /conversations
+   * Returns all conversations for the logged-in user, newest first.
+   */
   @Get()
   list(@CurrentUser() userId: string) {
     return this.conversations.listForUser(userId);
   }
 
-  // Start a new conversation or get existing one with another user
+  /**
+   * POST /conversations
+   * Idempotent — starts a new conversation with targetUserId,
+   * or returns the existing one if it already exists.
+   * Body: { targetUserId: string }
+   */
   @Post()
   start(
     @CurrentUser() userId: string,
@@ -48,8 +59,10 @@ export class ConversationsController {
     return this.conversations.getOrCreate(userId, dto.targetUserId);
   }
 
-  // Get a single conversation by ID
-  // GET /conversations/:id
+  /**
+   * GET /conversations/:id
+   * Returns a single conversation. Throws 403 if user is not a participant.
+   */
   @Get(':id')
   findOne(
     @Param('id') id: string,
@@ -58,8 +71,11 @@ export class ConversationsController {
     return this.conversations.findOne(id, userId);
   }
 
-  // Mark conversation as read (clears unread message count)
-  // PATCH /conversations/:id/read
+  /**
+   * PATCH /conversations/:id/read
+   * Resets the caller's unread message count to 0.
+   * Called when user opens the chat screen.
+   */
   @Patch(':id/read')
   markRead(
     @Param('id') id: string,
@@ -68,8 +84,11 @@ export class ConversationsController {
     return this.conversations.markAsRead(id, userId);
   }
 
-  // Mute or unmute notifications for a conversation
-  // PATCH /conversations/:id/mute
+  /**
+   * PATCH /conversations/:id/mute
+   * Toggles push-notification muting for this conversation.
+   * Body: { muted: boolean }
+   */
   @Patch(':id/mute')
   mute(
     @Param('id') id: string,
@@ -79,8 +98,11 @@ export class ConversationsController {
     return this.conversations.setMuted(id, userId, dto.muted);
   }
 
-  // Delete a conversation entirely
-  // DELETE /conversations/:id
+  /**
+   * DELETE /conversations/:id
+   * Permanently deletes the conversation and all its messages.
+   * Only a participant can delete.
+   */
   @Delete(':id')
   remove(
     @Param('id') id: string,

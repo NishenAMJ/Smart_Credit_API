@@ -20,7 +20,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger, UseFilters } from '@nestjs/common';
 import { IsString, IsBoolean } from 'class-validator';
 
-import { FirebaseService } from '../config/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { BlocksService } from '../users/blocks.service';

@@ -1,37 +1,40 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
-
-//This file creates custom decorators to easily get the current user's ID
- //from incoming requests (HTTP and WebSocket) in a NestJS app.
-
- //Instead of manually writing `req.user.id` everywhere, we use these decorators
- //to keep the code clean and reusable.
-
+/**
+ * @CurrentUser() — HTTP context
+ * ──────────────────────────────────────────────────────────────
+ * Extracts the authenticated userId from the incoming HTTP request.
+ *
+ * Your JWT / auth guard (in the parent AppModule) should populate
+ * req.user = { id: string } before the request reaches any chat controller.
+ *
+ * Falls back to the x-user-id header for testing without a full auth guard.
+ *
+ * Usage:
+ *   @Get()
+ *   listConversations(@CurrentUser() userId: string) { ... }
+ */
 export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): string => {
     const request = ctx.switchToHttp().getRequest();
-    // Adjust this path to match what your parent auth middleware sets
     return request.user?.id ?? request.headers['x-user-id'];
   },
 );
 
-//current user-Used in controllers (REST APIs).
- // It extracts the userId from the request object.
-
-
+/**
+ * @WsCurrentUser() — WebSocket context
+ * ──────────────────────────────────────────────────────────────
+ * Extracts the userId from a Socket.IO socket for WebSocket handlers.
+ *
+ * The ChatGateway's handleConnection sets socket.data.userId on connect
+ * (reading from handshake.auth.userId sent by the mobile app).
+ *
+ * Usage in a @SubscribeMessage handler:
+ *   handleTyping(@WsCurrentUser() userId: string, ...) { ... }
+ */
 export const WsCurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): string => {
     const client = ctx.switchToWs().getClient();
     return client.data?.userId ?? client.handshake?.auth?.userId;
   },
 );
-
-// Used in WebSocket gateways.
- // Extracts userId from the socket connection.
- //Gets the WebSocket client.
- // Tries to read: client.data.userId (set during handshake).
- // If not available, falls back to: client.handshake.auth.userId.
-
-
- //decorators used to Avoids repeating request parsing logic everywhere.
- // Keeps controllers clean and readable.

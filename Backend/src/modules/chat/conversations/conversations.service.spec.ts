@@ -3,7 +3,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
-import { FirebaseService } from '../config/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 
 describe('ConversationsService', () => {
   let service: ConversationsService;
