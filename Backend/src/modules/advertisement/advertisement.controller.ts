@@ -41,7 +41,7 @@ export class AdvertisementController {
   @Get('boost-packages')
   getBoostPackages() {
     return this.boostService.getBoostPackages();
-  }
+  }  //ok
 
   // Get full analytics for all ads by a lender
   @Get('analytics/summary')
@@ -49,7 +49,7 @@ export class AdvertisementController {
     @Query('lenderId') lenderId: string,
   ) {
     return this.analyticsService.getLenderAnalytics(lenderId);
-  }
+  }//ok
 
   // Get lender's own ads including view counts and click stats
   @Get('my')
