@@ -14,7 +14,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
-import { commonChatStyles } from '../../styles/chat.styles';
+
 import { Conversation, ChatStackParamList } from '../../types';
 import { conversationService } from '../../services';
 import Avatar from '../../components/common/Avatar';
