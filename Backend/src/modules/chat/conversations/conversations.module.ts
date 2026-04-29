@@ -8,3 +8,7 @@ import { ConversationsService } from './conversations.service';
   exports: [ConversationsService],
 })
 export class ConversationsModule {}
+
+// controllers - registers ConversationsController (handles routes)
+// providers - registers ConversationsService (logic + db operations)
+// exports - allows other modules to use ConversationsService

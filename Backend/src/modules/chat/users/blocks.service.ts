@@ -1,4 +1,12 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+// Blocks service handles user blocking logic in the chat system
+// Allows users to block, unblock, view blocked users, and check block status
+
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+
 import { FirebaseService } from '../config/firebase.service';
 import { COLLECTIONS, BlockDoc } from '../common/types';
 
@@ -6,10 +14,11 @@ import { COLLECTIONS, BlockDoc } from '../common/types';
 export class BlocksService {
   constructor(private firebase: FirebaseService) {}
 
-  // ── Block a user ─────────────────────────────────────────────────────────────
-
+  
+  // BLOCK USER
+  
   async blockUser(blockerId: string, blockedId: string): Promise<void> {
-    // Prevent duplicate blocks
+    // Check if block already exists (prevent duplicates)
     const existing = await this.firebase
       .collection(COLLECTIONS.BLOCKS)
       .where('blockerId', '==', blockerId)
@@ -17,8 +26,11 @@ export class BlocksService {
       .limit(1)
       .get();
 
-    if (!existing.empty) throw new ConflictException('User already blocked');
+    // If already blocked → throw error
+    if (!existing.empty)
+      throw new ConflictException('User already blocked');
 
+    // Create new block record
     await this.firebase.collection(COLLECTIONS.BLOCKS).add({
       blockerId,
       blockedId,
@@ -26,9 +38,11 @@ export class BlocksService {
     });
   }
 
-  // ── Unblock a user ───────────────────────────────────────────────────────────
+  
+  // UNBLOCK USER
 
   async unblockUser(blockerId: string, blockedId: string): Promise<void> {
+    // Find existing block record
     const snap = await this.firebase
       .collection(COLLECTIONS.BLOCKS)
       .where('blockerId', '==', blockerId)
@@ -36,26 +50,39 @@ export class BlocksService {
       .limit(1)
       .get();
 
-    if (snap.empty) throw new NotFoundException('Block not found');
+    // If no block found → error
+    if (snap.empty)
+      throw new NotFoundException('Block not found');
 
+    // Delete block record
     await snap.docs[0].ref.delete();
   }
 
-  // ── Get blocked users list ───────────────────────────────────────────────────
-
+ 
+  // GET BLOCKED USERS LIST
+  
   async getBlockedUsers(blockerId: string): Promise<BlockDoc[]> {
+    // Fetch all users blocked by current user
     const snap = await this.firebase
       .collection(COLLECTIONS.BLOCKS)
       .where('blockerId', '==', blockerId)
       .orderBy('createdAt', 'desc')
       .get();
 
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as BlockDoc));
+    // Map Firestore documents to BlockDoc format
+    return snap.docs.map(
+      (d) => ({ id: d.id, ...d.data() } as BlockDoc),
+    );
   }
 
-  // ── Check if blocked (used internally by gateway) ────────────────────────────
-
-  async isBlocked(senderId: string, recipientId: string): Promise<boolean> {
+  
+  // CHECK IF USER IS BLOCKED 
+  
+  async isBlocked(
+    senderId: string,
+    recipientId: string,
+  ): Promise<boolean> {
+    // Check if recipient has blocked sender
     const snap = await this.firebase
       .collection(COLLECTIONS.BLOCKS)
       .where('blockerId', '==', recipientId)
@@ -63,6 +90,7 @@ export class BlocksService {
       .limit(1)
       .get();
 
+    // Return true if block exists
     return !snap.empty;
   }
 }

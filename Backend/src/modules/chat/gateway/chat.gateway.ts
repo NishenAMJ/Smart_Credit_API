@@ -1,5 +1,10 @@
-// Chat gateway handles real-time WebSocket communication
-// Manages connections, rooms, messaging, typing indicators, and user presence
+// Chat Gateway handles real-time WebSocket communication
+// It manages: connections, rooms, messaging, typing, read receipts, presence, and notifications
+
+/**This file handles real-time chat in the app. It lets users connect,
+ join chats, send and receive messages instantly, see typing status, and
+  read updates. It also checks if users are allowed to chat, tracks who 
+  is online or offline, and sends notifications when someone is not active.**/
 
 import {
   WebSocketGateway,
@@ -13,7 +18,8 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, UseFilters } from '@nestjs/common';
-import { IsString, IsBoolean, IsOptional } from 'class-validator';
+import { IsString, IsBoolean } from 'class-validator';
+
 import { FirebaseService } from '../config/firebase.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationsService } from '../conversations/conversations.service';
@@ -21,27 +27,43 @@ import { BlocksService } from '../users/blocks.service';
 import { UsersService } from '../users/users.service';
 import { WsExceptionFilter } from '../common/filters/ws-exception.filter';
 
-// Data classes for validating incoming socket messages
+
+
+// Join a conversation room
 class JoinRoomDto {
-  @IsString() conversationId!: string;
+  @IsString()
+  conversationId!: string;
 }
 
+// Send a text message
 class SendMessageDto {
-  @IsString() conversationId!: string;
-  @IsString() text!: string;
+  @IsString()
+  conversationId!: string;
+
+  @IsString()
+  text!: string;
 }
 
+// Typing indicator payload
 class TypingDto {
-  @IsString() conversationId!: string;
-  @IsBoolean() isTyping!: boolean;
+  @IsString()
+  conversationId!: string;
+
+  @IsBoolean()
+  isTyping!: boolean;
 }
 
+// Read receipt payload
 class ReadReceiptDto {
-  @IsString() conversationId!: string;
-  @IsString() messageId!: string;
+  @IsString()
+  conversationId!: string;
+
+  @IsString()
+  messageId!: string;
 }
 
-// WebSocket gateway for real-time chat
+
+
 @UseFilters(WsExceptionFilter)
 @WebSocketGateway({
   cors: {
@@ -51,11 +73,12 @@ class ReadReceiptDto {
   transports: ['websocket'],
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
-  @WebSocketServer() server!: Server;
+  @WebSocketServer()
+  server!: Server;
+
   private readonly logger = new Logger(ChatGateway.name);
 
-  // Keep track of which sockets are connected for each user
-  // A user can have multiple devices connected at once
+  // Tracks all socket connections per user (multi-device support)
   private userSockets = new Map<string, Set<string>>();
 
   constructor(
@@ -66,37 +89,40 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private users: UsersService,
   ) {}
 
-  // Handle new socket connection
+
+
+  // When a user connects to WebSocket
   async handleConnection(client: Socket) {
-    // Get userId from socket auth or headers
     const userId =
       client.handshake.auth?.userId ??
-      client.handshake.headers['x-user-id'] as string;
+      (client.handshake.headers['x-user-id'] as string);
 
+    // Reject connection if no userId
     if (!userId) {
       this.logger.warn(`[${client.id}] connection rejected - no userId`);
       client.disconnect();
       return;
     }
 
-    // Store userId on the socket for later use
+    // Attach userId to socket
     client.data.userId = userId;
 
-    // Track this socket connection for the user
+    // Track socket for this user (multi-device support)
     if (!this.userSockets.has(userId)) {
       this.userSockets.set(userId, new Set());
     }
     this.userSockets.get(userId)!.add(client.id);
 
-    // Update user as online in database
+    // Mark user online in DB
     await this.users.setOnlineStatus(userId, true);
 
-    // Notify contacts that user came online
+    // Notify others that user is online
     this.broadcastPresence(userId, true);
 
     this.logger.log(`[${client.id}] connected - userId: ${userId}`);
   }
 
+  // When a user disconnects
   async handleDisconnect(client: Socket) {
     const userId = client.data?.userId;
     if (!userId) return;
@@ -104,7 +130,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const sockets = this.userSockets.get(userId);
     sockets?.delete(client.id);
 
-    // Only mark offline if no other sockets remain for this user
+    // If no more active sockets - mark offline
     if (!sockets || sockets.size === 0) {
       this.userSockets.delete(userId);
       await this.users.setOnlineStatus(userId, false);
@@ -114,9 +140,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`[${client.id}] disconnected — userId: ${userId}`);
   }
 
-  // ── Join a conversation room ──────────────────────────────────────────────────
-  // Client calls this when opening ChatScreen.
+  
 
+  // Join a conversation room
   @SubscribeMessage('joinConversation')
   async handleJoin(
     @ConnectedSocket() client: Socket,
@@ -124,7 +150,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const userId = client.data.userId;
 
-    // Verify user is a participant before letting them join the room
+    // Ensure user is part of conversation
     try {
       await this.conversations.findOne(dto.conversationId, userId);
     } catch {
@@ -132,12 +158,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     await client.join(dto.conversationId);
-    client.emit('joinedConversation', { conversationId: dto.conversationId });
+
+    client.emit('joinedConversation', {
+      conversationId: dto.conversationId,
+    });
+
     this.logger.log(`[${userId}] joined room ${dto.conversationId}`);
   }
 
-  // ── Leave a conversation room ─────────────────────────────────────────────────
-
+  // Leave a conversation room
   @SubscribeMessage('leaveConversation')
   handleLeave(
     @ConnectedSocket() client: Socket,
@@ -146,8 +175,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.leave(dto.conversationId);
   }
 
-  // ── Send a message via WebSocket ──────────────────────────────────────────────
-  // Saves to Firestore, emits to room, sends FCM push.
+  
 
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
@@ -156,11 +184,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const senderId = client.data.userId;
 
-    // Get the conversation to find the recipient
+    // Get conversation + determine recipient
     const conv = await this.conversations.findOne(dto.conversationId, senderId);
     const recipientId = conv.participantIds.find((id) => id !== senderId)!;
 
-    // Block check — don't deliver if recipient has blocked sender
+    // Block check (do not send if blocked)
     const blocked = await this.blocks.isBlocked(senderId, recipientId);
     if (blocked) {
       client.emit('messageFailed', {
@@ -170,26 +198,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    // Persist to Firestore
+    // Save message in Firestore
     const message = await this.messages.sendText(
       dto.conversationId,
       senderId,
       dto.text,
     );
 
-    // Broadcast to everyone in the room (sender included for multi-device)
+    // Broadcast message to all users in room
     this.server.to(dto.conversationId).emit('receiveMessage', message);
 
-    // Send FCM push if recipient is NOT currently in the room
+    // Check if recipient is actively in room
     const recipientInRoom = await this.isUserInRoom(
       recipientId,
       dto.conversationId,
     );
 
+    // If not active → send push notification
     if (!recipientInRoom) {
       await this.sendPushToUser(recipientId, {
         title: 'New message',
-        body: dto.text.length > 100 ? dto.text.slice(0, 97) + '…' : dto.text,
+        body:
+          dto.text.length > 100 ? dto.text.slice(0, 97) + '…' : dto.text,
         data: {
           type: 'new_message',
           conversationId: dto.conversationId,
@@ -199,7 +229,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // ── Typing indicator ──────────────────────────────────────────────────────────
+ 
 
   @SubscribeMessage('typing')
   handleTyping(
@@ -208,7 +238,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const userId = client.data.userId;
 
-    // Broadcast to the room but exclude the sender
+    // Notify others in room except sender
     client.to(dto.conversationId).emit('userTyping', {
       conversationId: dto.conversationId,
       userId,
@@ -216,7 +246,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  // ── Read receipt ──────────────────────────────────────────────────────────────
+
 
   @SubscribeMessage('markRead')
   async handleMarkRead(
@@ -225,7 +255,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const userId = client.data.userId;
 
-    // Update Firestore
+    // Mark message as read
     await this.messages.markMessageRead(
       dto.conversationId,
       dto.messageId,
@@ -235,7 +265,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Reset unread count
     await this.conversations.markAsRead(dto.conversationId, userId);
 
-    // Notify the sender their message was read
+    // Notify others message was read
     client.to(dto.conversationId).emit('messageRead', {
       conversationId: dto.conversationId,
       messageId: dto.messageId,
@@ -244,13 +274,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────────
+  
 
+  // Broadcast online/offline status globally
   private broadcastPresence(userId: string, isOnline: boolean) {
-    // Emit to all connected clients — the frontend filters by relevant userId
     this.server.emit('userOnline', { userId, isOnline });
   }
 
+  // Check if user is actively inside a chat room
   private async isUserInRoom(
     userId: string,
     room: string,
@@ -264,6 +295,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     return false;
   }
+
+  
 
   private async sendPushToUser(
     userId: string,
@@ -284,3 +317,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
   }
 }
+
+/*
+
+When a user connects, the gateway verifies their identity 
+and marks them as online, then tracks their socket connection.
+ When they join a conversation, it checks if they are allowed 
+ and then adds them to a chat room. When a message is sent,
+  it verifies permissions (including block checks), saves the message to
+   the database, and instantly broadcasts it to everyone in the room. 
+   If the recipient is not actively in the chat, it sends a 
+   push notification. It also handles typing indicators, read receipts,
+    and updates online/offline status when users disconnect.
+*/

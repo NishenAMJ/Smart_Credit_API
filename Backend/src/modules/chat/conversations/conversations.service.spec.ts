@@ -1,3 +1,5 @@
+// Unit tests for ConversationsService using Jest and NestJS testing utilities
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';

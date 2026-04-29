@@ -30,6 +30,7 @@ export class ConversationsService {
       .limit(1)
       .get();
 
+    // if exists, get the first conversation
     if (!existing.empty) {
       const d = existing.docs[0];
       return { id: d.id, ...d.data() } as ConversationDoc;

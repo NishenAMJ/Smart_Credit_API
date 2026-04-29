@@ -17,3 +17,11 @@ export class WsExceptionFilter extends BaseWsExceptionFilter {
     client.emit('error', { message });
   }
 }
+
+/*This file is used to handle errors that happen
+ during WebSocket communication in the chat system.
+  Instead of letting the application crash or show
+   unclear errors, it catches those errors, logs them 
+   for debugging, and sends a simple error message back 
+   to the client. This helps keep the real-time chat stable and 
+   ensures users get proper feedback when something goes wrong.*/
