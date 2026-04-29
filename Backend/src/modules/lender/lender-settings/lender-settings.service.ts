@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
-import { FirebaseService } from '../firebase/firebase.service';
-import { hasRole, readDate } from '../firebase/firestore-query.utils';
+import { FirebaseService } from '../../../firebase/firebase.service';
+import { hasRole, readDate } from '../../../firebase/firestore-query.utils';
 import {
   AnalyticsRangeKey,
   LenderLandingPage,

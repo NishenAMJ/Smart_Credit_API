@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
-import { FirebaseService } from '../firebase/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   applyDateCursor,
   buildPageInfo,
@@ -8,8 +8,8 @@ import {
   readDate,
   readNumber,
   readStringArray,
-} from '../firebase/firestore-query.utils';
-import { getAdStatus } from '../firebase/firestore-seed.utils';
+} from '../../../firebase/firestore-query.utils';
+import { getAdStatus } from '../../../firebase/firestore-seed.utils';
 import { LenderNotificationsService } from '../lender-notifications/lender-notifications.service';
 import {
   CreateLenderAdInput,

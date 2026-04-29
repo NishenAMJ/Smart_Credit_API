@@ -4,7 +4,7 @@ import {
   Firestore,
   QueryDocumentSnapshot,
 } from 'firebase-admin/firestore';
-import { FirebaseService } from '../firebase/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   applyDateCursor,
   buildPageInfo,
@@ -14,7 +14,7 @@ import {
   readString,
   readStringArray,
   scanQueryPage,
-} from '../firebase/firestore-query.utils';
+} from '../../../firebase/firestore-query.utils';
 import {
   PendingRequestListItem,
   PendingRequestsResponse,

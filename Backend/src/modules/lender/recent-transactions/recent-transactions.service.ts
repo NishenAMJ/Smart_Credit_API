@@ -6,7 +6,7 @@ import {
   QueryDocumentSnapshot,
   Timestamp,
 } from 'firebase-admin/firestore';
-import { FirebaseService } from '../firebase/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   applyDateCursor,
   buildPageInfo,
@@ -15,7 +15,7 @@ import {
   orderByDateAndId,
   readDate,
   readNumber,
-} from '../firebase/firestore-query.utils';
+} from '../../../firebase/firestore-query.utils';
 import {
   computeLoanRemainingAmount,
   getInstallmentAmount,
@@ -25,7 +25,7 @@ import {
   getPaymentCreatedAt,
   getLoanAmount,
   getLoanCreatedAt,
-} from '../firebase/firestore-seed.utils';
+} from '../../../firebase/firestore-seed.utils';
 import {
   LoanLedgerDetailsResponse,
   RecordInstallmentPaymentInput,

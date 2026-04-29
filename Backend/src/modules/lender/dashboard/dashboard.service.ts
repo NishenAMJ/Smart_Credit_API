@@ -5,7 +5,7 @@ import {
   QueryDocumentSnapshot,
   Query,
 } from 'firebase-admin/firestore';
-import { FirebaseService } from '../firebase/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   applyDateCursor,
   buildPageInfo,
@@ -16,7 +16,7 @@ import {
   readDate,
   readNumber,
   readString,
-} from '../firebase/firestore-query.utils';
+} from '../../../firebase/firestore-query.utils';
 import {
   computeLoanRemainingAmount,
   getLoanAmount,
@@ -25,7 +25,7 @@ import {
   getPaymentAmount,
   getPaymentCreatedAt,
   isActiveAd,
-} from '../firebase/firestore-seed.utils';
+} from '../../../firebase/firestore-seed.utils';
 import {
   BorrowerLoanSummary,
   BorrowerDetailsResponse,

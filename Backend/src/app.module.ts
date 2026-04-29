@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AnalyticsModule } from './modules/lender/analytics/analytics.module';
-import { FirebaseModule } from './modules/lender/firebase/firebase.module';
+import { FirebaseModule } from './firebase/firebase.module';
 import { DashboardModule } from './modules/lender/dashboard/dashboard.module';
 import { LenderAdsModule } from './modules/lender/lender-ads/lender-ads.module';
 import { LenderNotificationsModule } from './modules/lender/lender-notifications/lender-notifications.module';

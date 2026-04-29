@@ -30,6 +30,25 @@ const LOCATIONS = [
   'Matara', 'Kalutara', 'Anuradhapura', 'Ratnapura', 'Batticaloa', 'Badulla'
 ];
 const PAYMENT_TYPES = ['qr', 'receipt', 'manual'];
+const REQUEST_STATUSES = ['open', 'matched', 'under_review', 'pending_kyc', 'approved', 'accepted'];
+const REQUEST_URGENCIES = ['low', 'medium', 'high', 'critical'];
+const INCOME_SOURCES = ['salary', 'business', 'freelance', 'rental', 'farming'];
+const PURPOSE_CATEGORY_MAP = {
+  education: 'education',
+  business: 'business',
+  medical: 'emergency',
+  personal: 'personal',
+  vehicle: 'asset_purchase',
+  home: 'housing'
+};
+const REQUEST_NOTES = [
+  'Borrower attached repayment plan and last three months of statements.',
+  'Borrower asked for a fast decision because the opportunity window is short.',
+  'Initial affordability check looks acceptable, but more documents are still needed.',
+  'Borrower prefers a clear monthly installment schedule before accepting terms.',
+  'Requested quick turnaround after discussing terms with the lender support team.',
+  'Application includes income proof, ID copy, and a short use-of-funds note.'
+];
 const FIRST_NAMES = [
   'Nimal', 'Kamal', 'Kasun', 'Tharindu', 'Sanduni', 'Nadeesha', 'Dilini', 'Ruwan',
   'Chathura', 'Ishara', 'Dinuka', 'Amasha', 'Shanaka', 'Vihanga', 'Nethmi', 'Akila',
@@ -64,6 +83,9 @@ const LAST_NAMES = [
  * @typedef {Object} AdDoc
  * @property {string} adId
  * @property {string} lenderId
+ * @property {string} title
+ * @property {string} description
+ * @property {number} minAmount
  * @property {number} maxAmount
  * @property {number} preferredInterestRate
  * @property {number} minTenureMonths
@@ -72,26 +94,46 @@ const LAST_NAMES = [
  * @property {string} location
  * @property {"active"} status
  * @property {FirebaseFirestore.Timestamp} createdAt
+ * @property {FirebaseFirestore.Timestamp} updatedAt
  * @property {FirebaseFirestore.Timestamp} expiresAt
+ * @property {boolean} isBoosted
+ * @property {number} availableCapital
+ * @property {number} applicationCount
+ * @property {number} fundedLoansCount
+ * @property {number} responseTimeHours
  * @property {string} lenderName
  * @property {string} lenderPhotoURL
  * @property {number} lenderRating
+ * @property {string[]} searchKeywords
+ * @property {string} seedBatchId
+ * @property {string} source
  */
 
 /**
  * @typedef {Object} LoanRequestDoc
  * @property {string} requestId
- * @property {string} adId
+ * @property {string | null} adId
  * @property {string} borrowerId
  * @property {number} amount
  * @property {number} tenureMonths
  * @property {string} purpose
- * @property {"accepted"} status
+ * @property {string} purposeCategory
+ * @property {string} status
  * @property {FirebaseFirestore.Timestamp} createdAt
+ * @property {FirebaseFirestore.Timestamp} updatedAt
  * @property {string} borrowerName
  * @property {string} borrowerPhotoURL
  * @property {number} borrowerRating
  * @property {number} borrowerCreditScore
+ * @property {string | null} targetLenderId
+ * @property {string[]} matchedLenderIds
+ * @property {number} suggestedInterestRate
+ * @property {string} urgency
+ * @property {number} monthlyIncome
+ * @property {string} incomeSource
+ * @property {string} requestedRegion
+ * @property {boolean} collateralOffered
+ * @property {string} notes
  */
 
 /**
@@ -182,6 +224,12 @@ function addDays(date, days) {
   return copy;
 }
 
+function addHours(date, hours) {
+  const copy = new Date(date.getTime());
+  copy.setUTCHours(copy.getUTCHours() + hours);
+  return copy;
+}
+
 function addMonths(date, months) {
   const copy = new Date(date.getTime());
   copy.setUTCMonth(copy.getUTCMonth() + months);
@@ -250,6 +298,108 @@ function splitAmount(total, parts, rng) {
   const current = amounts.reduce((sum, value) => sum + value, 0);
   amounts[amounts.length - 1] += total - current;
   return amounts;
+}
+
+function purposeCategoryFromPurpose(purpose) {
+  return PURPOSE_CATEGORY_MAP[purpose] || 'uncategorized';
+}
+
+function buildSearchKeywords(values) {
+  return Array.from(
+    new Set(
+      values
+        .flatMap((value) =>
+          String(value || '')
+            .toLowerCase()
+            .split(/[^a-z0-9]+/)
+        )
+        .filter((token) => token.length > 1)
+    )
+  );
+}
+
+function buildAdTitle(purpose, location, maxAmount) {
+  const normalizedPurpose = purpose.charAt(0).toUpperCase() + purpose.slice(1);
+  return `${normalizedPurpose} funding up to LKR ${Math.round(maxAmount).toLocaleString()} in ${location}`;
+}
+
+function buildAdDescription(lenderName, purpose, location) {
+  return `${lenderName} is offering ${purpose} financing for borrowers in ${location} with transparent lender review and flexible repayment discussion.`;
+}
+
+function createAdDocument(input) {
+  const title = input.title || buildAdTitle(input.primaryPurpose, input.location, input.maxAmount);
+  const description =
+    input.description ||
+    buildAdDescription(input.lender.fullName, input.primaryPurpose, input.location);
+  const minAmount =
+    input.minAmount ||
+    roundCurrency(Math.max(10000, Math.min(input.maxAmount * 0.35, input.maxAmount - 10000)));
+  const updatedAt = input.updatedAt || input.createdAt;
+
+  return {
+    adId: input.adId,
+    lenderId: input.lender.uid,
+    title,
+    description,
+    minAmount,
+    maxAmount: input.maxAmount,
+    preferredInterestRate: input.preferredInterestRate,
+    minTenureMonths: Math.min(6, input.maxTenureMonths),
+    maxTenureMonths: input.maxTenureMonths,
+    preferredPurposes: input.preferredPurposes,
+    location: input.location,
+    status: 'active',
+    createdAt: ts(input.createdAt),
+    updatedAt: ts(updatedAt),
+    expiresAt: ts(input.expiresAt),
+    isBoosted: input.isBoosted === true,
+    availableCapital: input.availableCapital || input.maxAmount,
+    applicationCount: input.applicationCount || 0,
+    fundedLoansCount: input.fundedLoansCount || 0,
+    responseTimeHours: input.responseTimeHours || 24,
+    lenderName: input.lender.fullName,
+    lenderPhotoURL: input.lender.photoURL,
+    lenderRating: input.lender.rating,
+    searchKeywords: buildSearchKeywords([
+      input.lender.fullName,
+      title,
+      location,
+      ...input.preferredPurposes
+    ]),
+    seedBatchId: input.seedBatchId || 'seed_mock_data_20260421',
+    source: input.source || 'seed_script'
+  };
+}
+
+function createRequestDocument(input) {
+  const updatedAt = input.updatedAt || input.createdAt;
+
+  return {
+    requestId: input.requestId,
+    adId: input.adId || null,
+    borrowerId: input.borrower.uid,
+    amount: input.amount,
+    tenureMonths: input.tenureMonths,
+    purpose: input.purpose,
+    purposeCategory: input.purposeCategory || purposeCategoryFromPurpose(input.purpose),
+    status: input.status,
+    createdAt: ts(input.createdAt),
+    updatedAt: ts(updatedAt),
+    borrowerName: input.borrower.fullName,
+    borrowerPhotoURL: input.borrower.photoURL,
+    borrowerRating: input.borrower.rating,
+    borrowerCreditScore: input.borrower.creditScore,
+    targetLenderId: input.targetLenderId || null,
+    matchedLenderIds: input.matchedLenderIds || [],
+    suggestedInterestRate: input.suggestedInterestRate,
+    urgency: input.urgency,
+    monthlyIncome: input.monthlyIncome,
+    incomeSource: input.incomeSource,
+    requestedRegion: input.requestedRegion,
+    collateralOffered: input.collateralOffered === true,
+    notes: input.notes || ''
+  };
 }
 
 async function commitWrites(db, writes, label) {
@@ -362,6 +512,8 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
   const lenderBorrowerMap = new Map();
   /** @type {Map<string, { lenderId: string, borrowerId: string }>} */
   const loanMeta = new Map();
+  /** @type {Map<string, Array<{ id: string, lenderId: string, title: string, location: string, preferredInterestRate: number, maxAmount: number, maxTenureMonths: number, preferredPurposes: string[], createdAt: Date }>>} */
+  const adsByLender = new Map();
 
   let adsCount = 0;
   let requestsCount = 0;
@@ -371,6 +523,14 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
 
   const borrowerAssignments = borrowerList.slice();
   let borrowerPointer = 0;
+
+  function rememberAd(lenderId, adMeta) {
+    if (!adsByLender.has(lenderId)) {
+      adsByLender.set(lenderId, []);
+    }
+
+    adsByLender.get(lenderId).push(adMeta);
+  }
 
   distribution.forEach((entry, distributionIndex) => {
     const lender = lenderList[entry.lenderIndex];
@@ -388,20 +548,40 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       const tenureMonths = pick(rng, [6, 9, 12, 15, 18, 24, 30, 36]);
       const totalRepayable = roundCurrency(principalAmount + (principalAmount * interestRate * tenureMonths) / 1200);
       const purpose = pick(rng, PURPOSES);
-      const adCreatedAt = addDays(now, -randomInt(rng, 100, 540));
-      const requestCreatedAt = addDays(adCreatedAt, randomInt(rng, 1, 20));
-      const createdAt = addDays(requestCreatedAt, randomInt(rng, 1, 12));
-      const signedAt = addDays(createdAt, randomInt(rng, 1, 5));
-      const startDate = addDays(signedAt, randomInt(rng, 1, 7));
+      const location = pick(rng, LOCATIONS);
+      const preferredPurposes = pickPurposes(rng);
+      const isRecentLoanScenario = maybe(rng, 0.28);
+      const adCreatedAt = isRecentLoanScenario
+        ? addDays(now, -randomInt(rng, 8, 28))
+        : addDays(now, -randomInt(rng, 100, 540));
+      const requestCreatedAt = addDays(
+        adCreatedAt,
+        randomInt(rng, 1, isRecentLoanScenario ? 5 : 20)
+      );
+      const createdAt = addDays(
+        requestCreatedAt,
+        randomInt(rng, 0, isRecentLoanScenario ? 2 : 12)
+      );
+      const signedAt = addDays(
+        createdAt,
+        randomInt(rng, 0, isRecentLoanScenario ? 2 : 5)
+      );
+      const startDate = addDays(
+        signedAt,
+        randomInt(rng, 0, isRecentLoanScenario ? 2 : 7)
+      );
       const isCompleted = loanOffset < entry.completedExtra;
       const loanStatus = isCompleted ? 'completed' : 'active';
       const firstInstallmentDate = addMonths(startDate, 1);
       const installmentAmount = Math.round(totalRepayable / tenureMonths);
+      const hasInstallmentCycleStarted = firstInstallmentDate.getTime() <= now.getTime();
 
       const paidInstallmentsBase = isCompleted
         ? tenureMonths
-        : Math.min(tenureMonths - 1, randomInt(rng, 1, Math.max(2, tenureMonths - 2)));
-      const partialInstallmentNumber = !isCompleted && maybe(rng, 0.5)
+        : hasInstallmentCycleStarted
+          ? Math.min(tenureMonths - 1, randomInt(rng, 1, Math.max(2, tenureMonths - 2)))
+          : 0;
+      const partialInstallmentNumber = !isCompleted && hasInstallmentCycleStarted && maybe(rng, 0.5)
         ? Math.min(tenureMonths, paidInstallmentsBase + 1)
         : null;
 
@@ -410,38 +590,52 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
         : addMonths(firstInstallmentDate, paidInstallmentsBase);
 
       /** @type {AdDoc} */
-      const adDoc = {
+      const adMaxAmount = Math.max(
+        principalAmount,
+        roundCurrency(principalAmount + randomInt(rng, 30000, 180000))
+      );
+      const adDoc = createAdDocument({
         adId: adRef.id,
-        lenderId: lender.uid,
-        maxAmount: Math.max(principalAmount, roundCurrency(principalAmount + randomInt(rng, 30000, 180000))),
+        lender,
+        minAmount: roundCurrency(Math.max(10000, principalAmount * 0.45)),
+        maxAmount: adMaxAmount,
         preferredInterestRate: interestRate,
-        minTenureMonths: Math.min(6, tenureMonths),
         maxTenureMonths: tenureMonths,
-        preferredPurposes: pickPurposes(rng),
-        location: pick(rng, LOCATIONS),
-        status: 'active',
-        createdAt: ts(adCreatedAt),
-        expiresAt: ts(addDays(adCreatedAt, 180)),
-        lenderName: lender.fullName,
-        lenderPhotoURL: lender.photoURL,
-        lenderRating: lender.rating
-      };
+        preferredPurposes,
+        primaryPurpose: purpose,
+        location,
+        createdAt: adCreatedAt,
+        updatedAt: requestCreatedAt,
+        expiresAt: addDays(adCreatedAt, 180),
+        isBoosted: maybe(rng, 0.2),
+        availableCapital: adMaxAmount,
+        applicationCount: 1,
+        fundedLoansCount: 1,
+        responseTimeHours: randomInt(rng, 4, 24),
+        source: 'seed_base_loan_flow'
+      });
 
       /** @type {LoanRequestDoc} */
-      const requestDoc = {
+      const requestDoc = createRequestDocument({
         requestId: requestRef.id,
         adId: adRef.id,
-        borrowerId: borrower.uid,
+        borrower,
         amount: principalAmount,
         tenureMonths,
         purpose,
         status: 'accepted',
-        createdAt: ts(requestCreatedAt),
-        borrowerName: borrower.fullName,
-        borrowerPhotoURL: borrower.photoURL,
-        borrowerRating: borrower.rating,
-        borrowerCreditScore: borrower.creditScore
-      };
+        createdAt: requestCreatedAt,
+        updatedAt: signedAt,
+        targetLenderId: lender.uid,
+        matchedLenderIds: [],
+        suggestedInterestRate: interestRate,
+        urgency: pick(rng, ['medium', 'high']),
+        monthlyIncome: roundCurrency(randomInt(rng, 45000, 280000)),
+        incomeSource: pick(rng, INCOME_SOURCES),
+        requestedRegion: location,
+        collateralOffered: maybe(rng, 0.35),
+        notes: pick(rng, REQUEST_NOTES)
+      });
 
       /** @type {LoanDoc} */
       const loanDoc = {
@@ -468,6 +662,17 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       adWrites.push({ ref: adRef, data: adDoc });
       requestWrites.push({ ref: requestRef, data: requestDoc });
       loanWrites.push({ ref: loanRef, data: loanDoc });
+      rememberAd(lender.uid, {
+        id: adRef.id,
+        lenderId: lender.uid,
+        title: adDoc.title,
+        location: adDoc.location,
+        preferredInterestRate: adDoc.preferredInterestRate,
+        maxAmount: adDoc.maxAmount,
+        maxTenureMonths: adDoc.maxTenureMonths,
+        preferredPurposes: adDoc.preferredPurposes,
+        createdAt: adCreatedAt
+      });
       loanMeta.set(loanRef.id, {
         lenderId: lender.uid,
         borrowerId: borrower.uid
@@ -626,24 +831,43 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
     if (entry.totalLoans === 0) {
       const idleAdRef = db.collection(ADS_COLLECTION).doc();
       const idleCreatedAt = addDays(now, -randomInt(rng, 60, 240));
+      const idlePurpose = pick(rng, PURPOSES);
+      const idleLocation = pick(rng, LOCATIONS);
+      const idleMaxAmount = roundCurrency(randomInt(rng, 80000, 450000));
+      const idleTenure = pick(rng, [12, 18, 24, 36]);
+      const idlePurposes = pickPurposes(rng);
+      const idleAdDoc = createAdDocument({
+        adId: idleAdRef.id,
+        lender,
+        maxAmount: idleMaxAmount,
+        preferredInterestRate: randomFloat(rng, 9, 18, 1),
+        maxTenureMonths: idleTenure,
+        preferredPurposes: idlePurposes,
+        primaryPurpose: idlePurpose,
+        location: idleLocation,
+        createdAt: idleCreatedAt,
+        updatedAt: idleCreatedAt,
+        expiresAt: addDays(idleCreatedAt, 180),
+        availableCapital: idleMaxAmount,
+        applicationCount: 0,
+        fundedLoansCount: 0,
+        responseTimeHours: randomInt(rng, 6, 24),
+        source: 'seed_idle_active_ad'
+      });
       adWrites.push({
         ref: idleAdRef,
-        data: {
-          adId: idleAdRef.id,
-          lenderId: lender.uid,
-          maxAmount: roundCurrency(randomInt(rng, 80000, 450000)),
-          preferredInterestRate: randomFloat(rng, 9, 18, 1),
-          minTenureMonths: 6,
-          maxTenureMonths: pick(rng, [12, 18, 24, 36]),
-          preferredPurposes: pickPurposes(rng),
-          location: pick(rng, LOCATIONS),
-          status: 'active',
-          createdAt: ts(idleCreatedAt),
-          expiresAt: ts(addDays(idleCreatedAt, 180)),
-          lenderName: lender.fullName,
-          lenderPhotoURL: lender.photoURL,
-          lenderRating: lender.rating
-        }
+        data: idleAdDoc
+      });
+      rememberAd(lender.uid, {
+        id: idleAdRef.id,
+        lenderId: lender.uid,
+        title: idleAdDoc.title,
+        location: idleAdDoc.location,
+        preferredInterestRate: idleAdDoc.preferredInterestRate,
+        maxAmount: idleAdDoc.maxAmount,
+        maxTenureMonths: idleAdDoc.maxTenureMonths,
+        preferredPurposes: idleAdDoc.preferredPurposes,
+        createdAt: idleCreatedAt
       });
       adsCount += 1;
       console.log(`Created ad-only lender profile for ${lender.uid}`);
@@ -653,6 +877,20 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       `Prepared lender group ${distributionIndex + 1}/15 with ${entry.totalLoans} loans`
     );
   });
+
+  const recentScenarios = createRecentRequestScenarios(
+    db,
+    now,
+    rng,
+    lenders,
+    borrowers,
+    adsByLender
+  );
+
+  adWrites.push(...recentScenarios.adWrites);
+  requestWrites.push(...recentScenarios.requestWrites);
+  adsCount += recentScenarios.counts.ads;
+  requestsCount += recentScenarios.counts.loanRequests;
 
   return {
     adWrites,
@@ -665,12 +903,423 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       data: relation
     })),
     loanMeta,
+    adsByLender,
     counts: {
       ads: adsCount,
       loanRequests: requestsCount,
       loans: loansCount,
       installments: installmentsCount,
       payments: paymentsCount
+    }
+  };
+}
+
+function createRecentRequestScenarios(db, now, rng, lenders, borrowers, adsByLender) {
+  const lenderById = new Map(Array.from(lenders.values()).map((lender) => [lender.uid, lender]));
+  const borrowerPool = shuffle(rng, Array.from(borrowers.values()));
+  const adWrites = [];
+  const requestWrites = [];
+  let adsCount = 0;
+  let requestsCount = 0;
+  let borrowerPointer = 0;
+
+  function nextBorrower() {
+    const borrower = borrowerPool[borrowerPointer % borrowerPool.length];
+    borrowerPointer += 1;
+    return borrower;
+  }
+
+  function rememberAdMeta(lenderId, adMeta) {
+    if (!adsByLender.has(lenderId)) {
+      adsByLender.set(lenderId, []);
+    }
+
+    adsByLender.get(lenderId).push(adMeta);
+  }
+
+  function ensureScenarioAd(lender, options) {
+    const existingAds = adsByLender.get(lender.uid) || [];
+
+    if (options.useExisting !== false && existingAds.length > 0) {
+      const preferredIndex = Math.min(options.adIndex || 0, existingAds.length - 1);
+      return existingAds[preferredIndex];
+    }
+
+    const adRef = db.collection(ADS_COLLECTION).doc();
+    const primaryPurpose = options.primaryPurpose || pick(rng, PURPOSES);
+    const preferredPurposes = options.preferredPurposes || [primaryPurpose, ...pickPurposes(rng)].slice(0, 3);
+    const maxTenureMonths = options.maxTenureMonths || pick(rng, [6, 12, 18, 24, 36]);
+    const maxAmount = options.maxAmount || roundCurrency(randomInt(rng, 90000, 650000));
+    const createdAt = addDays(now, -randomInt(rng, options.minDaysAgo || 1, options.maxDaysAgo || 6));
+    const location = options.location || pick(rng, LOCATIONS);
+    const preferredInterestRate =
+      typeof options.preferredInterestRate === 'number'
+        ? options.preferredInterestRate
+        : randomFloat(rng, 9, 20, 1);
+    const adDoc = createAdDocument({
+      adId: adRef.id,
+      lender,
+      maxAmount,
+      preferredInterestRate,
+      maxTenureMonths,
+      preferredPurposes,
+      primaryPurpose,
+      location,
+      createdAt,
+      updatedAt: createdAt,
+      expiresAt: addDays(createdAt, 180),
+      availableCapital: maxAmount,
+      applicationCount: 0,
+      fundedLoansCount: 0,
+      responseTimeHours: randomInt(rng, 2, 18),
+      source: 'seed_recent_request_scenario'
+    });
+
+    adWrites.push({ ref: adRef, data: adDoc });
+    adsCount += 1;
+
+    const adMeta = {
+      id: adRef.id,
+      lenderId: lender.uid,
+      title: adDoc.title,
+      location: adDoc.location,
+      preferredInterestRate: adDoc.preferredInterestRate,
+      maxAmount: adDoc.maxAmount,
+      maxTenureMonths: adDoc.maxTenureMonths,
+      preferredPurposes: adDoc.preferredPurposes,
+      createdAt
+    };
+
+    rememberAdMeta(lender.uid, adMeta);
+    return adMeta;
+  }
+
+  function pushScenarioRequest(input) {
+    const borrower = input.borrower || nextBorrower();
+    const requestRef = db.collection(REQUESTS_COLLECTION).doc();
+    const adMeta = input.adMeta || null;
+    const purpose =
+      input.purpose ||
+      pick(
+        rng,
+        adMeta && Array.isArray(adMeta.preferredPurposes) && adMeta.preferredPurposes.length > 0
+          ? adMeta.preferredPurposes
+          : PURPOSES
+      );
+    const tenureMonths =
+      input.tenureMonths ||
+      (adMeta && adMeta.maxTenureMonths ? adMeta.maxTenureMonths : pick(rng, [6, 9, 12, 18, 24]));
+    const maxAmount =
+      input.maxAmount ||
+      (adMeta && adMeta.maxAmount ? adMeta.maxAmount : roundCurrency(randomInt(rng, 60000, 500000)));
+    const minAmount = Math.min(maxAmount - 1000, roundCurrency(Math.max(15000, maxAmount * 0.3)));
+    const amount = input.amount || roundCurrency(randomInt(rng, minAmount, maxAmount));
+    const createdAt = addDays(now, -input.daysAgo);
+    const updatedAt = addHours(
+      createdAt,
+      Math.min(input.daysAgo * 6, input.updatedHours || randomInt(rng, 3, 18))
+    );
+    const matchedLenderIds = input.matchedLenderIds || [];
+    const requestDoc = createRequestDocument({
+      requestId: requestRef.id,
+      adId: adMeta ? adMeta.id : null,
+      borrower,
+      amount,
+      tenureMonths,
+      purpose,
+      status: input.status,
+      createdAt,
+      updatedAt,
+      targetLenderId: input.targetLenderId || null,
+      matchedLenderIds,
+      suggestedInterestRate:
+        typeof input.suggestedInterestRate === 'number'
+          ? input.suggestedInterestRate
+          : adMeta && adMeta.preferredInterestRate
+            ? adMeta.preferredInterestRate
+            : randomFloat(rng, 10, 24, 1),
+      urgency: input.urgency || pick(rng, REQUEST_URGENCIES),
+      monthlyIncome: input.monthlyIncome || roundCurrency(randomInt(rng, 35000, 260000)),
+      incomeSource: input.incomeSource || pick(rng, INCOME_SOURCES),
+      requestedRegion: input.requestedRegion || (adMeta ? adMeta.location : pick(rng, LOCATIONS)),
+      collateralOffered:
+        typeof input.collateralOffered === 'boolean'
+          ? input.collateralOffered
+          : maybe(rng, 0.3),
+      notes: input.notes || pick(rng, REQUEST_NOTES)
+    });
+
+    requestWrites.push({ ref: requestRef, data: requestDoc });
+    requestsCount += 1;
+  }
+
+  const lender001 = lenderById.get('lender_001');
+  const lender002 = lenderById.get('lender_002');
+  const lender003 = lenderById.get('lender_003');
+  const lender004 = lenderById.get('lender_004');
+  const lender005 = lenderById.get('lender_005');
+  const lender006 = lenderById.get('lender_006');
+  const lender013 = lenderById.get('lender_013');
+  const lender014 = lenderById.get('lender_014');
+  const lender015 = lenderById.get('lender_015');
+
+  if (lender001) {
+    const mixedPendingAd = ensureScenarioAd(lender001, {
+      useExisting: false,
+      primaryPurpose: 'business',
+      location: 'Colombo',
+      maxTenureMonths: 18,
+      maxAmount: 550000,
+      minDaysAgo: 2,
+      maxDaysAgo: 5
+    });
+
+    pushScenarioRequest({
+      lender: lender001,
+      adMeta: mixedPendingAd,
+      status: 'open',
+      daysAgo: 1,
+      urgency: 'critical',
+      targetLenderId: lender001.uid,
+      notes: 'Urgent working-capital request created yesterday and still waiting for first lender response.'
+    });
+    pushScenarioRequest({
+      lender: lender001,
+      adMeta: mixedPendingAd,
+      status: 'matched',
+      daysAgo: 2,
+      urgency: 'high',
+      targetLenderId: lender001.uid,
+      notes: 'Borrower matched to the ad and is still deciding whether to proceed.'
+    });
+    pushScenarioRequest({
+      lender: lender001,
+      adMeta: mixedPendingAd,
+      status: 'under_review',
+      daysAgo: 3,
+      urgency: 'medium',
+      targetLenderId: lender001.uid,
+      notes: 'Manual review is in progress because income documents need a second look.'
+    });
+    pushScenarioRequest({
+      lender: lender001,
+      adMeta: mixedPendingAd,
+      status: 'pending_kyc',
+      daysAgo: 4,
+      urgency: 'medium',
+      targetLenderId: lender001.uid,
+      notes: 'Borrower still needs to upload the missing KYC document bundle.'
+    });
+    pushScenarioRequest({
+      lender: lender001,
+      adMeta: mixedPendingAd,
+      status: 'approved',
+      daysAgo: 5,
+      urgency: 'high',
+      targetLenderId: lender001.uid,
+      notes: 'Lender approved the request and is waiting for borrower confirmation.'
+    });
+  }
+
+  if (lender002) {
+    const acceptedOnlyAd = ensureScenarioAd(lender002, {
+      useExisting: false,
+      primaryPurpose: 'medical',
+      location: 'Kandy',
+      maxTenureMonths: 12,
+      maxAmount: 320000,
+      minDaysAgo: 1,
+      maxDaysAgo: 4
+    });
+
+    pushScenarioRequest({
+      lender: lender002,
+      adMeta: acceptedOnlyAd,
+      status: 'accepted',
+      daysAgo: 1,
+      urgency: 'high',
+      targetLenderId: lender002.uid,
+      notes: 'Accepted targeted request kept without immediate loan conversion for design testing.'
+    });
+    pushScenarioRequest({
+      lender: lender002,
+      adMeta: acceptedOnlyAd,
+      status: 'accepted',
+      daysAgo: 3,
+      urgency: 'medium',
+      targetLenderId: lender002.uid,
+      notes: 'Second accepted ad request from the last few days with no pending-state history.'
+    });
+  }
+
+  if (lender003) {
+    const existingAd = ensureScenarioAd(lender003, {
+      useExisting: true,
+      adIndex: 0
+    });
+
+    pushScenarioRequest({
+      lender: lender003,
+      adMeta: existingAd,
+      status: 'open',
+      daysAgo: 2,
+      urgency: 'high',
+      targetLenderId: lender003.uid,
+      notes: 'Fresh ad-driven request attached to an existing lender ad.'
+    });
+    pushScenarioRequest({
+      lender: lender003,
+      adMeta: existingAd,
+      status: 'accepted',
+      daysAgo: 6,
+      urgency: 'medium',
+      targetLenderId: lender003.uid,
+      notes: 'Accepted request left on the ad without creating a new loan record yet.'
+    });
+  }
+
+  if (lender004 && lender005) {
+    pushScenarioRequest({
+      lender: lender004,
+      status: 'open',
+      daysAgo: 1,
+      urgency: 'critical',
+      matchedLenderIds: [lender004.uid, lender005.uid],
+      requestedRegion: 'Galle',
+      purpose: 'vehicle',
+      notes: 'Marketplace match shared with two lenders after borrower requested an urgent vehicle loan.'
+    });
+    pushScenarioRequest({
+      lender: lender004,
+      status: 'matched',
+      daysAgo: 3,
+      urgency: 'medium',
+      matchedLenderIds: [lender004.uid, lender005.uid],
+      requestedRegion: 'Matara',
+      purpose: 'personal',
+      notes: 'Marketplace request is visible to both lenders through matched lender IDs.'
+    });
+  }
+
+  if (lender005) {
+    pushScenarioRequest({
+      lender: lender005,
+      status: 'under_review',
+      daysAgo: 2,
+      urgency: 'high',
+      targetLenderId: lender005.uid,
+      requestedRegion: 'Negombo',
+      purpose: 'home',
+      notes: 'Direct lender-targeted request with no ad ID, kept under review.'
+    });
+    pushScenarioRequest({
+      lender: lender005,
+      status: 'approved',
+      daysAgo: 4,
+      urgency: 'medium',
+      targetLenderId: lender005.uid,
+      requestedRegion: 'Kalutara',
+      purpose: 'education',
+      notes: 'Directly routed request approved after internal review.'
+    });
+  }
+
+  if (lender006) {
+    ensureScenarioAd(lender006, {
+      useExisting: false,
+      primaryPurpose: 'personal',
+      location: 'Jaffna',
+      maxTenureMonths: 24,
+      maxAmount: 260000,
+      minDaysAgo: 1,
+      maxDaysAgo: 2
+    });
+  }
+
+  if (lender013) {
+    const idleAcceptedAd = ensureScenarioAd(lender013, {
+      useExisting: true,
+      adIndex: 0
+    });
+
+    pushScenarioRequest({
+      lender: lender013,
+      adMeta: idleAcceptedAd,
+      status: 'accepted',
+      daysAgo: 2,
+      urgency: 'medium',
+      targetLenderId: lender013.uid,
+      notes: 'Ad-only lender with accepted requests only, no pending targeted states.'
+    });
+    pushScenarioRequest({
+      lender: lender013,
+      adMeta: idleAcceptedAd,
+      status: 'accepted',
+      daysAgo: 5,
+      urgency: 'high',
+      targetLenderId: lender013.uid,
+      notes: 'Second accepted-only targeted request for the same idle ad scenario.'
+    });
+  }
+
+  if (lender014) {
+    const idlePendingAd = ensureScenarioAd(lender014, {
+      useExisting: true,
+      adIndex: 0
+    });
+
+    pushScenarioRequest({
+      lender: lender014,
+      adMeta: idlePendingAd,
+      status: 'open',
+      daysAgo: 1,
+      urgency: 'critical',
+      targetLenderId: lender014.uid,
+      notes: 'Idle-ad lender now has a same-day open request for urgent UI testing.'
+    });
+    pushScenarioRequest({
+      lender: lender014,
+      adMeta: idlePendingAd,
+      status: 'pending_kyc',
+      daysAgo: 3,
+      urgency: 'medium',
+      targetLenderId: lender014.uid,
+      notes: 'Borrower selected the ad, but lender still waits for KYC completion.'
+    });
+  }
+
+  if (lender015) {
+    const mixedIdleAd = ensureScenarioAd(lender015, {
+      useExisting: true,
+      adIndex: 0
+    });
+
+    pushScenarioRequest({
+      lender: lender015,
+      adMeta: mixedIdleAd,
+      status: 'approved',
+      daysAgo: 2,
+      urgency: 'high',
+      targetLenderId: lender015.uid,
+      notes: 'Approved request with no loan conversion yet for the ad-only lender scenario.'
+    });
+    pushScenarioRequest({
+      lender: lender015,
+      adMeta: mixedIdleAd,
+      status: 'accepted',
+      daysAgo: 6,
+      urgency: 'medium',
+      targetLenderId: lender015.uid,
+      notes: 'Accepted request kept alongside a newer approved request on the same active ad.'
+    });
+  }
+
+  return {
+    adWrites,
+    requestWrites,
+    counts: {
+      ads: adsCount,
+      loanRequests: requestsCount
     }
   };
 }

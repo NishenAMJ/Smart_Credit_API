@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { FirebaseModule } from '../firebase/firebase.module';
+import { FirebaseModule } from '../../../firebase/firebase.module';
 import { LenderSettingsController } from './lender-settings.controller';
 import { LenderSettingsService } from './lender-settings.service';
 

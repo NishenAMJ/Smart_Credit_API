@@ -4,7 +4,7 @@ import {
   Firestore,
   QueryDocumentSnapshot,
 } from 'firebase-admin/firestore';
-import { FirebaseService } from '../firebase/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   buildPageInfo,
   chunkValues,
@@ -12,7 +12,7 @@ import {
   dedupeById,
   readDate,
   readNumber,
-} from '../firebase/firestore-query.utils';
+} from '../../../firebase/firestore-query.utils';
 import {
   computeLoanRemainingAmount,
   getAdStatus,
@@ -21,7 +21,7 @@ import {
   getPaymentAmount,
   getPaymentCreatedAt,
   isActiveAd as isSeedActiveAd,
-} from '../firebase/firestore-seed.utils';
+} from '../../../firebase/firestore-seed.utils';
 import {
   AnalyticsDrilldownItem,
   AnalyticsDrilldownResponse,

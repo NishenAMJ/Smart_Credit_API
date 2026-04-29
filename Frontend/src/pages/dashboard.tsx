@@ -431,14 +431,15 @@ export default function DashboardPage({
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Lender overview</p>
+            <p className="eyebrow">Welcome to the Smart Credit Lending Platform</p>
             <h1 className="page-title">Dashboard</h1>
             <p className="page-subtitle">
               Lender workspace for collections, portfolio health, borrower
-              activity, and ad performance from Firebase.
+              activity, and ad performance.
             </p>
             <p className="dashboard-context-pill">
-              Temporary session: {session.displayName} - {session.lenderId}
+              {session.displayName}
+              {/* Temporary session: {session.displayName} - {session.lenderId} */}
             </p>
           </div>
           <div className="dashboard-header-tools">
@@ -532,11 +533,11 @@ export default function DashboardPage({
               <div className="borrowers-toolbar">
                 <div>
                   <h2 className="section-title">Borrowers Linked To You</h2>
-                  <p className="section-subtitle">
+                  {/* <p className="section-subtitle">
                     These borrowers have taken at least one loan from this
                     lender. If they also borrowed from another lender, those
                     loans stay out of this view.
-                  </p>
+                  </p> */}
                 </div>
                 <label className="search-field">
                   <span className="search-field__icon" aria-hidden="true">

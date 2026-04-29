@@ -7,7 +7,7 @@ import {
   Timestamp,
   WriteBatch,
 } from 'firebase-admin/firestore';
-import { FirebaseService } from '../firebase/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   applyDateCursor,
   buildPageInfo,
@@ -18,7 +18,7 @@ import {
   readDate,
   readNumber,
   readStringArray,
-} from '../firebase/firestore-query.utils';
+} from '../../../firebase/firestore-query.utils';
 import {
   computeLoanRemainingAmount,
   getAdStatus,
@@ -27,7 +27,7 @@ import {
   getNormalizedInstallment,
   getPaymentAmount,
   getPaymentCreatedAt,
-} from '../firebase/firestore-seed.utils';
+} from '../../../firebase/firestore-seed.utils';
 import {
   LenderNotification,
   LenderNotificationsListResponse,

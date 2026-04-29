@@ -1,4 +1,4 @@
-import * as seedUtils from '../firebase/firestore-seed.utils';
+import * as seedUtils from '../../../firebase/firestore-seed.utils';
 import { AnalyticsService } from './analytics.service';
 
 function createDoc(id: string, data: Record<string, unknown>) {

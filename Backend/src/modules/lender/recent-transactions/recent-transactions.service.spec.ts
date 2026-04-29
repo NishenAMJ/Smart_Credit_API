@@ -1,4 +1,4 @@
-import * as firestoreQueryUtils from '../firebase/firestore-query.utils';
+import * as firestoreQueryUtils from '../../../firebase/firestore-query.utils';
 import { RecentTransactionsService } from './recent-transactions.service';
 
 function createDoc(id: string, data: Record<string, unknown>, path: string) {
