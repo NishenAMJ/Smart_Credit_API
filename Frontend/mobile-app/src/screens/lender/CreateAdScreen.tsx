@@ -11,18 +11,18 @@ const PURPOSES  = ['education', 'business', 'medical', 'personal', 'vehicle', 'h
 const LOCATIONS = ['Colombo', 'Kandy', 'Galle', 'Negombo', 'Kurunegala', 'Jaffna'];
 
 export default function CreateAdScreen({ navigation }: any) {
-  const [loading,    setLoading]    = useState(false);
-  const [title,      setTitle]      = useState('');
-  const [description,setDescription]= useState('');
-  const [minAmount,  setMinAmount]  = useState('');
-  const [maxAmount,  setMaxAmount]  = useState('');
-  const [rate,       setRate]       = useState('');
-  const [minTenure,  setMinTenure]  = useState('');
-  const [maxTenure,  setMaxTenure]  = useState('');
-  const [capital,    setCapital]    = useState('');
-  const [responseHrs,setResponseHrs]= useState('');
-  const [location,   setLocation]   = useState('Colombo');
-  const [purposes,   setPurposes]   = useState<string[]>([]);
+  const [loading,     setLoading]     = useState(false);
+  const [title,       setTitle]       = useState('');
+  const [description, setDescription] = useState('');
+  const [minAmount,   setMinAmount]   = useState('');
+  const [maxAmount,   setMaxAmount]   = useState('');
+  const [rate,        setRate]        = useState('');
+  const [minTenure,   setMinTenure]   = useState('');
+  const [maxTenure,   setMaxTenure]   = useState('');
+  const [capital,     setCapital]     = useState('');
+  const [responseHrs, setResponseHrs] = useState('');
+  const [location,    setLocation]    = useState('Colombo');
+  const [purposes,    setPurposes]    = useState<string[]>([]);
 
   const togglePurpose = (p: string) => {
     setPurposes((prev) =>
@@ -32,12 +32,22 @@ export default function CreateAdScreen({ navigation }: any) {
 
   const handleSubmit = async () => {
     if (!title || !description || !minAmount || !maxAmount || !rate) {
-      Alert.alert('Error', 'Please fill all required fields');
+      Alert.alert('Validation Error', 'Please fill all required fields (*)');
       return;
     }
 
     if (purposes.length === 0) {
-      Alert.alert('Error', 'Select at least one purpose');
+      Alert.alert('Validation Error', 'Select at least one loan purpose');
+      return;
+    }
+
+    if (Number(minAmount) >= Number(maxAmount)) {
+      Alert.alert('Validation Error', 'Maximum amount must be greater than minimum amount');
+      return;
+    }
+
+    if (minTenure && maxTenure && Number(minTenure) > Number(maxTenure)) {
+      Alert.alert('Validation Error', 'Maximum tenure must be >= minimum tenure');
       return;
     }
 
@@ -55,7 +65,7 @@ export default function CreateAdScreen({ navigation }: any) {
         preferredInterestRate: Number(rate),
         minTenureMonths:       Number(minTenure) || 6,
         maxTenureMonths:       Number(maxTenure) || 12,
-        availableCapital:      Number(capital),
+        availableCapital:      Number(capital) || 0,
         responseTimeHours:     Number(responseHrs) || 24,
         location,
         preferredPurposes:     purposes,
@@ -65,8 +75,8 @@ export default function CreateAdScreen({ navigation }: any) {
       Alert.alert('Success', 'Ad created successfully!', [
         { text: 'OK', onPress: () => navigation.navigate('MyAds') },
       ]);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to create ad');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to create ad');
     } finally {
       setLoading(false);
     }
@@ -87,7 +97,6 @@ export default function CreateAdScreen({ navigation }: any) {
       <ScrollView style={commonStyles.scrollContainer}>
 
         <Text style={commonStyles.sectionTitle}>Ad Details</Text>
-
         <View style={commonStyles.card}>
           <Text style={commonStyles.textPrimary}>Title *</Text>
           <TextInput
@@ -105,17 +114,16 @@ export default function CreateAdScreen({ navigation }: any) {
             placeholder="Describe your offer..."
             multiline
             numberOfLines={4}
-            style={[commonStyles.input, { marginBottom: 12 }]}
+            style={commonStyles.input}
             placeholderTextColor={COLORS.textSecondary}
           />
         </View>
 
         <Text style={commonStyles.sectionTitle}>Loan Terms</Text>
-
         <View style={commonStyles.card}>
           <View style={commonStyles.rowSpaceBetween}>
             <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={commonStyles.textPrimary}>Min (LKR) *</Text>
+              <Text style={commonStyles.textPrimary}>Min Amount (LKR) *</Text>
               <TextInput
                 value={minAmount}
                 onChangeText={setMinAmount}
@@ -126,7 +134,7 @@ export default function CreateAdScreen({ navigation }: any) {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={commonStyles.textPrimary}>Max (LKR) *</Text>
+              <Text style={commonStyles.textPrimary}>Max Amount (LKR) *</Text>
               <TextInput
                 value={maxAmount}
                 onChangeText={setMaxAmount}
@@ -152,7 +160,7 @@ export default function CreateAdScreen({ navigation }: any) {
 
           <View style={commonStyles.rowSpaceBetween}>
             <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={commonStyles.textPrimary}>Min Tenure (mo)</Text>
+              <Text style={commonStyles.textPrimary}>Min Tenure (months)</Text>
               <TextInput
                 value={minTenure}
                 onChangeText={setMinTenure}
@@ -163,7 +171,7 @@ export default function CreateAdScreen({ navigation }: any) {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={commonStyles.textPrimary}>Max Tenure (mo)</Text>
+              <Text style={commonStyles.textPrimary}>Max Tenure (months)</Text>
               <TextInput
                 value={maxTenure}
                 onChangeText={setMaxTenure}
@@ -177,7 +185,6 @@ export default function CreateAdScreen({ navigation }: any) {
         </View>
 
         <Text style={commonStyles.sectionTitle}>Availability</Text>
-
         <View style={commonStyles.card}>
           <Text style={commonStyles.textPrimary}>Available Capital (LKR)</Text>
           <TextInput
@@ -205,11 +212,7 @@ export default function CreateAdScreen({ navigation }: any) {
           {LOCATIONS.map((loc) => (
             <TouchableOpacity
               key={loc}
-              style={[
-                commonStyles.row,
-                commonStyles.spacer12,
-                { paddingVertical: 8 },
-              ]}
+              style={[commonStyles.row, { paddingVertical: 8 }]}
               onPress={() => setLocation(loc)}
             >
               <View style={{
@@ -231,11 +234,7 @@ export default function CreateAdScreen({ navigation }: any) {
           {PURPOSES.map((p) => (
             <TouchableOpacity
               key={p}
-              style={[
-                commonStyles.row,
-                commonStyles.spacer12,
-                { paddingVertical: 8 },
-              ]}
+              style={[commonStyles.row, { paddingVertical: 8 }]}
               onPress={() => togglePurpose(p)}
             >
               <View style={{
@@ -247,7 +246,9 @@ export default function CreateAdScreen({ navigation }: any) {
                 backgroundColor: purposes.includes(p) ? COLORS.primary : 'transparent',
                 marginRight: 8,
               }} />
-              <Text style={commonStyles.textPrimary}>{p}</Text>
+              <Text style={commonStyles.textPrimary}>
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -255,7 +256,7 @@ export default function CreateAdScreen({ navigation }: any) {
         <TouchableOpacity
           onPress={handleSubmit}
           disabled={loading}
-          style={[commonStyles.primaryButton, { marginVertical: 24 }]}
+          style={[commonStyles.primaryButton, { marginVertical: 24, opacity: loading ? 0.7 : 1 }]}
         >
           {loading
             ? <ActivityIndicator color="#fff" />

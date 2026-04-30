@@ -21,47 +21,47 @@ export default function AdAnalyticsScreen({ route, navigation }: any) {
       setLoading(true);
       const result = await AdService.getAdAnalytics(adId);
       setData(result);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to load analytics');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to load analytics');
     } finally {
       setLoading(false);
     }
   };
 
+  const Header = () => (
+    <View style={commonStyles.header}>
+      <View style={commonStyles.headerFlexRow}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Feather name="arrow-left" size={22} color="#fff" />
+        </TouchableOpacity>
+        <Text style={commonStyles.headerTitle}>Ad Analytics</Text>
+        <View style={{ width: 22 }} />
+      </View>
+    </View>
+  );
+
   if (loading) return (
     <SafeAreaView style={commonStyles.safe}>
-      <ActivityIndicator />
+      <Header />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
     </SafeAreaView>
   );
 
   if (!data) return (
     <SafeAreaView style={commonStyles.safe}>
-      <View style={commonStyles.header}>
-        <View style={commonStyles.headerFlexRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={commonStyles.headerTitle}>Ad Analytics</Text>
-          <View style={{ width: 22 }} />
-        </View>
-      </View>
+      <Header />
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={commonStyles.textSecondary}>No data available</Text>
+        <Feather name="bar-chart-2" size={40} color={COLORS.textSecondary} />
+        <Text style={[commonStyles.textSecondary, { marginTop: 12 }]}>No data available</Text>
       </View>
     </SafeAreaView>
   );
 
   return (
     <SafeAreaView style={commonStyles.safe}>
-      <View style={commonStyles.header}>
-        <View style={commonStyles.headerFlexRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={commonStyles.headerTitle}>Ad Analytics</Text>
-          <View style={{ width: 22 }} />
-        </View>
-      </View>
+      <Header />
 
       <ScrollView style={commonStyles.scrollContainer}>
 
@@ -137,11 +137,9 @@ export default function AdAnalyticsScreen({ route, navigation }: any) {
             </View>
           </View>
 
-          <View style={commonStyles.rowSpaceBetween}>
-            <View>
-              <Text style={commonStyles.textSmall}>Funding Rate</Text>
-              <Text style={commonStyles.textPrimary}>{data.fundingRate}</Text>
-            </View>
+          <View>
+            <Text style={commonStyles.textSmall}>Funding Rate</Text>
+            <Text style={commonStyles.textPrimary}>{data.fundingRate}</Text>
           </View>
         </View>
 
@@ -149,7 +147,10 @@ export default function AdAnalyticsScreen({ route, navigation }: any) {
         <View style={commonStyles.card}>
           <View style={[commonStyles.rowSpaceBetween, { marginBottom: 12 }]}>
             <Text style={commonStyles.textPrimary}>Amount Spent</Text>
-            <Text style={commonStyles.textPrimary}>LKR {data.boostAmount.toLocaleString()}</Text>
+            {/* ✅ null-safe fix: boostAmount defaults to 0 */}
+            <Text style={commonStyles.textPrimary}>
+              LKR {(data.boostAmount ?? 0).toLocaleString()}
+            </Text>
           </View>
           {data.boostExpiry && (
             <View style={commonStyles.rowSpaceBetween}>
@@ -158,6 +159,11 @@ export default function AdAnalyticsScreen({ route, navigation }: any) {
                 {new Date(data.boostExpiry).toLocaleDateString()}
               </Text>
             </View>
+          )}
+          {!data.isBoosted && (
+            <Text style={[commonStyles.textSmall, { marginTop: 4 }]}>
+              This ad is not currently boosted
+            </Text>
           )}
         </View>
 

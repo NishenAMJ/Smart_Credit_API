@@ -8,21 +8,22 @@ import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { AdService } from '../../services/advertisement.service';
 
 export default function MyAdsScreen({ navigation }: any) {
-  const [ads,       setAds]       = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [filter,    setFilter]    = useState('all');
+  const [ads,     setAds]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter,  setFilter]  = useState('all');
 
   useEffect(() => {
-    loadAds();
-  }, []);
+    const unsubscribe = navigation.addListener('focus', loadAds);
+    return unsubscribe;
+  }, [navigation]);
 
   const loadAds = async () => {
     try {
       setLoading(true);
       const data = await AdService.getMyAds();
       setAds(data);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to load ads');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to load ads');
     } finally {
       setLoading(false);
     }
@@ -32,8 +33,8 @@ export default function MyAdsScreen({ navigation }: any) {
     try {
       await AdService.pauseAd(adId);
       loadAds();
-    } catch (e) {
-      Alert.alert('Error', 'Failed to pause ad');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to pause ad');
     }
   };
 
@@ -41,8 +42,8 @@ export default function MyAdsScreen({ navigation }: any) {
     try {
       await AdService.activateAd(adId);
       loadAds();
-    } catch (e) {
-      Alert.alert('Error', 'Failed to activate ad');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to activate ad');
     }
   };
 
@@ -56,8 +57,8 @@ export default function MyAdsScreen({ navigation }: any) {
           try {
             await AdService.deleteAd(adId);
             loadAds();
-          } catch (e) {
-            Alert.alert('Error', 'Failed to delete ad');
+          } catch (e: any) {
+            Alert.alert('Error', e?.response?.data?.message || 'Failed to delete ad');
           }
         },
       },
@@ -65,14 +66,39 @@ export default function MyAdsScreen({ navigation }: any) {
   };
 
   const filtered = ads.filter((ad: any) => {
-    if (filter === 'all')    return true;
     if (filter === 'active') return ad.status === 'active';
     if (filter === 'paused') return ad.status === 'paused';
     return true;
   });
 
+  const renderFilterBar = () => (
+    <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12, marginTop: 12 }}>
+      {['all', 'active', 'paused'].map((f) => (
+        <TouchableOpacity
+          key={f}
+          onPress={() => setFilter(f)}
+          style={[
+            { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, flex: 1 },
+            filter === f
+              ? { backgroundColor: COLORS.primary }
+              : { backgroundColor: COLORS.border },
+          ]}
+        >
+          <Text style={{
+            textAlign: 'center',
+            fontWeight: '600',
+            fontSize: 12,
+            color: filter === f ? '#fff' : COLORS.textPrimary,
+          }}>
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
   const renderAd = ({ item }: any) => (
-    <View style={commonStyles.card}>
+    <View style={[commonStyles.card, { marginHorizontal: 16, marginBottom: 12 }]}>
       <View style={commonStyles.rowSpaceBetween}>
         <View style={{ flex: 1 }}>
           <Text style={commonStyles.textPrimary}>{item.title}</Text>
@@ -80,28 +106,17 @@ export default function MyAdsScreen({ navigation }: any) {
             {item.location}
           </Text>
         </View>
-        <View>
+        <View style={{ alignItems: 'flex-end' }}>
           {item.isBoosted && (
-            <Text style={{ 
-              fontSize: 12, 
-              fontWeight: '600', 
-              color: COLORS.warning,
-              marginBottom: 4
-            }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.warning, marginBottom: 4 }}>
               ⚡ Boosted
             </Text>
           )}
           <Text style={[
-            {
-              fontSize: 12,
-              fontWeight: '600',
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 12,
-            },
-            item.status === 'active' 
+            { fontSize: 12, fontWeight: '600', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+            item.status === 'active'
               ? { backgroundColor: '#D1F9E6', color: COLORS.success }
-              : { backgroundColor: '#FEF2F2', color: COLORS.danger }
+              : { backgroundColor: '#FEF2F2', color: COLORS.danger },
           ]}>
             {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
           </Text>
@@ -175,10 +190,18 @@ export default function MyAdsScreen({ navigation }: any) {
 
         <TouchableOpacity
           style={commonStyles.secondaryButton}
-          onPress={() => (item.status === 'active' ? handlePause(item.adId) : handleActivate(item.adId))}
+          onPress={() =>
+            item.status === 'active'
+              ? handlePause(item.adId)
+              : handleActivate(item.adId)
+          }
         >
           <View style={commonStyles.row}>
-            <Feather name={item.status === 'active' ? 'pause-circle' : 'play-circle'} size={14} color={COLORS.textPrimary} />
+            <Feather
+              name={item.status === 'active' ? 'pause-circle' : 'play-circle'}
+              size={14}
+              color={COLORS.textPrimary}
+            />
           </View>
         </TouchableOpacity>
       </View>
@@ -197,7 +220,18 @@ export default function MyAdsScreen({ navigation }: any) {
 
   if (loading) return (
     <SafeAreaView style={commonStyles.safe}>
-      <ActivityIndicator />
+      <View style={commonStyles.header}>
+        <View style={commonStyles.headerFlexRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Feather name="arrow-left" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={commonStyles.headerTitle}>My Ads</Text>
+          <View style={{ width: 22 }} />
+        </View>
+      </View>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
     </SafeAreaView>
   );
 
@@ -215,40 +249,14 @@ export default function MyAdsScreen({ navigation }: any) {
         </View>
       </View>
 
-      <View style={[commonStyles.scrollContainer, { paddingHorizontal: 0, paddingTop: 12 }]}>
-        <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 }}>
-          {['all', 'active', 'paused'].map((f) => (
-            <TouchableOpacity 
-              key={f} 
-              onPress={() => setFilter(f)}
-              style={[
-                { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, flex: 1 },
-                filter === f 
-                  ? { backgroundColor: COLORS.primary } 
-                  : { backgroundColor: COLORS.border }
-              ]}
-            >
-              <Text style={{
-                textAlign: 'center',
-                fontWeight: '600',
-                fontSize: 12,
-                color: filter === f ? '#fff' : COLORS.textPrimary
-              }}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
       <FlatList
         data={filtered}
         keyExtractor={(item: any) => item.adId}
         renderItem={renderAd}
         onRefresh={loadAds}
         refreshing={loading}
-        scrollEnabled={false}
-        contentContainerStyle={{ paddingHorizontal: 0, paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        ListHeaderComponent={renderFilterBar}
         ListEmptyComponent={
           <View style={{ alignItems: 'center', paddingVertical: 40 }}>
             <Feather name="inbox" size={40} color={COLORS.textSecondary} />

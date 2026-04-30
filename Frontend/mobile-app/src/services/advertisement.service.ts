@@ -1,17 +1,25 @@
-import axios from 'axios';
+import { api } from './api';
 
-const api = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000',
-  timeout: 10000,
-});
+// ─────────────────────────────────────────────────────────────
+// TODO: Replace this with real auth when ready.
+// Example with Firebase Auth:
+//   import { getAuth } from 'firebase/auth';
+//   const getLenderId = () => getAuth().currentUser?.uid ?? '';
+// ─────────────────────────────────────────────────────────────
+let _lenderId = 'test123';
+
+export const setLenderId = (id: string) => {
+  _lenderId = id;
+};
 
 const getLenderId = (): string => {
-  return 'lender_001';
+  if (!_lenderId) throw new Error('User not authenticated');
+  return _lenderId;
 };
 
 export const AdService = {
 
-  // ── Get all active ads for borrowers ────────────
+  // ── Browse ads (for borrowers) ───────────────────
   getAllAds: async (filters?: {
     location?: string;
     purpose?: string;
@@ -20,113 +28,97 @@ export const AdService = {
     maxAmount?: number;
   }) => {
     const params = new URLSearchParams();
-    if (filters?.location) params.append('location', filters.location);
-    if (filters?.purpose) params.append('purpose', filters.purpose);
-    if (filters?.search) params.append('search', filters.search);
+    if (filters?.location)  params.append('location',  filters.location);
+    if (filters?.purpose)   params.append('purpose',   filters.purpose);
+    if (filters?.search)    params.append('search',    filters.search);
     if (filters?.minAmount) params.append('minAmount', String(filters.minAmount));
     if (filters?.maxAmount) params.append('maxAmount', String(filters.maxAmount));
 
-    const url = params.toString() ? `/advertisements?${params.toString()}` : '/advertisements';
-    const res = await api.get(url);
-    return res.data;
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return api.get(`/advertisements${query}`);
   },
 
-  // ── Get lender's own ads ────────────────────────
+  // ── Get lender's own ads ─────────────────────────
   getMyAds: async () => {
     const lenderId = getLenderId();
-    const res = await api.get(`/advertisements/my?lenderId=${lenderId}`);
-    return res.data;
+    return api.get(`/advertisements/my?lenderId=${lenderId}`);
   },
 
-  // ── Get single ad ───────────────────────────────
+  // ── Get single ad ────────────────────────────────
   getAdById: async (adId: string) => {
-    const res = await api.get(`/advertisements/${adId}`);
-    return res.data;
+    return api.get(`/advertisements/${adId}`);
   },
 
-  // ── Create ad ───────────────────────────────────
+  // ── Create ad ────────────────────────────────────
   createAd: async (data: any) => {
     const lenderId = getLenderId();
-    const res = await api.post(`/advertisements?lenderId=${lenderId}`, data);
-    return res.data;
+    return api.post(`/advertisements?lenderId=${lenderId}`, data);
   },
 
-  // ── Update ad ───────────────────────────────────
+  // ── Update ad ────────────────────────────────────
   updateAd: async (adId: string, data: any) => {
     const lenderId = getLenderId();
-    const res = await api.patch(`/advertisements/${adId}?lenderId=${lenderId}`, data);
-    return res.data;
+    return api.patch(`/advertisements/${adId}?lenderId=${lenderId}`, data);
   },
 
-  // ── Delete ad (soft delete) ──────────────────────
+  // ── Soft delete ad ───────────────────────────────
   deleteAd: async (adId: string) => {
     const lenderId = getLenderId();
-    const res = await api.delete(`/advertisements/${adId}?lenderId=${lenderId}`);
-    return res.data;
+    return api.delete(`/advertisements/${adId}?lenderId=${lenderId}`);
   },
 
-  // ── Hard delete ad ──────────────────────────────
-  hardDeleteAd: async (adId: string) => {
-    const lenderId = getLenderId();
-    const res = await api.delete(`/advertisements/${adId}/hard?lenderId=${lenderId}`);
-    return res.data;
-  },
-
-  // ── Pause ad ────────────────────────────────────
+  // ── Pause ad ─────────────────────────────────────
   pauseAd: async (adId: string) => {
     const lenderId = getLenderId();
-    const res = await api.patch(`/advertisements/${adId}/pause?lenderId=${lenderId}`);
-    return res.data;
+    return api.patch(`/advertisements/${adId}/pause?lenderId=${lenderId}`);
   },
 
-  // ── Activate ad ─────────────────────────────────
+  // ── Activate ad ──────────────────────────────────
   activateAd: async (adId: string) => {
     const lenderId = getLenderId();
-    const res = await api.patch(`/advertisements/${adId}/activate?lenderId=${lenderId}`);
-    return res.data;
+    return api.patch(`/advertisements/${adId}/activate?lenderId=${lenderId}`);
   },
 
   // ── Boost ad ─────────────────────────────────────
-  boostAd: async (adId: string, data: any) => {
+  boostAd: async (adId: string, data: {
+    package: string;
+    amount: number;
+    paymentReference: string;
+  }) => {
     const lenderId = getLenderId();
-    const res = await api.post(`/advertisements/${adId}/boost?lenderId=${lenderId}`, data);
-    return res.data;
+    return api.post(`/advertisements/${adId}/boost?lenderId=${lenderId}`, data);
   },
 
   // ── Get boost packages ───────────────────────────
   getBoostPackages: async () => {
-    const res = await api.get(`/advertisements/boost-packages`);
-    return res.data;
+    return api.get('/advertisements/boost-packages');
   },
 
   // ── Cancel boost ─────────────────────────────────
   cancelBoost: async (adId: string) => {
     const lenderId = getLenderId();
-    const res = await api.patch(`/advertisements/${adId}/boost/cancel?lenderId=${lenderId}`);
-    return res.data;
+    return api.patch(`/advertisements/${adId}/boost/cancel?lenderId=${lenderId}`);
   },
 
-  // ── Get analytics summary ────────────────────────
+  // ── Analytics summary (all lender ads) ───────────
   getAnalyticsSummary: async () => {
     const lenderId = getLenderId();
-    const res = await api.get(`/advertisements/analytics/summary?lenderId=${lenderId}`);
-    return res.data;
+    return api.get(`/advertisements/analytics/summary?lenderId=${lenderId}`);
   },
 
-  // ── Get single ad analytics ──────────────────────
+  // ── Full analytics for one ad ─────────────────────
   getAdAnalytics: async (adId: string) => {
     const lenderId = getLenderId();
-    const res = await api.get(`/advertisements/${adId}/analytics/full?lenderId=${lenderId}`);
-    return res.data;
+    return api.get(`/advertisements/${adId}/analytics/full?lenderId=${lenderId}`);
   },
 
   // ── Track view ───────────────────────────────────
   trackView: async (adId: string) => {
-    await api.post(`/advertisements/${adId}/view`);
+    return api.post(`/advertisements/${adId}/view`);
   },
 
   // ── Track click ──────────────────────────────────
   trackClick: async (adId: string) => {
-    await api.post(`/advertisements/${adId}/click`);
+    return api.post(`/advertisements/${adId}/click`);
   },
 };

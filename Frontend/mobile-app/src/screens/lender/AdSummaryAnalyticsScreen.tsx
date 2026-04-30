@@ -20,47 +20,47 @@ export default function AdSummaryAnalyticsScreen({ navigation }: any) {
       setLoading(true);
       const result = await AdService.getAnalyticsSummary();
       setData(result);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to load analytics');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to load analytics');
     } finally {
       setLoading(false);
     }
   };
 
+  const Header = () => (
+    <View style={commonStyles.header}>
+      <View style={commonStyles.headerFlexRow}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Feather name="arrow-left" size={22} color="#fff" />
+        </TouchableOpacity>
+        <Text style={commonStyles.headerTitle}>Analytics Overview</Text>
+        <View style={{ width: 22 }} />
+      </View>
+    </View>
+  );
+
   if (loading) return (
     <SafeAreaView style={commonStyles.safe}>
-      <ActivityIndicator />
+      <Header />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
     </SafeAreaView>
   );
 
   if (!data) return (
     <SafeAreaView style={commonStyles.safe}>
-      <View style={commonStyles.header}>
-        <View style={commonStyles.headerFlexRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={commonStyles.headerTitle}>Analytics Overview</Text>
-          <View style={{ width: 22 }} />
-        </View>
-      </View>
+      <Header />
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={commonStyles.textSecondary}>No data available</Text>
+        <Feather name="bar-chart-2" size={40} color={COLORS.textSecondary} />
+        <Text style={[commonStyles.textSecondary, { marginTop: 12 }]}>No data available</Text>
       </View>
     </SafeAreaView>
   );
 
   return (
     <SafeAreaView style={commonStyles.safe}>
-      <View style={commonStyles.header}>
-        <View style={commonStyles.headerFlexRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={commonStyles.headerTitle}>Analytics Overview</Text>
-          <View style={{ width: 22 }} />
-        </View>
-      </View>
+      <Header />
 
       <ScrollView style={commonStyles.scrollContainer}>
 
@@ -93,7 +93,7 @@ export default function AdSummaryAnalyticsScreen({ navigation }: any) {
             <View>
               <Text style={commonStyles.textSmall}>Total Spent</Text>
               <Text style={[commonStyles.textPrimary, { color: COLORS.warning }]}>
-                LKR {data.totalBoostSpent.toLocaleString()}
+                LKR {(data.totalBoostSpent ?? 0).toLocaleString()}
               </Text>
             </View>
           </View>
@@ -152,69 +152,70 @@ export default function AdSummaryAnalyticsScreen({ navigation }: any) {
             <Text style={commonStyles.textPrimary}>
               {data.totalApplications > 0
                 ? ((data.totalFunded / data.totalApplications) * 100).toFixed(1)
-                : 0}%
+                : '0'}%
             </Text>
           </View>
         </View>
 
         <Text style={commonStyles.sectionTitle}>Per Ad Breakdown</Text>
-        <View style={{ marginHorizontal: -16, paddingHorizontal: 0 }}>
-          <FlatList
-            data={data.ads}
-            keyExtractor={(item: any) => item.adId}
-            scrollEnabled={false}
-            renderItem={({ item }: any) => (
-              <TouchableOpacity
-                onPress={() =>
-                  navigation.navigate('AdAnalytics', { adId: item.adId })
-                }
-                style={[commonStyles.card, { marginHorizontal: 16, marginBottom: 12 }]}
-              >
-                <View style={commonStyles.rowSpaceBetween}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={commonStyles.textPrimary}>{item.title}</Text>
-                    <Text style={[commonStyles.textSecondary, { marginTop: 4, fontSize: 12 }]}>
-                      Status: {item.status}
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color={COLORS.textSecondary} />
+        <FlatList
+          data={data.ads}
+          keyExtractor={(item: any) => item.adId}
+          scrollEnabled={false}
+          renderItem={({ item }: any) => (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('AdAnalytics', { adId: item.adId })}
+              style={[commonStyles.card, { marginBottom: 12 }]}
+            >
+              <View style={commonStyles.rowSpaceBetween}>
+                <View style={{ flex: 1 }}>
+                  <Text style={commonStyles.textPrimary}>{item.title}</Text>
+                  <Text style={[commonStyles.textSecondary, { marginTop: 4, fontSize: 12 }]}>
+                    Status: {item.status}
+                  </Text>
                 </View>
+                <Feather name="chevron-right" size={20} color={COLORS.textSecondary} />
+              </View>
 
-                <View style={commonStyles.divider} />
+              <View style={commonStyles.divider} />
 
-                <View style={commonStyles.rowSpaceBetween}>
-                  <View>
-                    <Text style={commonStyles.textSmall}>Views</Text>
-                    <Text style={commonStyles.textPrimary}>{item.views}</Text>
-                  </View>
-                  <View>
-                    <Text style={commonStyles.textSmall}>Clicks</Text>
-                    <Text style={commonStyles.textPrimary}>{item.clicks}</Text>
-                  </View>
-                  <View>
-                    <Text style={commonStyles.textSmall}>CTR</Text>
-                    <Text style={commonStyles.textPrimary}>{item.ctr}</Text>
-                  </View>
+              <View style={commonStyles.rowSpaceBetween}>
+                <View>
+                  <Text style={commonStyles.textSmall}>Views</Text>
+                  <Text style={commonStyles.textPrimary}>{item.views}</Text>
                 </View>
-
-                <View style={commonStyles.spacer8} />
-
-                <View style={commonStyles.rowSpaceBetween}>
-                  <View>
-                    <Text style={commonStyles.textSmall}>Applications</Text>
-                    <Text style={commonStyles.textPrimary}>{item.applicationCount}</Text>
-                  </View>
-                  <View>
-                    <Text style={commonStyles.textSmall}>Funded</Text>
-                    <Text style={[commonStyles.textPrimary, { color: COLORS.success }]}>
-                      {item.fundedLoansCount}
-                    </Text>
-                  </View>
+                <View>
+                  <Text style={commonStyles.textSmall}>Clicks</Text>
+                  <Text style={commonStyles.textPrimary}>{item.clicks}</Text>
                 </View>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
+                <View>
+                  <Text style={commonStyles.textSmall}>CTR</Text>
+                  <Text style={commonStyles.textPrimary}>{item.ctr}</Text>
+                </View>
+              </View>
+
+              <View style={commonStyles.spacer8} />
+
+              <View style={commonStyles.rowSpaceBetween}>
+                <View>
+                  <Text style={commonStyles.textSmall}>Applications</Text>
+                  <Text style={commonStyles.textPrimary}>{item.applicationCount}</Text>
+                </View>
+                <View>
+                  <Text style={commonStyles.textSmall}>Funded</Text>
+                  <Text style={[commonStyles.textPrimary, { color: COLORS.success }]}>
+                    {item.fundedLoansCount}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <Text style={commonStyles.textSecondary}>No ads yet</Text>
+            </View>
+          }
+        />
 
       </ScrollView>
     </SafeAreaView>

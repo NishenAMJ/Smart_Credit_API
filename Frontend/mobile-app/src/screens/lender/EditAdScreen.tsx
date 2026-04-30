@@ -7,22 +7,34 @@ import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { AdService } from '../../services/advertisement.service';
 
+const LOCATIONS = ['Colombo', 'Kandy', 'Galle', 'Negombo', 'Kurunegala', 'Jaffna'];
+
 export default function EditAdScreen({ route, navigation }: any) {
   const { ad } = route.params;
 
-  const [loading,    setLoading]    = useState(false);
-  const [title,      setTitle]      = useState(ad.title);
-  const [description,setDescription]= useState(ad.description);
-  const [minAmount,  setMinAmount]  = useState(String(ad.minAmount));
-  const [maxAmount,  setMaxAmount]  = useState(String(ad.maxAmount));
-  const [rate,       setRate]       = useState(String(ad.preferredInterestRate));
-  const [minTenure,  setMinTenure]  = useState(String(ad.minTenureMonths));
-  const [maxTenure,  setMaxTenure]  = useState(String(ad.maxTenureMonths));
-  const [capital,    setCapital]    = useState(String(ad.availableCapital));
-  const [responseHrs,setResponseHrs]= useState(String(ad.responseTimeHours));
-  const [location,   setLocation]   = useState(ad.location);
+  const [loading,     setLoading]     = useState(false);
+  const [title,       setTitle]       = useState(ad.title);
+  const [description, setDescription] = useState(ad.description);
+  const [minAmount,   setMinAmount]   = useState(String(ad.minAmount));
+  const [maxAmount,   setMaxAmount]   = useState(String(ad.maxAmount));
+  const [rate,        setRate]        = useState(String(ad.preferredInterestRate));
+  const [minTenure,   setMinTenure]   = useState(String(ad.minTenureMonths));
+  const [maxTenure,   setMaxTenure]   = useState(String(ad.maxTenureMonths));
+  const [capital,     setCapital]     = useState(String(ad.availableCapital));
+  const [responseHrs, setResponseHrs] = useState(String(ad.responseTimeHours));
+  const [location,    setLocation]    = useState(ad.location);
 
   const handleUpdate = async () => {
+    if (Number(minAmount) >= Number(maxAmount)) {
+      Alert.alert('Validation Error', 'Maximum amount must be greater than minimum amount');
+      return;
+    }
+
+    if (Number(minTenure) > Number(maxTenure)) {
+      Alert.alert('Validation Error', 'Maximum tenure must be >= minimum tenure');
+      return;
+    }
+
     try {
       setLoading(true);
       await AdService.updateAd(ad.adId, {
@@ -38,11 +50,11 @@ export default function EditAdScreen({ route, navigation }: any) {
         location,
       });
 
-      Alert.alert('Success', 'Ad updated!', [
+      Alert.alert('Success', 'Ad updated successfully!', [
         { text: 'OK', onPress: () => navigation.navigate('MyAds') },
       ]);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to update ad');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to update ad');
     } finally {
       setLoading(false);
     }
@@ -96,7 +108,6 @@ export default function EditAdScreen({ route, navigation }: any) {
                 placeholderTextColor={COLORS.textSecondary}
               />
             </View>
-
             <View style={{ flex: 1 }}>
               <Text style={commonStyles.textPrimary}>Max Amount (LKR)</Text>
               <TextInput
@@ -131,7 +142,6 @@ export default function EditAdScreen({ route, navigation }: any) {
                 placeholderTextColor={COLORS.textSecondary}
               />
             </View>
-
             <View style={{ flex: 1 }}>
               <Text style={commonStyles.textPrimary}>Max Tenure (months)</Text>
               <TextInput
@@ -166,18 +176,33 @@ export default function EditAdScreen({ route, navigation }: any) {
           />
         </View>
 
+        {/* ── Location picker (was read-only before — now editable) ── */}
         <Text style={commonStyles.sectionTitle}>Location</Text>
         <View style={commonStyles.card}>
-          <View style={[commonStyles.row, { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 10, backgroundColor: COLORS.background }]}>
-            <Feather name="map-pin" size={18} color={COLORS.primary} />
-            <Text style={[commonStyles.textPrimary, { marginLeft: 8 }]}>{location}</Text>
-          </View>
+          {LOCATIONS.map((loc) => (
+            <TouchableOpacity
+              key={loc}
+              style={[commonStyles.row, { paddingVertical: 8 }]}
+              onPress={() => setLocation(loc)}
+            >
+              <View style={{
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                borderWidth: 2,
+                borderColor: COLORS.primary,
+                backgroundColor: location === loc ? COLORS.primary : 'transparent',
+                marginRight: 8,
+              }} />
+              <Text style={commonStyles.textPrimary}>{loc}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <TouchableOpacity
           onPress={handleUpdate}
           disabled={loading}
-          style={[commonStyles.primaryButton, { marginVertical: 24 }]}
+          style={[commonStyles.primaryButton, { marginVertical: 24, opacity: loading ? 0.7 : 1 }]}
         >
           {loading
             ? <ActivityIndicator color="#fff" />
