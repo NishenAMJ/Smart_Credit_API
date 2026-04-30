@@ -34,7 +34,7 @@ export class LenderService {
 
   async findLenderById(id: string): Promise<LenderResponseDto> {
     const doc = await this.firebaseService.db
-      .collection('lenders')
+      .collection('users')
       .doc(id)
       .get();
 
@@ -42,9 +42,21 @@ export class LenderService {
       throw new NotFoundException(`Lender with ID ${id} not found`);
     }
 
+    const data = doc.data();
     return {
       id: doc.id,
-      ...doc.data(),
+      name: data?.fullName || '',
+      email: data?.email || '',
+      phone: data?.phone || '',
+      investmentCapacity: 0, // Not in users
+      riskPreference: 'medium', // Not in users
+      address: '', // Not in users
+      panNumber: '', // Not in users
+      bankAccountNumber: '', // Not in users
+      ifscCode: '', // Not in users
+      status: 'active',
+      createdAt: data?.createdAt,
+      updatedAt: data?.updatedAt,
     } as LenderResponseDto;
   }
 

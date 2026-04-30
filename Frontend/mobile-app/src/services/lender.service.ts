@@ -181,7 +181,7 @@ export const LenderProfileService = {
   // ── Get profile ──────────────────────────────────────────────
   getProfile: async () => {
     const lenderId = getLenderId();
-    return api.get(`/lender-profile/${lenderId}`);
+    return api.get(`/lender/${lenderId}`);
   },
 
   // ── Update profile ───────────────────────────────────────────

@@ -7,7 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { StatCard, QuickAction, LenderActionItem, AlertBanner } from '../../components/lender';
 import { ActivityIndicator } from 'react-native';
-import { DashboardService, LoanRequestsService } from '../../services/lender.service';
+import { DashboardService, LoanRequestsService, LenderProfileService } from '../../services/lender.service';
 
 const { width } = Dimensions.get('window');
 
@@ -17,6 +17,7 @@ const { width } = Dimensions.get('window');
 export default function LenderDashboardScreen({ navigation }: any) {
   const [activeSlide, setActiveSlide] = useState(0);
   const [summary, setSummary] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [recentApps, setRecentApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,12 +25,14 @@ export default function LenderDashboardScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const [sum, requests] = await Promise.all([
+        const [sum, requests, prof] = await Promise.all([
           DashboardService.getSummary(),
           LoanRequestsService.getPendingRequests({ pageSize: 3 }),
+          LenderProfileService.getProfile(),
         ]);
         setSummary(sum);
         setRecentApps(requests?.requests ?? []);
+        setProfile(prof);
       } catch (e: any) {
         setError(e?.response?.data?.message ?? 'Failed to load dashboard');
       } finally {
@@ -85,12 +88,14 @@ export default function LenderDashboardScreen({ navigation }: any) {
               activeOpacity={0.8}
             >
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>R</Text>
+                <Text style={styles.avatarText}>
+                  {profile?.fullName ? profile.fullName[0].toUpperCase() : (profile?.name ? profile.name[0].toUpperCase() : '?')}
+                </Text>
               </View>
             </TouchableOpacity>
           </View>
           <Text style={commonStyles.headerGreeting}>Welcome back</Text>
-          <Text style={commonStyles.headerName}>Ranil Perera</Text>
+          <Text style={commonStyles.headerName}>{profile?.fullName ?? profile?.name ?? 'Loading...'}</Text>
         </View>
 
         {/* ── STATS ─────────────────────────────────── */}
@@ -131,12 +136,14 @@ export default function LenderDashboardScreen({ navigation }: any) {
         </View>
 
         {/* ── PENDING BANNER ────────────────────────── */}
-        <AlertBanner
-          type="warning"
-          title="5 Pending Loan Requests"
-          message="Review and approve borrower requests"
-          icon="inbox"
-        />
+        {(summary?.pendingRequests ?? 0) > 0 && (
+          <AlertBanner
+            type="warning"
+            title={`${summary.pendingRequests ?? 0} Pending Loan Requests`}
+            message="Review and approve borrower requests"
+            icon="inbox"
+          />
+        )}
 
         {/* ── QUICK ACTIONS ─────────────────────────── */}
         <Text style={commonStyles.sectionTitle}>Quick Actions</Text>
