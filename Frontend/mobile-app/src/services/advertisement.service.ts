@@ -6,7 +6,7 @@ import { api } from './api';
 //   import { getAuth } from 'firebase/auth';
 //   const getLenderId = () => getAuth().currentUser?.uid ?? '';
 // ─────────────────────────────────────────────────────────────
-let _lenderId = 'test123';
+let _lenderId = 'lender_004';
 
 export const setLenderId = (id: string) => {
   _lenderId = id;
