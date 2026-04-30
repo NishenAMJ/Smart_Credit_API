@@ -11,7 +11,7 @@ import type { LenderSession } from '../lib/lender-session'
 
 const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
-  'http://localhost:3000'
+  'http://localhost:3000/api'
 
 const RANGE_OPTIONS = [
   { key: '30d', label: '30 Days' },
