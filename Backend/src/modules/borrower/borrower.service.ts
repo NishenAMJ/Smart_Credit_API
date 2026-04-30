@@ -1,885 +1,1355 @@
-// modules/borrower/borrower.service.ts
 import {
   Injectable,
-  BadRequestException,
-  InternalServerErrorException,
   NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { FirebaseService } from '../../firebase/firebase.service';
-import { LoansService } from '../loans/loans.service';
-import { FieldValue } from 'firebase-admin/firestore';
-import { CreateApplicationDto } from './dto/create-application.dto';
-import { UpdateApplicationDto } from './dto/update-application.dto';
-import { FilterLoansDto } from './dto/filter-loans.dto';
-import { CreatePaymentDto } from './dto/create-payment.dto';
-import { UploadReceiptDto } from './dto/upload-receipt.dto';
-import { GenerateQrDto } from './dto/generate-qr.dto';
-import { SendMessageDto } from './dto/send-message.dto';
+import { CreateBorrowerProfileDto } from './dto/create-profile.dto';
+import { UpdateBorrowerProfileDto } from './dto/update-profile.dto';
+import {
+  CreateLoanApplicationDto,
+  UpdateLoanApplicationDto,
+  LoanApplicationStatus,
+} from './dto/loan-application.dto';
+import { MakeRepaymentDto } from './dto/make-repayment.dto';
+import {
+  BorrowerProfile,
+  LoanApplication,
+  Loan,
+  LoanStatus,
+  Repayment,
+  RepaymentStatus,
+  BorrowerDashboard,
+} from './interfaces/borrower.interface';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { instanceToPlain } from 'class-transformer';
+import { BORROWER_DEFAULTS, BORROWER_FLOW } from './borrower.constants';
+import { CreditScoreService } from './credit-score.service';
+import { randomBytes, scryptSync } from 'crypto';
+
+type TimestampLike =
+  | FirebaseFirestore.Timestamp
+  | Date
+  | { toMillis?: () => number; toDate?: () => Date }
+  | null
+  | undefined;
+
+type QrTokenPayload = {
+  loanId: string;
+  borrowerId: string;
+  amount: number;
+  nonce: string;
+  issuedAt: number;
+};
 
 @Injectable()
 export class BorrowerService {
+  // Firestore collection names used by borrower workflows.
+  private readonly USERS_COL = 'users';
+  private readonly BORROWERS_COL = 'borrowers';
+  private readonly LOAN_APPS_COL = 'loanRequests';
+
+  private readonly LOANS_COL = 'loans';
+  private readonly ADS_COL = 'ads';
+  private readonly REPAYMENTS_COL = 'repayments';
+  private readonly QR_NONCES_COL = 'qrNonces';
+
   constructor(
     private readonly firebaseService: FirebaseService,
-    private readonly loansService: LoansService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly creditScoreService: CreditScoreService,
   ) {}
 
-  // ==================== LOAN DISCOVERY ====================
-
-  // GET /api/borrower/loans/search?keyword=medical
-  async searchLoans(keyword: string) {
-    try {
-      if (!keyword || keyword.trim() === '') {
-        throw new BadRequestException('Search keyword is required');
-      }
-
-      const snapshot = await this.firebaseService.db
-        .collection('loans')
-        .where('status', '==', 'active')
-        .get();
-
-      if (snapshot.empty) {
-        return {
-          statusCode: 200,
-          message: 'No loans found',
-          keyword,
-          total: 0,
-          data: [],
-        };
-      }
-
-      const keywordLower = keyword.toLowerCase().trim();
-
-      const loans = snapshot.docs
-        .map((doc) => ({
-          loanId: doc.id,
-          ...doc.data(),
-        }))
-        .filter((loan: any) => {
-          const titleMatch = loan.title?.toLowerCase().includes(keywordLower);
-          const descMatch = loan.description
-            ?.toLowerCase()
-            .includes(keywordLower);
-          const lenderMatch = loan.lenderName
-            ?.toLowerCase()
-            .includes(keywordLower);
-
-          return titleMatch || descMatch || lenderMatch;
-        });
-
-      return {
-        statusCode: 200,
-        message: 'Search completed successfully',
-        keyword,
-        total: loans.length,
-        data: loans,
-      };
-    } catch (error) {
-      if (error instanceof BadRequestException) throw error;
-      console.error('Search loans error:', error);
-      throw new InternalServerErrorException('Failed to search loans');
-    }
+  private get db() {
+    return this.firebaseService.db;
   }
 
-  // GET /api/borrower/loans/featured
-  async getFeaturedLoans() {
-    try {
-      const snapshot = await this.firebaseService.db
-        .collection('loans')
-        .where('status', '==', 'active')
-        .where('featured', '==', true)
-        .limit(10)
-        .get();
+  // ==================== DASHBOARD ====================
 
-      const loans = snapshot.docs.map((doc) => ({
-        loanId: doc.id,
-        ...doc.data(),
-      }));
-
-      return {
-        statusCode: 200,
-        message: 'Featured loans retrieved successfully',
-        total: loans.length,
-        data: loans,
-      };
-    } catch (error) {
-      console.error('Get featured loans error:', error);
-      throw new InternalServerErrorException('Failed to get featured loans');
+  async getDashboard(borrowerId: string) {
+    if (!borrowerId) {
+      throw new BadRequestException('Borrower ID is required');
     }
-  }
 
-  // GET /api/borrower/loans/:loanId
-  async getLoanById(loanId: string) {
     try {
-      const loan = await this.loansService.getLoanById(loanId);
-      if (!loan) {
-        throw new NotFoundException(`Loan with ID ${loanId} not found`);
-      }
-      return {
-        statusCode: 200,
-        message: 'Loan retrieved successfully',
-        data: loan,
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Get loan by ID error:', error);
-      throw new InternalServerErrorException('Failed to get loan');
-    }
-  }
-
-  // POST /api/borrower/loans/filter
-  async filterLoans(filterDto: FilterLoansDto) {
-    try {
-      let query: any = this.firebaseService.db.collection('loans');
-
-      // Apply status filter
-      if (filterDto.status) {
-        query = query.where('status', '==', filterDto.status);
-      }
-
-      const snapshot = await query.get();
-      let loans = snapshot.docs.map((doc) => ({
-        loanId: doc.id,
-        ...doc.data(),
-      }));
-
-      // Apply client-side filters
-      if (filterDto.minAmount !== undefined) {
-        loans = loans.filter(
-          (loan: any) => loan.amount >= filterDto.minAmount!,
-        );
-      }
-      if (filterDto.maxAmount !== undefined) {
-        loans = loans.filter(
-          (loan: any) => loan.amount <= filterDto.maxAmount!,
-        );
-      }
-      if (filterDto.minInterestRate !== undefined) {
-        loans = loans.filter(
-          (loan: any) => loan.interestRate >= filterDto.minInterestRate!,
-        );
-      }
-      if (filterDto.maxInterestRate !== undefined) {
-        loans = loans.filter(
-          (loan: any) => loan.interestRate <= filterDto.maxInterestRate!,
-        );
-      }
-      if (filterDto.minDuration !== undefined) {
-        loans = loans.filter(
-          (loan: any) => loan.durationMonths >= filterDto.minDuration!,
-        );
-      }
-      if (filterDto.maxDuration !== undefined) {
-        loans = loans.filter(
-          (loan: any) => loan.durationMonths <= filterDto.maxDuration!,
-        );
-      }
-      if (filterDto.category) {
-        loans = loans.filter(
-          (loan: any) => loan.category === filterDto.category,
-        );
-      }
-
-      return {
-        statusCode: 200,
-        message: 'Loans filtered successfully',
-        total: loans.length,
-        filters: filterDto,
-        data: loans,
-      };
-    } catch (error) {
-      console.error('Filter loans error:', error);
-      throw new InternalServerErrorException('Failed to filter loans');
-    }
-  }
-
-  // ==================== LOAN APPLICATION ====================
-
-  // GET /api/borrower/applications
-  async getAllApplications(borrowerId?: string) {
-    try {
-      let query: any = this.firebaseService.db.collection('applications');
-
-      if (borrowerId) {
-        query = query.where('borrowerId', '==', borrowerId);
-      }
-
-      const snapshot = await query.get();
-      const applications = snapshot.docs.map((doc) => ({
-        applicationId: doc.id,
-        ...doc.data(),
-      }));
-
-      return {
-        statusCode: 200,
-        message: 'Applications retrieved successfully',
-        total: applications.length,
-        data: applications,
-      };
-    } catch (error) {
-      console.error('Get all applications error:', error);
-      throw new InternalServerErrorException('Failed to get applications');
-    }
-  }
-
-  // GET /api/borrower/applications/:applicationId
-  async getApplicationById(applicationId: string) {
-    try {
-      const doc = await this.firebaseService.db
-        .collection('applications')
-        .doc(applicationId)
-        .get();
-
-      if (!doc.exists) {
-        throw new NotFoundException(
-          `Application with ID ${applicationId} not found`,
-        );
-      }
-
-      return {
-        statusCode: 200,
-        message: 'Application retrieved successfully',
-        data: { applicationId: doc.id, ...doc.data() },
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Get application by ID error:', error);
-      throw new InternalServerErrorException('Failed to get application');
-    }
-  }
-
-  // POST /api/borrower/applications
-  async createApplication(createApplicationDto: CreateApplicationDto) {
-    try {
-      const docRef = await this.firebaseService.db
-        .collection('applications')
-        .add({
-          ...createApplicationDto,
-          status: 'PENDING',
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-
-      return {
-        statusCode: 201,
-        message: 'Application created successfully',
-        data: { applicationId: docRef.id },
-      };
-    } catch (error) {
-      console.error('Create application error:', error);
-      throw new InternalServerErrorException('Failed to create application');
-    }
-  }
-
-  // PUT /api/borrower/applications/:applicationId
-  async updateApplication(
-    applicationId: string,
-    updateApplicationDto: UpdateApplicationDto,
-  ) {
-    try {
-      const docRef = this.firebaseService.db
-        .collection('applications')
-        .doc(applicationId);
-      const doc = await docRef.get();
-
-      if (!doc.exists) {
-        throw new NotFoundException(
-          `Application with ID ${applicationId} not found`,
-        );
-      }
-
-      await docRef.update({
-        ...updateApplicationDto,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      return {
-        statusCode: 200,
-        message: 'Application updated successfully',
-        data: { applicationId },
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Update application error:', error);
-      throw new InternalServerErrorException('Failed to update application');
-    }
-  }
-
-  // DELETE /api/borrower/applications/:applicationId
-  async deleteApplication(applicationId: string) {
-    try {
-      const docRef = this.firebaseService.db
-        .collection('applications')
-        .doc(applicationId);
-      const doc = await docRef.get();
-
-      if (!doc.exists) {
-        throw new NotFoundException(
-          `Application with ID ${applicationId} not found`,
-        );
-      }
-
-      await docRef.delete();
-
-      return {
-        statusCode: 200,
-        message: 'Application deleted successfully',
-        data: { applicationId },
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Delete application error:', error);
-      throw new InternalServerErrorException('Failed to delete application');
-    }
-  }
-
-  // ==================== CREDIT SCORE ====================
-
-  // GET /api/borrower/credit-score
-  async getCreditScore(borrowerId: string) {
-    try {
-      const doc = await this.firebaseService.db
-        .collection('creditScores')
+      const profileDoc = await this.db
+        .collection(this.BORROWERS_COL)
         .doc(borrowerId)
         .get();
+      // Fallback to 'users' collection if borrower profile doesn't exist yet
+      let profileData = profileDoc.exists ? profileDoc.data() : null;
 
-      if (!doc.exists) {
-        return {
-          statusCode: 200,
-          message: 'No credit score found',
-          data: { borrowerId, score: 0, rating: 'N/A' },
-        };
+      if (!profileData) {
+        const userDoc = await this.db.collection('users').doc(borrowerId).get();
+        profileData = userDoc.exists ? userDoc.data() : {};
       }
 
-      const data: any = doc.data();
-
-      return {
-        statusCode: 200,
-        message: 'Credit score retrieved successfully',
-        data: {
-          borrowerId,
-          score: data.score,
-          rating: data.rating,
-          lastUpdated: data.lastUpdated,
-        },
-      };
-    } catch (error) {
-      console.error('Get credit score error:', error);
-      throw new InternalServerErrorException('Failed to get credit score');
-    }
-  }
-
-  // GET /api/borrower/credit-score/history
-  async getCreditScoreHistory(borrowerId: string) {
-    try {
-      const snapshot = await this.firebaseService.db
-        .collection('creditScoreHistory')
+      const loansSnapshot = await this.db
+        .collection('loans')
         .where('borrowerId', '==', borrowerId)
         .get();
 
-      let history = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      let activeLoansCount = 0;
+      let totalOutstanding = 0;
+      let totalBorrowed = 0;
+      let totalRepaid = 0;
+      let nextPaymentAmount = 0;
+      let nextDueDate: TimestampLike = null;
 
-      // Sort in memory instead of Firestore
-      history = history.sort((a: any, b: any) => {
-        const aTime = a.timestamp?._seconds || 0;
-        const bTime = b.timestamp?._seconds || 0;
-        return bTime - aTime; // descending order
+      loansSnapshot.forEach((doc) => {
+        const data = doc.data();
+        const loan = this.normalizeLoanDocument(data, doc.id);
+
+        // Sum total principal ever borrowed
+        totalBorrowed += loan.principalAmount || 0;
+
+        // Calculate total repaid (Total Repayable - Current Outstanding)
+        const totalRepayable =
+          (loan.principalAmount || 0) + this.toNumber(data.totalInterest);
+        const repaidOnThisLoan = Math.max(
+          0,
+          totalRepayable - (loan.outstandingBalance || 0),
+        );
+        totalRepaid += repaidOnThisLoan;
+
+        if (data.status === 'active') {
+          activeLoansCount++;
+          totalOutstanding += loan.outstandingBalance || 0;
+
+          if (loan.nextDueDate) {
+            const loanDate = new Date(this.timestampToMillis(loan.nextDueDate));
+            const currentNextDate = nextDueDate
+              ? new Date(this.timestampToMillis(nextDueDate))
+              : null;
+
+            if (!currentNextDate || loanDate < currentNextDate) {
+              nextDueDate = loan.nextDueDate;
+              nextPaymentAmount = loan.monthlyInstallment || 0;
+            }
+          }
+        }
       });
 
-      return {
-        statusCode: 200,
-        message: 'Credit score history retrieved successfully',
-        total: history.length,
-        data: history.slice(0, 50), // limit to 50
-      };
-    } catch (error) {
-      console.error('Get credit score history error:', error);
-      throw new InternalServerErrorException(
-        'Failed to get credit score history',
-      );
-    }
-  }
-
-  // GET /api/borrower/credit-score/factors
-  async getCreditScoreFactors(borrowerId: string) {
-    try {
-      const doc = await this.firebaseService.db
-        .collection('creditScores')
-        .doc(borrowerId)
+      const appsSnapshot = await this.db
+        .collection('loanRequests')
+        .where('borrowerId', '==', borrowerId)
+        .where('status', 'in', ['pending', 'PENDING', 'draft', 'DRAFT'])
         .get();
 
-      if (!doc.exists) {
-        return {
-          statusCode: 200,
-          message: 'No credit score factors found',
-          data: { borrowerId, factors: [] },
-        };
-      }
-
-      const data: any = doc.data();
+      const dashboard = {
+        profile: profileData,
+        activeLoans: activeLoansCount,
+        pendingApplications: appsSnapshot.size,
+        totalOutstanding,
+        nextDueDate,
+        nextPaymentAmount,
+        creditScore: profileData?.creditScore || 0,
+        totalBorrowed,
+        totalRepaid,
+      };
 
       return {
         statusCode: 200,
-        message: 'Credit score factors retrieved successfully',
-        data: {
-          borrowerId,
-          factors: data.factors || [],
-          breakdown: data.breakdown || {},
-        },
+        message: 'Dashboard data retrieved successfully',
+        data: dashboard,
       };
     } catch (error) {
-      console.error('Get credit score factors error:', error);
-      throw new InternalServerErrorException(
-        'Failed to get credit score factors',
-      );
+      console.error('Error fetching dashboard:', error);
+      throw new InternalServerErrorException('Failed to fetch dashboard data');
     }
   }
 
-  // ==================== REPAYMENT ====================
+  async getMyLoans(borrowerId: string, status?: string) {
+    if (!borrowerId) {
+      throw new BadRequestException('Borrower ID is required');
+    }
 
-  // GET /api/borrower/payments
-  async getAllPayments(borrowerId?: string) {
     try {
-      let query: any = this.firebaseService.db.collection('payments');
+      let query: any = this.db
+        .collection('loans')
+        .where('borrowerId', '==', borrowerId);
 
-      if (borrowerId) {
-        query = query.where('borrowerId', '==', borrowerId);
+      if (status) {
+        query = query.where('status', '==', status);
       }
 
       const snapshot = await query.get();
-      let payments = snapshot.docs.map((doc) => ({
-        paymentId: doc.id,
-        ...doc.data(),
-      }));
-
-      // Sort in memory by createdAt
-      payments = payments.sort((a: any, b: any) => {
-        const aTime = a.createdAt?._seconds || 0;
-        const bTime = b.createdAt?._seconds || 0;
-        return bTime - aTime; // descending order (newest first)
-      });
+      const loans = snapshot.docs.map((doc) =>
+        this.normalizeLoanDocument(doc.data(), doc.id),
+      );
 
       return {
         statusCode: 200,
-        message: 'Payments retrieved successfully',
-        total: payments.length,
-        data: payments,
+        message: 'Loans retrieved successfully',
+        total: loans.length,
+        data: loans,
       };
     } catch (error) {
-      console.error('Get all payments error:', error);
-      throw new InternalServerErrorException('Failed to get payments');
+      console.error('Error fetching loans:', error);
+      throw new InternalServerErrorException('Failed to fetch loans');
     }
   }
 
-  // GET /api/borrower/payments/:paymentId
-  async getPaymentById(paymentId: string) {
-    try {
-      const doc = await this.firebaseService.db
-        .collection('payments')
-        .doc(paymentId)
-        .get();
+  private removeUndefinedDeep<T>(value: T): T {
+    // Firestore rejects undefined values, so recursively strip them from payloads.
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => this.removeUndefinedDeep(item))
+        .filter((item) => item !== undefined) as T;
+    }
 
-      if (!doc.exists) {
-        throw new NotFoundException(`Payment with ID ${paymentId} not found`);
+    if (value && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .map(([key, entryValue]) => [
+          key,
+          this.removeUndefinedDeep(entryValue),
+        ]);
+
+      return Object.fromEntries(entries) as T;
+    }
+
+    return value;
+  }
+
+  private timestampToMillis(value: TimestampLike): number {
+    if (!value) {
+      return 0;
+    }
+
+    if ('toMillis' in value && typeof value.toMillis === 'function') {
+      return value.toMillis();
+    }
+
+    if ('toDate' in value && typeof value.toDate === 'function') {
+      return value.toDate().getTime();
+    }
+
+    if (value instanceof Date) {
+      return value.getTime();
+    }
+
+    return 0;
+  }
+
+  private toNumber(value: unknown, fallback = 0): number {
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback;
+  }
+
+  private toTimestamp(value: unknown): FirebaseFirestore.Timestamp | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      if ('toDate' in value && typeof value.toDate === 'function') {
+        const date = value.toDate();
+        if (date instanceof Date) {
+          return Timestamp.fromDate(date);
+        }
       }
-
-      return {
-        statusCode: 200,
-        message: 'Payment retrieved successfully',
-        data: { paymentId: doc.id, ...doc.data() },
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Get payment by ID error:', error);
-      throw new InternalServerErrorException('Failed to get payment');
     }
+
+    if (value instanceof Date) {
+      return Timestamp.fromDate(value);
+    }
+
+    return undefined;
   }
 
-  // POST /api/borrower/payments
-  async createPayment(createPaymentDto: CreatePaymentDto) {
-    try {
-      // Create payment record
-      const docRef = await this.firebaseService.db.collection('payments').add({
-        ...createPaymentDto,
-        status: 'PENDING',
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+  private normalizeLoanStatus(value: unknown): LoanStatus {
+    const status = String(value ?? '').toLowerCase();
 
-      // Update loan balance (if loan exists)
-      try {
-        await this.loansService.updateBalance(
-          createPaymentDto.loanId,
-          createPaymentDto.amount,
-        );
-      } catch (error) {
-        console.warn('Could not update loan balance:', error);
-        // Continue even if loan update fails
+    if (Object.values(LoanStatus).includes(status as LoanStatus)) {
+      return status as LoanStatus;
+    }
+
+    return LoanStatus.ACTIVE;
+  }
+
+  private normalizeLoanDocument(
+    data: FirebaseFirestore.DocumentData,
+    documentId?: string,
+  ): Loan {
+    const now = Timestamp.now();
+    const status = this.normalizeLoanStatus(data.status);
+    const createdAt = this.toTimestamp(data.createdAt) ?? now;
+    const updatedAt = this.toTimestamp(data.updatedAt) ?? createdAt;
+    const startDate = this.toTimestamp(data.startDate) ?? createdAt;
+    const nextDueDate = this.toTimestamp(data.nextDueDate) ?? startDate;
+    const endDate = this.toTimestamp(data.endDate) ?? nextDueDate;
+
+    const principalAmount = this.toNumber(data.principalAmount);
+    const tenureMonths = this.toNumber(data.tenureMonths);
+    const totalRepayable = this.toNumber(
+      data.totalRepayable,
+      principalAmount + this.toNumber(data.totalInterest),
+    );
+    const monthlyInstallment = this.toNumber(
+      data.monthlyInstallment,
+      tenureMonths > 0 ? Math.round(totalRepayable / tenureMonths) : 0,
+    );
+    const outstandingBalance = this.toNumber(
+      data.outstandingBalance,
+      status === LoanStatus.COMPLETED ? 0 : totalRepayable || principalAmount,
+    );
+
+    return {
+      loanId: String(data.loanId ?? documentId ?? ''),
+      requestId: String(data.requestId ?? ''),
+      borrowerId: String(data.borrowerId ?? ''),
+      lenderId: String(data.lenderId ?? ''),
+      lenderName: data.lenderName ? String(data.lenderName) : undefined,
+      principalAmount,
+      interestRate: this.toNumber(data.interestRate),
+      tenureMonths,
+      monthlyInstallment,
+      outstandingBalance,
+      totalInterest: this.toNumber(
+        data.totalInterest,
+        Math.max(0, totalRepayable - principalAmount),
+      ),
+      status,
+      startDate,
+      nextDueDate,
+      endDate,
+      repaymentsMade: this.toNumber(data.repaymentsMade),
+      createdAt,
+      updatedAt,
+    };
+  }
+
+  private normalizeAdDocument(
+    data: FirebaseFirestore.DocumentData,
+    documentId?: string,
+  ): Partial<Loan> & Record<string, unknown> {
+    const adId = String(data.adId ?? documentId ?? '');
+    const maxAmount = this.toNumber(data.maxAmount);
+    const durationMonths = this.toNumber(
+      data.maxTenureMonths,
+      this.toNumber(data.tenureMonths),
+    );
+
+    return {
+      ...data,
+      adId,
+      loanId: adId,
+      lenderId: data.lenderId,
+      lenderName: data.lenderName,
+      lenderLocation: data.location,
+      principalAmount: maxAmount,
+      maxAmount,
+      minAmount: this.toNumber(data.minAmount),
+      amount: maxAmount,
+      interestRate: this.toNumber(data.preferredInterestRate),
+      durationMonths,
+      tenureMonths: durationMonths,
+      isFeatured: data.status === 'active',
+    };
+  }
+
+  private readDisplayName(
+    data?: FirebaseFirestore.DocumentData,
+  ): string | null {
+    const name =
+      typeof data?.fullName === 'string' && data.fullName.trim().length > 0
+        ? data.fullName
+        : typeof data?.displayName === 'string' &&
+            data.displayName.trim().length > 0
+          ? data.displayName
+          : typeof data?.name === 'string' && data.name.trim().length > 0
+            ? data.name
+            : null;
+
+    return name?.trim() ?? null;
+  }
+
+  /**
+   * Batch-fetches lender display names from the borrowers collection.
+   * Returns a Map of lenderId → fullName.
+   */
+  async getLenderNamesMap(lenderIds: string[]): Promise<Map<string, string>> {
+    const unique = [...new Set(lenderIds.filter(Boolean))];
+    const nameMap = new Map<string, string>();
+
+    if (unique.length === 0) return nameMap;
+
+    await Promise.all(
+      unique.map(async (lenderId) => {
+        const doc = await this.db
+          .collection(this.USERS_COL)
+          .doc(lenderId)
+          .get();
+        if (!doc?.exists) return;
+
+        const name = this.readDisplayName(doc.data());
+        if (name) {
+          nameMap.set(lenderId, name);
+        }
+      }),
+    );
+
+    // Firestore `in` queries support max 30 values; chunk if needed.
+    for (const field of ['uid', 'userId']) {
+      const missing = unique.filter((lenderId) => !nameMap.has(lenderId));
+      if (missing.length === 0) break;
+
+      for (let i = 0; i < missing.length; i += 30) {
+        const chunk = missing.slice(i, i + 30);
+        const snapshot = await this.db
+          .collection(this.USERS_COL)
+          .where(field, 'in', chunk)
+          .get();
+
+        for (const doc of snapshot?.docs ?? []) {
+          const data = doc.data() as {
+            uid?: string;
+            userId?: string;
+          };
+          const lenderId = data.uid ?? data.userId ?? doc.id;
+          const name = this.readDisplayName(data);
+          if (name) {
+            nameMap.set(lenderId, name);
+          }
+        }
       }
-
-      return {
-        statusCode: 201,
-        message: 'Payment created successfully',
-        data: { paymentId: docRef.id },
-      };
-    } catch (error) {
-      console.error('Create payment error:', error);
-      throw new InternalServerErrorException('Failed to create payment');
     }
+
+    return nameMap;
   }
 
-  // POST /api/borrower/payments/qr-generate
-  async generateQrCode(generateQrDto: GenerateQrDto) {
-    try {
-      // Generate QR code data (simplified - in production use a proper QR library)
-      const qrData = {
-        loanId: generateQrDto.loanId,
-        amount: generateQrDto.amount,
-        borrowerId: generateQrDto.borrowerId,
-        timestamp: Date.now(),
-      };
+  /**
+   * Creates a new borrower profile after preventing duplicate user records.
+   */
+  async createProfile(dto: CreateBorrowerProfileDto): Promise<BorrowerProfile> {
+    const plainDto = this.removeUndefinedDeep(
+      instanceToPlain(dto) as CreateBorrowerProfileDto,
+    );
 
-      const qrString = Buffer.from(JSON.stringify(qrData)).toString('base64');
+    // Check if profile already exists for this user
+    const existing = await this.db
+      .collection(this.BORROWERS_COL)
+      .doc(plainDto.userId)
+      .get();
 
-      return {
-        statusCode: 200,
-        message: 'QR code generated successfully',
-        data: {
-          qrCode: qrString,
-          qrData,
-        },
-      };
-    } catch (error) {
-      console.error('Generate QR code error:', error);
-      throw new InternalServerErrorException('Failed to generate QR code');
-    }
-  }
-
-  // POST /api/borrower/payments/upload-receipt
-  async uploadReceipt(uploadReceiptDto: UploadReceiptDto) {
-    try {
-      const paymentRef = this.firebaseService.db
-        .collection('payments')
-        .doc(uploadReceiptDto.paymentId);
-      const doc = await paymentRef.get();
-
-      if (!doc.exists) {
-        throw new NotFoundException(
-          `Payment with ID ${uploadReceiptDto.paymentId} not found`,
-        );
-      }
-
-      await paymentRef.update({
-        receiptUrl: uploadReceiptDto.receiptUrl,
-        receiptNotes: uploadReceiptDto.notes,
-        receiptUploadedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      return {
-        statusCode: 200,
-        message: 'Receipt uploaded successfully',
-        data: { paymentId: uploadReceiptDto.paymentId },
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Upload receipt error:', error);
-      throw new InternalServerErrorException('Failed to upload receipt');
-    }
-  }
-
-  // ==================== TRANSACTION HISTORY ====================
-
-  // GET /api/borrower/transactions
-  async getAllTransactions(borrowerId?: string) {
-    try {
-      let query: any = this.firebaseService.db.collection('transactions');
-
-      if (borrowerId) {
-        query = query.where('borrowerId', '==', borrowerId);
-      }
-
-      const snapshot = await query.get();
-      let transactions = snapshot.docs.map((doc) => ({
-        transactionId: doc.id,
-        ...doc.data(),
-      }));
-
-      // Sort in memory
-      transactions = transactions.sort((a: any, b: any) => {
-        const aTime = a.createdAt?._seconds || 0;
-        const bTime = b.createdAt?._seconds || 0;
-        return bTime - aTime; // descending
-      });
-
-      return {
-        statusCode: 200,
-        message: 'Transactions retrieved successfully',
-        total: transactions.length,
-        data: transactions,
-      };
-    } catch (error) {
-      console.error('Get all transactions error:', error);
-      throw new InternalServerErrorException('Failed to get transactions');
-    }
-  }
-
-  // GET /api/borrower/transactions/:transactionId
-  async getTransactionById(transactionId: string) {
-    try {
-      const doc = await this.firebaseService.db
-        .collection('transactions')
-        .doc(transactionId)
-        .get();
-
-      if (!doc.exists) {
-        throw new NotFoundException(
-          `Transaction with ID ${transactionId} not found`,
-        );
-      }
-
-      return {
-        statusCode: 200,
-        message: 'Transaction retrieved successfully',
-        data: { transactionId: doc.id, ...doc.data() },
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Get transaction by ID error:', error);
-      throw new InternalServerErrorException('Failed to get transaction');
-    }
-  }
-
-  // GET /api/borrower/payment-schedule/:loanId
-  async getPaymentSchedule(loanId: string) {
-    try {
-      const snapshot = await this.firebaseService.db
-        .collection('paymentSchedule')
-        .where('loanId', '==', loanId)
-        .get();
-
-      let schedule = snapshot.docs.map((doc) => ({
-        scheduleId: doc.id,
-        ...doc.data(),
-      }));
-
-      // Sort in memory
-      schedule = schedule.sort((a: any, b: any) => {
-        const aTime = a.dueDate?._seconds || 0;
-        const bTime = b.dueDate?._seconds || 0;
-        return aTime - bTime; // ascending
-      });
-
-      return {
-        statusCode: 200,
-        message: 'Payment schedule retrieved successfully',
-        loanId,
-        total: schedule.length,
-        data: schedule,
-      };
-    } catch (error) {
-      console.error('Get payment schedule error:', error);
-      throw new InternalServerErrorException('Failed to get payment schedule');
-    }
-  }
-
-  // ==================== CHAT & COMMUNICATION ====================
-
-  // GET /api/borrower/chat/conversations
-  async getAllConversations(borrowerId: string) {
-    try {
-      const snapshot = await this.firebaseService.db
-        .collection('conversations')
-        .where('participants', 'array-contains', borrowerId)
-        .get();
-
-      let conversations = snapshot.docs.map((doc) => ({
-        conversationId: doc.id,
-        ...doc.data(),
-      }));
-
-      // Sort in memory
-      conversations = conversations.sort((a: any, b: any) => {
-        const aTime = a.lastMessageAt?._seconds || 0;
-        const bTime = b.lastMessageAt?._seconds || 0;
-        return bTime - aTime; // descending
-      });
-
-      return {
-        statusCode: 200,
-        message: 'Conversations retrieved successfully',
-        total: conversations.length,
-        data: conversations,
-      };
-    } catch (error) {
-      console.error('Get all conversations error:', error);
-      throw new InternalServerErrorException('Failed to get conversations');
-    }
-  }
-
-  // GET /api/borrower/chat/:conversationId
-  async getConversationMessages(conversationId: string) {
-    try {
-      const snapshot = await this.firebaseService.db
-        .collection('messages')
-        .where('conversationId', '==', conversationId)
-        .get();
-
-      let messages = snapshot.docs.map((doc) => ({
-        messageId: doc.id,
-        ...doc.data(),
-      }));
-
-      // Sort in memory
-      messages = messages.sort((a: any, b: any) => {
-        const aTime = a.createdAt?._seconds || 0;
-        const bTime = b.createdAt?._seconds || 0;
-        return aTime - bTime; // ascending
-      });
-
-      return {
-        statusCode: 200,
-        message: 'Messages retrieved successfully',
-        conversationId,
-        total: messages.length,
-        data: messages,
-      };
-    } catch (error) {
-      console.error('Get conversation messages error:', error);
-      throw new InternalServerErrorException('Failed to get messages');
-    }
-  }
-
-  // POST /api/borrower/chat/send
-  async sendMessage(sendMessageDto: SendMessageDto) {
-    try {
-      const docRef = await this.firebaseService.db.collection('messages').add({
-        ...sendMessageDto,
-        createdAt: FieldValue.serverTimestamp(),
-        read: false,
-      });
-
-      // Update conversation's last message (if conversation exists)
-      try {
-        await this.firebaseService.db
-          .collection('conversations')
-          .doc(sendMessageDto.conversationId)
-          .update({
-            lastMessage: sendMessageDto.message,
-            lastMessageAt: FieldValue.serverTimestamp(),
-          });
-      } catch (error) {
-        console.warn('Could not update conversation:', error);
-        // Continue even if conversation update fails
-      }
-
-      return {
-        statusCode: 201,
-        message: 'Message sent successfully',
-        data: { messageId: docRef.id },
-      };
-    } catch (error) {
-      console.error('Send message error:', error);
-      throw new InternalServerErrorException('Failed to send message');
-    }
-  }
-
-  // ==================== NOTIFICATIONS ====================
-
-  // GET /api/borrower/notifications
-  async getAllNotifications(borrowerId: string) {
-    try {
-      const snapshot = await this.firebaseService.db
-        .collection('notifications')
-        .where('userId', '==', borrowerId)
-        .get();
-
-      let notifications = snapshot.docs.map((doc) => ({
-        notificationId: doc.id,
-        ...doc.data(),
-      }));
-
-      // Sort in memory and limit
-      notifications = notifications
-        .sort((a: any, b: any) => {
-          const aTime = a.createdAt?._seconds || 0;
-          const bTime = b.createdAt?._seconds || 0;
-          return bTime - aTime; // descending
-        })
-        .slice(0, 50);
-
-      return {
-        statusCode: 200,
-        message: 'Notifications retrieved successfully',
-        total: notifications.length,
-        data: notifications,
-      };
-    } catch (error) {
-      console.error('Get all notifications error:', error);
-      throw new InternalServerErrorException('Failed to get notifications');
-    }
-  }
-
-  // PUT /api/borrower/notifications/:notificationId/read
-  async markNotificationAsRead(notificationId: string) {
-    try {
-      const docRef = this.firebaseService.db
-        .collection('notifications')
-        .doc(notificationId);
-      const doc = await docRef.get();
-
-      if (!doc.exists) {
-        throw new NotFoundException(
-          `Notification with ID ${notificationId} not found`,
-        );
-      }
-
-      await docRef.update({
-        read: true,
-        readAt: FieldValue.serverTimestamp(),
-      });
-
-      return {
-        statusCode: 200,
-        message: 'Notification marked as read',
-        data: { notificationId },
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Mark notification as read error:', error);
-      throw new InternalServerErrorException(
-        'Failed to mark notification as read',
+    if (existing.exists) {
+      throw new ConflictException(
+        `Borrower profile already exists for user ${dto.userId}`,
       );
     }
+
+    const now = FieldValue.serverTimestamp();
+    const profileData: Omit<BorrowerProfile, 'createdAt' | 'updatedAt'> & {
+      createdAt: FieldValue;
+      updatedAt: FieldValue;
+    } = {
+      ...plainDto,
+      creditScore: BORROWER_DEFAULTS.STARTING_CREDIT_SCORE,
+      profileComplete: true,
+      kycVerified: false,
+      totalLoans: 0,
+      activeLoans: 0,
+      totalBorrowed: 0,
+      totalRepaid: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await this.db
+      .collection(this.BORROWERS_COL)
+      .doc(plainDto.userId)
+      .set(profileData);
+
+    // Sync back to 'users' collection to ensure identity consistency
+    try {
+      await this.db.collection('users').doc(plainDto.userId).update({
+        fullName: plainDto.fullName,
+        email: plainDto.email,
+        updatedAt: now,
+      });
+    } catch (e) {
+      console.warn(
+        `[BorrowerService] Could not sync back to users collection during creation: ${e}`,
+      );
+    }
+
+    const created = await this.db
+      .collection(this.BORROWERS_COL)
+      .doc(plainDto.userId)
+      .get();
+
+    return { ...created.data() } as BorrowerProfile;
   }
 
-  // DELETE /api/borrower/notifications/:notificationId
-  async deleteNotification(notificationId: string) {
-    try {
-      const docRef = this.firebaseService.db
-        .collection('notifications')
-        .doc(notificationId);
-      const doc = await docRef.get();
+  async getProfile(userId: string): Promise<BorrowerProfile> {
+    const [doc, userDoc] = await Promise.all([
+      this.db.collection(this.BORROWERS_COL).doc(userId).get(),
+      this.db.collection('users').doc(userId).get(),
+    ]);
 
-      if (!doc.exists) {
+    if (!doc.exists) {
+      if (!userDoc.exists) {
         throw new NotFoundException(
-          `Notification with ID ${notificationId} not found`,
+          `Borrower profile not found for user ${userId}`,
         );
       }
 
-      await docRef.delete();
+      const userData = userDoc.data() ?? {};
+      const fullName = String(userData.fullName ?? '');
+      const email = String(userData.email ?? '');
+      const phone = String(userData.phone ?? '');
 
       return {
-        statusCode: 200,
-        message: 'Notification deleted successfully',
-        data: { notificationId },
+        userId,
+        fullName,
+        email,
+        phone,
+        dateOfBirth: String(userData.dateOfBirth ?? ''),
+        nic: String(userData.nic ?? ''),
+        address: {
+          line1: String(userData.address?.line1 ?? ''),
+          city: String(userData.address?.city ?? ''),
+          district: String(userData.address?.district ?? ''),
+          province: String(userData.address?.province ?? ''),
+        },
+        employmentStatus: String(userData.employmentStatus ?? ''),
+        monthlyIncome: this.toNumber(userData.monthlyIncome),
+        occupation: String(userData.occupation ?? ''),
+        creditScore: this.toNumber(userData.creditScore, 0),
+        profileComplete: false,
+        kycVerified:
+          String(userData.kycStatus ?? '').toLowerCase() === 'approved',
+        totalLoans: 0,
+        activeLoans: 0,
+        totalBorrowed: 0,
+        totalRepaid: 0,
+        createdAt: this.toTimestamp(userData.createdAt) ?? Timestamp.now(),
+        updatedAt: this.toTimestamp(userData.updatedAt) ?? Timestamp.now(),
+        photoURL: String(userData.photoURL ?? ''),
+        profilePicture: String(userData.profilePicture ?? ''),
+        profilePictureUrl: String(userData.profilePictureUrl ?? ''),
+        profilePicUrl: String(userData.profilePicUrl ?? ''),
+        profilePhotoUrl: String(userData.profilePhotoUrl ?? ''),
+        imageUrl: String(userData.imageUrl ?? ''),
+        avatarUrl: String(userData.avatarUrl ?? ''),
       };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Delete notification error:', error);
-      throw new InternalServerErrorException('Failed to delete notification');
     }
+
+    const profileData = doc.data() ?? {};
+    const userData = userDoc.data() ?? {};
+    const pickProfileImageUrl = (
+      ...values: unknown[]
+    ): string => {
+      const value = values.find(
+        (item) => typeof item === 'string' && item.trim().length > 0,
+      );
+
+      return typeof value === 'string' ? value.trim() : '';
+    };
+    const photoURL =
+      pickProfileImageUrl(
+        profileData.photoURL,
+        profileData.profilePictureUrl,
+        profileData.profilePicUrl,
+        profileData.profilePhotoUrl,
+        profileData.profilePicture,
+        profileData.imageUrl,
+        profileData.avatarUrl,
+        userData.photoURL,
+        userData.profilePictureUrl,
+        userData.profilePicUrl,
+        userData.profilePhotoUrl,
+        userData.profilePicture,
+        userData.imageUrl,
+        userData.avatarUrl,
+      );
+
+    return {
+      userId: doc.id,
+      ...profileData,
+      photoURL,
+      profilePicture: profileData.profilePicture ?? userData.profilePicture,
+      profilePictureUrl:
+        profileData.profilePictureUrl ?? userData.profilePictureUrl,
+      profilePicUrl: profileData.profilePicUrl ?? userData.profilePicUrl,
+      profilePhotoUrl:
+        profileData.profilePhotoUrl ?? userData.profilePhotoUrl,
+      imageUrl: profileData.imageUrl ?? userData.imageUrl,
+      avatarUrl: profileData.avatarUrl ?? userData.avatarUrl,
+    } as BorrowerProfile;
+  }
+
+  async updateProfile(
+    userId: string,
+    dto: UpdateBorrowerProfileDto,
+  ): Promise<BorrowerProfile> {
+    const doc = await this.db.collection(this.BORROWERS_COL).doc(userId).get();
+
+    const plainDto = this.removeUndefinedDeep(
+      instanceToPlain(dto) as UpdateBorrowerProfileDto,
+    );
+    const { password, ...profileUpdateDto } = plainDto;
+    const updateData = {
+      ...profileUpdateDto,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    if (doc.exists) {
+      await this.db.collection(this.BORROWERS_COL).doc(userId).update(updateData);
+    } else {
+      const userDoc = await this.db.collection('users').doc(userId).get();
+      const userData = userDoc.data() ?? {};
+
+      await this.db
+        .collection(this.BORROWERS_COL)
+        .doc(userId)
+        .set({
+          userId,
+          fullName: dto.fullName ?? userData.fullName ?? '',
+          email: dto.email ?? userData.email ?? '',
+          phone: dto.phone ?? userData.phone ?? '',
+          dateOfBirth: userData.dateOfBirth ?? '',
+          nic: userData.nic ?? '',
+          address:
+            dto.address ??
+            userData.address ?? {
+              line1: '',
+              city: '',
+              district: '',
+              province: '',
+            },
+          employmentStatus: dto.employmentStatus ?? userData.employmentStatus ?? '',
+          monthlyIncome:
+            dto.monthlyIncome ?? this.toNumber(userData.monthlyIncome, 0),
+          occupation: dto.occupation ?? userData.occupation ?? '',
+          creditScore: this.toNumber(userData.creditScore, 0),
+          profileComplete: false,
+          kycVerified:
+            String(userData.kycStatus ?? '').toLowerCase() === 'approved',
+          totalLoans: 0,
+          activeLoans: 0,
+          totalBorrowed: 0,
+          totalRepaid: 0,
+          createdAt:
+            this.toTimestamp(userData.createdAt) ?? FieldValue.serverTimestamp(),
+          ...updateData,
+        });
+    }
+
+    // Sync to 'users' collection if name changed
+    const userUpdate: Record<string, any> = {};
+    if (dto.fullName) userUpdate.fullName = dto.fullName;
+    if (dto.email) userUpdate.email = dto.email;
+    if (password) {
+      const passwordSalt = randomBytes(16).toString('hex');
+      userUpdate.passwordSalt = passwordSalt;
+      userUpdate.passwordHash = scryptSync(password, passwordSalt, 64).toString(
+        'hex',
+      );
+      userUpdate.passwordUpdatedAt = FieldValue.serverTimestamp();
+    }
+
+    if (Object.keys(userUpdate).length > 0) {
+      try {
+        await this.db.collection('users').doc(userId).update(userUpdate);
+      } catch (e) {
+        // Ignore if user doc doesn't exist or isn't updatable
+        console.warn(
+          `[BorrowerService] Could not sync to users collection: ${e}`,
+        );
+      }
+    }
+
+    return this.getProfile(userId);
+  }
+
+  /**
+   * Creates a new draft loan application for a KYC-verified borrower.
+   */
+  async createLoanApplication(
+    dto: CreateLoanApplicationDto,
+  ): Promise<LoanApplication> {
+    const plainDto = this.removeUndefinedDeep(
+      instanceToPlain(dto) as CreateLoanApplicationDto,
+    );
+
+    // Verify borrower profile exists
+    const profileDoc = await this.db
+      .collection(this.BORROWERS_COL)
+      .doc(plainDto.borrowerId)
+      .get();
+
+    if (!profileDoc.exists) {
+      throw new NotFoundException(
+        `Borrower profile not found. Please complete your profile first.`,
+      );
+    }
+
+    const profile = profileDoc.data() as BorrowerProfile;
+    if (!profile.kycVerified) {
+      throw new ForbiddenException(
+        'KYC verification required before submitting a loan application.',
+      );
+    }
+
+    const scoreSummary = await this.creditScoreService.getSummary(
+      plainDto.borrowerId,
+    );
+    const now = FieldValue.serverTimestamp();
+    const appRef = this.db.collection(this.LOAN_APPS_COL).doc();
+
+    const applicationData = {
+      requestId: appRef.id,
+      ...plainDto,
+      purpose: plainDto.loanPurpose,
+
+      borrowerName: profile.fullName || 'Unknown',
+      borrowerPhotoURL: (profile as any).photoURL || '',
+      borrowerRating: (profile as any).rating || 0,
+      smartScore: scoreSummary.score,
+      borrowerCreditScore: scoreSummary.score,
+      scoreRating: scoreSummary.rating,
+      scoreBreakdown: scoreSummary.breakdown,
+      scoreSnapshotAt: now,
+
+      // Start as draft so mobile can save first and submit explicitly.
+      status: LoanApplicationStatus.DRAFT,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await appRef.set(applicationData);
+
+    const created = await appRef.get();
+    return { ...created.data() } as LoanApplication;
+  }
+
+  /**
+   * Lists borrower loan applications, optionally filtered by application status.
+   */
+  async getLoanApplications(
+    borrowerId: string,
+    status?: LoanApplicationStatus,
+  ): Promise<LoanApplication[]> {
+    let query = this.db
+      .collection(this.LOAN_APPS_COL)
+      .where('borrowerId', '==', borrowerId) as FirebaseFirestore.Query;
+
+    if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    const snapshot = await query.get();
+    const applications = snapshot.docs.map(
+      (doc) => ({ ...doc.data() }) as LoanApplication,
+    );
+
+    return applications.sort(
+      (a, b) =>
+        this.timestampToMillis(b.createdAt) -
+        this.timestampToMillis(a.createdAt),
+    );
+  }
+
+  /**
+   * Returns one loan application after confirming borrower ownership.
+   */
+  async getLoanApplicationById(
+    applicationId: string,
+    borrowerId: string,
+  ): Promise<LoanApplication> {
+    const doc = await this.db
+      .collection(this.LOAN_APPS_COL)
+      .doc(applicationId)
+      .get();
+
+    if (!doc.exists) {
+      throw new NotFoundException(
+        `Loan application ${applicationId} not found`,
+      );
+    }
+
+    const application = doc.data() as LoanApplication;
+
+    // Ensure the application belongs to the requesting borrower
+    if (application.borrowerId !== borrowerId) {
+      throw new ForbiddenException('Access denied to this loan application');
+    }
+
+    return application;
+  }
+
+  /**
+   * Updates an editable draft loan application.
+   */
+  async updateLoanApplication(
+    applicationId: string,
+    borrowerId: string,
+    dto: UpdateLoanApplicationDto,
+  ): Promise<LoanApplication> {
+    const application = await this.getLoanApplicationById(
+      applicationId,
+      borrowerId,
+    );
+
+    if (application.status !== LoanApplicationStatus.DRAFT) {
+      throw new BadRequestException(
+        `Only DRAFT applications can be edited. Current status: ${application.status}`,
+      );
+    }
+
+    const plainDto = this.removeUndefinedDeep(
+      instanceToPlain(dto) as UpdateLoanApplicationDto,
+    );
+
+    await this.db
+      .collection(this.LOAN_APPS_COL)
+      .doc(applicationId)
+      .update({
+        ...plainDto,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+    return this.getLoanApplicationById(applicationId, borrowerId);
+  }
+
+  /**
+   * Deletes a draft application before it enters review.
+   */
+  async deleteLoanApplication(
+    applicationId: string,
+    borrowerId: string,
+  ): Promise<{ message: string }> {
+    const application = await this.getLoanApplicationById(
+      applicationId,
+      borrowerId,
+    );
+
+    if (application.status !== LoanApplicationStatus.DRAFT) {
+      throw new BadRequestException('Only DRAFT applications can be deleted.');
+    }
+
+    await this.db.collection(this.LOAN_APPS_COL).doc(applicationId).delete();
+
+    return {
+      message: `Loan application ${applicationId} deleted successfully`,
+    };
+  }
+
+  /**
+   * Moves a draft application into the lender review queue.
+   */
+  async submitLoanApplication(
+    applicationId: string,
+    borrowerId: string,
+  ): Promise<LoanApplication> {
+    const application = await this.getLoanApplicationById(
+      applicationId,
+      borrowerId,
+    );
+
+    if (application.status !== LoanApplicationStatus.DRAFT) {
+      throw new BadRequestException(
+        `Only DRAFT applications can be submitted. Current status: ${application.status}`,
+      );
+    }
+
+    const scoreSummary = await this.creditScoreService.getSummary(borrowerId);
+
+    await this.db.collection(this.LOAN_APPS_COL).doc(applicationId).update({
+      status: LoanApplicationStatus.OPEN,
+      smartScore: scoreSummary.score,
+      borrowerCreditScore: scoreSummary.score,
+      scoreRating: scoreSummary.rating,
+      scoreBreakdown: scoreSummary.breakdown,
+      scoreSnapshotAt: FieldValue.serverTimestamp(),
+      submittedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return this.getLoanApplicationById(applicationId, borrowerId);
+  }
+
+  /**
+   * Gets borrower loans, optionally filtered by loan status.
+   */
+  async getLoans(borrowerId: string, status?: LoanStatus): Promise<Loan[]> {
+    let query = this.db
+      .collection(this.LOANS_COL)
+      .where('borrowerId', '==', borrowerId) as FirebaseFirestore.Query;
+
+    if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    const snapshot = await query.get();
+    const loans = snapshot.docs.map((doc) =>
+      this.normalizeLoanDocument(doc.data(), doc.id),
+    );
+
+    return loans.sort(
+      (a, b) =>
+        this.timestampToMillis(b.createdAt) -
+        this.timestampToMillis(a.createdAt),
+    );
+  }
+
+  /**
+   * Lists active lender ads for borrower loan discovery.
+   */
+  async getActiveLoanAds() {
+    const snapshot = await this.db
+      .collection(this.ADS_COL)
+      .where('status', '==', 'active')
+      .get();
+
+    const ads = snapshot.docs.map((doc) =>
+      this.normalizeAdDocument(doc.data(), doc.id),
+    );
+
+    return ads.sort(
+      (a, b) =>
+        this.timestampToMillis(b.createdAt as TimestampLike) -
+        this.timestampToMillis(a.createdAt as TimestampLike),
+    );
+  }
+
+  /**
+   * Returns one loan after confirming borrower ownership.
+   */
+  async getLoanById(loanId: string, borrowerId: string): Promise<Loan> {
+    const doc = await this.db.collection(this.LOANS_COL).doc(loanId).get();
+
+    if (!doc.exists) {
+      throw new NotFoundException(`Loan ${loanId} not found`);
+    }
+
+    const loan = this.normalizeLoanDocument(doc.data() ?? {}, doc.id);
+
+    if (loan.borrowerId !== borrowerId) {
+      throw new ForbiddenException('Access denied to this loan');
+    }
+
+    return loan;
+  }
+
+  /**
+   * Calculates the full repayment schedule and marks paid or overdue items.
+   */
+  async getRepaymentSchedule(
+    loanId: string,
+    borrowerId: string,
+  ): Promise<
+    Array<{
+      installmentNumber: number;
+      dueDate: Date;
+      principalAmount: number;
+      interestAmount: number;
+      totalAmount: number;
+      remainingBalance: number;
+      status: string;
+    }>
+  > {
+    const loan = await this.getLoanById(loanId, borrowerId);
+
+    // Fetch already-made repayments to mark completed installments
+    const repaymentSnapshot = await this.db
+      .collection(this.REPAYMENTS_COL)
+      .where('loanId', '==', loanId)
+      .orderBy('installmentNumber', 'asc')
+      .get();
+
+    const paidInstallments = new Set(
+      repaymentSnapshot.docs
+        .filter((d) => d.data().status === RepaymentStatus.COMPLETED)
+        .map((d) => d.data().installmentNumber as number),
+    );
+
+    // Amortization schedule calculation
+    const monthlyRate = loan.interestRate / 100 / 12;
+    const principal = loan.principalAmount;
+    const term = loan.tenureMonths;
+
+    const disbursedAt =
+      loan.startDate instanceof Date ? loan.startDate : loan.startDate.toDate();
+
+    const schedule: Array<{
+      installmentNumber: number;
+      dueDate: Date;
+      principalAmount: number;
+      interestAmount: number;
+      totalAmount: number;
+      remainingBalance: number;
+      status: string;
+    }> = [];
+    let remainingBalance = principal;
+
+    for (let i = 1; i <= term; i++) {
+      const interestAmount = remainingBalance * monthlyRate;
+      const principalAmount = loan.monthlyInstallment - interestAmount;
+      remainingBalance = Math.max(0, remainingBalance - principalAmount);
+
+      const dueDate = new Date(disbursedAt);
+      dueDate.setMonth(dueDate.getMonth() + i);
+
+      const now = new Date();
+      let status = 'upcoming';
+      if (paidInstallments.has(i)) {
+        status = 'paid';
+      } else if (dueDate < now) {
+        status = 'overdue';
+      }
+
+      schedule.push({
+        installmentNumber: i,
+        dueDate,
+        principalAmount: Math.round(principalAmount * 100) / 100,
+        interestAmount: Math.round(interestAmount * 100) / 100,
+        totalAmount: loan.monthlyInstallment,
+        remainingBalance: Math.round(remainingBalance * 100) / 100,
+        status,
+      });
+    }
+
+    return schedule;
+  }
+
+  /**
+   * Records a repayment and updates loan and borrower totals atomically.
+   */
+  async makeRepayment(dto: MakeRepaymentDto): Promise<Repayment> {
+    const loan = await this.getLoanById(dto.loanId, dto.borrowerId);
+
+    if (loan.status === LoanStatus.COMPLETED) {
+      throw new BadRequestException('This loan is already fully repaid.');
+    }
+    if (loan.status === LoanStatus.CANCELLED) {
+      throw new BadRequestException('Cannot repay a cancelled loan.');
+    }
+    if (dto.amount <= 0) {
+      throw new BadRequestException('Repayment amount must be greater than 0.');
+    }
+    if (dto.amount > loan.outstandingBalance) {
+      throw new BadRequestException(
+        `Repayment amount (LKR ${dto.amount}) exceeds outstanding balance (LKR ${loan.outstandingBalance}).`,
+      );
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const repaymentRef = this.db.collection(this.REPAYMENTS_COL).doc();
+
+    // Calculate principal vs interest split
+    const monthlyRate = loan.interestRate / 100 / 12;
+    const interestPaid =
+      Math.round(loan.outstandingBalance * monthlyRate * 100) / 100;
+    const principalPaid = Math.round((dto.amount - interestPaid) * 100) / 100;
+
+    const newOutstanding = Math.max(
+      0,
+      Math.round((loan.outstandingBalance - principalPaid) * 100) / 100,
+    );
+
+    const installmentNumber = loan.repaymentsMade + 1;
+
+    const repaymentData = {
+      repaymentId: repaymentRef.id,
+      loanId: dto.loanId,
+      borrowerId: dto.borrowerId,
+      lenderId: loan.lenderId,
+      amount: dto.amount,
+      principalPaid,
+      interestPaid,
+      paymentMethod: dto.paymentMethod,
+      transactionReference: dto.transactionReference ?? null,
+      paymentProofUrl: dto.paymentProofUrl ?? null,
+      status: RepaymentStatus.COMPLETED,
+      dueDate: loan.nextDueDate,
+      paidAt: now,
+      installmentNumber,
+      createdAt: now,
+    };
+
+    // Use a batch write for atomicity
+    const batch = this.db.batch();
+
+    batch.set(repaymentRef, repaymentData);
+
+    const isFullyRepaid = newOutstanding === 0;
+    const nextDueDate = new Date();
+    nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+
+    // Keep loan progress and borrower aggregates in sync in the same batch.
+    batch.update(this.db.collection(this.LOANS_COL).doc(dto.loanId), {
+      outstandingBalance: newOutstanding,
+      repaymentsMade: FieldValue.increment(1),
+      status: isFullyRepaid ? LoanStatus.COMPLETED : loan.status,
+      nextDueDate: isFullyRepaid ? null : nextDueDate,
+      updatedAt: now,
+    });
+
+    // Update borrower's totalRepaid
+    batch.update(this.db.collection(this.BORROWERS_COL).doc(dto.borrowerId), {
+      totalRepaid: FieldValue.increment(dto.amount),
+      activeLoans: isFullyRepaid
+        ? FieldValue.increment(-1)
+        : FieldValue.increment(0),
+      updatedAt: now,
+    });
+
+    await batch.commit();
+
+    this.creditScoreService
+      .calculateCreditScore(dto.borrowerId)
+      .catch((error) =>
+        console.error('[CreditScore] Recalc failed after repayment:', error),
+      );
+
+    const created = await repaymentRef.get();
+    return { ...created.data() } as Repayment;
+  }
+
+  /**
+   * Generates a signed short-lived QR token for a borrower repayment flow.
+   */
+  async generateQrToken(loanId: string, borrowerId: string, amount?: number) {
+    const loan = await this.getLoanById(loanId, borrowerId);
+
+    if (loan.status === LoanStatus.COMPLETED) {
+      throw new BadRequestException('Cannot generate QR for a completed loan.');
+    }
+
+    const preferredAmount =
+      typeof amount === 'number' && amount > 0
+        ? amount
+        : loan.monthlyInstallment || BORROWER_DEFAULTS.REPAYMENT_AMOUNT;
+
+    const safeAmount = Math.min(preferredAmount, loan.outstandingBalance);
+    const now = Date.now();
+    const expiresAt = now + 5 * 60 * 1000;
+    const nonce = this.db.collection(this.QR_NONCES_COL).doc().id;
+
+    const payload: QrTokenPayload = {
+      loanId,
+      borrowerId,
+      amount: Math.max(0, Math.round(safeAmount * 100) / 100),
+      nonce,
+      issuedAt: now,
+    };
+
+    const token = await this.jwtService.signAsync(payload);
+
+    await this.db.collection(this.QR_NONCES_COL).doc(nonce).set({
+      nonce,
+      loanId,
+      borrowerId,
+      amount: payload.amount,
+      issuedAt: now,
+      expiresAt,
+      used: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      token,
+      expiresAt,
+      loanId,
+      borrowerId,
+      amount: payload.amount,
+    };
+  }
+
+  /**
+   * Verifies signed QR token integrity and marks nonce as used.
+   */
+  async verifyQrToken(token: string) {
+    let payload: QrTokenPayload;
+
+    try {
+      payload = await this.jwtService.verifyAsync<QrTokenPayload>(token);
+    } catch {
+      throw new BadRequestException('QR code is invalid or expired.');
+    }
+
+    if (!payload?.nonce || !payload.loanId || !payload.borrowerId) {
+      throw new BadRequestException('QR code payload is invalid.');
+    }
+
+    const nonceRef = this.db.collection(this.QR_NONCES_COL).doc(payload.nonce);
+
+    await this.db.runTransaction(async (tx) => {
+      const nonceDoc = await tx.get(nonceRef);
+      if (!nonceDoc.exists) {
+        throw new BadRequestException('QR nonce not found.');
+      }
+
+      const nonceData = nonceDoc.data() as
+        | { used?: boolean; expiresAt?: number }
+        | undefined;
+
+      if (nonceData?.used) {
+        throw new BadRequestException('QR code has already been used.');
+      }
+
+      if (
+        typeof nonceData?.expiresAt === 'number' &&
+        nonceData.expiresAt < Date.now()
+      ) {
+        throw new BadRequestException('QR code is expired.');
+      }
+
+      tx.update(nonceRef, {
+        used: true,
+        usedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    await this.getLoanById(payload.loanId, payload.borrowerId);
+
+    return {
+      valid: true,
+      payload,
+    };
+  }
+
+  /**
+   * Gets all repayments made for a borrower-owned loan.
+   */
+  async getRepaymentHistory(
+    loanId: string,
+    borrowerId: string,
+  ): Promise<Repayment[]> {
+    // Verify loan ownership
+    await this.getLoanById(loanId, borrowerId);
+
+    const snapshot = await this.db
+      .collection(this.REPAYMENTS_COL)
+      .where('loanId', '==', loanId)
+      .get();
+
+    const repayments = snapshot.docs.map(
+      (doc) => ({ ...doc.data() }) as Repayment,
+    );
+
+    return repayments.sort(
+      (a, b) =>
+        this.timestampToMillis(b.createdAt) -
+        this.timestampToMillis(a.createdAt),
+    );
+  }
+
+  /**
+   * Returns aggregated borrower profile, loan, and recent activity data.
+   */
+  async getDashboardDetailed(userId: string): Promise<BorrowerDashboard> {
+    const profile = await this.getProfile(userId);
+
+    // Fetch active loans
+    const activeLoansSnapshot = await this.db
+      .collection(this.LOANS_COL)
+      .where('borrowerId', '==', userId)
+      .where('status', '==', LoanStatus.ACTIVE)
+      .get();
+
+    // Fetch pending applications
+    const pendingAppsSnapshot = await this.db
+      .collection(this.LOAN_APPS_COL)
+      .where('borrowerId', '==', userId)
+      .where('status', 'in', [
+        LoanApplicationStatus.PENDING,
+        LoanApplicationStatus.UNDER_REVIEW,
+      ])
+      .get();
+
+    const activeLoans = activeLoansSnapshot.docs.map((d) => d.data() as Loan);
+
+    const totalOutstanding = activeLoans.reduce(
+      (sum, loan) => sum + loan.outstandingBalance,
+      0,
+    );
+
+    // Find the nearest next payment
+    const sortedByNextPayment = [...activeLoans].sort((a, b) => {
+      const aDate = a.nextDueDate?.toDate?.() ?? new Date(0);
+      const bDate = b.nextDueDate?.toDate?.() ?? new Date(0);
+      return aDate.getTime() - bDate.getTime();
+    });
+
+    const nextLoan = sortedByNextPayment[0];
+
+    // Recent activity (last 5 repayments)
+    const recentRepaymentsSnapshot = await this.db
+      .collection(this.REPAYMENTS_COL)
+      .where('borrowerId', '==', userId)
+      .get();
+
+    const recentRepayments = recentRepaymentsSnapshot.docs
+      .map((doc) => doc.data() as Repayment)
+      .sort(
+        (a, b) =>
+          this.timestampToMillis(b.createdAt) -
+          this.timestampToMillis(a.createdAt),
+      )
+      .slice(0, BORROWER_FLOW.RECENT_ACTIVITY_LIMIT);
+
+    const recentActivity = recentRepayments.map((r) => {
+      return {
+        type: 'repayment' as const,
+        description: `Repayment of LKR ${r.amount.toLocaleString()} for loan ${r.loanId}`,
+        amount: r.amount,
+        date: r.paidAt!,
+      };
+    });
+
+    return {
+      profile: {
+        userId: profile.userId,
+        fullName: profile.fullName,
+        email: profile.email,
+        phone: profile.phone,
+        kycVerified: profile.kycVerified,
+        profileComplete: profile.profileComplete,
+      },
+      activeLoans: activeLoans.length,
+      pendingApplications: pendingAppsSnapshot.size,
+      totalOutstanding: Math.round(totalOutstanding * 100) / 100,
+      nextDueDate: nextLoan?.nextDueDate,
+      nextPaymentAmount: nextLoan?.monthlyInstallment,
+      creditScore: profile.creditScore,
+      totalBorrowed: profile.totalBorrowed,
+      totalRepaid: profile.totalRepaid,
+      recentActivity,
+    };
+  }
+
+  /**
+   * Returns mock support ticket statuses for the borrower.
+   */
+  async getSupportStatus(borrowerId: string) {
+    // In a real application, this would query a tickets collection
+    // For now, return dynamic mock data that looks realistic
+    return [
+      {
+        id: `TCK-${Math.floor(Math.random() * 90000) + 10000}`,
+        title: 'Open Ticket',
+        value: `TCK-${Math.floor(Math.random() * 90000) + 10000}`,
+        subtitle: 'In Progress - Payment verification',
+        color: '#F59E0B',
+      },
+      {
+        id: `RPL-${Math.floor(Math.random() * 90000) + 10000}`,
+        title: 'Expected Reply',
+        value: 'Within 2 hours',
+        subtitle: 'Average first response time',
+        color: '#0EA5E9',
+      },
+    ];
   }
 }
