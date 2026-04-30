@@ -2,6 +2,10 @@ import { ServiceAccount } from 'firebase-admin';
 import * as path from 'path';
 import * as fs from 'fs';
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 const serviceAccountPath =
   process.env.FIREBASE_SERVICE_ACCOUNT_KEY || './firebase-service-account.json';
 
@@ -45,11 +49,17 @@ try {
   console.log(`  - client_email: ${parsed.client_email}`);
   console.log(`  - type: ${parsed.type}`);
 
-  firebaseConfig = parsed as ServiceAccount;
+  const normalized: ServiceAccount = {
+    projectId: parsed.project_id ?? parsed.projectId,
+    clientEmail: parsed.client_email ?? parsed.clientEmail,
+    privateKey: parsed.private_key ?? parsed.privateKey,
+  };
+
+  firebaseConfig = normalized;
 } catch (error) {
   console.error(
     `✗ Failed to load Firebase service account from ${absolutePath}:`,
-    error.message,
+    getErrorMessage(error),
   );
   // Fallback configuration (will fail at runtime if not replaced)
   firebaseConfig = {

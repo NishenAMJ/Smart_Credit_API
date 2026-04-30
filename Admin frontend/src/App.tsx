@@ -18,6 +18,7 @@ import Analytics from "./pages/analytics/Analytics";
 import AuditLogs from "./pages/auditLogs/AuditLogs";
 import SettingsPage from "./pages/settings/Settings";
 import Disputes from "./pages/disputes/Disputes";
+import Transactions from "./pages/transactions/Transactions";
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/manage-users" element={<ManageUsers />} />
           <Route path="/disputes" element={<Disputes />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/transactions" element={<Transactions />} />
           <Route path="/audit-logs" element={<AuditLogs />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

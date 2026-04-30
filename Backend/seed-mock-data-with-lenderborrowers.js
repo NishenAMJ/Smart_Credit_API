@@ -6,6 +6,7 @@
  * Optional backfill for old data: node seed-mock-data.js --backfill-missing
  * Deep nested backfill (more reads): node seed-mock-data.js --backfill-missing --deep-backfill
  * Backfill only mode: node seed-mock-data.js --backfill-only
+ * Transactions only mode: node seed-mock-data.js --transactions-only
  */
 
 'use strict';
@@ -136,6 +137,32 @@ const LAST_NAMES = [
  */
 
 /**
+ * @typedef {Object} TransactionDoc
+ * @property {string} transactionId
+ * @property {string} paymentId
+ * @property {string|null} loanId
+ * @property {string|null} installmentId
+ * @property {string|null} lenderId
+ * @property {string|null} lenderName
+ * @property {string|null} lenderEmail
+ * @property {string|null} borrowerId
+ * @property {string|null} borrowerName
+ * @property {string|null} borrowerEmail
+ * @property {number} amount
+ * @property {number} platformFee
+ * @property {string} paymentType
+ * @property {string} type
+ * @property {string} status
+ * @property {boolean} verifiedByLender
+ * @property {FirebaseFirestore.Timestamp|null} paidAt
+ * @property {FirebaseFirestore.Timestamp|null} verifiedAt
+ * @property {FirebaseFirestore.Timestamp} createdAt
+ * @property {FirebaseFirestore.Timestamp} updatedAt
+ * @property {string} receiptURL
+ * @property {string} qrScanData
+ */
+
+/**
  * @typedef {Object} DisputeDoc
  * @property {string} disputeId
  * @property {string} disputeCode
@@ -176,7 +203,8 @@ function parseArgs(argv) {
     key: DEFAULT_KEY_PATH,
     backfillMissing: false,
     deepBackfill: false,
-    backfillOnly: false
+    backfillOnly: false,
+    transactionsOnly: false
   };
   argv.forEach((arg) => {
     if (arg.startsWith('--key=')) {
@@ -187,6 +215,8 @@ function parseArgs(argv) {
       options.deepBackfill = true;
     } else if (arg === '--backfill-only') {
       options.backfillOnly = true;
+    } else if (arg === '--transactions-only' || arg === '--backfill-transactions') {
+      options.transactionsOnly = true;
     }
   });
   return options;
@@ -327,6 +357,120 @@ async function commitWrites(db, writes, label) {
   }
 }
 
+function asNonEmptyString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function chunkArray(values, size) {
+  const chunks = [];
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function loadDocumentsById(db, collectionName, ids) {
+  const uniqueIds = Array.from(new Set(Array.from(ids).filter(Boolean)));
+  const docsById = new Map();
+
+  for (const chunk of chunkArray(uniqueIds, MAX_BATCH_SIZE)) {
+    const refs = chunk.map((id) => db.collection(collectionName).doc(id));
+    const docs = await db.getAll(...refs);
+    docs.forEach((doc) => {
+      if (doc.exists) {
+        docsById.set(doc.id, doc.data());
+      }
+    });
+  }
+
+  return docsById;
+}
+
+function getUserName(user, fallback) {
+  if (!user) {
+    return fallback || null;
+  }
+
+  const fullName = asNonEmptyString(user.fullName);
+  const firstName = asNonEmptyString(user.firstName);
+  const lastName = asNonEmptyString(user.lastName);
+  const email = asNonEmptyString(user.email);
+
+  if (fullName) {
+    return fullName;
+  }
+
+  if (firstName || lastName) {
+    return [firstName, lastName].filter(Boolean).join(' ');
+  }
+
+  return email || fallback || null;
+}
+
+function getUserEmail(user) {
+  return user ? asNonEmptyString(user.email) : null;
+}
+
+function timestampOrNow(value) {
+  return value || admin.firestore.Timestamp.now();
+}
+
+function getTransactionStatus(paymentData) {
+  const status = asNonEmptyString(paymentData.status);
+  if (status) {
+    return status;
+  }
+
+  return paymentData.verifiedByLender === true ? 'completed' : 'pending';
+}
+
+function getPlatformFee(amount, existingFee) {
+  const parsedFee = Number(existingFee);
+  if (Number.isFinite(parsedFee) && parsedFee >= 0) {
+    return Math.round(parsedFee);
+  }
+
+  return Math.round(amount * 0.02);
+}
+
+function buildTransactionData(paymentData, transactionId, lender, borrower) {
+  const amount = Number(paymentData.amount || 0);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const paidAt = paymentData.paidAt || paymentData.createdAt || null;
+  const updatedAt = paymentData.updatedAt || paymentData.verifiedAt || paidAt;
+  const lenderId = asNonEmptyString(paymentData.lenderId);
+  const borrowerId = asNonEmptyString(paymentData.borrowerId);
+  const paymentType = asNonEmptyString(paymentData.paymentType) || asNonEmptyString(paymentData.type) || 'manual';
+
+  /** @type {TransactionDoc} */
+  const transaction = {
+    transactionId,
+    paymentId: asNonEmptyString(paymentData.paymentId) || transactionId,
+    loanId: asNonEmptyString(paymentData.loanId),
+    installmentId: asNonEmptyString(paymentData.installmentId),
+    lenderId,
+    lenderName: getUserName(lender, lenderId),
+    lenderEmail: getUserEmail(lender),
+    borrowerId,
+    borrowerName: getUserName(borrower, borrowerId),
+    borrowerEmail: getUserEmail(borrower),
+    amount: safeAmount,
+    platformFee: getPlatformFee(safeAmount, paymentData.platformFee || paymentData.fee),
+    paymentType,
+    type: paymentType,
+    status: getTransactionStatus(paymentData),
+    verifiedByLender: paymentData.verifiedByLender === true,
+    paidAt,
+    verifiedAt: paymentData.verifiedAt || null,
+    createdAt: timestampOrNow(paymentData.createdAt || paidAt),
+    updatedAt: timestampOrNow(updatedAt),
+    receiptURL: asNonEmptyString(paymentData.receiptURL) || '',
+    qrScanData: asNonEmptyString(paymentData.qrScanData) || ''
+  };
+
+  return transaction;
+}
+
 function createUsers(db, now, rng) {
   /** @type {Map<string, UserDoc>} */
   const lenders = new Map();
@@ -438,6 +582,7 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
   const loanWrites = [];
   const installmentWrites = [];
   const paymentWrites = [];
+  const transactionWrites = [];
   const disputeWrites = [];
   const disputeCandidates = [];
   const lenderBorrowerMap = new Map();
@@ -449,6 +594,7 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
   let loansCount = 0;
   let installmentsCount = 0;
   let paymentsCount = 0;
+  let transactionsCount = 0;
   let disputesCount = 0;
 
   const borrowerAssignments = borrowerList.slice();
@@ -695,8 +841,14 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
         installmentsCount += 1;
 
         paymentsForInstallment.forEach((paymentWrite) => {
+          const transactionId = paymentWrite.data.paymentId;
           paymentWrites.push(paymentWrite);
+          transactionWrites.push({
+            ref: db.collection(TRANSACTIONS_COLLECTION).doc(transactionId),
+            data: buildTransactionData(paymentWrite.data, transactionId, lender, borrower)
+          });
           paymentsCount += 1;
+          transactionsCount += 1;
         });
 
         if (
@@ -833,6 +985,7 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
     loanWrites,
     installmentWrites,
     paymentWrites,
+    transactionWrites,
     disputeWrites,
     lenderBorrowerWrites: Array.from(lenderBorrowerMap.values()).map((relation) => ({
       ref: db.collection(LENDER_BORROWERS_COLLECTION).doc(relation.relationId),
@@ -845,6 +998,7 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       loans: loansCount,
       installments: installmentsCount,
       payments: paymentsCount,
+      transactions: transactionsCount,
       disputes: disputesCount
     }
   };
@@ -997,6 +1151,111 @@ async function backfillLenderScope(db, providedLoanMeta, deepBackfill) {
   console.log(JSON.stringify(counts, null, 2));
 }
 
+async function backfillTransactionsFromPayments(db) {
+  const loansSnapshot = await db.collection(LOANS_COLLECTION).get();
+  const paymentEntries = [];
+  const userIds = new Set();
+
+  if (loansSnapshot.empty) {
+    console.log('No loans found. Transactions were not changed.');
+    return { transactions: 0 };
+  }
+
+  for (const loanDoc of loansSnapshot.docs) {
+    const loan = loanDoc.data();
+    const loanId = loanDoc.id;
+    const loanLenderId = asNonEmptyString(loan.lenderId);
+    const loanBorrowerId = asNonEmptyString(loan.borrowerId);
+    const installmentsSnapshot = await loanDoc.ref.collection('installments').get();
+
+    for (const installmentDoc of installmentsSnapshot.docs) {
+      const installment = installmentDoc.data();
+      const installmentId = asNonEmptyString(installment.installmentId) || installmentDoc.id;
+      const paymentsSnapshot = await installmentDoc.ref.collection('payments').get();
+
+      for (const paymentDoc of paymentsSnapshot.docs) {
+        const payment = paymentDoc.data();
+        const lenderId = asNonEmptyString(payment.lenderId)
+          || asNonEmptyString(installment.lenderId)
+          || loanLenderId;
+        const borrowerId = asNonEmptyString(payment.borrowerId)
+          || asNonEmptyString(installment.borrowerId)
+          || loanBorrowerId;
+        const paymentData = {
+          ...payment,
+          paymentId: asNonEmptyString(payment.paymentId) || paymentDoc.id,
+          loanId: asNonEmptyString(payment.loanId) || loanId,
+          installmentId: asNonEmptyString(payment.installmentId) || installmentId,
+          lenderId,
+          borrowerId
+        };
+
+        if (lenderId) {
+          userIds.add(lenderId);
+        }
+        if (borrowerId) {
+          userIds.add(borrowerId);
+        }
+
+        paymentEntries.push(paymentData);
+      }
+    }
+  }
+
+  if (paymentEntries.length === 0) {
+    console.log('No nested payments found. Transactions were not changed.');
+    return { transactions: 0 };
+  }
+
+  const usersById = await loadDocumentsById(db, USERS_COLLECTION, userIds);
+  let batch = db.batch();
+  let batchWrites = 0;
+  let committedBatches = 0;
+  let transactions = 0;
+
+  async function commitBatch() {
+    if (batchWrites === 0) {
+      return;
+    }
+
+    await batch.commit();
+    committedBatches += 1;
+    console.log(`Committed transactions batch ${committedBatches} (${batchWrites} writes)`);
+    batch = db.batch();
+    batchWrites = 0;
+  }
+
+  for (const paymentData of paymentEntries) {
+    const transactionId = asNonEmptyString(paymentData.transactionId)
+      || asNonEmptyString(paymentData.paymentId);
+
+    if (!transactionId) {
+      continue;
+    }
+
+    const lender = usersById.get(asNonEmptyString(paymentData.lenderId));
+    const borrower = usersById.get(asNonEmptyString(paymentData.borrowerId));
+    const transactionRef = db.collection(TRANSACTIONS_COLLECTION).doc(transactionId);
+    batch.set(
+      transactionRef,
+      buildTransactionData(paymentData, transactionId, lender, borrower),
+      { merge: true }
+    );
+    batchWrites += 1;
+    transactions += 1;
+
+    if (batchWrites >= MAX_BATCH_SIZE) {
+      await commitBatch();
+    }
+  }
+
+  await commitBatch();
+
+  console.log('Transactions backfill complete.');
+  console.log(JSON.stringify({ transactions }, null, 2));
+  return { transactions };
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const keyPath = path.resolve(process.cwd(), options.key);
@@ -1017,6 +1276,12 @@ async function main() {
   if (options.backfillOnly) {
     console.log('Backfill-only mode started...');
     await backfillLenderScope(db, null, options.deepBackfill);
+    return;
+  }
+
+  if (options.transactionsOnly) {
+    console.log('Transactions-only backfill started...');
+    await backfillTransactionsFromPayments(db);
     return;
   }
 
@@ -1047,6 +1312,9 @@ async function main() {
   console.log('Writing payments...');
   await commitWrites(db, generated.paymentWrites, 'payments');
 
+  console.log('Writing transactions...');
+  await commitWrites(db, generated.transactionWrites, 'transactions');
+
   console.log('Writing disputes...');
   await commitWrites(db, generated.disputeWrites, 'disputes');
 
@@ -1069,6 +1337,7 @@ async function main() {
   console.log(`loans: ${generated.counts.loans}`);
   console.log(`installments: ${generated.counts.installments}`);
   console.log(`payments: ${generated.counts.payments}`);
+  console.log(`transactions: ${generated.counts.transactions}`);
   console.log(`disputes: ${generated.counts.disputes}`);
   console.log(`lenderBorrowers: ${generated.lenderBorrowerWrites.length}`);
 }

@@ -16,6 +16,10 @@ export type AuditSeverity = "info" | "warning" | "critical" | "success";
 export type AuditTargetType = "user" | "ad" | "system" | "report";
 export type AdStatus = "pending" | "approved" | "rejected" | "active" | "closed";
 
+export function getApiBaseUrl() {
+  return API_BASE_URL;
+}
+
 type ApiOptions = RequestInit & {
   auth?: boolean;
 };
@@ -206,6 +210,34 @@ export interface TransactionsReportResponse {
     averageTransactionAmount: number;
     transactionsByType: Record<string, number>;
   };
+}
+
+export interface AdminTransaction {
+  id: string;
+  transactionId: string;
+  loanId?: string;
+  lenderId?: string;
+  lenderName?: string;
+  lenderEmail?: string;
+  borrowerId?: string;
+  borrowerName?: string;
+  borrowerEmail?: string;
+  amount: number;
+  platformFee: number;
+  paymentType: string;
+  status: string;
+  verifiedByLender: boolean;
+  createdAt?: string;
+  paidAt?: string;
+  updatedAt?: string;
+}
+
+export interface TransactionsResponse {
+  success: boolean;
+  count: number;
+  totalAmount: number;
+  transactions: AdminTransaction[];
+  error?: string;
 }
 
 export interface RevenueReportResponse {
@@ -447,6 +479,40 @@ export function getTransactionsReport() {
   return apiRequest<TransactionsReportResponse>("/admin/reports/transactions", {
     auth: true,
   });
+}
+
+export function getTransactions(limit = 100) {
+  return apiRequest<TransactionsResponse>(`/admin/transactions?limit=${limit}`, {
+    auth: true,
+  });
+}
+
+export function subscribeToTransactions(
+  onMessage: (payload: TransactionsResponse) => void,
+  onError?: () => void,
+  limit = 100,
+) {
+  const token = getAdminToken();
+
+  if (!token) {
+    throw new Error("You are not signed in.");
+  }
+
+  const url = new URL(`${API_BASE_URL}/admin/transactions/stream`);
+  url.searchParams.set("token", token);
+  url.searchParams.set("limit", String(limit));
+
+  const source = new EventSource(url.toString());
+
+  source.onmessage = (event) => {
+    onMessage(JSON.parse(event.data) as TransactionsResponse);
+  };
+
+  source.onerror = () => {
+    onError?.();
+  };
+
+  return source;
 }
 
 // Keeps report-fetching logic consistent across reporting pages.

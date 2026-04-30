@@ -13,13 +13,11 @@ export class AdminJwtGuard implements CanActivate {
   // Verifies the bearer token and ensures the authenticated user has the admin role.
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers.authorization;
+    const token = this.getToken(request);
 
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (!token) {
       throw new UnauthorizedException('Missing or invalid authorization token');
     }
-
-    const token = authHeader.substring(7);
 
     try {
       const payload = await this.jwtService.verifyAsync(token);
@@ -33,5 +31,24 @@ export class AdminJwtGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
+
+  private getToken(request: {
+    headers: { authorization?: string };
+    query?: { token?: string | string[] };
+  }): string | null {
+    const authHeader = request.headers.authorization;
+
+    if (authHeader?.startsWith('Bearer ')) {
+      return authHeader.substring(7);
+    }
+
+    const queryToken = request.query?.token;
+
+    if (typeof queryToken === 'string') {
+      return queryToken;
+    }
+
+    return null;
   }
 }

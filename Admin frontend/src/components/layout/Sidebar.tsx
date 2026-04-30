@@ -6,6 +6,7 @@ import {
   Users,
   MessageSquareWarning,
   BarChart2,
+  ReceiptText,
   ScrollText,
   Settings,
   LogOut,
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { to: "/manage-users", icon: Users,           label: "Manage Users"  },
   { to: "/disputes",     icon: MessageSquareWarning, label: "Disputes" },
   { to: "/analytics",    icon: BarChart2,       label: "Analytics"     },
+  { to: "/transactions", icon: ReceiptText,     label: "Transactions"  },
   { to: "/audit-logs",   icon: ScrollText,      label: "Audit Logs"    },
   { to: "/settings",     icon: Settings,        label: "Settings"      },
 ];

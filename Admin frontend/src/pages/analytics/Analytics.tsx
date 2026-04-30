@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AreaChart,
   Area,
@@ -23,6 +24,7 @@ import {
 } from "../../lib/api";
 
 export default function Analytics() {
+  const navigate = useNavigate();
   const [usersReport, setUsersReport] = useState<UsersReportResponse["data"] | null>(null);
   const [loansReport, setLoansReport] = useState<LoansReportResponse["data"] | null>(null);
   const [transactionsReport, setTransactionsReport] = useState<TransactionsReportResponse["data"] | null>(null);
@@ -83,6 +85,7 @@ export default function Analytics() {
       icon: Activity,
       color: "#F59E0B",
       bg: "#FFFBEB",
+      to: "/transactions",
     },
   ];
 
@@ -126,7 +129,17 @@ export default function Analytics() {
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
-            <div key={card.label} className="card" style={S.statCard}>
+            <div
+              key={card.label}
+              className="card"
+              style={{
+                ...S.statCard,
+                cursor: card.to ? "pointer" : "default",
+              }}
+              onClick={() => {
+                if (card.to) navigate(card.to);
+              }}
+            >
               <div style={S.statTop}>
                 <div>
                   <p style={S.statLabel}>{card.label}</p>

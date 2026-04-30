@@ -1,7 +1,18 @@
 import { Module, Global } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import * as serviceAccount from '../../firebase-service-account.json';
+import { firebaseConfig } from './firebase.config';
 import { FirebaseService } from './firebase.service';
+
+function hasFirebaseCredentials(config: admin.ServiceAccount): boolean {
+  return Boolean(
+    config.projectId &&
+      config.clientEmail &&
+      config.privateKey &&
+      config.projectId !== 'undefined' &&
+      config.clientEmail !== 'undefined' &&
+      config.privateKey !== 'undefined',
+  );
+}
 
 @Global()
 @Module({
@@ -10,11 +21,24 @@ import { FirebaseService } from './firebase.service';
       provide: 'FIREBASE_APP',
       useFactory: () => {
         if (!admin.apps.length) {
-          admin.initializeApp({
-            credential: admin.credential.cert(
-              serviceAccount as admin.ServiceAccount,
-            ),
-          });
+          const appOptions: admin.AppOptions = hasFirebaseCredentials(
+            firebaseConfig,
+          )
+            ? {
+                credential: admin.credential.cert(firebaseConfig),
+              }
+            : {
+                projectId:
+                  process.env.FIREBASE_PROJECT_ID || 'smart-credit-local',
+              };
+
+          if (!hasFirebaseCredentials(firebaseConfig)) {
+            console.warn(
+              'Firebase credentials were not found. Starting backend with local Firebase config only.',
+            );
+          }
+
+          admin.initializeApp(appOptions);
         }
         return admin.app();
       },
