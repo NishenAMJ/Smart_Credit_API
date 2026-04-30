@@ -2,12 +2,7 @@ export type LenderSession = {
   lenderId: string
   displayName: string
   email: string
-}
-
-type LenderRegistrationInput = {
-  lenderId: string
-  displayName?: string
-  email?: string
+  accessToken: string
 }
 
 const SESSION_STORAGE_KEY = 'smart-credit:lender-session'
@@ -46,22 +41,7 @@ function safeParseAccounts(value: string | null): LenderSession[] {
   }
 }
 
-function normalizeLenderId(value: string): string {
-  return value.trim()
-}
 
-function buildDisplayName(lenderId: string): string {
-  const normalized = lenderId
-    .trim()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-
-  if (!normalized) {
-    return 'Lender'
-  }
-
-  return normalized.replace(/\b\w/g, (character) => character.toUpperCase())
-}
 
 function readStoredAccounts(): LenderSession[] {
   if (!canUseStorage()) {
@@ -122,45 +102,4 @@ export function updateStoredSession(session: LenderSession) {
   writeStoredAccounts(nextAccounts)
 }
 
-export function signInWithLenderId(lenderId: string): LenderSession {
-  const normalizedLenderId = normalizeLenderId(lenderId)
-  const storedAccount = readStoredAccounts().find(
-    (account) => account.lenderId === normalizedLenderId,
-  )
 
-  const session =
-    storedAccount ??
-    ({
-      lenderId: normalizedLenderId,
-      displayName: buildDisplayName(normalizedLenderId),
-      email: '',
-    } satisfies LenderSession)
-
-  setStoredSession(session)
-  return session
-}
-
-export function registerTemporaryLender(
-  input: LenderRegistrationInput,
-): LenderSession {
-  const lenderId = normalizeLenderId(input.lenderId)
-  const displayName = input.displayName?.trim() || buildDisplayName(lenderId)
-  const email = input.email?.trim() || ''
-
-  const session: LenderSession = {
-    lenderId,
-    displayName,
-    email,
-  }
-
-  const existingAccounts = readStoredAccounts()
-  const nextAccounts = existingAccounts.filter(
-    (account) => account.lenderId !== lenderId,
-  )
-
-  nextAccounts.unshift(session)
-  writeStoredAccounts(nextAccounts)
-  setStoredSession(session)
-
-  return session
-}

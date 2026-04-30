@@ -1,73 +1,110 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import type { LenderSession } from '../lib/lender-session'
+import { login, register } from '../lib/auth-api'
 
 type AuthMode = 'login' | 'signup'
 
 type AuthPageProps = {
   onLogin: (session: LenderSession) => void
-  onSignUp: (session: LenderSession) => void
 }
 
-export default function AuthPage({ onLogin, onSignUp }: AuthPageProps) {
+export default function AuthPage({ onLogin }: AuthPageProps) {
   const [activeMode, setActiveMode] = useState<AuthMode>('login')
-  const [loginLenderId, setLoginLenderId] = useState('')
-  const [signUpLenderId, setSignUpLenderId] = useState('')
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  
   const [signUpName, setSignUpName] = useState('')
   const [signUpEmail, setSignUpEmail] = useState('')
+  const [signUpPhone, setSignUpPhone] = useState('')
+  const [signUpPassword, setSignUpPassword] = useState('')
+  
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
   const authCopy = useMemo(() => {
     return activeMode === 'login'
       ? {
-          eyebrow: 'Temporary lender access',
-          title: 'Sign in with your lender ID',
-          subtitle:
-            'Use this temporary screen until the real auth service is ready. If this lender ID already exists locally, we will restore its basic profile.',
-          buttonLabel: 'Enter lender workspace',
+          eyebrow: 'Lender Access',
+          title: 'Sign in to your lender account',
+          subtitle: 'Enter your credentials to manage your loan portfolio.',
+          buttonLabel: 'Sign in',
         }
       : {
-          eyebrow: 'Quick onboarding',
-          title: 'Create a temporary lender profile',
-          subtitle:
-            'This only stores a lightweight profile in your browser so we can keep building lender-scoped pages now.',
-          buttonLabel: 'Create profile and continue',
+          eyebrow: 'Lender Onboarding',
+          title: 'Create your lender account',
+          subtitle: 'Register your details to start lending on Smart Credit.',
+          buttonLabel: 'Create account',
         }
   }, [activeMode])
 
-  function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setError(null)
 
-    const normalizedLenderId = loginLenderId.trim()
-
-    if (!normalizedLenderId) {
-      setError('Enter a lender ID to continue.')
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setError('Please enter both email and password.')
       return
     }
 
-    setError(null)
-    onLogin({
-      lenderId: normalizedLenderId,
-      displayName: normalizedLenderId,
-      email: '',
-    })
+    try {
+      setLoading(true)
+      const data = await login({
+        identifier: loginEmail.trim(),
+        password: loginPassword,
+      })
+
+      if (data.user.role !== 'lender' && data.user.role !== 'admin') {
+        throw new Error('Access denied. This portal is for lenders only.')
+      }
+
+      onLogin({
+        lenderId: data.user.uid,
+        displayName: data.user.fullName,
+        email: data.user.email,
+        accessToken: data.accessToken,
+      })
+    } catch (err: any) {
+      setError(err.message || 'Login failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function handleSignUpSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSignUpSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setError(null)
 
-    const normalizedLenderId = signUpLenderId.trim()
-
-    if (!normalizedLenderId) {
-      setError('Enter a lender ID to create the temporary profile.')
+    if (!signUpName.trim() || !signUpEmail.trim() || !signUpPassword.trim()) {
+      setError('Please fill in all required fields.')
       return
     }
 
-    setError(null)
-    onSignUp({
-      lenderId: normalizedLenderId,
-      displayName: signUpName.trim(),
-      email: signUpEmail.trim(),
-    })
+    try {
+      setLoading(true)
+      await register({
+        fullName: signUpName.trim(),
+        email: signUpEmail.trim(),
+        phone: signUpPhone.trim(),
+        password: signUpPassword,
+        role: 'lender',
+      })
+      
+      const data = await login({
+        identifier: signUpEmail.trim(),
+        password: signUpPassword,
+      })
+
+      onLogin({
+        lenderId: data.user.uid,
+        displayName: data.user.fullName,
+        email: data.user.email,
+        accessToken: data.accessToken,
+      })
+    } catch (err: any) {
+      setError(err.message || 'Registration failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -85,22 +122,18 @@ export default function AuthPage({ onLogin, onSignUp }: AuthPageProps) {
 
           <div className="auth-card__highlights">
             <article className="auth-highlight">
-              <strong>Faster development</strong>
-              <span>Enter with a lender ID and keep building the real lender flow.</span>
+              <strong>Secure access</strong>
+              <span>Your account is protected by industry standard security.</span>
             </article>
             <article className="auth-highlight">
-              <strong>Lender-scoped analytics</strong>
-              <span>The signed-in lender ID becomes the data key for analytics requests.</span>
-            </article>
-            <article className="auth-highlight">
-              <strong>Easy to replace later</strong>
-              <span>This local session can be swapped with real auth when your partner finishes it.</span>
+              <strong>Lender dashboard</strong>
+              <span>Manage loans, applications, and borrower analytics in one place.</span>
             </article>
           </div>
         </div>
 
         <div className="auth-card__form-panel">
-          <div className="auth-tabs" role="tablist" aria-label="Temporary auth mode">
+          <div className="auth-tabs" role="tablist" aria-label="Auth mode">
             <button
               type="button"
               className={`auth-tab${activeMode === 'login' ? ' auth-tab--active' : ''}`}
@@ -128,46 +161,44 @@ export default function AuthPage({ onLogin, onSignUp }: AuthPageProps) {
           {activeMode === 'login' ? (
             <form className="auth-form" onSubmit={handleLoginSubmit}>
               <label className="auth-field">
-                <span className="auth-field__label">Lender ID</span>
+                <span className="auth-field__label">Email</span>
                 <input
                   className="input"
-                  type="text"
-                  placeholder="ex: lender_001"
-                  value={loginLenderId}
-                  onChange={(event) => setLoginLenderId(event.target.value)}
+                  type="email"
+                  placeholder="name@example.com"
+                  value={loginEmail}
+                  onChange={(event) => setLoginEmail(event.target.value)}
+                  disabled={loading}
                 />
               </label>
 
-              <button type="submit" className="auth-submit">
-                {authCopy.buttonLabel}
-              </button>
+              <label className="auth-field">
+                <span className="auth-field__label">Password</span>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                  disabled={loading}
+                />
+              </label>
 
-              <p className="auth-helper">
-                If this lender was already created locally, we reuse that profile.
-                Otherwise, we still let you enter with the typed lender ID.
-              </p>
+              <button type="submit" className="auth-submit" disabled={loading}>
+                {loading ? 'Signing in...' : authCopy.buttonLabel}
+              </button>
             </form>
           ) : (
             <form className="auth-form" onSubmit={handleSignUpSubmit}>
               <label className="auth-field">
-                <span className="auth-field__label">Lender ID</span>
+                <span className="auth-field__label">Full Name</span>
                 <input
                   className="input"
                   type="text"
-                  placeholder="ex: lender_001"
-                  value={signUpLenderId}
-                  onChange={(event) => setSignUpLenderId(event.target.value)}
-                />
-              </label>
-
-              <label className="auth-field">
-                <span className="auth-field__label">Display Name</span>
-                <input
-                  className="input"
-                  type="text"
-                  placeholder="Smart Capital Lanka"
+                  placeholder="Company Name / Your Name"
                   value={signUpName}
                   onChange={(event) => setSignUpName(event.target.value)}
+                  disabled={loading}
                 />
               </label>
 
@@ -176,14 +207,39 @@ export default function AuthPage({ onLogin, onSignUp }: AuthPageProps) {
                 <input
                   className="input"
                   type="email"
-                  placeholder="lender@example.com"
+                  placeholder="name@example.com"
                   value={signUpEmail}
                   onChange={(event) => setSignUpEmail(event.target.value)}
+                  disabled={loading}
                 />
               </label>
 
-              <button type="submit" className="auth-submit">
-                {authCopy.buttonLabel}
+              <label className="auth-field">
+                <span className="auth-field__label">Phone</span>
+                <input
+                  className="input"
+                  type="tel"
+                  placeholder="+94 77 123 4567"
+                  value={signUpPhone}
+                  onChange={(event) => setSignUpPhone(event.target.value)}
+                  disabled={loading}
+                />
+              </label>
+
+              <label className="auth-field">
+                <span className="auth-field__label">Password</span>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Minimum 8 characters"
+                  value={signUpPassword}
+                  onChange={(event) => setSignUpPassword(event.target.value)}
+                  disabled={loading}
+                />
+              </label>
+
+              <button type="submit" className="auth-submit" disabled={loading}>
+                {loading ? 'Creating account...' : authCopy.buttonLabel}
               </button>
             </form>
           )}

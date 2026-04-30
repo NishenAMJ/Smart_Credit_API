@@ -15,8 +15,6 @@ import LenderProfileModal from './components/profile/LenderProfileModal'
 import {
   clearStoredSession,
   getStoredSession,
-  registerTemporaryLender,
-  signInWithLenderId,
   updateStoredSession,
   type LenderSession,
 } from './lib/lender-session'
@@ -29,15 +27,9 @@ function App() {
   )
   const [isProfileOpen, setIsProfileOpen] = useState(false)
 
-  function handleLogin(input: LenderSession) {
-    const nextSession = signInWithLenderId(input.lenderId)
-    setSession(nextSession)
-    setActiveView('dashboard')
-  }
-
-  function handleSignUp(input: LenderSession) {
-    const nextSession = registerTemporaryLender(input)
-    setSession(nextSession)
+  function handleLogin(sessionInput: LenderSession) {
+    updateStoredSession(sessionInput)
+    setSession(sessionInput)
     setActiveView('dashboard')
   }
 
@@ -52,6 +44,7 @@ function App() {
       lenderId: profile.lenderId,
       displayName: profile.businessName || profile.fullName,
       email: profile.email,
+      accessToken: session!.accessToken,
     }
 
     updateStoredSession(nextSession)
@@ -63,7 +56,7 @@ function App() {
     .replace(/\b\w/g, (character: string) => character.toUpperCase())
 
   if (!session) {
-    return <AuthPage onLogin={handleLogin} onSignUp={handleSignUp} />
+    return <AuthPage onLogin={handleLogin} />
   }
 
   return (
