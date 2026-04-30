@@ -9,12 +9,15 @@ type ApplicationCardProps = {
     status?: string;
     createdAt?: string;
     loanTitle?: string;
-    requestedAmount?: number;
+    amount?: number;
     purpose?: string;
   };
   onPress?: () => void;
 };
 
+/**
+ * Renders a summary card for a borrower loan application.
+ */
 export default function ApplicationCard({
   application,
   onPress,
@@ -53,7 +56,7 @@ export default function ApplicationCard({
         {application.loanTitle || "Loan Application"}
       </Text>
       <Text style={styles.amount}>
-        LKR {application.requestedAmount?.toLocaleString() ?? "0"}
+        LKR {application.amount?.toLocaleString() ?? "0"}
       </Text>
       <Text style={styles.purpose}>{application.purpose ?? "-"}</Text>
 

@@ -2,17 +2,17 @@ import { IsString, IsNumber, IsOptional, Min } from 'class-validator';
 
 export class CreateApplicationDto {
   @IsString()
-  loanId: string;
+  adId!: string;
 
   @IsString()
-  borrowerId: string;
+  borrowerId!: string;
 
   @IsNumber()
   @Min(0)
-  requestedAmount: number;
+  amount?: number;
 
   @IsString()
-  purpose: string;
+  purpose!: string;
 
   @IsOptional()
   @IsString()

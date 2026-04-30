@@ -10,42 +10,43 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { getFeaturedLoans, searchLoans } from "../../api/services/loan.service";
+import { loanService } from "../../api/services/loan.service";
 import EmptyState from "../../components/common/EmptyState";
 import Loader from "../../components/common/Loader";
 import LoanCard from "../../components/borrower/LoanCard";
-
-type Loan = {
-  loanId: string;
-  lenderName?: string;
-  lenderLocation?: string;
-  location?: string;
-  city?: string;
-  district?: string;
-  province?: string;
-  branchAddress?: string;
-  address?: string;
-  minAmount?: number;
-  maxAmount?: number;
-  durationMonths?: number;
-  amount?: number;
-  isFeatured?: boolean;
-  interestRate?: number;
-};
+import SidebarMenu from "../../components/common/SidebarMenu";
+import type { BorrowerLoan } from "../../types/borrower";
+import type { BorrowerNavigation } from "../../types/navigation";
 
 type FindLoansScreenProps = {
-  navigation: any;
+  navigation: BorrowerNavigation;
 };
 
+type DropdownKey = "location" | "amount" | "duration";
+
+type DropdownConfig = {
+  key: DropdownKey;
+  label: string;
+  value: string;
+  options: string[];
+};
+
+/**
+ * Lets borrowers discover and filter available loan offers.
+ */
 export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
-  const [loans, setLoans] = useState<Loan[]>([]);
+  const [loans, setLoans] = useState<BorrowerLoan[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [locationInput, setLocationInput] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("Any");
   const [selectedAmount, setSelectedAmount] = useState("Any");
   const [selectedDuration, setSelectedDuration] = useState("Any");
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<
     "location" | "amount" | "duration" | null
   >(null);
@@ -58,7 +59,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
     "> 12 months",
   ];
 
-  const getLoanLocation = (loan: Loan) =>
+  const getLoanLocation = (loan: BorrowerLoan) =>
     loan.lenderLocation ??
     loan.location ??
     loan.city ??
@@ -69,6 +70,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
     "";
 
   const locationOptions = useMemo(() => {
+    // Build dynamic location options from API data while preserving custom user input.
     const uniqueLocations = Array.from(
       new Set(
         loans
@@ -77,8 +79,76 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
       ),
     );
 
+    const hasSelectedLocation = uniqueLocations.some(
+      (location) => location.toLowerCase() === selectedLocation.toLowerCase(),
+    );
+
+    if (selectedLocation !== "Any" && !hasSelectedLocation) {
+      return ["Any", selectedLocation, ...uniqueLocations];
+    }
+
     return ["Any", ...uniqueLocations];
-  }, [loans]);
+  }, [loans, selectedLocation]);
+
+  const dropdownConfig = useMemo<DropdownConfig | null>(() => {
+    if (!activeDropdown) {
+      return null;
+    }
+
+    if (activeDropdown === "location") {
+      return {
+        key: "location",
+        label: "Lender Location",
+        value: selectedLocation,
+        options: locationOptions,
+      };
+    }
+
+    if (activeDropdown === "amount") {
+      return {
+        key: "amount",
+        label: "Loan Amount",
+        value: selectedAmount,
+        options: amountOptions,
+      };
+    }
+
+    return {
+      key: "duration",
+      label: "Duration",
+      value: selectedDuration,
+      options: durationOptions,
+    };
+  }, [
+    activeDropdown,
+    amountOptions,
+    durationOptions,
+    locationOptions,
+    selectedAmount,
+    selectedDuration,
+    selectedLocation,
+  ]);
+
+  const filterControls: DropdownConfig[] = [
+    {
+      key: "location",
+      label: "Location",
+      value: selectedLocation,
+      options: locationOptions,
+    },
+    {
+      key: "amount",
+      label: "Amount",
+      value: selectedAmount,
+      options: amountOptions,
+    },
+    {
+      key: "duration",
+      label: "Duration",
+      value: selectedDuration,
+      options: durationOptions,
+    },
+  ];
 
   useEffect(() => {
     void fetchFeaturedLoans();
@@ -86,25 +156,38 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
 
   const fetchFeaturedLoans = async () => {
     try {
-      const data = await getFeaturedLoans();
-      setLoans((data as Loan[]) ?? []);
+      const response = await loanService.getFeaturedLoans();
+      const loans = response.data ?? [];
+
+      if (loans.length === 0) {
+        console.warn("No available loans returned from API");
+      }
+
+      setLoans(loans);
     } catch (error) {
-      console.error("Error fetching loans:", error);
+      console.error("Error fetching available loans:", error);
       setLoans([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    void fetchFeaturedLoans();
+  }, []);
+
   const handleSearch = async () => {
     if (searchQuery.trim() === "") {
+      void fetchFeaturedLoans();
       return;
     }
 
     try {
       setLoading(true);
-      const data = await searchLoans(searchQuery);
-      setLoans((data as Loan[]) ?? []);
+      const response = await loanService.searchLoans(searchQuery);
+      setLoans(response.data ?? []);
     } catch (error) {
       console.error("Error searching loans:", error);
       setLoans([]);
@@ -126,11 +209,13 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
     return loans.filter((loan) => {
       if (selectedLocation !== "Any") {
         const lenderLocation = getLoanLocation(loan).toLowerCase();
-        if (lenderLocation !== selectedLocation.toLowerCase()) {
+        const normalizedFilter = selectedLocation.toLowerCase().trim();
+        if (!lenderLocation.includes(normalizedFilter)) {
           return false;
         }
       }
 
+      // Use max amount as primary value because most cards display an upper loan cap.
       const amountToCheck = loan.maxAmount ?? loan.amount ?? 0;
       if (selectedAmount === "< 50,000" && amountToCheck >= 50000) {
         return false;
@@ -163,16 +248,18 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
     });
   }, [loans, selectedAmount, selectedDuration, selectedLocation]);
 
-  const dropdownOptions =
-    activeDropdown === "location"
-      ? locationOptions
-      : activeDropdown === "amount"
-        ? amountOptions
-        : durationOptions;
+  const onOpenDropdown = (key: DropdownKey) => {
+    setActiveDropdown(key);
+
+    if (key === "location") {
+      setLocationInput(selectedLocation === "Any" ? "" : selectedLocation);
+    }
+  };
 
   const onSelectDropdownValue = (value: string) => {
     if (activeDropdown === "location") {
       setSelectedLocation(value);
+      setLocationInput(value === "Any" ? "" : value);
     } else if (activeDropdown === "amount") {
       setSelectedAmount(value);
     } else if (activeDropdown === "duration") {
@@ -181,93 +268,104 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
     setActiveDropdown(null);
   };
 
-  const renderLoanCard = ({ item }: { item: Loan }) => (
+  const onApplyTypedLocation = () => {
+    const normalizedInput = locationInput.trim();
+
+    // Empty input resets location filtering to the default "Any" state.
+    setSelectedLocation(normalizedInput.length > 0 ? normalizedInput : "Any");
+    setActiveDropdown(null);
+  };
+
+  const renderLoanCard = ({ item }: { item: BorrowerLoan }) => (
     <LoanCard
       loan={item}
-      onPress={() => navigation.navigate("LoanDetails", { loan: item })}
+      onPress={() => navigation.navigate("LoanApplication", { loan: item })}
     />
   );
-
-  if (loading) {
-    return <Loader />;
-  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Feather name='menu' size={24} color='#FFFFFF' />
+          <TouchableOpacity onPress={() => setSidebarVisible(true)}>
+            <Feather name='menu' size={24} color='#FFFFFF' />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Find Loans</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton}>
-            <Feather name='map-pin' size={20} color='#FFFFFF' />
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => navigation.navigate("Notifications")}
+          >
+            <Feather name='bell' size={20} color='#FFFFFF' />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton}>
-            <Feather name='filter' size={20} color='#FFFFFF' />
+            <Feather name='map-pin' size={20} color='#FFFFFF' />
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.searchContainer}>
-        <Feather
-          name='search'
-          size={20}
-          color='#6B7280'
-          style={styles.searchIcon}
-        />
+        <TouchableOpacity style={styles.searchIcon} onPress={handleSearch}>
+          <Feather name='search' size={20} color='#007AFF' />
+        </TouchableOpacity>
+
         <TextInput
           style={styles.searchInput}
           placeholder='Search loans...'
           placeholderTextColor='#9CA3AF'
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            if (text.trim() === "") {
+              void fetchFeaturedLoans();
+            }
+          }}
           onSubmitEditing={handleSearch}
           returnKeyType='search'
         />
-        <TouchableOpacity style={styles.filterIcon} onPress={handleSearch}>
-          <Feather name='sliders' size={20} color='#6B7280' />
-        </TouchableOpacity>
+
+        {searchQuery.length > 0 && (
+          <TouchableOpacity
+            style={styles.filterIcon}
+            onPress={() => {
+              setSearchQuery("");
+              void fetchFeaturedLoans();
+            }}
+          >
+            <Feather name='x-circle' size={20} color='#9CA3AF' />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.filterSection}>
         <View style={styles.filterRow}>
-          <TouchableOpacity
-            style={styles.filterChip}
-            onPress={() => setActiveDropdown("location")}
-          >
-            <Text style={styles.filterLabel}>Lender Location:</Text>
-            <Text style={styles.filterValue}>{selectedLocation}</Text>
-            <Feather name='chevron-down' size={16} color='#1A1A1A' />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.filtersButton}
-            onPress={() => navigation.navigate("FilterLoans")}
-          >
-            <Text style={styles.filtersButtonText}>Filters</Text>
-            <Feather name='chevron-down' size={16} color='#1A1A1A' />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.filterRow}>
-          <TouchableOpacity
-            style={styles.filterChip}
-            onPress={() => setActiveDropdown("amount")}
-          >
-            <Text style={styles.filterLabel}>Loan Amount:</Text>
-            <Text style={styles.filterValue}>{selectedAmount}</Text>
-            <Feather name='chevron-down' size={16} color='#1A1A1A' />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.filterChip}
-            onPress={() => setActiveDropdown("duration")}
-          >
-            <Text style={styles.filterLabel}>Duration:</Text>
-            <Text style={styles.filterValue}>{selectedDuration}</Text>
-            <Feather name='chevron-down' size={16} color='#1A1A1A' />
-          </TouchableOpacity>
+          {filterControls.map((control, index) => (
+            <TouchableOpacity
+              key={control.key}
+              style={[
+                styles.filterChip,
+                activeDropdown === control.key && styles.filterChipActive,
+                index === filterControls.length - 1 && styles.filterChipLast,
+              ]}
+              onPress={() => onOpenDropdown(control.key)}
+            >
+              <View style={styles.filterChipContent}>
+                <Text style={styles.filterLabel} numberOfLines={1}>
+                  {control.label}
+                </Text>
+                <Text style={styles.filterValue} numberOfLines={1}>
+                  {control.value}
+                </Text>
+              </View>
+              <Feather
+                name='chevron-down'
+                size={14}
+                color='#1A1A1A'
+                style={styles.filterChipIcon}
+              />
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
@@ -277,32 +375,133 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
         keyExtractor={(item, index) => item.loanId ?? String(index)}
         contentContainerStyle={styles.loanList}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={<EmptyState title={emptyLabel} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor='#007AFF'
+          />
+        }
+        ListEmptyComponent={
+          loading ? <Loader /> : <EmptyState title={emptyLabel} />
+        }
       />
 
       <Modal
-        visible={activeDropdown !== null}
+        visible={dropdownConfig !== null}
         transparent
         animationType='fade'
         onRequestClose={() => setActiveDropdown(null)}
       >
-        <Pressable
-          style={styles.dropdownOverlay}
-          onPress={() => setActiveDropdown(null)}
-        >
+        <View style={styles.dropdownOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setActiveDropdown(null)}
+          />
           <View style={styles.dropdownSheet}>
-            {dropdownOptions.map((option) => (
+            <View style={styles.dropdownHeader}>
+              <View>
+                <Text style={styles.dropdownTitle}>
+                  {dropdownConfig?.label ?? "Select option"}
+                </Text>
+                <Text style={styles.dropdownSubtitle}>
+                  Choose one filter value to update the results.
+                </Text>
+              </View>
               <TouchableOpacity
-                key={option}
-                style={styles.dropdownOption}
-                onPress={() => onSelectDropdownValue(option)}
+                style={styles.dropdownCloseButton}
+                onPress={() => setActiveDropdown(null)}
               >
-                <Text style={styles.dropdownOptionText}>{option}</Text>
+                <Feather name='x' size={20} color='#6B7280' />
               </TouchableOpacity>
-            ))}
+            </View>
+
+            {dropdownConfig?.key === "location" ? (
+              <>
+                <View style={styles.locationInputSection}>
+                  <Text style={styles.locationInputLabel}>
+                    Type your location
+                  </Text>
+                  <TextInput
+                    style={styles.locationInput}
+                    value={locationInput}
+                    onChangeText={setLocationInput}
+                    placeholder='Enter city, district, or area'
+                    placeholderTextColor='#9CA3AF'
+                    returnKeyType='done'
+                    onSubmitEditing={onApplyTypedLocation}
+                  />
+                  <TouchableOpacity
+                    style={styles.useLocationButton}
+                    onPress={onApplyTypedLocation}
+                  >
+                    <Text style={styles.useLocationButtonText}>
+                      Use typed location
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.dropdownOptionsList}>
+                  <TouchableOpacity
+                    style={[
+                      styles.dropdownOption,
+                      selectedLocation === "Any" && styles.dropdownOptionActive,
+                    ]}
+                    onPress={() => onSelectDropdownValue("Any")}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownOptionText,
+                        selectedLocation === "Any" &&
+                          styles.dropdownOptionTextActive,
+                      ]}
+                    >
+                      Any
+                    </Text>
+                    {selectedLocation === "Any" ? (
+                      <Feather name='check' size={18} color='#007AFF' />
+                    ) : null}
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={styles.dropdownOptionsList}>
+                {dropdownConfig?.options.map((option) => {
+                  const isSelected = dropdownConfig.value === option;
+
+                  return (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.dropdownOption,
+                        isSelected && styles.dropdownOptionActive,
+                      ]}
+                      onPress={() => onSelectDropdownValue(option)}
+                    >
+                      <Text
+                        style={[
+                          styles.dropdownOptionText,
+                          isSelected && styles.dropdownOptionTextActive,
+                        ]}
+                      >
+                        {option}
+                      </Text>
+                      {isSelected ? (
+                        <Feather name='check' size={18} color='#007AFF' />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
-        </Pressable>
+        </View>
       </Modal>
+
+      <SidebarMenu
+        visible={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+        navigation={navigation}
+      />
     </View>
   );
 }
@@ -379,11 +578,12 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 8,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
+    flex: 1,
     marginRight: 10,
     elevation: 1,
     shadowColor: "#000",
@@ -391,35 +591,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 1,
   },
+  filterChipLast: {
+    marginRight: 0,
+  },
+  filterChipActive: {
+    borderWidth: 1,
+    borderColor: "#007AFF",
+  },
+  filterChipContent: {
+    flex: 1,
+  },
+  filterChipIcon: {
+    marginTop: 2,
+  },
   filterLabel: {
-    fontSize: 13,
+    fontSize: 11,
     color: "#6B7280",
-    marginRight: 5,
   },
   filterValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: "#1A1A1A",
-    marginRight: 5,
-  },
-  filtersButton: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-  },
-  filtersButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#1A1A1A",
-    marginRight: 5,
+    marginTop: 3,
   },
   loanList: {
     paddingHorizontal: 15,
@@ -533,17 +726,82 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     paddingBottom: 24,
-    paddingTop: 10,
+    paddingTop: 12,
+    paddingHorizontal: 16,
+  },
+  dropdownHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  dropdownTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 4,
+  },
+  dropdownSubtitle: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  dropdownCloseButton: {
+    padding: 4,
+    marginLeft: 12,
+  },
+  dropdownOptionsList: {
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  locationInputSection: {
+    marginBottom: 12,
+  },
+  locationInputLabel: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginBottom: 8,
+  },
+  locationInput: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#111827",
+  },
+  useLocationButton: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#E8F1FF",
+  },
+  useLocationButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#005FCC",
   },
   dropdownOption: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 4,
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  dropdownOptionActive: {
+    backgroundColor: "#EFF6FF",
   },
   dropdownOptionText: {
     fontSize: 15,
     color: "#1A1A1A",
     fontWeight: "500",
+  },
+  dropdownOptionTextActive: {
+    color: "#007AFF",
   },
 });

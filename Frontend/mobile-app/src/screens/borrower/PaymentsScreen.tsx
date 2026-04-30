@@ -1,107 +1,398 @@
 /** @format */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   FlatList,
   Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
+  RefreshControl,
+  Modal,
+  Pressable,
   View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
-import { getPayments } from "../../api/services/payment.service";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import QRCode from "react-native-qrcode-svg";
+import {
+  getPayments,
+  paymentService,
+} from "../../api/services/payment.service";
+import { getTransactions } from "../../api/services/transaction.service";
+import { dashboardService } from "../../api/services/dashboard.service";
 import EmptyState from "../../components/common/EmptyState";
 import Loader from "../../components/common/Loader";
 import PaymentCard from "../../components/borrower/PaymentCard";
-
-type Payment = {
-  paymentId?: string;
-  dueDate?: string;
-  status?: string;
-  amount?: number;
-};
+import SidebarMenu from "../../components/common/SidebarMenu";
+import { COLORS } from "../../constants/colors";
+import { SPACING } from "../../constants/spacing";
+import { TYPOGRAPHY } from "../../constants/typography";
+import { BORDER_RADIUS } from "../../constants/borderRadius";
+import type { BorrowerNavigation } from "../../types/navigation";
+import type { BorrowerRepayment } from "../../types/borrower";
+import type { RouteProp } from "@react-navigation/native";
+import { isPaidPayment } from "../../utils/paymentCardUtils";
+//import TransactionDetailsScreen from "../../screens/borrower/TransactionDetailsScreen";
 
 type PaymentsScreenProps = {
-  navigation: any;
+  navigation: BorrowerNavigation;
+  route?: RouteProp<any, any>;
 };
 
-type PaymentMethod = "Card" | "Bank Transfer" | "Mobile Wallet";
+type PaymentMethod = "Card" | "Bank Transfer" | "Cash (QR)";
 
-export default function PaymentsScreen({ navigation }: PaymentsScreenProps) {
+type PaymentMethodConfig =
+  | {
+      label: "Card" | "Bank Transfer";
+      iconSet: "feather";
+      icon: React.ComponentProps<typeof Feather>["name"];
+    }
+  | {
+      label: "Cash (QR)";
+      iconSet: "material";
+      icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+    };
+
+/**
+ * Manages borrower payment workflows for upcoming and past repayments.
+ */
+export default function PaymentsScreen({
+  navigation,
+  route,
+}: PaymentsScreenProps) {
   const [activeTab, setActiveTab] = useState<"Upcoming" | "History">(
-    "Upcoming",
+    route?.params?.tab ?? "Upcoming",
   );
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [payments, setPayments] = useState<BorrowerRepayment[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [dashboardNextPayment, setDashboardNextPayment] = useState<{
+    amount?: number;
+    dueDate?: string;
+    loanId?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<PaymentMethod>("Card");
+  const [error, setError] = useState<string | null>(null);
+  const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(
+    null,
+  );
+  const [qrModalVisible, setQrModalVisible] = useState(false);
+  const [selectedQRPayment, setSelectedQRPayment] =
+    useState<BorrowerRepayment | null>(null);
+  const [qrToken, setQrToken] = useState<string | null>(null);
+  const [generatingQr, setGeneratingQr] = useState(false);
 
-  const paymentMethods: Array<{
-    label: PaymentMethod;
-    icon: React.ComponentProps<typeof Feather>["name"];
-  }> = [
-    { label: "Card", icon: "credit-card" },
-    { label: "Bank Transfer", icon: "repeat" },
-    { label: "Mobile Wallet", icon: "smartphone" },
+  const paymentMethods: PaymentMethodConfig[] = [
+    { label: "Card", iconSet: "feather", icon: "credit-card" },
+    { label: "Bank Transfer", iconSet: "feather", icon: "repeat" },
+    { label: "Cash (QR)", iconSet: "material", icon: "qrcode-scan" },
   ];
+
+  const fetchPayments = async () => {
+    try {
+      setError(null);
+      const [paymentsData, transactionsData, dashboardData] = await Promise.all(
+        [
+          getPayments(),
+          getTransactions(),
+          dashboardService.getDashboard().catch(() => null),
+        ],
+      );
+      setPayments(paymentsData ?? []);
+      setTransactions(transactionsData ?? []);
+      const dash = dashboardData?.data ?? dashboardData ?? null;
+      if (dash?.nextPaymentAmount) {
+        setDashboardNextPayment({
+          amount: dash.nextPaymentAmount,
+          dueDate: dash.nextDueDate,
+          loanId: dash.loanId ?? dash.nextPaymentLoanId,
+        });
+      } else {
+        setDashboardNextPayment(null);
+      }
+    } catch (err) {
+      console.error("Error fetching payments/transactions:", err);
+      setError("Failed to load data. Please try again.");
+      setPayments([]);
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     void fetchPayments();
   }, []);
 
-  const fetchPayments = async () => {
-    try {
-      const data = await getPayments();
-      setPayments((data as Payment[]) ?? []);
-    } catch (error) {
-      console.error("Error fetching payments:", error);
-      setPayments([]);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (route?.params?.tab) {
+      setActiveTab(route.params.tab as any);
     }
-  };
+  }, [route?.params?.tab]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void fetchPayments();
+  }, []);
 
   const filteredPayments = useMemo(() => {
     if (activeTab === "Upcoming") {
-      return payments.filter((payment) => payment.status !== "PAID");
-    }
-    return payments.filter((payment) => payment.status === "PAID");
-  }, [activeTab, payments]);
+      let upcoming = payments.filter(
+        (p) => p.status !== "PAID" && p.status !== "COMPLETED",
+      );
 
-  const handlePay = (payment: Payment) => {
+      // If the backend returned no upcoming stubs but the dashboard shows a next
+      // payment, inject a synthetic entry so the list is never misleadingly empty.
+      if (upcoming.length === 0 && dashboardNextPayment?.amount) {
+        upcoming = [
+          {
+            paymentId: "dashboard-next",
+            amount: dashboardNextPayment.amount,
+            status: "PENDING",
+            dueDate: dashboardNextPayment.dueDate,
+            loanId: dashboardNextPayment.loanId,
+            lenderName: "Lender",
+          } as BorrowerRepayment,
+        ];
+      }
+
+      // Sort ascending by dueDate (earliest first)
+      return upcoming.slice().sort((a, b) => {
+        const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+        const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+        return aTime - bTime;
+      });
+    }
+
+    // Merge paid repayments from `payments` + all `transactions`, deduplicate by ID
+    const paidRepayments = payments.filter(
+      (p) => p.status === "PAID" || p.status === "COMPLETED",
+    );
+
+    const txAsRepayments: BorrowerRepayment[] = transactions.map((t) => ({
+      paymentId: t.transactionId ?? t.repaymentId,
+      transactionId: t.transactionId,
+      repaymentId: t.repaymentId,
+      loanId: t.loanId,
+      amount: t.amount,
+      status: t.status,
+      paidAt: t.paidAt ?? t.timestamp,
+      timestamp: t.timestamp,
+      type: t.type,
+      paymentMethod: t.paymentMethod,
+      lenderName: t.lenderName,
+    }));
+
+    // Merge and deduplicate by ID
+    const seen = new Set<string>();
+    const merged: BorrowerRepayment[] = [];
+    for (const item of [...paidRepayments, ...txAsRepayments]) {
+      const id = item.paymentId ?? item.transactionId ?? item.repaymentId;
+      if (id && seen.has(id)) {
+        const existingIndex = merged.findIndex(
+          (entry) =>
+            (entry.paymentId ?? entry.transactionId ?? entry.repaymentId) ===
+            id,
+        );
+        if (
+          existingIndex >= 0 &&
+          !merged[existingIndex].lenderName &&
+          item.lenderName
+        ) {
+          merged[existingIndex] = {
+            ...merged[existingIndex],
+            lenderName: item.lenderName,
+          };
+        }
+        continue;
+      }
+      if (id) {
+        seen.add(id);
+      }
+      merged.push(item);
+    }
+
+    // Sort newest first
+    return merged.sort((a, b) => {
+      const aTime = new Date(a.paidAt ?? a.timestamp ?? 0).getTime();
+      const bTime = new Date(b.paidAt ?? b.timestamp ?? 0).getTime();
+      return bTime - aTime;
+    });
+  }, [activeTab, payments, transactions]);
+
+  //Generate QR
+  const generateQRCodeToken = async (payment: BorrowerRepayment) => {
+    try {
+      if (!payment.loanId) return;
+      setGeneratingQr(true);
+      setQrToken(null);
+
+      const data = await paymentService.generateQr(payment.loanId);
+
+      if (data?.token) {
+        setQrToken(data.token);
+      } else {
+        throw new Error("Invalid response");
+      }
+    } catch (err) {
+      console.error("QR Generation error:", err);
+      Alert.alert("Error", "Failed to generate QR code. Please try again.");
+      setQrModalVisible(false);
+    } finally {
+      setGeneratingQr(false);
+    }
+  };
+
+  const handlePay = (payment: BorrowerRepayment) => {
+    // Validate payment data before proceeding
+    if (!payment.amount || payment.amount <= 0) {
+      Alert.alert(
+        "Invalid Payment Amount",
+        "Payment amount must be greater than 0. Please contact support if this is unexpected.",
+      );
+      return;
+    }
+
+    if (!payment.loanId) {
+      Alert.alert(
+        "Missing Loan Information",
+        "This payment cannot be processed because loan information is missing. Please try again or contact support.",
+      );
+      return;
+    }
+
+    const formattedAmount = new Intl.NumberFormat("en-LK", {
+      style: "currency",
+      currency: "LKR",
+    }).format(payment.amount ?? 0);
+
+    let paymentMethodApi: "bank_transfer" | "qr_payment" | "card";
+    if (selectedPaymentMethod === "Card") paymentMethodApi = "card";
+    if (selectedPaymentMethod === "Bank Transfer")
+      paymentMethodApi = "bank_transfer";
+    if (selectedPaymentMethod === "Cash (QR)") paymentMethodApi = "qr_payment";
+
+    if (selectedPaymentMethod === "Cash (QR)") {
+      if (!payment.loanId) {
+        Alert.alert(
+          "Invalid Payment",
+          "This payment cannot be completed via QR code. Please try another payment method.",
+        );
+        return;
+      }
+      setSelectedQRPayment(payment);
+      setQrModalVisible(true);
+      generateQRCodeToken(payment);
+      return;
+    }
+
     Alert.alert(
-      "Payment Method",
-      `Proceeding with ${selectedPaymentMethod} for LKR ${
-        payment.amount?.toLocaleString() ?? "0"
-      }.`,
+      "Confirm Payment",
+      `Proceeding with ${selectedPaymentMethod} for ${formattedAmount}.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Pay Now",
+          onPress: async () => {
+            const { amount, loanId, paymentId } = payment;
+
+            if (!amount || amount <= 0 || !loanId) {
+              Alert.alert(
+                "Error",
+                "Invalid payment amount or missing Loan ID.",
+              );
+              return;
+            }
+            try {
+              setProcessingPaymentId(payment.paymentId || null);
+
+              await paymentService.makeRepayment({
+                loanId: loanId,
+                amount: amount,
+                paymentMethod: paymentMethodApi,
+                transactionReference: `TXN-${Date.now()}`,
+              });
+
+              Alert.alert(
+                "Success",
+                "Payment submitted successfully and is pending verification.",
+              );
+              void fetchPayments();
+            } catch (err) {
+              console.error("Payment error:", err);
+              Alert.alert(
+                "Error",
+                "Failed to process payment. Please try again.",
+              );
+            } finally {
+              setProcessingPaymentId(null);
+            }
+          },
+        },
+      ],
     );
   };
 
-  const renderPaymentCard = ({ item }: { item: Payment }) => {
+  const renderPaymentCard = ({ item }: { item: BorrowerRepayment }) => {
+    const handleCardPress = () => {
+      // Navigate to TransactionDetailsScreen when paid payment card is tapped
+      navigation.navigate("TransactionDetails", {
+        transaction: {
+          transactionId:
+            item.transactionId ?? item.repaymentId ?? item.paymentId,
+          repaymentId: item.repaymentId,
+          loanId: item.loanId,
+          type: item.type ?? "repayment",
+          status: item.status,
+          paidAt: item.paidAt,
+          timestamp: item.timestamp,
+          createdAt: (item as any).createdAt,
+          amount: item.amount,
+          paymentMethod: item.paymentMethod,
+          lenderName: item.lenderName,
+        },
+      });
+    };
+
     return (
       <PaymentCard
         payment={item}
         paymentMethod={selectedPaymentMethod}
         onPay={() => handlePay(item)}
+        onPress={handleCardPress}
       />
     );
   };
-
-  if (loading) {
-    return <Loader />;
-  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Feather name='menu' size={24} color='#FFFFFF' />
+          <TouchableOpacity onPress={() => setSidebarVisible(true)}>
+            <Feather
+              name='menu'
+              size={24}
+              color={COLORS.surface || "#FFFFFF"}
+            />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Payments</Text>
         </View>
-        <TouchableOpacity style={styles.notificationButton}>
-          <Feather name='bell' size={20} color='#FFFFFF' />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => navigation.navigate("Notifications")}
+          >
+            <Feather
+              name='bell'
+              size={20}
+              color={COLORS.surface || "#FFFFFF"}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.tabContainer}>
@@ -132,71 +423,198 @@ export default function PaymentsScreen({ navigation }: PaymentsScreenProps) {
             History
           </Text>
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.searchButton}>
-          <Feather name='search' size={20} color='#6B7280' />
-        </TouchableOpacity>
       </View>
 
-      <View style={styles.filterContainer}>
-        <View style={styles.filterLeft}>
-          <Text style={styles.filterLabel}>Personal Loan:</Text>
-          <TouchableOpacity style={styles.filterDropdown}>
-            <Text style={styles.filterValue}>All</Text>
-            <Feather name='chevron-down' size={16} color='#6B7280' />
-          </TouchableOpacity>
+      {activeTab === "Upcoming" && (
+        <View style={styles.methodWrapper}>
+          <View style={styles.methodContainer}>
+            <Text style={styles.methodTitle}>Select Payment Method</Text>
+            <View style={styles.methodList}>
+              {paymentMethods.map((method) => {
+                const isActive = selectedPaymentMethod === method.label;
+                return (
+                  <TouchableOpacity
+                    key={method.label}
+                    style={[
+                      styles.methodChip,
+                      isActive && styles.activeMethodChip,
+                    ]}
+                    onPress={() => setSelectedPaymentMethod(method.label)}
+                  >
+                    {method.iconSet === "feather" ? (
+                      <Feather
+                        name={method.icon}
+                        size={14}
+                        color={
+                          isActive
+                            ? COLORS.surface || "#FFFFFF"
+                            : COLORS.primary
+                        }
+                      />
+                    ) : (
+                      <MaterialCommunityIcons
+                        name={method.icon}
+                        size={14}
+                        color={
+                          isActive
+                            ? COLORS.surface || "#FFFFFF"
+                            : COLORS.primary
+                        }
+                      />
+                    )}
+                    <Text
+                      style={[
+                        styles.methodChipText,
+                        isActive && styles.activeMethodChipText,
+                      ]}
+                    >
+                      {method.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </View>
+      )}
 
-        <View style={styles.filterRight}>
-          <Text style={styles.filterLabel}>Sort By:</Text>
-          <TouchableOpacity style={styles.filterDropdown}>
-            <Text style={styles.filterValue}>Due Date</Text>
-            <Feather name='chevron-down' size={16} color='#6B7280' />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{activeTab} Payments</Text>
-      </View>
-
-      <View style={styles.methodContainer}>
-        <Text style={styles.methodTitle}>Payment Method</Text>
-        <View style={styles.methodList}>
-          {paymentMethods.map((method) => {
-            const isActive = selectedPaymentMethod === method.label;
-            return (
-              <TouchableOpacity
-                key={method.label}
-                style={[styles.methodChip, isActive && styles.activeMethodChip]}
-                onPress={() => setSelectedPaymentMethod(method.label)}
-              >
-                <Feather
-                  name={method.icon}
-                  size={16}
-                  color={isActive ? "#FFFFFF" : "#007AFF"}
-                />
-                <Text
-                  style={[
-                    styles.methodChipText,
-                    isActive && styles.activeMethodChipText,
-                  ]}
-                >
-                  {method.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+      {activeTab === "Upcoming" &&
+        payments.some((p) => p.status === "PENDING") && (
+          <View style={styles.pendingBanner}>
+            <Feather name='clock' size={16} color='#B45309' />
+            <Text style={styles.pendingBannerText}>
+              You have payments pending verification.
+            </Text>
+          </View>
+        )}
 
       <FlatList
         data={filteredPayments}
         renderItem={renderPaymentCard}
-        keyExtractor={(item, index) => item.paymentId ?? String(index)}
+        keyExtractor={(item, index) =>
+          item.paymentId ?? item.transactionId ?? String(index)
+        }
         contentContainerStyle={styles.paymentList}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={<EmptyState title='No payments found.' />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary}
+          />
+        }
+        ListEmptyComponent={
+          loading ? (
+            <Loader />
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Feather
+                name='alert-circle'
+                size={48}
+                color={COLORS.error || "#EF4444"}
+              />
+              <Text style={styles.errorText}>
+                {typeof error === "string" ? error : "Failed to load"}
+              </Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={fetchPayments}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <EmptyState
+              title={`No ${activeTab.toLowerCase()} payments found.`}
+            />
+          )
+        }
+      />
+
+      {/* QR Code Modal for Cash Payments */}
+      <Modal
+        visible={qrModalVisible}
+        transparent
+        animationType='fade'
+        onRequestClose={() => setQrModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setQrModalVisible(false)}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Cash Payment</Text>
+              <TouchableOpacity
+                onPress={() => setQrModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Feather
+                  name='x'
+                  size={24}
+                  color={COLORS.textSecondary || "#6B7280"}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalInstructions}>
+              Show this QR code to your lender. They will scan it to instantly
+              verify and record your cash payment of{" "}
+              <Text style={{ fontWeight: "700", color: COLORS.textPrimary }}>
+                LKR {selectedQRPayment?.amount?.toLocaleString() ?? "0"}
+              </Text>
+              .
+            </Text>
+
+            {generatingQr ? (
+              <View style={styles.qrPlaceholderBox}>
+                <Loader />
+                <Text style={styles.qrPlaceholderText}>
+                  Generating QR Code...
+                </Text>
+              </View>
+            ) : qrToken ? (
+              <View style={styles.qrPlaceholderBox}>
+                <QRCode
+                  value={qrToken}
+                  size={200}
+                  backgroundColor='#F3F4F6'
+                  color={COLORS.primary}
+                />
+              </View>
+            ) : (
+              <View style={styles.qrPlaceholderBox}>
+                <MaterialCommunityIcons
+                  name='qrcode-scan'
+                  size={64}
+                  color={COLORS.primary || "#007AFF"}
+                />
+                <Text style={styles.qrPlaceholderText}>
+                  QR Code automatically generates here
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.qrInfoBox}>
+              <Feather
+                name='info'
+                size={16}
+                color={COLORS.primary || "#007AFF"}
+              />
+              <Text style={styles.qrInfoText}>
+                Do not close this screen until the lender has successfully
+                scanned it.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <SidebarMenu
+        visible={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+        navigation={navigation}
       />
     </View>
   );
@@ -205,19 +623,13 @@ export default function PaymentsScreen({ navigation }: PaymentsScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F6FA",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     paddingTop: 50,
     paddingBottom: 15,
-    paddingHorizontal: 20,
+    paddingHorizontal: SPACING.xl,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -227,224 +639,198 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#FFFFFF",
+    fontSize: TYPOGRAPHY.subtitle.fontSize,
+    fontWeight: TYPOGRAPHY.subtitle.fontWeight,
+    color: COLORS.surface,
+    marginLeft: SPACING.lg,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconButton: {
     marginLeft: 15,
   },
-  notificationButton: {
-    padding: 5,
-  },
   tabContainer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     flexDirection: "row",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   tab: {
-    marginRight: 20,
-    paddingVertical: 5,
+    marginRight: SPACING.xxl + 1,
+    paddingVertical: 6,
   },
   activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: "#007AFF",
+    borderBottomWidth: 3,
+    borderBottomColor: COLORS.primary,
   },
   tabText: {
-    fontSize: 15,
-    color: "#6B7280",
+    fontSize: TYPOGRAPHY.body.fontSize,
+    color: COLORS.textSecondary || "#9CA3AF",
+    fontWeight: TYPOGRAPHY.small.fontWeight,
   },
   activeTabText: {
-    fontWeight: "600",
-    color: "#007AFF",
+    fontWeight: TYPOGRAPHY.heading.fontWeight,
+    color: COLORS.primary,
   },
-  searchButton: {
-    marginLeft: "auto",
-  },
-  filterContainer: {
-    backgroundColor: "#FFFFFF",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-  },
-  filterLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  filterRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  filterLabel: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginRight: 8,
-  },
-  filterDropdown: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  filterValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#1A1A1A",
-    marginRight: 4,
-  },
-  sectionHeader: {
-    paddingHorizontal: 20,
+
+  methodWrapper: {
+    backgroundColor: COLORS.surface,
     paddingVertical: 15,
-    backgroundColor: "#F5F6FA",
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6B7280",
+    marginBottom: 10,
   },
   methodContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingHorizontal: SPACING.lg,
   },
   methodTitle: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginBottom: 10,
-    fontWeight: "500",
+    fontSize: 14,
+    color: COLORS.textPrimary || "#374151",
+    marginBottom: SPACING.md,
+    fontWeight: "600",
   },
   methodList: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 10,
   },
   methodChip: {
     backgroundColor: "#EAF2FF",
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    borderRadius: BORDER_RADIUS.medium,
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.md,
     flexDirection: "row",
     alignItems: "center",
   },
   activeMethodChip: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
   },
   methodChipText: {
-    marginLeft: 6,
+    marginLeft: SPACING.sm,
     fontSize: 13,
-    color: "#007AFF",
+    color: COLORS.primary,
     fontWeight: "600",
   },
   activeMethodChipText: {
-    color: "#FFFFFF",
+    color: COLORS.surface,
   },
   paymentList: {
-    paddingHorizontal: 15,
-    paddingBottom: 100,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: 40,
   },
-  paymentCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  paymentHeader: {
+  pendingBanner: {
+    backgroundColor: "#FEF3C7",
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.lg,
+    marginHorizontal: SPACING.lg,
+    marginBottom: 10,
+    borderRadius: BORDER_RADIUS.medium,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 15,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#E0F2FE",
+  pendingBannerText: {
+    marginLeft: 8,
+    color: "#B45309",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 40,
+  },
+  errorText: {
+    color: COLORS.textSecondary,
+    fontSize: 15,
+    textAlign: "center",
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: COLORS.surface,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    padding: SPACING.lg,
   },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#007AFF",
+  modalContent: {
+    backgroundColor: COLORS.surface || "#FFFFFF",
+    borderRadius: 20,
+    padding: SPACING.xl,
+    width: "100%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  paymentInfo: {
-    flex: 1,
-  },
-  paymentTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#1A1A1A",
-    marginBottom: 4,
-  },
-  paymentDate: {
-    fontSize: 13,
-    color: "#6B7280",
-  },
-  payButton: {
-    backgroundColor: "#10B981",
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  historyButton: {
-    backgroundColor: "#007AFF",
-  },
-  payButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  paymentDetails: {
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-    paddingTop: 12,
-  },
-  paymentDetailItem: {
+  modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: SPACING.lg,
   },
-  paymentDetailDate: {
-    fontSize: 14,
-    color: "#6B7280",
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.textPrimary || "#1A1A1A",
   },
-  paymentActions: {
-    flexDirection: "row",
+  modalCloseBtn: {
+    padding: 4,
   },
-  partialButton: {
+  modalInstructions: {
+    fontSize: 15,
+    color: COLORS.textSecondary || "#6B7280",
+    lineHeight: 22,
+    marginBottom: SPACING.xl,
+    textAlign: "center",
+  },
+  qrPlaceholderBox: {
+    width: "100%",
+    aspectRatio: 1,
     backgroundColor: "#F3F4F6",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  partialButtonText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#6B7280",
-  },
-  payActionButton: {
-    backgroundColor: "#E0F2FE",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  payActionButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#007AFF",
-  },
-  emptyState: {
+    borderRadius: 16,
+    justifyContent: "center",
     alignItems: "center",
-    marginTop: 60,
+    marginBottom: SPACING.xl,
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+    borderStyle: "dashed",
   },
-  emptyStateText: {
+  qrPlaceholderText: {
+    marginTop: SPACING.md,
     fontSize: 14,
-    color: "#6B7280",
+    color: COLORS.textSecondary || "#6B7280",
+    fontWeight: "500",
+  },
+  qrInfoBox: {
+    flexDirection: "row",
+    backgroundColor: "#EAF2FF",
+    padding: SPACING.md,
+    borderRadius: 10,
+    alignItems: "flex-start",
+  },
+  qrInfoText: {
+    flex: 1,
+    marginLeft: SPACING.sm,
+    fontSize: 13,
+    color: COLORS.primary || "#007AFF",
+    lineHeight: 18,
+    fontWeight: "500",
   },
 });

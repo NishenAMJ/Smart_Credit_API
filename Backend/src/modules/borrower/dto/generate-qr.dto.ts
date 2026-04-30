@@ -2,12 +2,12 @@ import { IsString, IsNumber, Min } from 'class-validator';
 
 export class GenerateQrDto {
   @IsString()
-  loanId: string;
+  loanId!: string;
 
   @IsNumber()
   @Min(0)
-  amount: number;
+  amount!: number;
 
   @IsString()
-  borrowerId: string;
+  borrowerId!: string;
 }
