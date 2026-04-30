@@ -1,19 +1,29 @@
-﻿import React, { useState } from 'react';
-import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader, AlertBanner } from '../../components/lender';
+import { LoanRequestsService } from '../../services/lender.service';
 
 export default function ApplicationsReceivedScreen({ navigation }: any) {
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [allApps, setAllApps] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const apps = [
-    { id: 'APP-001', borrower: 'Kasun Silva', amount: 150000, roi: 18, status: 'pending', date: '2 Feb 2026' },
-    { id: 'APP-002', borrower: 'Priya Perera', amount: 100000, roi: 20, status: 'approved', date: '1 Feb 2026' },
-    { id: 'APP-003', borrower: 'Vijay Kumar', amount: 200000, roi: 16, status: 'rejected', date: '31 Jan 2026' },
-  ];
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await LoanRequestsService.getPendingRequests({ includeAllStatuses: true, pageSize: 50 });
+        setAllApps(data?.requests ?? []);
+      } catch {
+        setAllApps([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-  const filtered = apps.filter(a => filter === 'all' || a.status === filter);
+  const filtered = allApps.filter(a => filter === 'all' || (a.status ?? '').toLowerCase() === filter);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -23,6 +33,15 @@ export default function ApplicationsReceivedScreen({ navigation }: any) {
       default: return COLORS.textSecondary;
     }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <LenderHeader title="Applications Received" onBackPress={() => navigation.goBack()} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={commonStyles.safe}>
@@ -54,11 +73,11 @@ export default function ApplicationsReceivedScreen({ navigation }: any) {
             >
               <View style={commonStyles.rowSpaceBetween}>
                 <View style={{ flex: 1 }}>
-                  <Text style={commonStyles.sectionTitle}>{app.borrower}</Text>
+                  <Text style={commonStyles.sectionTitle}>{app.borrowerName ?? app.borrower}</Text>
                   <Text style={commonStyles.textSecondary}>{app.id}</Text>
                 </View>
-                <View style={[styles.badge, { backgroundColor: getStatusColor(app.status) }]}>
-                  <Text style={styles.badgeText}>{app.status.toUpperCase()}</Text>
+                <View style={[styles.badge, { backgroundColor: getStatusColor(app.status ?? 'pending') }]}>
+                  <Text style={styles.badgeText}>{(app.status ?? 'pending').toUpperCase()}</Text>
                 </View>
               </View>
 
@@ -67,15 +86,15 @@ export default function ApplicationsReceivedScreen({ navigation }: any) {
               <View style={commonStyles.rowSpaceBetween}>
                 <View>
                   <Text style={commonStyles.textSecondary}>Amount Requested</Text>
-                  <Text style={commonStyles.textPrimary}>LKR {(app.amount / 1000).toFixed(0)}K</Text>
+                  <Text style={commonStyles.textPrimary}>LKR {((app.requestedAmount ?? app.amount ?? 0) / 1000).toFixed(0)}K</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={commonStyles.textSecondary}>ROI</Text>
-                  <Text style={commonStyles.textPrimary}>{app.roi}%</Text>
+                  <Text style={commonStyles.textPrimary}>{app.interestRate ?? app.roi ?? '--'}%</Text>
                 </View>
               </View>
 
-              <Text style={[commonStyles.textSecondary, { marginTop: 12 }]}>Applied: {app.date}</Text>
+              <Text style={[commonStyles.textSecondary, { marginTop: 12 }]}>Applied: {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : (app.date ?? '')}</Text>
             </TouchableOpacity>
           ))
         )}

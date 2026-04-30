@@ -1,23 +1,43 @@
-﻿import React, { useState } from 'react';
-import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader } from '../../components/lender';
+import { RecentTransactionsService } from '../../services/lender.service';
 
 export default function ActiveLoansScreen({ navigation }: any) {
 
   {/*navigation is used to move between screens,  any is TypeScript type (means “any type”)*/}
   const [filter, setFilter] = useState<'all' | 'active' | 'overdue'>('all');
   {/*filter → current selected filter,setFilter → function to change it*/}
-  
-  const loans = [
-    { id: 'L-001', borrower: 'Kasun Silva', amount: 150000, disbursed: 150000, roi: 18, status: 'active', daysLeft: 45 },
-    { id: 'L-002', borrower: 'Priya Perera', amount: 75000, disbursed: 75000, roi: 20, status: 'overdue', daysLeft: -5 },
-    { id: 'L-003', borrower: 'Vijay Kumar', amount: 200000, disbursed: 180000, roi: 16, status: 'active', daysLeft: 120 },
-  ];
+  const [allLoans, setAllLoans] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await RecentTransactionsService.getTransactions({ pageSize: 50 });
+        setAllLoans(data?.transactions ?? []);
+      } catch {
+        setAllLoans([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const loans = allLoans;
   const filtered = loans.filter(l => filter === 'all' || l.status === filter);
   {/*Filters loans based on selected filter*/}
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <LenderHeader title="Active Loans" onBackPress={() => navigation.goBack()} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={commonStyles.safe}>
@@ -39,7 +59,7 @@ export default function ActiveLoansScreen({ navigation }: any) {
           ))}
         </View>
 
-        {filtered.map((loan) => (
+        {filtered.map((loan: any) => (
           <TouchableOpacity
             key={loan.id}
             style={commonStyles.card}
@@ -48,42 +68,42 @@ export default function ActiveLoansScreen({ navigation }: any) {
             <View style={commonStyles.rowSpaceBetween}>
               <View style={{ flex: 1 }}>
                 <Text style={commonStyles.sectionTitle}>{loan.id}</Text>
-                <Text style={commonStyles.textSecondary}>{loan.borrower}</Text>
+                <Text style={commonStyles.textSecondary}>{loan.borrowerName ?? loan.borrower}</Text>
               </View>
               <View style={[styles.badge, { backgroundColor: loan.status === 'active' ? COLORS.success : COLORS.danger }]}>
-                <Text style={styles.badgeText}>{loan.status.toUpperCase()}</Text>
+                <Text style={styles.badgeText}>{(loan.status ?? 'active').toUpperCase()}</Text>
               </View>
             </View>
 
             <View style={commonStyles.spacer32} />
 
             <View style={styles.row}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={commonStyles.textSecondary}>Loan Amount</Text>
-                <Text style={commonStyles.textPrimary}>LKR {(loan.amount / 1000).toFixed(0)}K</Text>
+                <Text style={commonStyles.textPrimary}>LKR {((loan.principalAmount ?? loan.amount ?? 0) / 1000).toFixed(0)}K</Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={commonStyles.textSecondary}>Disbursed</Text>
-                <Text style={commonStyles.textPrimary}>LKR {(loan.disbursed / 1000).toFixed(0)}K</Text>
+                <Text style={commonStyles.textPrimary}>LKR {((loan.disbursedAmount ?? loan.disbursed ?? 0) / 1000).toFixed(0)}K</Text>
               </View>
             </View>
 
             <View style={styles.progress}>
               <View style={styles.bar}>
-                <View style={[styles.fill, { width: `${(loan.disbursed / loan.amount) * 100}%` }]} />
+                <View style={[styles.fill, { width: `${Math.min(((loan.disbursedAmount ?? loan.disbursed ?? 0) / (loan.principalAmount ?? loan.amount ?? 1)) * 100, 100)}%` }]} />
               </View>
-              <Text style={commonStyles.textSecondary}>{Math.round((loan.disbursed / loan.amount) * 100)}% Disbursed</Text>
+              <Text style={commonStyles.textSecondary}>{Math.round(((loan.disbursedAmount ?? loan.disbursed ?? 0) / (loan.principalAmount ?? loan.amount ?? 1)) * 100)}% Disbursed</Text>
             </View>
 
             <View style={[commonStyles.row, { marginTop: 8 }]}>
               <View style={{ flex: 1 }}>
                 <Text style={commonStyles.textSecondary}>ROI</Text>
-                <Text style={commonStyles.textPrimary}>{loan.roi}%</Text>
+                <Text style={commonStyles.textPrimary}>{loan.interestRate ?? loan.roi ?? '--'}%</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={commonStyles.textSecondary}>Days Left</Text>
-                <Text style={[commonStyles.textPrimary, { color: loan.daysLeft < 0 ? COLORS.danger : COLORS.success }]}>
-                  {Math.abs(loan.daysLeft)} days
+                <Text style={[commonStyles.textPrimary, { color: (loan.daysLeft ?? 0) < 0 ? COLORS.danger : COLORS.success }]}>
+                  {Math.abs(loan.daysLeft ?? 0)} days
                 </Text>
               </View>
             </View>

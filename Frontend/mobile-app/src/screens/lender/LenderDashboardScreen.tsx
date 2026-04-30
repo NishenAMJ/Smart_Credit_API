@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, FlatList, Dimensions,
@@ -6,31 +6,49 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { StatCard, QuickAction, LenderActionItem, AlertBanner } from '../../components/lender';
+import { ActivityIndicator } from 'react-native';
+import { DashboardService, LoanRequestsService } from '../../services/lender.service';
 
 const { width } = Dimensions.get('window');
 
 // ── Data ─────────────────────────────────────────────────
-const STATS = [
-  { id: '1', icon: 'trending-up',   color: COLORS.success, value: 'LKR 2.4M', label: 'Total Lent'      },
-  { id: '2', icon: 'dollar-sign',   color: COLORS.primary, value: 'LKR 1.8M', label: 'Total Collected'  },
-  { id: '3', icon: 'file-text',     color: COLORS.warning, value: '5',         label: 'Pending Apps'    },
-  { id: '4', icon: 'trending-down', color: COLORS.danger,  value: '2',         label: 'Overdue'         },
-];
-
-const RECENT_APPLICATIONS = [
-  { id: '1', name: 'Kasun Silva',   offer: 'Quick Personal Loan', amount: '50,000 LKR', status: 'Pending'  },
-  { id: '2', name: 'Nimal Perera',  offer: 'SME Business Boost',  amount: '25,000 LKR', status: 'Approved' },
-  { id: '3', name: 'Priya Dias',    offer: 'Quick Personal Loan', amount: '80,000 LKR', status: 'Pending'  },
-];
-
-const OVERDUE = [
-  { id: '1', name: 'Amal Bandara',   amount: 'LKR 8,500',  days: 5  },
-  { id: '2', name: 'Sunil Fernando', amount: 'LKR 12,000', days: 12 },
-];
 
 // ── Main Component ────────────────────────────────────────
 export default function LenderDashboardScreen({ navigation }: any) {
   const [activeSlide, setActiveSlide] = useState(0);
+  const [summary, setSummary] = useState<any>(null);
+  const [recentApps, setRecentApps] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [sum, requests] = await Promise.all([
+          DashboardService.getSummary(),
+          LoanRequestsService.getPendingRequests({ pageSize: 3 }),
+        ]);
+        setSummary(sum);
+        setRecentApps(requests?.requests ?? []);
+      } catch (e: any) {
+        setError(e?.response?.data?.message ?? 'Failed to load dashboard');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // ── Build stats array from API summary ──────────────────
+  const STATS = summary
+    ? [
+        { id: '1', icon: 'trending-up',   color: COLORS.success, value: `LKR ${((summary.totalDisbursed ?? 0) / 1000).toFixed(0)}K`, label: 'Total Lent'      },
+        { id: '2', icon: 'dollar-sign',   color: COLORS.primary, value: `LKR ${((summary.totalCollected ?? 0) / 1000).toFixed(0)}K`, label: 'Total Collected'  },
+        { id: '3', icon: 'file-text',     color: COLORS.warning, value: String(summary.pendingRequests ?? 0),    label: 'Pending Apps'    },
+        { id: '4', icon: 'trending-down', color: COLORS.danger,  value: String(summary.overdueCount ?? 0),       label: 'Overdue'         },
+      ]
+    : [];
+
+  const overdueCount: number = summary?.overdueCount ?? 0;
 
   const getStatusColor = (status: string) => {
     if (status === 'Approved') return COLORS.success;
@@ -43,6 +61,14 @@ export default function LenderDashboardScreen({ navigation }: any) {
     if (status === 'Rejected') return '#FEF2F2';
     return '#FFFBEB';
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={commonStyles.safe}>
@@ -179,10 +205,10 @@ export default function LenderDashboardScreen({ navigation }: any) {
         </View>
 
         {/* ── OVERDUE ALERT ─────────────────────────── */}
-        {OVERDUE.length > 0 && (
+        {overdueCount > 0 && (
           <AlertBanner
             type="error"
-            title={`${OVERDUE.length} Overdue Payments`}
+            title={`${overdueCount} Overdue Payments`}
             message="Tap to send reminders"
             icon="alert-circle"
           />
@@ -190,7 +216,7 @@ export default function LenderDashboardScreen({ navigation }: any) {
 
         {/* ── RECENT APPLICATIONS ───────────────────── */}
         <Text style={commonStyles.sectionTitle}>Recent Applications</Text>
-        {RECENT_APPLICATIONS.map((app) => (
+        {recentApps.map((app: any) => (
           <TouchableOpacity
             key={app.id}
             style={commonStyles.card}
@@ -200,24 +226,24 @@ export default function LenderDashboardScreen({ navigation }: any) {
             <View style={commonStyles.rowSpaceBetween}>
               <View style={commonStyles.row}>
                 <View style={styles.appAvatar}>
-                  <Text style={styles.appAvatarText}>{app.name[0]}</Text>
+                  <Text style={styles.appAvatarText}>{(app.borrowerName ?? app.name ?? '?')[0]}</Text>
                 </View>
                 <View>
-                  <Text style={commonStyles.textPrimary}>{app.name}</Text>
-                  <Text style={commonStyles.textSecondary}>{app.offer}</Text>
+                  <Text style={commonStyles.textPrimary}>{app.borrowerName ?? app.name}</Text>
+                  <Text style={commonStyles.textSecondary}>{app.adHeadline ?? app.offer ?? ''}</Text>
                 </View>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={commonStyles.textPrimary}>{app.amount}</Text>
+                <Text style={commonStyles.textPrimary}>{app.requestedAmount ? `LKR ${(app.requestedAmount / 1000).toFixed(0)}K` : (app.amount ?? '')}</Text>
                 <View style={[
                   styles.badge,
-                  { backgroundColor: getStatusBg(app.status) }
+                  { backgroundColor: getStatusBg(app.status ?? 'Pending') }
                 ]}>
                   <Text style={[
                     styles.badgeText,
-                    { color: getStatusColor(app.status) }
+                    { color: getStatusColor(app.status ?? 'Pending') }
                   ]}>
-                    {app.status}
+                    {app.status ?? 'Pending'}
                   </Text>
                 </View>
               </View>

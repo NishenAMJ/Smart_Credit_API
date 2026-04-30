@@ -42,7 +42,7 @@ class ChatSocket {
     }
 
     const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
-    
+
     this.socket = io(apiUrl, {
       auth: {
         token: jwtToken, // Backend expects token in auth

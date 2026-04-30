@@ -1,5 +1,5 @@
 // src/screens/lender/MyBorrowersScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,17 +12,9 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader } from '../../components/lender';
+import { DashboardService } from '../../services/lender.service';
 
-// ── Sample Data ──────────────────────────────────────
-const BORROWERS = [
-  { id: '1', name: 'Kasun Silva', score: 820, rating: 4.5, loans: 3, total: '250,000' },
-  { id: '2', name: 'Nimal Perera', score: 750, rating: 4.2, loans: 2, total: '150,000' },
-  { id: '3', name: 'Priya Dias', score: 690, rating: 4.0, loans: 1, total: '80,000' },
-  { id: '4', name: 'Amal Bandara', score: 780, rating: 4.3, loans: 2, total: '200,000' },
-  { id: '5', name: 'Sunil Fernando', score: 710, rating: 4.1, loans: 3, total: '175,000' },
-];
-
-// ── Helper Functions ────────────────────────────────
+// ── Helper Functions ──────────────────────────────────
 const getScoreColor = (score: number) => {
   if (score >= 750) return COLORS.success;
   if (score >= 650) return COLORS.warning;
@@ -32,9 +24,24 @@ const getScoreColor = (score: number) => {
 // ── Main Component ──────────────────────────────────
 export default function MyBorrowersScreen({ navigation }: any) {
   const [search, setSearch] = useState('');
+  const [allBorrowers, setAllBorrowers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = BORROWERS.filter((b) =>
-    b.name.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await DashboardService.getBorrowers(20);
+        setAllBorrowers(data?.borrowers ?? []);
+      } catch {
+        setAllBorrowers([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const filtered = allBorrowers.filter((b) =>
+    (b.borrowerName ?? b.name ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const renderCard = ({ item }: any) => (
@@ -46,12 +53,12 @@ export default function MyBorrowersScreen({ navigation }: any) {
       <View style={commonStyles.rowSpaceBetween}>
         <View style={commonStyles.row}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{item.name[0]}</Text>
+            <Text style={styles.avatarText}>{(item.borrowerName ?? item.name ?? '?')[0]}</Text>
           </View>
           <View>
-            <Text style={commonStyles.textPrimary}>{item.name}</Text>
-            <Text style={styles.scoreText}>
-              Score: {item.score} • ★{item.rating}
+            <Text style={commonStyles.textPrimary}>{item.borrowerName ?? item.name}</Text>
+            <Text style={[styles.scoreText, { color: getScoreColor(item.creditScore ?? item.score ?? 0) }]}>
+              Score: {item.creditScore ?? item.score ?? '--'} • ★{item.rating ?? '--'}
             </Text>
           </View>
         </View>
@@ -63,11 +70,11 @@ export default function MyBorrowersScreen({ navigation }: any) {
       <View style={commonStyles.rowSpaceBetween}>
         <View>
           <Text style={styles.cardLabel}>Active Loans</Text>
-          <Text style={commonStyles.textPrimary}>{item.loans}</Text>
+          <Text style={commonStyles.textPrimary}>{item.activeLoans ?? item.loans ?? '--'}</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.cardLabel}>Total Borrowed</Text>
-          <Text style={commonStyles.textPrimary}>{item.total} LKR</Text>
+          <Text style={commonStyles.textPrimary}>{item.totalBorrowed != null ? `${(item.totalBorrowed / 1000).toFixed(0)}K LKR` : (item.total ? `${item.total} LKR` : '--')}</Text>
         </View>
       </View>
     </TouchableOpacity>

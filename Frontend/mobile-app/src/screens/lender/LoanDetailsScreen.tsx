@@ -1,25 +1,11 @@
-import React, { useState } from 'react';
-import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 {/*Icon library (used for button icon*/}
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader, AlertBanner } from '../../components/lender';
+import { RecentTransactionsService } from '../../services/lender.service';
 
-
-const MOCK_LOAN = {
-  id: 'L-2026-001',
-  borrowerName: 'Kasun Silva',
-  amount: '50,000',
-  paidAmount: '15,000',
-  remainingAmount: '35,000',
-  status: 'active',
-  rate: '12',
-  tenure: '12', //months
-  disbursedDate: '2026-03-15',
-  maturityDate: '2027-03-15',
-  nextPaymentDue: '2026-05-15',
-  amountDue: '4,500',
-};
 
 
 export default function LoanDetailsScreen({ navigation, route }: any) {
@@ -28,9 +14,50 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
     //route - get data passed from previous screen
   const loanId = route?.params?.loanId || 'L-2026-001';
   // Gets loanId from navigatio If not found - use default
-  const loan = MOCK_LOAN;
+  const [loan, setLoan] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const progressPercent = (parseInt(loan.paidAmount) / parseInt(loan.amount)) * 100;
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await RecentTransactionsService.getLoanLedger(loanId);
+        setLoan(data);
+      } catch {
+        setLoan(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [loanId]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <LenderHeader title="Loan Details" onBackPress={() => navigation.goBack()} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
+
+  // Resolved display values from API or fallback
+  const displayLoan = {
+    id:              loan?.loanId ?? loanId,
+    borrowerName:    loan?.borrowerName ?? '--',
+    amount:          loan?.principalAmount ?? loan?.amount ?? 0,
+    paidAmount:      loan?.totalPaid ?? loan?.paidAmount ?? 0,
+    remainingAmount: loan?.remainingBalance ?? loan?.remainingAmount ?? 0,
+    status:          loan?.status ?? 'active',
+    rate:            loan?.interestRate ?? loan?.rate ?? '--',
+    tenure:          loan?.tenureMonths ?? loan?.tenure ?? '--',
+    disbursedDate:   loan?.disbursedAt ?? loan?.disbursedDate ?? '--',
+    maturityDate:    loan?.maturityDate ?? '--',
+    nextPaymentDue:  loan?.nextInstallmentDue ?? loan?.nextPaymentDue ?? '--',
+    amountDue:       loan?.nextInstallmentAmount ?? loan?.amountDue ?? 0,
+  };
+
+  const progressPercent = displayLoan.amount > 0
+    ? (displayLoan.paidAmount / displayLoan.amount) * 100
+    : 0;
 
   return (
     <SafeAreaView style={commonStyles.safe}>
@@ -38,7 +65,7 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
       
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Status Alert */}
-        {loan.status === 'active' && (
+        {displayLoan.status === 'active' && (
           <AlertBanner type="success" title="Loan Active" message="All payments on track" />
         )}
 
@@ -47,10 +74,10 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
           <View style={commonStyles.rowSpaceBetween}>
             <View>
               <Text style={commonStyles.textSecondary}>Total Amount</Text>
-              <Text style={styles.largeText}>LKR {loan.amount}</Text>
+              <Text style={styles.largeText}>LKR {Number(displayLoan.amount).toLocaleString()}</Text>
             </View>
             <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>{loan.status.toUpperCase()}</Text>
+              <Text style={styles.statusText}>{displayLoan.status.toUpperCase()}</Text>
             </View>
           </View>
 
@@ -59,8 +86,8 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
             <View style={[styles.progressBar, { width: `${progressPercent}%` }]} />
           </View>
           <View style={commonStyles.rowSpaceBetween}>
-            <Text style={commonStyles.textSecondary}>LKR {loan.paidAmount} paid</Text>
-            <Text style={commonStyles.textSecondary}>LKR {loan.remainingAmount} remaining</Text>
+            <Text style={commonStyles.textSecondary}>LKR {Number(displayLoan.paidAmount).toLocaleString()} paid</Text>
+            <Text style={commonStyles.textSecondary}>LKR {Number(displayLoan.remainingAmount).toLocaleString()} remaining</Text>
           </View>
         </View>
 
@@ -69,10 +96,10 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
           <Text style={commonStyles.sectionTitle}>Borrower</Text>
           <View style={commonStyles.row}>
             <View style={commonStyles.avatar}>
-              <Text style={styles.avatarText}>{loan.borrowerName[0]}</Text>
+              <Text style={styles.avatarText}>{displayLoan.borrowerName[0]}</Text>
             </View>
             <View>
-              <Text style={commonStyles.textPrimary}>{loan.borrowerName}</Text>
+              <Text style={commonStyles.textPrimary}>{displayLoan.borrowerName}</Text>
               <Text style={commonStyles.textSecondary}>{loanId}</Text>
             </View>
           </View>
@@ -84,22 +111,22 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
           
           <View style={styles.detailRow}>
             <Text style={commonStyles.textSecondary}>Interest Rate</Text>
-            <Text style={commonStyles.textPrimary}>{loan.rate}% p.a.</Text>
+            <Text style={commonStyles.textPrimary}>{displayLoan.rate}% p.a.</Text>
           </View>
           
           <View style={styles.detailRow}>
             <Text style={commonStyles.textSecondary}>Tenure</Text>
-            <Text style={commonStyles.textPrimary}>{loan.tenure} months</Text>
+            <Text style={commonStyles.textPrimary}>{displayLoan.tenure} months</Text>
           </View>
 
           <View style={styles.detailRow}>
             <Text style={commonStyles.textSecondary}>Disbursed Date</Text>
-            <Text style={commonStyles.textPrimary}>{loan.disbursedDate}</Text>
+            <Text style={commonStyles.textPrimary}>{displayLoan.disbursedDate}</Text>
           </View>
 
           <View style={styles.detailRow}>
             <Text style={commonStyles.textSecondary}>Maturity Date</Text>
-            <Text style={commonStyles.textPrimary}>{loan.maturityDate}</Text>
+            <Text style={commonStyles.textPrimary}>{displayLoan.maturityDate}</Text>
           </View>
         </View>
 
@@ -109,8 +136,8 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
           
           <View style={styles.dueBox} >
             <Text style={commonStyles.textSecondary}>Amount Due</Text>
-            <Text style={styles.largeText}>LKR {loan.amountDue}</Text>
-            <Text style={commonStyles.textSecondary}>Due: {loan.nextPaymentDue}</Text>
+            <Text style={styles.largeText}>LKR {Number(displayLoan.amountDue).toLocaleString()}</Text>
+            <Text style={commonStyles.textSecondary}>Due: {displayLoan.nextPaymentDue}</Text>
           </View>
         </View>
 

@@ -29,13 +29,13 @@ api.interceptors.request.use((config) => {
   // Get token from your auth store (adjust based on your auth implementation)
   // Example: const token = useAuthStore.getState().token;
   // if (token) config.headers.Authorization = `Bearer ${token}`;
-  
+
   // Temporary: You can manually set token after getting it from auth
   const token = localStorage?.getItem?.('authToken') ?? sessionStorage?.getItem?.('authToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  
+
   return config;
 });
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Switch, Alert,
@@ -6,17 +6,8 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader, LenderActionItem } from '../../components/lender';
-
-// ── Profile Data ──────────────────────────────────────────
-const PROFILE_DATA = {
-  name:             'Ranil Perera',
-  email:            'ranil.perera@smartcredit.com',
-  phone:            '+94 71 234 5678',
-  registrationDate: 'Jan 15, 2023',
-  accountStatus:    'Active & Verified',
-  totalLoaned:      'LKR 2,400,000',
-  totalReturned:    'LKR 1,800,000',
-};
+import { ActivityIndicator } from 'react-native';
+import { LenderProfileService } from '../../services/lender.service';
 
 // ── Settings menu ─────────────────────────────────────────
 const PROFILE_SETTINGS = [
@@ -57,6 +48,42 @@ const AD_MENU = [
 export default function LenderProfileScreen({ navigation }: any) {
   const [notifications, setNotifications] = useState(true);
   const [autoReminders, setAutoReminders] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await LenderProfileService.getProfile();
+        setProfile(data);
+      } catch {
+        // silently fall back — profile card will show placeholder
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // ── Resolved display values from API or fallback placeholders ──
+  const PROFILE_DATA = {
+    name:             profile?.fullName ?? 'My Profile',
+    email:            profile?.email ?? '',
+    phone:            profile?.phone ?? '',
+    registrationDate: profile?.createdAt
+      ? new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '',
+    accountStatus:    profile?.status ?? 'Active & Verified',
+    totalLoaned:      profile?.totalLoaned != null ? `LKR ${Number(profile.totalLoaned).toLocaleString()}` : 'LKR --',
+    totalReturned:    profile?.totalReturned != null ? `LKR ${Number(profile.totalReturned).toLocaleString()}` : 'LKR --',
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [

@@ -1,42 +1,62 @@
-import React, { useState } from 'react';
-import { FlatList, View, TouchableOpacity, Text, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { FlatList, View, TouchableOpacity, Text, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader } from '../../components/lender';
-
-// ── Mock Collection History ──────────────────────────
-const MOCK_HISTORY = [
-  { id: '1', loanId: 'L-001', borrower: 'Kasun Silva', amount: '4,500', date: '2026-04-20', status: 'success' },
-  { id: '2', loanId: 'L-002', borrower: 'Divya Patel', amount: '6,200', date: '2026-04-18', status: 'success' },
-  { id: '3', loanId: 'L-003', borrower: 'Arjun Sharma', amount: '3,800', date: '2026-04-15', status: 'success' },
-  { id: '4', loanId: 'L-004', borrower: 'Priya Singh', amount: '5,000', date: '2026-04-12', status: 'failed' },
-];
+import { RecentTransactionsService } from '../../services/lender.service';
 
 // ── Main Component ──────────────────────────────────
 export default function CollectionHistoryScreen({ navigation }: any) {
-  const [history] = useState(MOCK_HISTORY);
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalCollected, setTotalCollected] = useState(0);
 
-  const successAmount = history.filter((h) => h.status === 'success').reduce((sum, h) => sum + parseInt(h.amount), 0);
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await RecentTransactionsService.getTransactions({ pageSize: 50 });
+        const txns = data?.transactions ?? [];
+        setHistory(txns);
+        const sum = txns
+          .filter((t: any) => (t.status ?? 'success') === 'success')
+          .reduce((acc: number, t: any) => acc + (t.amount ?? t.paidAmount ?? 0), 0);
+        setTotalCollected(sum);
+      } catch {
+        setHistory([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const renderItem = ({ item }: any) => (
     <View style={commonStyles.card}>
       <View style={commonStyles.rowSpaceBetween}>
         <View style={commonStyles.row}>
-          <View style={[styles.statusIcon, { backgroundColor: item.status === 'success' ? '#ECFDF5' : '#FEF2F2' }]}>
-            <Feather name={item.status === 'success' ? 'check-circle' : 'x-circle'} size={20} color={item.status === 'success' ? COLORS.success : COLORS.danger} />
+          <View style={[styles.statusIcon, { backgroundColor: (item.status ?? 'success') === 'success' ? '#ECFDF5' : '#FEF2F2' }]}>
+            <Feather name={(item.status ?? 'success') === 'success' ? 'check-circle' : 'x-circle'} size={20} color={(item.status ?? 'success') === 'success' ? COLORS.success : COLORS.danger} />
           </View>
           <View>
-            <Text style={commonStyles.textPrimary}>{item.borrower}</Text>
-            <Text style={commonStyles.textSecondary}>{item.loanId}</Text>
+            <Text style={commonStyles.textPrimary}>{item.borrowerName ?? item.borrower}</Text>
+            <Text style={commonStyles.textSecondary}>{item.loanId ?? item.id}</Text>
           </View>
         </View>
         <View>
-          <Text style={[commonStyles.textPrimary, { textAlign: 'right' }]}>LKR {item.amount}</Text>
-          <Text style={[commonStyles.textSecondary, { textAlign: 'right' }]}>{item.date}</Text>
+          <Text style={[commonStyles.textPrimary, { textAlign: 'right' }]}>LKR {typeof item.amount === 'number' ? item.amount.toLocaleString() : (item.amount ?? '--')}</Text>
+          <Text style={[commonStyles.textSecondary, { textAlign: 'right' }]}>{item.paidAt ? new Date(item.paidAt).toLocaleDateString() : (item.date ?? '')}</Text>
         </View>
       </View>
     </View>
   );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <LenderHeader title="Collection History" onBackPress={() => navigation.goBack()} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={commonStyles.safe}>
@@ -47,7 +67,7 @@ export default function CollectionHistoryScreen({ navigation }: any) {
         <View style={commonStyles.rowSpaceBetween}>
           <View>
             <Text style={commonStyles.textSecondary}>Total Collections</Text>
-            <Text style={styles.largeText}>LKR {successAmount}</Text>
+            <Text style={styles.largeText}>LKR {totalCollected.toLocaleString()}</Text>
           </View>
           <View style={styles.statsBox}>
             <Text style={styles.statsNumber}>{history.length}</Text>

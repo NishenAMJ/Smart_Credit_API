@@ -1,19 +1,56 @@
-import React, { useState } from 'react';
-import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader, StatCard } from '../../components/lender';
+import { AnalyticsService } from '../../services/lender.service';
 
 // ── Main Component ──────────────────────────────────
 export default function PortfolioScreen({ navigation }: any) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const portfolioData = [
-    { id: '1', type: 'Personal Loans', count: 18, amount: '25,50,000', rate: '12%' },
-    { id: '2', type: 'Business Loans', count: 8, amount: '15,25,000', rate: '14%' },
-    { id: '3', type: 'Education Loans', count: 12, amount: '8,75,000', rate: '9%' },
-    { id: '4', type: 'Vehicle Loans', count: 5, amount: '6,50,000', rate: '13%' },
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await AnalyticsService.getSummary('90d');
+        setSummary(data);
+      } catch {
+        setSummary(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // Build portfolio breakdown from API loan category breakdown if available
+  const portfolioData = summary?.loanCategories ?? [
+    { id: '1', type: 'Personal Loans',   count: summary?.personalLoans  ?? '--', amount: '--', rate: '--' },
+    { id: '2', type: 'Business Loans',   count: summary?.businessLoans  ?? '--', amount: '--', rate: '--' },
+    { id: '3', type: 'Education Loans',  count: summary?.educationLoans ?? '--', amount: '--', rate: '--' },
+    { id: '4', type: 'Vehicle Loans',    count: summary?.vehicleLoans   ?? '--', amount: '--', rate: '--' },
   ];
+
+  const totalLoans = summary?.totalLoans ?? '--';
+  const portfolioSize = summary?.totalDisbursed != null
+    ? `${((summary.totalDisbursed) / 100000).toFixed(2)}L`
+    : '--';
+
+  const performance = [
+    { label: 'On-Time Collection', value: summary?.onTimeRate != null ? `${summary.onTimeRate}%` : '--', color: COLORS.success },
+    { label: 'Default Rate',       value: summary?.defaultRate != null ? `${summary.defaultRate}%` : '--', color: COLORS.danger  },
+    { label: 'Portfolio Yield',    value: summary?.portfolioYield != null ? `${summary.portfolioYield}%` : '--', color: COLORS.primary },
+  ];
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <LenderHeader title="Portfolio" onBackPress={() => navigation.goBack()} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={commonStyles.safe}>
@@ -22,15 +59,15 @@ export default function PortfolioScreen({ navigation }: any) {
       <ScrollView showsVerticalScrollIndicator={false} style={styles.container}>
         {/* Summary */}
         <View style={styles.summaryGrid}>
-          <StatCard icon="briefcase" color={COLORS.primary} value="43" label="Total Loans" />
-          <StatCard icon="trending-up" color={COLORS.success} value="55.99L" label="Portfolio Size" />
+          <StatCard icon="briefcase" color={COLORS.primary} value={String(totalLoans)} label="Total Loans" />
+          <StatCard icon="trending-up" color={COLORS.success} value={portfolioSize} label="Portfolio Size" />
         </View>
 
         {/* Portfolio Breakdown */}
         <View style={commonStyles.card}>
           <Text style={commonStyles.sectionTitle}>Loan Categories</Text>
           
-          {portfolioData.map((item) => (
+          {portfolioData.map((item: any) => (
             <TouchableOpacity 
               key={item.id}
               style={styles.categoryItem}
@@ -65,11 +102,7 @@ export default function PortfolioScreen({ navigation }: any) {
         <View style={commonStyles.card}>
           <Text style={commonStyles.sectionTitle}>Performance</Text>
           
-          {[
-            { label: 'On-Time Collection', value: '94.2%', color: COLORS.success },
-            { label: 'Default Rate', value: '3.2%', color: COLORS.danger },
-            { label: 'Portfolio Yield', value: '12.8%', color: COLORS.primary },
-          ].map((item, idx) => (
+          {performance.map((item, idx) => (
             <View key={idx} style={commonStyles.rowSpaceBetween}>
               <Text style={commonStyles.textSecondary}>{item.label}</Text>
               <Text style={[commonStyles.textPrimary, { color: item.color }]}>{item.value}</Text>
