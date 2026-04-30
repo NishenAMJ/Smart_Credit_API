@@ -1,18 +1,35 @@
+# Dependencies
 node_modules/
-dist/
+Frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+**/.DS_Store
+
+# Environments
 .env
 .env.local
-.DS_Store
-.npm/
-coverage/
-apps/*/node_modules/
-apps/*/dist/
-apps/*/.env
-apps/*/.env.local
-apps/backend/firebase-service-account.json
-apps/backend/your-service-account-key.json
-Backend/firebase-service-account.json
-Backend/your-service-account-key.json
-Backend/.env
-Backend/.env.local
-key/*.json
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+
+# Sensitive / Keys
+key/
+*.pem
+*.key
+ serviceAccountKey.json
+ firebase-service-account.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build output
+dist/
+build/

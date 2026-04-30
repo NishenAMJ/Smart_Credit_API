@@ -1,0 +1,71 @@
+import {
+  BadRequestException,
+  Controller,
+  DefaultValuePipe,
+  Get,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
+  Query,
+} from '@nestjs/common';
+import { DashboardService } from './dashboard.service';
+import {
+  BorrowerDetailsResponse,
+  DashboardBorrowersResponse,
+  DashboardSummaryResponse,
+} from './dashboard.types';
+
+@Controller('dashboard')
+export class DashboardController {
+  constructor(private readonly dashboardService: DashboardService) {}
+
+  @Get('summary')
+  getSummary(
+    @Query('lenderId') lenderId: string | undefined,
+  ): Promise<DashboardSummaryResponse> {
+    if (!lenderId?.trim()) {
+      throw new BadRequestException('lenderId is required.');
+    }
+
+    return this.dashboardService.getSummary(lenderId.trim());
+  }
+
+  @Get('borrowers')
+  getBorrowers(
+    @Query('lenderId') lenderId: string | undefined,
+    @Query('pageSize', new DefaultValuePipe(8), ParseIntPipe) pageSize: number,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ): Promise<DashboardBorrowersResponse> {
+    if (!lenderId?.trim()) {
+      throw new BadRequestException('lenderId is required.');
+    }
+
+    return this.dashboardService.getBorrowers(
+      lenderId.trim(),
+      Number.isFinite(Number(limit)) ? Number(limit) : pageSize,
+      cursor?.trim() || null,
+    );
+  }
+
+  @Get('borrowers/:id')
+  async getBorrowerDetails(
+    @Param('id') id: string,
+    @Query('lenderId') lenderId: string | undefined,
+  ): Promise<BorrowerDetailsResponse> {
+    if (!lenderId?.trim()) {
+      throw new BadRequestException('lenderId is required.');
+    }
+
+    const borrower = await this.dashboardService.getBorrowerDetails(
+      lenderId.trim(),
+      id,
+    );
+
+    if (!borrower) {
+      throw new NotFoundException(`Borrower ${id} was not found.`);
+    }
+
+    return borrower;
+  }
+}

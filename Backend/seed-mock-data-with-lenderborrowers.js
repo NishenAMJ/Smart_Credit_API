@@ -394,10 +394,11 @@ async function createUsers(db, now, rng) {
 
   for (let i = 1; i <= 45; i += 1) {
     const uid = `borrower_${pad(i, 3)}`;
-    const fullName = buildName(i + 100);
+    const fullName = i === 1 ? 'Amal Perera' : buildName(i + 100);
     const createdAt = addDays(now, -randomInt(rng, 90, 540));
     const phone = phoneNumber(i + 50);
-    const email = emailFromName(fullName, `b${pad(i, 2)}`);
+    const email = i === 1 ? 'amal@gmail.com' : emailFromName(fullName, `b${pad(i, 2)}`);
+    const borrowerPasswordHash = i === 1 ? await bcrypt.hash('Amal@123', 10) : passwordHash;
     /** @type {UserDoc} */
     const borrower = {
       uid,
@@ -408,7 +409,7 @@ async function createUsers(db, now, rng) {
       email,
       emailLower: normalizeEmail(email),
       phoneNormalized: normalizePhone(phone),
-      passwordHash,
+      passwordHash: borrowerPasswordHash,
       creditScore: randomInt(rng, 480, 790),
       rating: randomFloat(rng, 3.8, 5, 1),
       totalLoansCompleted: 0,
