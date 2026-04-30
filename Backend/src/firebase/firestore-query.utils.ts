@@ -170,9 +170,7 @@ export function encodeCursor(date: Date | null, id: string): string | null {
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
 }
 
-export function decodeCursor(
-  cursor: string | null | undefined,
-): DecodedCursor | null {
+export function decodeCursor(cursor: string | null | undefined): DecodedCursor | null {
   if (!cursor || cursor.trim().length === 0) {
     return null;
   }
@@ -221,9 +219,11 @@ export function orderByDateAndId<T extends Query<DocumentData>>(
     .orderBy(FieldPath.documentId(), 'desc') as T;
 }
 
-export function buildPageInfo<
-  T extends { cursorDate: Date | null; cursorId: string },
->(items: T[], pageSize: number, hasMore: boolean): PageInfo {
+export function buildPageInfo<T extends { cursorDate: Date | null; cursorId: string }>(
+  items: T[],
+  pageSize: number,
+  hasMore: boolean,
+): PageInfo {
   const lastItem = items[items.length - 1];
 
   return {
@@ -236,22 +236,21 @@ export function buildPageInfo<
   };
 }
 
-export async function scanQueryPage<T>(options: {
-  pageSize: number;
-  cursor?: string | null;
-  batchSize?: number;
-  fetchChunk: (
-    cursor: string | null,
-    batchSize: number,
-  ) => Promise<QueryDocumentSnapshot<DocumentData>[]>;
-  mapDoc: (
-    doc: QueryDocumentSnapshot<DocumentData>,
-  ) => Promise<T | null> | T | null;
-}): Promise<{ items: T[]; exhausted: boolean }> {
-  const batchSize = Math.max(
-    options.batchSize ?? options.pageSize * 2,
-    options.pageSize,
-  );
+export async function scanQueryPage<T>(
+  options: {
+    pageSize: number;
+    cursor?: string | null;
+    batchSize?: number;
+    fetchChunk: (
+      cursor: string | null,
+      batchSize: number,
+    ) => Promise<QueryDocumentSnapshot<DocumentData>[]>;
+    mapDoc: (
+      doc: QueryDocumentSnapshot<DocumentData>,
+    ) => Promise<T | null> | T | null;
+  },
+): Promise<{ items: T[]; exhausted: boolean }> {
+  const batchSize = Math.max(options.batchSize ?? options.pageSize * 2, options.pageSize);
   let currentCursor = options.cursor ?? null;
   let exhausted = false;
   const items: T[] = [];
@@ -276,12 +275,7 @@ export async function scanQueryPage<T>(options: {
       }
     }
 
-    currentCursor = encodeCursor(
-      readDate(docs[docs.length - 1].get('createdAt')) ??
-        readDate(docs[docs.length - 1].get('paidAt')) ??
-        new Date(0),
-      docs[docs.length - 1].id,
-    );
+    currentCursor = encodeCursor(readDate(docs[docs.length - 1].get('createdAt')) ?? readDate(docs[docs.length - 1].get('paidAt')) ?? new Date(0), docs[docs.length - 1].id);
     exhausted = docs.length < batchSize;
   }
 

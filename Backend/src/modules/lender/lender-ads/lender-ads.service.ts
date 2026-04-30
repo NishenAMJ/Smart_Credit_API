@@ -28,10 +28,7 @@ export class LenderAdsService {
     this.validateCreateInput(input);
 
     const db = this.firebaseService.getDb();
-    const lenderSnapshot = await db
-      .collection('users')
-      .doc(input.lenderId)
-      .get();
+    const lenderSnapshot = await db.collection('users').doc(input.lenderId).get();
     const lenderData = lenderSnapshot.data();
     const now = Timestamp.now();
     const expiresAt = Timestamp.fromDate(this.getExpiryDate(now.toDate(), 30));
@@ -39,8 +36,7 @@ export class LenderAdsService {
     const title = input.headline.trim();
     const preferredPurposes = this.buildPreferredPurposes(input);
     const lenderName =
-      typeof lenderData?.businessName === 'string' &&
-      lenderData.businessName.trim().length > 0
+      typeof lenderData?.businessName === 'string' && lenderData.businessName.trim().length > 0
         ? lenderData.businessName
         : input.lenderName;
     const location =
@@ -140,10 +136,7 @@ export class LenderAdsService {
     const safePageSize = Math.min(Math.max(pageSize, 1), 12);
     const collection = this.firebaseService.getDb().collection('ads');
     const snapshot = await applyDateCursor(
-      orderByDateAndId(
-        collection.where('lenderId', '==', lenderId),
-        'createdAt',
-      ),
+      orderByDateAndId(collection.where('lenderId', '==', lenderId), 'createdAt'),
       cursor,
     )
       .limit(safePageSize + 1)
@@ -178,15 +171,11 @@ export class LenderAdsService {
     }
 
     if (input.minAmount <= 0 || input.maxAmount <= 0) {
-      throw new BadRequestException(
-        'Loan amount range must be greater than zero.',
-      );
+      throw new BadRequestException('Loan amount range must be greater than zero.');
     }
 
     if (input.maxAmount < input.minAmount) {
-      throw new BadRequestException(
-        'maxAmount must be greater than or equal to minAmount.',
-      );
+      throw new BadRequestException('maxAmount must be greater than or equal to minAmount.');
     }
 
     if (input.interestRate <= 0) {
@@ -198,33 +187,23 @@ export class LenderAdsService {
     }
 
     if (input.borrowerFocus.trim().length < 8) {
-      throw new BadRequestException(
-        'borrowerFocus must be at least 8 characters.',
-      );
+      throw new BadRequestException('borrowerFocus must be at least 8 characters.');
     }
 
     if (input.processingTime.trim().length < 6) {
-      throw new BadRequestException(
-        'processingTime must be at least 6 characters.',
-      );
+      throw new BadRequestException('processingTime must be at least 6 characters.');
     }
 
     if (input.repaymentStyle.trim().length < 6) {
-      throw new BadRequestException(
-        'repaymentStyle must be at least 6 characters.',
-      );
+      throw new BadRequestException('repaymentStyle must be at least 6 characters.');
     }
 
     if (input.requirements.trim().length < 12) {
-      throw new BadRequestException(
-        'requirements must be at least 12 characters.',
-      );
+      throw new BadRequestException('requirements must be at least 12 characters.');
     }
 
     if (input.supportNote.trim().length < 12) {
-      throw new BadRequestException(
-        'supportNote must be at least 12 characters.',
-      );
+      throw new BadRequestException('supportNote must be at least 12 characters.');
     }
   }
 
@@ -270,10 +249,7 @@ export class LenderAdsService {
       id,
       adId: typeof data.adId === 'string' ? data.adId : id,
       lenderId: typeof data.lenderId === 'string' ? data.lenderId : lenderId,
-      title:
-        typeof data.title === 'string' && data.title.trim().length > 0
-          ? data.title
-          : 'Untitled ad',
+      title: typeof data.title === 'string' && data.title.trim().length > 0 ? data.title : 'Untitled ad',
       description: typeof data.description === 'string' ? data.description : '',
       minAmount: this.toNumber(data.minAmount),
       maxAmount: this.toNumber(data.maxAmount),
@@ -292,9 +268,7 @@ export class LenderAdsService {
       createdAt: this.toIsoString(data.createdAt),
       updatedAt: this.toIsoString(data.updatedAt),
       searchKeywords: Array.isArray(data.searchKeywords)
-        ? data.searchKeywords.filter(
-            (value): value is string => typeof value === 'string',
-          )
+        ? data.searchKeywords.filter((value): value is string => typeof value === 'string')
         : [],
       seedBatchId: typeof data.seedBatchId === 'string' ? data.seedBatchId : '',
       source: typeof data.source === 'string' ? data.source : 'unknown',

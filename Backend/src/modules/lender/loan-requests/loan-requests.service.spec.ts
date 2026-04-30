@@ -80,12 +80,7 @@ describe('LoanRequestsService', () => {
         };
       });
 
-    const result = await service.getPendingRequests(
-      'lender_1',
-      10,
-      null,
-      false,
-    );
+    const result = await service.getPendingRequests('lender_1', 10, null, false);
 
     expect(result.requests).toHaveLength(1);
     expect(result.requests[0]).toMatchObject({

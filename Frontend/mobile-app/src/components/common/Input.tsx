@@ -19,13 +19,15 @@ export default function Input(props: TextInputProps) {
 const styles = StyleSheet.create({
   container: {
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    borderColor: "#E5EAF2",
+    borderRadius: 14,
+    paddingHorizontal: 14,
     backgroundColor: COLORS.surface,
+    minHeight: 52,
+    justifyContent: "center",
   },
   input: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: 15,
     color: COLORS.textPrimary,
   },

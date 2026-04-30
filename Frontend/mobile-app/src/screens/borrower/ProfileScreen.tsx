@@ -16,6 +16,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import SidebarMenu from "../../components/common/SidebarMenu";
 import { profileService } from "../../api/services/profile.service";
+import { getApiErrorMessage } from "../../api/api-error";
 import { PROFILE_UPDATE_VERIFICATION_CODE } from "../../constants/demo";
 import {
   getScoreColor,
@@ -78,8 +79,12 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       setEditableProfile(editable);
       setSavedEditableProfile(editable);
     } catch (error) {
-      console.error("Error fetching profile:", error);
-      Alert.alert("Error", "Failed to load profile details.");
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load profile details.",
+      );
+      console.error("Error fetching profile:", message);
+      Alert.alert("Profile unavailable", message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -317,8 +322,12 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       setVerifiedForSensitiveSave(false);
       Alert.alert("Profile Updated", "Your changes were saved successfully.");
     } catch (error) {
-      console.error("Error updating profile:", error);
-      Alert.alert("Error", "Failed to save profile changes.");
+      const message = getApiErrorMessage(
+        error,
+        "Failed to save profile changes.",
+      );
+      console.error("Error updating profile:", message);
+      Alert.alert("Profile update failed", message);
     } finally {
       setSaving(false);
     }

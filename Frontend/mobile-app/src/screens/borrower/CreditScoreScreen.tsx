@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { getApiErrorMessage } from "../../api/api-error";
 import { creditScoreService } from "../../api/services/creditScore.service";
 import type { CreditScoreSummary } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
@@ -27,6 +28,7 @@ export default function CreditScoreScreen({
 }: CreditScoreScreenProps) {
   const [creditData, setCreditData] = useState<CreditScoreSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     void fetchCreditScore();
@@ -34,10 +36,16 @@ export default function CreditScoreScreen({
 
   const fetchCreditScore = async () => {
     try {
+      setErrorMessage("");
       const response = await creditScoreService.getMyCreditScore();
       setCreditData(response?.data ?? null);
     } catch (error) {
-      console.error("Error fetching credit score:", error);
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load your credit score.",
+      );
+      console.error("Error fetching credit score:", message);
+      setErrorMessage(message);
       setCreditData(null);
     } finally {
       setLoading(false);
@@ -72,6 +80,10 @@ export default function CreditScoreScreen({
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {errorMessage ? (
+          <Text style={styles.emptyBreakdownText}>{errorMessage}</Text>
+        ) : null}
+
         <View style={styles.scoreCard}>
           <View style={styles.scoreCircle}>
             <Text style={styles.scoreNumber}>

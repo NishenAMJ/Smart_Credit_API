@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Param,
-  Patch,
-} from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch } from '@nestjs/common';
 import { LenderProfileService } from './lender-profile.service';
 import {
   LenderProfileResponse,
@@ -29,9 +22,7 @@ export class LenderProfileController {
   constructor(private readonly lenderProfileService: LenderProfileService) {}
 
   @Get(':lenderId')
-  getProfile(
-    @Param('lenderId') lenderId: string,
-  ): Promise<LenderProfileResponse> {
+  getProfile(@Param('lenderId') lenderId: string): Promise<LenderProfileResponse> {
     if (!lenderId.trim()) {
       throw new BadRequestException('lenderId is required.');
     }
@@ -54,9 +45,7 @@ export class LenderProfileController {
     );
   }
 
-  private toUpdateInput(
-    body: UpdateLenderProfileBody,
-  ): UpdateLenderProfileInput {
+  private toUpdateInput(body: UpdateLenderProfileBody): UpdateLenderProfileInput {
     return {
       fullName: typeof body.fullName === 'string' ? body.fullName : '',
       email: typeof body.email === 'string' ? body.email : '',

@@ -10,6 +10,7 @@
 
 'use strict';
 
+const bcrypt = require('bcrypt');
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
@@ -22,6 +23,7 @@ const LENDER_BORROWERS_COLLECTION = 'lenderBorrowers';
 const TRANSACTIONS_COLLECTION = 'transactions';
 const DISPUTES_COLLECTION = 'disputes';
 const DEFAULT_KEY_PATH = './your-service-account-key.json';
+const DEFAULT_USER_PASSWORD = 'SmartCredit@123';
 const MAX_BATCH_SIZE = 400;
 
 const PURPOSES = ['education', 'business', 'medical', 'personal', 'vehicle', 'home'];
@@ -30,6 +32,15 @@ const LOCATIONS = [
   'Matara', 'Kalutara', 'Anuradhapura', 'Ratnapura', 'Batticaloa', 'Badulla'
 ];
 const PAYMENT_TYPES = ['qr', 'receipt', 'manual'];
+const DISPUTE_CATEGORIES = ['payment', 'fraud', 'service', 'other'];
+const DISPUTE_PRIORITIES = ['low', 'medium', 'high', 'critical'];
+const DISPUTE_STATUSES = ['open', 'in-progress', 'escalated', 'resolved'];
+const DISPUTE_REASON_BY_CATEGORY = {
+  payment: 'Borrower says repayment was made but lender has not acknowledged it.',
+  fraud: 'Borrower reported suspicious lender behavior during the loan process.',
+  service: 'Borrower raised a service complaint about lender communication.',
+  other: 'Borrower requested admin review for an unusual loan issue.'
+};
 const FIRST_NAMES = [
   'Nimal', 'Kamal', 'Kasun', 'Tharindu', 'Sanduni', 'Nadeesha', 'Dilini', 'Ruwan',
   'Chathura', 'Ishara', 'Dinuka', 'Amasha', 'Shanaka', 'Vihanga', 'Nethmi', 'Akila',
@@ -50,12 +61,17 @@ const LAST_NAMES = [
  * @property {string} photoURL
  * @property {string} phone
  * @property {string} email
+ * @property {string} emailLower
+ * @property {string} phoneNormalized
+ * @property {string} passwordHash
  * @property {number} creditScore
  * @property {number} rating
  * @property {number} totalLoansCompleted
  * @property {number} totalAmountLent
  * @property {number} totalAmountBorrowed
  * @property {"approved"} kycStatus
+ * @property {"active"} accountStatus
+ * @property {"local"} authProvider
  * @property {FirebaseFirestore.Timestamp} createdAt
  * @property {FirebaseFirestore.Timestamp} updatedAt
  */
@@ -114,6 +130,42 @@ const LAST_NAMES = [
  * @property {string} borrowerName
  * @property {string} borrowerPhotoURL
  * @property {number} borrowerRating
+ */
+
+/**
+ * @typedef {Object} DisputeDoc
+ * @property {string} disputeId
+ * @property {string} disputeCode
+ * @property {string} transactionId
+ * @property {string} loanId
+ * @property {string} lenderId
+ * @property {string} borrowerId
+ * @property {string} lenderName
+ * @property {string} borrowerName
+ * @property {string} lenderPhotoURL
+ * @property {string} borrowerPhotoURL
+ * @property {string} raisedBy
+ * @property {string} raisedByUserId
+ * @property {"borrower"|"lender"} raisedByRole
+ * @property {string} againstUser
+ * @property {string} againstUserId
+ * @property {"borrower"|"lender"} againstUserRole
+ * @property {string} title
+ * @property {string} description
+ * @property {"payment"|"fraud"|"service"|"other"} category
+ * @property {"open"|"in-progress"|"resolved"|"escalated"|"closed"} status
+ * @property {"low"|"medium"|"high"|"critical"} priority
+ * @property {number} disputedAmount
+ * @property {string[]} evidenceUrls
+ * @property {Array<{status: string, note: string, at: FirebaseFirestore.Timestamp, by: string}>} statusHistory
+ * @property {FirebaseFirestore.Timestamp} createdAt
+ * @property {FirebaseFirestore.Timestamp} updatedAt
+ * @property {string=} assignedTo
+ * @property {FirebaseFirestore.Timestamp=} resolvedAt
+ * @property {string=} resolution
+ * @property {FirebaseFirestore.Timestamp=} escalatedAt
+ * @property {string=} escalationReason
+ * @property {string=} notes
  */
 
 function parseArgs(argv) {
@@ -196,6 +248,34 @@ function ts(date) {
   return admin.firestore.Timestamp.fromDate(clampDate(date));
 }
 
+function normalizeEmail(email) {
+  return String(email ?? '').trim().toLowerCase();
+}
+
+function normalizePhone(phone) {
+  const raw = String(phone ?? '').trim();
+  const digitsAndPlus = raw.replace(/[^\d+]/g, '');
+  let normalized = digitsAndPlus;
+
+  if (normalized.startsWith('+')) {
+    normalized = `+${normalized.slice(1).replace(/\D/g, '')}`;
+  } else {
+    normalized = normalized.replace(/\D/g, '');
+
+    if (normalized.startsWith('0')) {
+      normalized = `+94${normalized.slice(1)}`;
+    } else if (normalized.startsWith('94')) {
+      normalized = `+${normalized}`;
+    } else if (normalized.length === 9) {
+      normalized = `+94${normalized}`;
+    } else {
+      normalized = `+${normalized}`;
+    }
+  }
+
+  return normalized;
+}
+
 function photoURL(id) {
   return `https://i.pravatar.cc/300?u=${encodeURIComponent(id)}`;
 }
@@ -272,31 +352,39 @@ async function commitWrites(db, writes, label) {
   }
 }
 
-function createUsers(db, now, rng) {
+async function createUsers(db, now, rng) {
   /** @type {Map<string, UserDoc>} */
   const lenders = new Map();
   /** @type {Map<string, UserDoc>} */
   const borrowers = new Map();
   const writes = [];
+  const passwordHash = await bcrypt.hash(DEFAULT_USER_PASSWORD, 10);
 
   for (let i = 1; i <= 15; i += 1) {
     const uid = `lender_${pad(i, 3)}`;
     const fullName = buildName(i);
     const createdAt = addDays(now, -randomInt(rng, 120, 660));
+    const phone = phoneNumber(i);
+    const email = emailFromName(fullName, `l${pad(i, 2)}`);
     /** @type {UserDoc} */
     const lender = {
       uid,
       role: ['lender'],
       fullName,
       photoURL: photoURL(uid),
-      phone: phoneNumber(i),
-      email: emailFromName(fullName, `l${pad(i, 2)}`),
+      phone,
+      email,
+      emailLower: normalizeEmail(email),
+      phoneNormalized: normalizePhone(phone),
+      passwordHash,
       creditScore: randomInt(rng, 690, 840),
       rating: randomFloat(rng, 4.2, 5, 1),
       totalLoansCompleted: 0,
       totalAmountLent: 0,
       totalAmountBorrowed: 0,
       kycStatus: 'approved',
+      accountStatus: 'active',
+      authProvider: 'local',
       createdAt: ts(createdAt),
       updatedAt: ts(addDays(createdAt, randomInt(rng, 5, 45)))
     };
@@ -306,22 +394,30 @@ function createUsers(db, now, rng) {
 
   for (let i = 1; i <= 45; i += 1) {
     const uid = `borrower_${pad(i, 3)}`;
-    const fullName = buildName(i + 100);
+    const fullName = i === 1 ? 'Amal Perera' : buildName(i + 100);
     const createdAt = addDays(now, -randomInt(rng, 90, 540));
+    const phone = phoneNumber(i + 50);
+    const email = i === 1 ? 'amal@gmail.com' : emailFromName(fullName, `b${pad(i, 2)}`);
+    const borrowerPasswordHash = i === 1 ? await bcrypt.hash('Amal@123', 10) : passwordHash;
     /** @type {UserDoc} */
     const borrower = {
       uid,
       role: ['borrower'],
       fullName,
       photoURL: photoURL(uid),
-      phone: phoneNumber(i + 50),
-      email: emailFromName(fullName, `b${pad(i, 2)}`),
+      phone,
+      email,
+      emailLower: normalizeEmail(email),
+      phoneNormalized: normalizePhone(phone),
+      passwordHash: borrowerPasswordHash,
       creditScore: randomInt(rng, 480, 790),
       rating: randomFloat(rng, 3.8, 5, 1),
       totalLoansCompleted: 0,
       totalAmountLent: 0,
       totalAmountBorrowed: 0,
       kycStatus: 'approved',
+      accountStatus: 'active',
+      authProvider: 'local',
       createdAt: ts(createdAt),
       updatedAt: ts(addDays(createdAt, randomInt(rng, 5, 35)))
     };
@@ -359,6 +455,8 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
   const loanWrites = [];
   const installmentWrites = [];
   const paymentWrites = [];
+  const disputeWrites = [];
+  const disputeCandidates = [];
   const lenderBorrowerMap = new Map();
   /** @type {Map<string, { lenderId: string, borrowerId: string }>} */
   const loanMeta = new Map();
@@ -368,6 +466,7 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
   let loansCount = 0;
   let installmentsCount = 0;
   let paymentsCount = 0;
+  let disputesCount = 0;
 
   const borrowerAssignments = borrowerList.slice();
   let borrowerPointer = 0;
@@ -616,6 +715,22 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
           paymentWrites.push(paymentWrite);
           paymentsCount += 1;
         });
+
+        if (
+          paymentsForInstallment.length > 0 &&
+          disputeCandidates.length < 18 &&
+          (installmentNumber === 1 || maybe(rng, 0.04))
+        ) {
+          const paymentWrite = pick(rng, paymentsForInstallment);
+          disputeCandidates.push({
+            paymentWrite,
+            loanId: loanRef.id,
+            lender,
+            borrower,
+            installmentNumber,
+            amount: paymentWrite.data.amount
+          });
+        }
       }
 
       console.log(
@@ -654,12 +769,87 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
     );
   });
 
+  disputeCandidates.slice(0, 12).forEach((candidate, index) => {
+    const disputeRef = db.collection(DISPUTES_COLLECTION).doc();
+    const category = DISPUTE_CATEGORIES[index % DISPUTE_CATEGORIES.length];
+    const status = DISPUTE_STATUSES[index % DISPUTE_STATUSES.length];
+    const priority = DISPUTE_PRIORITIES[(index + 1) % DISPUTE_PRIORITIES.length];
+    const createdAt = addDays(now, -randomInt(rng, 1, 45));
+    const updatedAt = addDays(createdAt, randomInt(rng, 1, 7));
+    const assignedTo = status === 'open' ? null : 'admin-review-team';
+
+    /** @type {DisputeDoc} */
+    const disputeDoc = {
+      disputeId: disputeRef.id,
+      disputeCode: `DSP-${now.getFullYear()}-${pad(index + 1, 3)}`,
+      transactionId: candidate.paymentWrite.data.paymentId,
+      loanId: candidate.loanId,
+      lenderId: candidate.lender.uid,
+      borrowerId: candidate.borrower.uid,
+      lenderName: candidate.lender.fullName,
+      borrowerName: candidate.borrower.fullName,
+      lenderPhotoURL: candidate.lender.photoURL,
+      borrowerPhotoURL: candidate.borrower.photoURL,
+      raisedBy: candidate.borrower.fullName,
+      raisedByUserId: candidate.borrower.uid,
+      raisedByRole: 'borrower',
+      againstUser: candidate.lender.fullName,
+      againstUserId: candidate.lender.uid,
+      againstUserRole: 'lender',
+      title: `${category} dispute for installment ${candidate.installmentNumber}`,
+      description: DISPUTE_REASON_BY_CATEGORY[category],
+      category,
+      status,
+      priority,
+      disputedAmount: candidate.amount,
+      evidenceUrls: [
+        `https://example.com/disputes/${disputeRef.id}/receipt.jpg`,
+        `https://example.com/disputes/${disputeRef.id}/chat-summary.pdf`
+      ],
+      statusHistory: [
+        {
+          status: 'open',
+          note: 'Dispute submitted by borrower',
+          at: ts(createdAt),
+          by: candidate.borrower.uid
+        }
+      ],
+      createdAt: ts(createdAt),
+      updatedAt: ts(updatedAt),
+      notes: 'Seeded dispute for admin review workflow'
+    };
+
+    if (assignedTo) {
+      disputeDoc.assignedTo = assignedTo;
+      disputeDoc.statusHistory.push({
+        status,
+        note: `Dispute moved to ${status}`,
+        at: ts(updatedAt),
+        by: assignedTo
+      });
+    }
+
+    if (status === 'resolved') {
+      disputeDoc.resolvedAt = ts(updatedAt);
+      disputeDoc.resolution = 'Resolved after reviewing payment and lender records';
+    }
+
+    if (status === 'escalated') {
+      disputeDoc.escalatedAt = ts(updatedAt);
+      disputeDoc.escalationReason = 'Escalated for senior admin investigation';
+    }
+
+    disputeWrites.push({ ref: disputeRef, data: disputeDoc });
+    disputesCount += 1;
+  });
+
   return {
     adWrites,
     requestWrites,
     loanWrites,
     installmentWrites,
     paymentWrites,
+    disputeWrites,
     lenderBorrowerWrites: Array.from(lenderBorrowerMap.values()).map((relation) => ({
       ref: db.collection(LENDER_BORROWERS_COLLECTION).doc(relation.relationId),
       data: relation
@@ -670,7 +860,8 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       loanRequests: requestsCount,
       loans: loansCount,
       installments: installmentsCount,
-      payments: paymentsCount
+      payments: paymentsCount,
+      disputes: disputesCount
     }
   };
 }
@@ -848,7 +1039,7 @@ async function main() {
   console.log('Starting Smart Credit+ Firestore mock seed...');
   console.log(`Using key file: ${keyPath}`);
 
-  const { lenders, borrowers, writes: userWrites } = createUsers(db, now, rng);
+  const { lenders, borrowers, writes: userWrites } = await createUsers(db, now, rng);
   console.log('Created 15 lenders and 45 borrowers in memory');
 
   const generated = createAdsAndLoans(db, now, rng, lenders, borrowers);
@@ -872,6 +1063,9 @@ async function main() {
   console.log('Writing payments...');
   await commitWrites(db, generated.paymentWrites, 'payments');
 
+  console.log('Writing disputes...');
+  await commitWrites(db, generated.disputeWrites, 'disputes');
+
   console.log('Writing lenderBorrowers...');
   await commitWrites(db, generated.lenderBorrowerWrites, 'lenderBorrowers');
 
@@ -885,12 +1079,14 @@ async function main() {
 
   console.log('');
   console.log('Seed complete.');
+  console.log(`shared seeded-user password: ${DEFAULT_USER_PASSWORD}`);
   console.log(`users: ${userWrites.length}`);
   console.log(`ads: ${generated.counts.ads}`);
   console.log(`loanRequests: ${generated.counts.loanRequests}`);
   console.log(`loans: ${generated.counts.loans}`);
   console.log(`installments: ${generated.counts.installments}`);
   console.log(`payments: ${generated.counts.payments}`);
+  console.log(`disputes: ${generated.counts.disputes}`);
   console.log(`lenderBorrowers: ${generated.lenderBorrowerWrites.length}`);
 }
 

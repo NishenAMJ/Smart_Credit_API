@@ -37,7 +37,7 @@ export const STATUS_COLORS = {
 export const PAYMENT_METHODS = {
   CARD: "Card",
   BANK_TRANSFER: "Bank Transfer",
-  CASH_QR: "Cash (QR)",
+  QR_PAYMENT: "QR Payment",
 } as const;
 
 // UI dimensions and styling

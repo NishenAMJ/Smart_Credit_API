@@ -1,64 +1,77 @@
 import { ServiceAccount } from 'firebase-admin';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as dotenv from 'dotenv';
 
-const configuredServiceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+dotenv.config({
+  path: path.resolve(process.cwd(), '.env'),
+});
 
-// Resolve the service account from environment first, then local defaults.
-let absolutePath: string;
+function parseServiceAccountJson(): ServiceAccount | null {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
-const candidateFiles = configuredServiceAccountPath
-  ? [configuredServiceAccountPath]
-  : ['./firebase-service-account.json', './firebase-service-account1.json'];
+  if (!serviceAccountJson) {
+    return null;
+  }
 
-let candidates = candidateFiles.flatMap((serviceAccountPath) => [
-  path.resolve(process.cwd(), serviceAccountPath),
-  path.resolve(__dirname, '../../', serviceAccountPath),
-  serviceAccountPath,
-]);
+  return JSON.parse(serviceAccountJson) as ServiceAccount;
+}
 
-absolutePath = candidates[0];
-let fileFound = false;
+function resolveServiceAccountPath(): string {
+  const explicitPath =
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  const candidateNames = [
+    explicitPath,
+    'firebase-service-account.json',
+    'your-service-account-key.json',
+    'service-account.json',
+    'serviceAccountKey.json',
+  ].filter(Boolean) as string[];
+  const candidateDirs = [process.cwd(), path.resolve(__dirname, '../../')];
 
-for (const candidate of candidates) {
-  if (fs.existsSync(candidate)) {
-    absolutePath = candidate;
-    fileFound = true;
-    console.log(`Firebase service account found at: ${candidate}`);
-    break;
+  for (const dir of candidateDirs) {
+    for (const fileName of candidateNames) {
+      const fullPath = path.isAbsolute(fileName)
+        ? fileName
+        : path.resolve(dir, fileName);
+
+      if (fs.existsSync(fullPath)) {
+        console.log('Firebase service account found at: ' + fullPath);
+        return fullPath;
+      }
+    }
+  }
+
+  throw new Error(
+    'Firebase service account not found. Tried: ' + candidateNames.join(', '),
+  );
+}
+
+function loadFirebaseConfig(): ServiceAccount {
+  const serviceAccountFromJson = parseServiceAccountJson();
+
+  if (serviceAccountFromJson) {
+    return serviceAccountFromJson;
+  }
+
+  try {
+    const serviceAccountPath = resolveServiceAccountPath();
+    return JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8')) as ServiceAccount;
+  } catch (error) {
+    console.error(
+      error instanceof Error
+        ? error.message
+        : 'Failed to load Firebase service account.',
+    );
+
+    return {
+      projectId: process.env.FIREBASE_PROJECT_ID || 'undefined',
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL || 'undefined',
+      privateKey:
+        process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n') || 'undefined',
+    };
   }
 }
 
-if (!fileFound) {
-  console.warn(
-    `Firebase service account not found. Tried: ${candidates.join(', ')}`,
-  );
-}
-
-let firebaseConfig: ServiceAccount;
-
-try {
-  const serviceAccountJson = fs.readFileSync(absolutePath, 'utf8');
-  const parsed = JSON.parse(serviceAccountJson);
-  console.log('Firebase JSON parsed successfully');
-  console.log(`  - project_id: ${parsed.project_id}`);
-  console.log(`  - client_email: ${parsed.client_email}`);
-  console.log(`  - type: ${parsed.type}`);
-
-  firebaseConfig = parsed as ServiceAccount;
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(
-    `Failed to load Firebase service account from ${absolutePath}:`,
-    message,
-  );
-  // Environment fallback keeps configuration explicit for deployed systems.
-  firebaseConfig = {
-    projectId: process.env.FIREBASE_PROJECT_ID || 'undefined',
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL || 'undefined',
-    privateKey:
-      process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n') || 'undefined',
-  };
-}
-
-export { firebaseConfig };
+export const firebaseConfig = loadFirebaseConfig();

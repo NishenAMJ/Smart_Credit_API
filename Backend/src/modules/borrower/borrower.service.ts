@@ -130,7 +130,10 @@ export class BorrowerService {
 
             if (!currentNextDate || loanDate < currentNextDate) {
               nextDueDate = loan.nextDueDate;
-              nextPaymentAmount = loan.monthlyInstallment || 0;
+              nextPaymentAmount = Math.min(
+                loan.monthlyInstallment || 0,
+                loan.outstandingBalance || 0,
+              );
             }
           }
         }

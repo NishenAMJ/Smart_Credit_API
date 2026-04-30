@@ -1,26 +1,22 @@
 /** @format */
 
 import "react-native-gesture-handler";
-import React, { useEffect } from "react";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-
-import BorrowerStackNavigator from "./navigation/BorrowerStackNavigator";
-import { setupMockSession } from "./utils/mockSession";
+import { AuthProvider } from "./context/AuthContext";
+import RootNavigator from "./navigation/RootNavigator";
 
 export default function App() {
-  useEffect(() => {
-    // Remove this after real auth is fully wired.
-    void setupMockSession();
-  }, []);
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <NavigationContainer>
-          <BorrowerStackNavigator />
-        </NavigationContainer>
+        <AuthProvider>
+          <NavigationContainer>
+            <RootNavigator />
+          </NavigationContainer>
+        </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -18,6 +18,7 @@ import {
   getPayments,
   paymentService,
 } from "../../api/services/payment.service";
+import { getApiErrorMessage } from "../../api/api-error";
 import { getTransactions } from "../../api/services/transaction.service";
 import { dashboardService } from "../../api/services/dashboard.service";
 import EmptyState from "../../components/common/EmptyState";
@@ -39,7 +40,7 @@ type PaymentsScreenProps = {
   route?: RouteProp<any, any>;
 };
 
-type PaymentMethod = "Card" | "Bank Transfer" | "Cash (QR)";
+type PaymentMethod = "Card" | "Bank Transfer" | "QR Payment";
 
 type PaymentMethodConfig =
   | {
@@ -48,7 +49,7 @@ type PaymentMethodConfig =
       icon: React.ComponentProps<typeof Feather>["name"];
     }
   | {
-      label: "Cash (QR)";
+      label: "QR Payment";
       iconSet: "material";
       icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
     };
@@ -88,7 +89,7 @@ export default function PaymentsScreen({
   const paymentMethods: PaymentMethodConfig[] = [
     { label: "Card", iconSet: "feather", icon: "credit-card" },
     { label: "Bank Transfer", iconSet: "feather", icon: "repeat" },
-    { label: "Cash (QR)", iconSet: "material", icon: "qrcode-scan" },
+    { label: "QR Payment", iconSet: "material", icon: "qrcode-scan" },
   ];
 
   const fetchPayments = async () => {
@@ -114,8 +115,12 @@ export default function PaymentsScreen({
         setDashboardNextPayment(null);
       }
     } catch (err) {
-      console.error("Error fetching payments/transactions:", err);
-      setError("Failed to load data. Please try again.");
+      const message = getApiErrorMessage(
+        err,
+        "Failed to load payment data. Please try again.",
+      );
+      console.error("Error fetching payments/transactions:", message);
+      setError(message);
       setPayments([]);
       setTransactions([]);
     } finally {
@@ -239,8 +244,12 @@ export default function PaymentsScreen({
         throw new Error("Invalid response");
       }
     } catch (err) {
-      console.error("QR Generation error:", err);
-      Alert.alert("Error", "Failed to generate QR code. Please try again.");
+      const message = getApiErrorMessage(
+        err,
+        "Failed to generate QR code. Please try again.",
+      );
+      console.error("QR Generation error:", message);
+      Alert.alert("QR unavailable", message);
       setQrModalVisible(false);
     } finally {
       setGeneratingQr(false);
@@ -270,13 +279,14 @@ export default function PaymentsScreen({
       currency: "LKR",
     }).format(payment.amount ?? 0);
 
-    let paymentMethodApi: "bank_transfer" | "qr_payment" | "card";
-    if (selectedPaymentMethod === "Card") paymentMethodApi = "card";
-    if (selectedPaymentMethod === "Bank Transfer")
-      paymentMethodApi = "bank_transfer";
-    if (selectedPaymentMethod === "Cash (QR)") paymentMethodApi = "qr_payment";
+    const paymentMethodApi =
+      selectedPaymentMethod === "Card"
+        ? "card"
+        : selectedPaymentMethod === "QR Payment"
+          ? "qr_payment"
+          : "bank_transfer";
 
-    if (selectedPaymentMethod === "Cash (QR)") {
+    if (selectedPaymentMethod === "QR Payment") {
       if (!payment.loanId) {
         Alert.alert(
           "Invalid Payment",
@@ -323,11 +333,12 @@ export default function PaymentsScreen({
               );
               void fetchPayments();
             } catch (err) {
-              console.error("Payment error:", err);
-              Alert.alert(
-                "Error",
+              const message = getApiErrorMessage(
+                err,
                 "Failed to process payment. Please try again.",
               );
+              console.error("Payment error:", message);
+              Alert.alert("Payment failed", message);
             } finally {
               setProcessingPaymentId(null);
             }
@@ -531,7 +542,7 @@ export default function PaymentsScreen({
         }
       />
 
-      {/* QR Code Modal for Cash Payments */}
+      {/* QR Code Modal for QR payments */}
       <Modal
         visible={qrModalVisible}
         transparent
@@ -545,7 +556,7 @@ export default function PaymentsScreen({
           />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Cash Payment</Text>
+              <Text style={styles.modalTitle}>QR Payment</Text>
               <TouchableOpacity
                 onPress={() => setQrModalVisible(false)}
                 style={styles.modalCloseBtn}
@@ -560,7 +571,7 @@ export default function PaymentsScreen({
 
             <Text style={styles.modalInstructions}>
               Show this QR code to your lender. They will scan it to instantly
-              verify and record your cash payment of{" "}
+              verify and record your QR payment of{" "}
               <Text style={{ fontWeight: "700", color: COLORS.textPrimary }}>
                 LKR {selectedQRPayment?.amount?.toLocaleString() ?? "0"}
               </Text>

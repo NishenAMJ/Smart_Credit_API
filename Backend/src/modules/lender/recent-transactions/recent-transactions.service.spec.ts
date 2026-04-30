@@ -81,12 +81,8 @@ describe('RecentTransactionsService', () => {
     const firebaseService = { getDb: () => db } as any;
     const service = new RecentTransactionsService(firebaseService);
 
-    jest
-      .spyOn(firestoreQueryUtils, 'orderByDateAndId')
-      .mockReturnValue(query as never);
-    jest
-      .spyOn(firestoreQueryUtils, 'applyDateCursor')
-      .mockReturnValue(query as never);
+    jest.spyOn(firestoreQueryUtils, 'orderByDateAndId').mockReturnValue(query as never);
+    jest.spyOn(firestoreQueryUtils, 'applyDateCursor').mockReturnValue(query as never);
 
     const result = await (service as any).getRecentPaymentsPage(
       createContext(['loan_1']),
@@ -130,12 +126,8 @@ describe('RecentTransactionsService', () => {
     const firebaseService = { getDb: () => db } as any;
     const service = new RecentTransactionsService(firebaseService);
 
-    jest
-      .spyOn(firestoreQueryUtils, 'orderByDateAndId')
-      .mockReturnValue(query as never);
-    jest
-      .spyOn(firestoreQueryUtils, 'applyDateCursor')
-      .mockReturnValue(query as never);
+    jest.spyOn(firestoreQueryUtils, 'orderByDateAndId').mockReturnValue(query as never);
+    jest.spyOn(firestoreQueryUtils, 'applyDateCursor').mockReturnValue(query as never);
 
     const result = await (service as any).getRecentPaymentsPage(
       createContext(['loan_1']),
@@ -181,12 +173,8 @@ describe('RecentTransactionsService', () => {
     const firebaseService = { getDb: () => db } as any;
     const service = new RecentTransactionsService(firebaseService);
 
-    jest
-      .spyOn(firestoreQueryUtils, 'orderByDateAndId')
-      .mockReturnValue(query as never);
-    jest
-      .spyOn(firestoreQueryUtils, 'applyDateCursor')
-      .mockReturnValue(query as never);
+    jest.spyOn(firestoreQueryUtils, 'orderByDateAndId').mockReturnValue(query as never);
+    jest.spyOn(firestoreQueryUtils, 'applyDateCursor').mockReturnValue(query as never);
 
     const result = await (service as any).getRecentPaymentsPage(
       createContext(['loan_1']),
@@ -311,9 +299,7 @@ describe('RecentTransactionsService', () => {
       amount: 5100,
       source: 'payment',
     });
-    expect(result.items[0].createdAt?.toISOString()).toBe(
-      '2026-04-21T15:30:00.000Z',
-    );
+    expect(result.items[0].createdAt?.toISOString()).toBe('2026-04-21T15:30:00.000Z');
   });
 
   it('reuses the cached summary instead of rescanning history on each request', async () => {

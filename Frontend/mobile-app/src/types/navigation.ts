@@ -15,6 +15,7 @@ export type BorrowerStackParamList = {
         Loans: undefined;
         Payments: undefined;
         Support: undefined;
+        Agreement: undefined;
         Profile: undefined;
       }>
     | undefined;
@@ -22,6 +23,7 @@ export type BorrowerStackParamList = {
   Loans: undefined;
   Payments: undefined;
   Support: undefined;
+  Agreement: undefined;
   Profile: undefined;
   MyLoans: undefined;
   LoanDetails: { loan: BorrowerLoan };

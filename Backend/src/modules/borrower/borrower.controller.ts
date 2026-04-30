@@ -411,7 +411,7 @@ export class BorrowerController {
         return {
           paymentId: `upcoming-${l.loanId}`,
           loanId: l.loanId,
-          amount: l.monthlyInstallment,
+          amount: Math.min(l.monthlyInstallment, l.outstandingBalance),
           status: 'PENDING',
           dueDate,
           lenderName: lenderNames.get(l.lenderId) ?? l.lenderName ?? 'Lender',

@@ -10,6 +10,7 @@ import Home from "../screens/borrower/Home";
 import PaymentsScreen from "../screens/borrower/PaymentsScreen";
 import SupportScreen from "../screens/borrower/SupportScreen";
 import ProfileScreen from "../screens/borrower/ProfileScreen";
+import LegalAgreementScreen from "../screens/borrower/LegalAgreementScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -85,6 +86,16 @@ export default function BorrowerTabNavigator() {
         options={{
           tabBarIcon: ({ color, size }) => (
             <Feather name="message-circle" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tab.Screen
+        name="Agreement"
+        component={LegalAgreementScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="file-text" size={size} color={color} />
           ),
         }}
       />

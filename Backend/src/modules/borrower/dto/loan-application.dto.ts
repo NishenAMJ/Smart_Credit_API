@@ -27,9 +27,9 @@ export enum LoanPurpose {
  * Supported repayment channels for borrower payments.
  */
 export enum RepaymentMethod {
+  CARD = 'card',
   BANK_TRANSFER = 'bank_transfer',
   QR_PAYMENT = 'qr_payment',
-  CASH = 'cash',
 }
 
 /**

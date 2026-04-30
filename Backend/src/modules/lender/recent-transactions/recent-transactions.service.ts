@@ -140,7 +140,7 @@ export class RecentTransactionsService {
     );
     const visibleTransactions = pagedTransactions.items.slice(0, safePageSize);
     const activeLoanIds = Array.from(
-      new Set<string>(
+      new Set(
         visibleTransactions
           .map((transaction) => transaction.loanId)
           .filter((loanId): loanId is string => Boolean(loanId)),
@@ -154,10 +154,9 @@ export class RecentTransactionsService {
       loanIdsList,
       includeSummary,
     );
-    const searchResultCount =
-      normalizedSearch && includeSearchCount
-        ? await this.getSearchResultCount(lenderId, context, normalizedSearch)
-        : null;
+    const searchResultCount = normalizedSearch && includeSearchCount
+      ? await this.getSearchResultCount(lenderId, context, normalizedSearch)
+      : null;
 
     const transactions: RecentTransactionListItem[] = visibleTransactions.map(
       (transaction) => {
@@ -434,11 +433,9 @@ export class RecentTransactionsService {
     const borrowerMap = await this.getBorrowerMap(uniqueBorrowerIds);
     const context = {
       loans,
-      loanIds: new Set<string>(loanIdsList),
+      loanIds: new Set(loanIdsList),
       loanIdsList,
-      loanMap: new Map<string, LoanRecord>(
-        loans.map((loan) => [loan.id, loan]),
-      ),
+      loanMap: new Map(loans.map((loan) => [loan.id, loan])),
       borrowerMap,
     } satisfies LenderLedgerContext;
 

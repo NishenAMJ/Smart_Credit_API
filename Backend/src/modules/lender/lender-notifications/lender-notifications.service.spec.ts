@@ -1,9 +1,6 @@
 import { LenderNotificationsService } from './lender-notifications.service';
 
-function createNotificationDoc(
-  id: string,
-  overrides: Record<string, unknown> = {},
-) {
+function createNotificationDoc(id: string, overrides: Record<string, unknown> = {}) {
   const data = {
     lenderId: 'lender_1',
     category: 'loan_request',
@@ -31,27 +28,11 @@ function createNotificationDoc(
 
 describe('LenderNotificationsService', () => {
   it('returns paginated notifications while preserving summary counts', async () => {
-    const service = new LenderNotificationsService({
-      getDb: () => ({}),
-    } as any);
-    jest
-      .spyOn(service as any, 'syncNotifications')
-      .mockResolvedValue(undefined);
+    const service = new LenderNotificationsService({ getDb: () => ({}) } as any);
+    jest.spyOn(service as any, 'syncNotifications').mockResolvedValue(undefined);
     jest.spyOn(service as any, 'loadNotifications').mockResolvedValue([
-      {
-        id: 'n1',
-        category: 'loan_request',
-        severity: 'info',
-        isRead: false,
-        createdAt: '2026-04-21T00:00:00.000Z',
-      },
-      {
-        id: 'n2',
-        category: 'ad',
-        severity: 'warning',
-        isRead: true,
-        createdAt: '2026-04-20T00:00:00.000Z',
-      },
+      { id: 'n1', category: 'loan_request', severity: 'info', isRead: false, createdAt: '2026-04-21T00:00:00.000Z' },
+      { id: 'n2', category: 'ad', severity: 'warning', isRead: true, createdAt: '2026-04-20T00:00:00.000Z' },
     ]);
     jest.spyOn(service as any, 'buildNotificationsQuery').mockReturnValue({
       get: jest.fn().mockResolvedValue({
@@ -66,12 +47,7 @@ describe('LenderNotificationsService', () => {
       }),
     });
 
-    const result = await service.getNotifications(
-      'lender_1',
-      undefined,
-      'all',
-      10,
-    );
+    const result = await service.getNotifications('lender_1', undefined, 'all', 10);
 
     expect(result.unreadCount).toBe(1);
     expect(result.notifications).toHaveLength(10);
@@ -79,27 +55,11 @@ describe('LenderNotificationsService', () => {
   });
 
   it('keeps summary behavior intact', async () => {
-    const service = new LenderNotificationsService({
-      getDb: () => ({}),
-    } as any);
-    jest
-      .spyOn(service as any, 'syncNotifications')
-      .mockResolvedValue(undefined);
+    const service = new LenderNotificationsService({ getDb: () => ({}) } as any);
+    jest.spyOn(service as any, 'syncNotifications').mockResolvedValue(undefined);
     jest.spyOn(service as any, 'loadNotifications').mockResolvedValue([
-      {
-        id: 'n1',
-        category: 'loan_request',
-        severity: 'critical',
-        isRead: false,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'n2',
-        category: 'ad',
-        severity: 'info',
-        isRead: true,
-        createdAt: '2026-04-20T00:00:00.000Z',
-      },
+      { id: 'n1', category: 'loan_request', severity: 'critical', isRead: false, createdAt: new Date().toISOString() },
+      { id: 'n2', category: 'ad', severity: 'info', isRead: true, createdAt: '2026-04-20T00:00:00.000Z' },
     ]);
 
     const result = await service.getSummary('lender_1');

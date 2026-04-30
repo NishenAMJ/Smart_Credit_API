@@ -14,6 +14,7 @@ import { Feather } from "@expo/vector-icons";
 import LoanCard from "../../components/borrower/LoanCard";
 import EmptyState from "../../components/common/EmptyState";
 import { getMyLoans } from "../../api/services/loan.service";
+import { getApiErrorMessage } from "../../api/api-error";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import type { BorrowerLoan } from "../../types/borrower";
@@ -40,8 +41,9 @@ export default function MyLoansScreen({ navigation }: MyLoansScreenProps) {
       const data = await getMyLoans("active");
       setLoans(data ?? []);
     } catch (err) {
-      console.error("Error fetching active loans:", err);
-      setError("Failed to load your active loans.");
+      const message = getApiErrorMessage(err, "Failed to load your active loans.");
+      console.error("Error fetching active loans:", message);
+      setError(message);
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -19,6 +19,7 @@ import { BORDER_RADIUS } from "../../constants/borderRadius";
 import { SHADOWS } from "../../constants/shadows";
 import type { BorrowerNavigation } from "../../types/navigation";
 import { supportService, type SupportStatus } from "../../api/services/support.service";
+import { getApiErrorMessage } from "../../api/api-error";
 import { getUserId } from "../../utils/auth.storage";
 import Loader from "../../components/common/Loader";
 
@@ -34,16 +35,20 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
   const [supportStatusCards, setSupportStatusCards] = useState<SupportStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const fetchSupportStatus = async () => {
     try {
+      setErrorMessage("");
       const userId = await getUserId();
       if (userId) {
         const data = await supportService.getSupportStatus(userId);
         setSupportStatusCards(data);
       }
     } catch (err) {
-      console.error("Error loading support status:", err);
+      const message = getApiErrorMessage(err, "Failed to load support status.");
+      console.error("Error loading support status:", message);
+      setErrorMessage(message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -114,6 +119,10 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
           />
         }
       >
+        {errorMessage ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : null}
+
         <View style={styles.quickActionRow}>
           {supportQuickActions.map((action) => (
             <TouchableOpacity
@@ -220,6 +229,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginBottom: SPACING.lg,
+  },
+  errorText: {
+    color: COLORS.error ?? "#DC2626",
+    fontSize: TYPOGRAPHY.small.fontSize,
+    marginBottom: SPACING.md,
   },
   quickActionCard: {
     flex: 1,

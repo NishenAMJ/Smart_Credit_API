@@ -103,9 +103,7 @@ export class LenderNotificationsController {
     );
   }
 
-  private resolveStateFilter(
-    value: string | undefined,
-  ): NotificationStateFilter {
+  private resolveStateFilter(value: string | undefined): NotificationStateFilter {
     if (value === 'read' || value === 'unread') {
       return value;
     }

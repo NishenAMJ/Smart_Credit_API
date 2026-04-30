@@ -197,10 +197,10 @@ export class AnalyticsService {
     );
     const ads = adSnapshot.docs.map((doc) => this.mapAd(doc));
 
-    const loanIds = new Set<string>(loans.map((loan) => loan.id));
-    const adIds = new Set<string>(ads.map((ad) => ad.id));
+    const loanIds = new Set(loans.map((loan) => loan.id));
+    const adIds = new Set(ads.map((ad) => ad.id));
     const borrowerIds = Array.from(
-      new Set<string>(
+      new Set(
         loans
           .filter((loan) => loan.status === 'active' && loan.borrowerId)
           .map((loan) => loan.borrowerId as string),
@@ -641,8 +641,8 @@ export class AnalyticsService {
     );
     const ads = adSnapshot.docs.map((doc) => this.mapAd(doc));
 
-    const loanIds = new Set<string>(loans.map((loan) => loan.id));
-    const adIds = new Set<string>(ads.map((ad) => ad.id));
+    const loanIds = new Set(loans.map((loan) => loan.id));
+    const adIds = new Set(ads.map((ad) => ad.id));
     const [scopedRequests, transactions, disputes] = await Promise.all([
       this.getRequestsForLender(db, lenderId, adIds),
       this.getTransactionsForLoanIds(db, loanIds),
@@ -650,7 +650,7 @@ export class AnalyticsService {
     ]);
 
     const borrowerIds = Array.from(
-      new Set<string>([
+      new Set([
         ...loans
           .map((loan) => loan.borrowerId)
           .filter((borrowerId): borrowerId is string => Boolean(borrowerId)),
@@ -668,9 +668,7 @@ export class AnalyticsService {
       transactions,
       disputes,
       borrowerNameMap,
-      loanMap: new Map<string, LoanRecord>(
-        loans.map((loan) => [loan.id, loan]),
-      ),
+      loanMap: new Map(loans.map((loan) => [loan.id, loan])),
     };
   }
 

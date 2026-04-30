@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
+import { getApiErrorMessage } from "../../api/api-error";
 import LoanCard from "../../components/borrower/LoanCard";
 import TransactionCard from "../../components/borrower/TransactionCard";
 import CreditScoreWidget from "../../components/borrower/CreditScoreWidget";
@@ -66,6 +67,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const HEADER_MAX_HEIGHT = 330;
   const HEADER_MIN_HEIGHT = 120;
@@ -99,6 +101,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
   const fetchData = async () => {
     try {
+      setErrorMessage("");
       const [dashboardResponse, loanData, transactionResponse, creditResponse] =
         await Promise.all([
           dashboardService.getDashboard(),
@@ -124,7 +127,10 @@ export default function Home({ navigation }: MyLoansScreenProps) {
             };
           }
         } catch (profileError) {
-          console.warn("Could not fetch profile separately:", profileError);
+          console.warn(
+            "Could not fetch profile separately:",
+            getApiErrorMessage(profileError, "Profile details are unavailable."),
+          );
         }
       }
 
@@ -161,7 +167,12 @@ export default function Home({ navigation }: MyLoansScreenProps) {
       setLoans(loanData ?? []);
       setTransactions(transactionResponse?.data ?? []);
     } catch (error) {
-      console.error("Error fetching borrower home data:", error);
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load your borrower dashboard.",
+      );
+      console.error("Error fetching borrower home data:", message);
+      setErrorMessage(message);
       setDashboard(null);
       setLoans([]);
       setTransactions([]);
@@ -348,6 +359,13 @@ export default function Home({ navigation }: MyLoansScreenProps) {
           />
         }
       >
+        {errorMessage ? (
+          <View style={styles.errorBanner}>
+            <Feather name="alert-circle" size={16} color={COLORS.error ?? "#DC2626"} />
+            <Text style={styles.errorBannerText}>{errorMessage}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.quickActionsRow}>
           {quickActions.map((action) => (
             <TouchableOpacity
@@ -659,6 +677,20 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     paddingBottom: 42,
     gap: SPACING.lg,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    padding: SPACING.md,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: COLORS.error ?? "#DC2626",
+    fontSize: TYPOGRAPHY.small.fontSize,
+    lineHeight: 18,
   },
   quickActionsRow: {
     flexDirection: "row",

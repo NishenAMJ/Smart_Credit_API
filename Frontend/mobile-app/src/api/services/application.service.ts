@@ -21,7 +21,7 @@ export interface CreateApplicationPayload {
   purpose?: string;
   description?: string;
   tenureMonths: number;
-  preferredRepaymentMethod?: "bank_transfer" | "qr_payment" | "cash";
+  preferredRepaymentMethod?: "bank_transfer" | "qr_payment" | "card";
   collateralDetails?: string[];
   additionalNotes?: string;
 }
@@ -156,7 +156,7 @@ export async function createApplication(payload: {
   purpose: string;
   description?: string;
   tenureMonths?: number;
-  preferredRepaymentMethod?: "bank_transfer" | "qr_payment" | "cash";
+  preferredRepaymentMethod?: "bank_transfer" | "qr_payment" | "card";
 }) {
   return applicationService.createApplication({
     adId: payload.adId,

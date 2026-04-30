@@ -7,10 +7,14 @@ import {
 import { FirebaseService } from '../../firebase/firebase.service';
 import { FieldValue } from 'firebase-admin/firestore';
 import { CreateLoanDto } from './dto/create-loan.dto';
+import { LegalService } from '../legal/legal.service';
 
 @Injectable()
 export class LoansService {
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly legalService: LegalService,
+  ) {}
 
   private hasExpectedRole(
     roleValue: unknown,
@@ -66,7 +70,21 @@ export class LoansService {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    return { id: docRef.id };
+
+    let legalDocumentId: string | null = null;
+
+    try {
+      const document = await this.legalService.generateLoanAgreement(
+        docRef.id,
+        createLoanDto.lenderId,
+        'lender',
+      );
+      legalDocumentId = document.id;
+    } catch (error) {
+      console.error('Automatic legal agreement generation failed:', error);
+    }
+
+    return { id: docRef.id, legalDocumentId };
   }
 
   async getAllLoans() {

@@ -43,7 +43,7 @@ interface IPayment {
 interface IPaymentCardProps {
   /** Payment data object containing amount, dates, status, etc. */
   payment: IPayment;
-  /** Selected payment method (Card, Bank Transfer, Cash (QR)) */
+  /** Selected payment method (Card, Bank Transfer, QR Payment) */
   paymentMethod?: string;
   /** Callback fired when pay button is pressed */
   onPay?: () => void;

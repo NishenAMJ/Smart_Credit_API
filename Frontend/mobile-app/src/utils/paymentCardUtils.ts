@@ -167,7 +167,7 @@ export const shouldShowPayButton = (
 export const getPaymentButtonLabel = (
   paymentMethod: string | undefined,
 ): string => {
-  return paymentMethod === "Cash (QR)" ? "Show QR" : "Pay Now";
+  return paymentMethod === "QR Payment" ? "Show QR" : "Pay Now";
 };
 
 /**
@@ -178,7 +178,7 @@ export const getPaymentButtonLabel = (
 export const getPaymentButtonIcon = (
   paymentMethod: string | undefined,
 ): { name: string; type: "feather" | "material" } => {
-  if (paymentMethod === "Cash (QR)") {
+  if (paymentMethod === "QR Payment") {
     return { name: "qrcode-scan", type: "material" };
   }
   return { name: "send", type: "feather" };

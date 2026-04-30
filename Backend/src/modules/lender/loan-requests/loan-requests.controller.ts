@@ -1,4 +1,9 @@
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Query,
+} from '@nestjs/common';
 import { LoanRequestsService } from './loan-requests.service';
 import { PendingRequestsResponse } from './loan-requests.types';
 

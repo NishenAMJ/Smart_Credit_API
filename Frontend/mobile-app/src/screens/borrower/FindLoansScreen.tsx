@@ -13,6 +13,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { getApiErrorMessage } from "../../api/api-error";
 import { loanService } from "../../api/services/loan.service";
 import EmptyState from "../../components/common/EmptyState";
 import Loader from "../../components/common/Loader";
@@ -47,6 +48,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
   const [selectedDuration, setSelectedDuration] = useState("Any");
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [activeDropdown, setActiveDropdown] = useState<
     "location" | "amount" | "duration" | null
   >(null);
@@ -156,6 +158,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
 
   const fetchFeaturedLoans = async () => {
     try {
+      setErrorMessage("");
       const response = await loanService.getFeaturedLoans();
       const loans = response.data ?? [];
 
@@ -165,7 +168,12 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
 
       setLoans(loans);
     } catch (error) {
-      console.error("Error fetching available loans:", error);
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load available loans.",
+      );
+      console.error("Error fetching available loans:", message);
+      setErrorMessage(message);
       setLoans([]);
     } finally {
       setLoading(false);
@@ -186,10 +194,13 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
 
     try {
       setLoading(true);
+      setErrorMessage("");
       const response = await loanService.searchLoans(searchQuery);
       setLoans(response.data ?? []);
     } catch (error) {
-      console.error("Error searching loans:", error);
+      const message = getApiErrorMessage(error, "Failed to search loans.");
+      console.error("Error searching loans:", message);
+      setErrorMessage(message);
       setLoans([]);
     } finally {
       setLoading(false);
@@ -200,10 +211,14 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
     if (loading) {
       return "";
     }
+    if (errorMessage) {
+      return errorMessage;
+    }
+
     return searchQuery.trim()
       ? "No loans found for your search."
       : "No loans available.";
-  }, [loading, searchQuery]);
+  }, [errorMessage, loading, searchQuery]);
 
   const filteredLoans = useMemo(() => {
     return loans.filter((loan) => {
