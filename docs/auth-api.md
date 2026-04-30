@@ -34,8 +34,9 @@ On login, the backend:
 
 - looks up the user by email or phone
 - compares the submitted password against `passwordHash` with `bcrypt.compare`
-- checks that the selected role is allowed for that user
-- signs a JWT with `sub`, `email`, and `role`
+- resolves the active session role from the stored account roles
+- optionally honors a requested role when an older client still submits one
+- signs a JWT with `sub`, `email`, and the resolved `role`
 
 The JWT is a signed access token. It is not a Firebase token and it is not a database session record. The frontend stores it locally and sends it back on every protected request.
 
@@ -115,15 +116,14 @@ Response:
 
 ### `POST /auth/login`
 
-Accepts either email or phone as `identifier`. The selected `role` is required and becomes part of the signed JWT payload for that session.
+Accepts either email or phone as `identifier`. The backend resolves the session role from the stored account data, and older clients may still send an optional `role` override when needed.
 
 Request:
 
 ```json
 {
   "identifier": "auth.demo@example.com",
-  "password": "DemoPass123",
-  "role": "borrower"
+  "password": "DemoPass123"
 }
 ```
 

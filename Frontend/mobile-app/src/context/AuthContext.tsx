@@ -75,10 +75,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   async function hydrateWorkspace(accessToken: string, user: AuthResponse["user"]) {
     setAuthToken(accessToken);
-
-    const [nextSessionStatus, nextDashboard, nextKyc] = await Promise.all([
-      getSession(),
-      getDashboard(user.role === "lender" ? "lender" : "borrower"),
+    const nextSessionStatus = await getSession();
+    const dashboardPromise =
+      nextSessionStatus.activeRole === "lender"
+        ? getDashboard("lender")
+        : nextSessionStatus.activeRole === "borrower"
+          ? getDashboard("borrower")
+          : Promise.resolve<DashboardResponse | null>(null);
+    const [nextDashboard, nextKyc] = await Promise.all([
+      dashboardPromise,
       getMyKycSubmission().catch(() => ({ submission: null })),
     ]);
 

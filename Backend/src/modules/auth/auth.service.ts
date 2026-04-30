@@ -91,7 +91,7 @@ export class AuthService {
     const user = await this.findUserByIdentifier(loginDto.identifier);
 
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials or selected role.');
+      throw new UnauthorizedException('Invalid credentials.');
     }
 
     if (user.accountStatus !== 'active') {
@@ -103,14 +103,16 @@ export class AuthService {
       user.passwordHash,
     );
 
-    if (!passwordMatches || !user.role.includes(loginDto.role)) {
-      throw new UnauthorizedException('Invalid credentials or selected role.');
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Invalid credentials.');
     }
+
+    const activeRole = this.resolveLoginRole(user, loginDto.role);
 
     const accessToken = this.jwtService.sign({
       sub: user.uid,
       email: user.email,
-      role: loginDto.role,
+      role: activeRole,
     });
 
     await this.usersCollection.doc(user.uid).update({
@@ -120,7 +122,7 @@ export class AuthService {
 
     return {
       accessToken,
-      user: this.toSafeUser(user, loginDto.role),
+      user: this.toSafeUser(user, activeRole),
     };
   }
 
@@ -334,6 +336,27 @@ export class AuthService {
       role: roleOverride ?? user.role[0],
       kycStatus: user.kycStatus,
     };
+  }
+
+  private resolveLoginRole(
+    user: UserDocument,
+    requestedRole?: UserRole,
+  ): UserRole {
+    if (requestedRole) {
+      if (!user.role.includes(requestedRole)) {
+        throw new UnauthorizedException('Invalid credentials.');
+      }
+
+      return requestedRole;
+    }
+
+    const defaultRole = user.role[0];
+
+    if (!defaultRole) {
+      throw new UnauthorizedException('This account does not have an assigned role.');
+    }
+
+    return defaultRole;
   }
 
   private normalizeEmail(email: string): string {

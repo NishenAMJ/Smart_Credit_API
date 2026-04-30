@@ -218,7 +218,6 @@ describe('AuthService', () => {
     const response = await service.login({
       identifier: 'NIMAL@example.com',
       password: 'SmartPass123',
-      role: 'borrower',
     });
 
     expect(jwtService.sign).toHaveBeenCalledWith({
@@ -255,7 +254,6 @@ describe('AuthService', () => {
     await service.login({
       identifier: '077 123 4568',
       password: 'SmartPass123',
-      role: 'borrower',
     });
 
     expect(usersCollection.where).toHaveBeenCalledWith(
@@ -273,7 +271,6 @@ describe('AuthService', () => {
       service.login({
         identifier: 'nimal@example.com',
         password: 'SmartPass123',
-        role: 'borrower',
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
@@ -291,6 +288,28 @@ describe('AuthService', () => {
         role: 'lender',
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('uses the requested role when it is allowed for the account', async () => {
+    const user = buildUser({
+      role: ['borrower', 'lender'],
+      passwordHash: 'stored-hash',
+    });
+    queueQueryResult(user);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+    const response = await service.login({
+      identifier: 'nimal@example.com',
+      password: 'SmartPass123',
+      role: 'lender',
+    });
+
+    expect(jwtService.sign).toHaveBeenCalledWith({
+      sub: user.uid,
+      email: user.email,
+      role: 'lender',
+    });
+    expect(response.user.role).toBe('lender');
   });
 
   it('returns the stored session status and falls back to the first available role', async () => {

@@ -14,7 +14,7 @@ export type AuthUser = {
 export type LoginPayload = {
   identifier: string;
   password: string;
-  role: UserRole;
+  role?: UserRole;
 };
 
 export type RegisterPayload = {

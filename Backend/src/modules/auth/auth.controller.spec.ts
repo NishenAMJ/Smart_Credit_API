@@ -58,7 +58,6 @@ describe('AuthController', () => {
     const payload = {
       identifier: 'nimal@example.com',
       password: 'SmartPass123',
-      role: 'borrower',
     };
 
     await controller.login(payload);

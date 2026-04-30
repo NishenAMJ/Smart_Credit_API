@@ -9,7 +9,6 @@ import type {
   PublicUserRole,
   RegisterFormState,
   StoredSession,
-  UserRole,
 } from './types';
 
 const STORAGE_KEY = 'smart-credit-shared-auth-session';
@@ -81,9 +80,7 @@ export default function App() {
   const [apiError, setApiError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loginRole, setLoginRole] = useState<UserRole>('lender');
 
-  const isAdminLogin = loginRole === 'admin';
   const registerRoleLabel = registerForm.role === 'borrower' ? 'borrower' : 'lender';
 
   const authSummary = useMemo(() => {
@@ -118,21 +115,11 @@ export default function App() {
     const nextErrors: Record<string, string> = {};
 
     if (!loginForm.identifier.trim()) {
-      nextErrors.identifier = isAdminLogin
-        ? 'Admin email is required.'
-        : 'Email or phone is required.';
+      nextErrors.identifier = 'Email or phone is required.';
     }
 
     if (!loginForm.password.trim()) {
       nextErrors.password = 'Password is required.';
-    }
-
-    if (
-      isAdminLogin &&
-      loginForm.identifier.trim() &&
-      !/^\S+@\S+\.\S+$/.test(loginForm.identifier.trim())
-    ) {
-      nextErrors.identifier = 'Enter a valid admin email address.';
     }
 
     setFieldErrors(nextErrors);
@@ -218,7 +205,6 @@ export default function App() {
       const response = await authApi.login({
         identifier: loginForm.identifier.trim(),
         password: loginForm.password,
-        role: loginRole,
       });
 
       const nextSession = {
@@ -246,6 +232,8 @@ export default function App() {
 
     try {
       setLoading(true);
+      const createdRoleLabel =
+        registerForm.role === 'borrower' ? 'borrower' : 'lender';
 
       await authApi.register({
         fullName: registerForm.fullName.trim(),
@@ -291,7 +279,7 @@ export default function App() {
         password: '',
       });
       setInfoMessage(
-        'Account created and KYC submitted successfully. Your lender account is now waiting for review.',
+        `Account created and KYC submitted successfully. Your ${createdRoleLabel} account is now waiting for review.`,
       );
     } catch (error) {
       if (error instanceof ApiError) {
@@ -378,9 +366,10 @@ export default function App() {
             One secure <span>login</span> for every Smart Credit role.
           </h1>
           <p className="hero-copy">
-            Sign in with the role that matches your account. Public account
-            creation is available for lenders and borrowers, with KYC handled
-            in a separate second step.
+            Sign in with your credentials and let the backend resolve the
+            correct access role for your account. Public account creation is
+            available for lenders and borrowers, with KYC handled in a separate
+            second step.
           </p>
         </div>
 
@@ -405,20 +394,18 @@ export default function App() {
               </span>
               <span className="auth-kicker auth-kicker-muted">
                 {mode === 'login'
-                  ? `${loginRole === 'admin' ? 'Admin' : loginRole === 'borrower' ? 'Borrower' : 'Lender'} session`
+                  ? 'Account session'
                   : `${registerRoleLabel} account setup`}
               </span>
             </div>
             <h2>
               {mode === 'login'
-                ? `${loginRole === 'admin' ? 'Admin' : loginRole === 'borrower' ? 'Borrower' : 'Lender'} sign in`
+                ? 'Sign in'
                 : `Create ${registerRoleLabel} account`}
             </h2>
             <p>
               {mode === 'login'
-                ? isAdminLogin
-                  ? 'Use the admin email and password for platform access.'
-                  : 'Access your account with the matching role, using your email or phone and password.'
+                ? 'Use your email or phone and password. Your account role is confirmed by the backend after authentication.'
                 : `Register your ${registerRoleLabel} account and submit KYC in the same flow.`}
             </p>
           </div>
@@ -480,35 +467,14 @@ export default function App() {
                 <div className="field-group-card">
                   <div className="section-card-head">
                     <strong>Sign in</strong>
-                    <span>Choose your role and enter the matching credentials.</span>
-                  </div>
-
-                  <div className="field">
-                    <span>Sign in as</span>
-                    <div className="role-chip-row">
-                      {(['admin', 'lender', 'borrower'] as UserRole[]).map((role) => (
-                        <button
-                          key={role}
-                          type="button"
-                          className={`role-chip ${loginRole === role ? 'active' : ''}`}
-                          onClick={() => {
-                            resetMessages();
-                            setLoginRole(role);
-                          }}
-                        >
-                          {role.charAt(0).toUpperCase() + role.slice(1)}
-                        </button>
-                      ))}
-                    </div>
+                    <span>Enter the credentials stored for your Smart Credit account.</span>
                   </div>
 
                   <div className="role-strategy-panel">
                     <div className="role-strategy-item">
-                      <strong>{isAdminLogin ? 'Private admin access' : 'Role-based access'}</strong>
+                      <strong>Backend-resolved access</strong>
                       <span>
-                        {isAdminLogin
-                          ? 'Admins use the private stored platform account and enter with email only.'
-                          : 'Lenders and borrowers can use email or phone, but the selected role must match the account on the backend.'}
+                        Your session is issued with the role stored on the backend, so the login form stays focused on identity and password only.
                       </span>
                     </div>
                   </div>
@@ -516,7 +482,7 @@ export default function App() {
 
                 <div className="field-group-card field-group-card-soft">
                   <label className="field">
-                    <span>{isAdminLogin ? 'Admin email' : 'Email or phone'}</span>
+                    <span>Email or phone</span>
                     <input
                       value={loginForm.identifier}
                       onChange={(event) =>
@@ -525,11 +491,7 @@ export default function App() {
                           identifier: event.target.value,
                         }))
                       }
-                      placeholder={
-                        isAdminLogin
-                          ? 'admin@example.com'
-                          : 'name@example.com or +94 77 123 4567'
-                      }
+                      placeholder="name@example.com or +94 77 123 4567"
                       disabled={loading}
                     />
                     {fieldErrors.identifier && (
@@ -561,9 +523,7 @@ export default function App() {
               <div className="inline-note">
                 <span className="inline-note-dot" />
                 <p>
-                  {isAdminLogin
-                    ? 'Admin access is sign-in only and uses the private admin account stored in Firestore.'
-                    : 'The selected role must match the account role stored in the backend.'}
+                  The backend validates your credentials and signs the session with the role assigned to your account.
                 </p>
               </div>
 

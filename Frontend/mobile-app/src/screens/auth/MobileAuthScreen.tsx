@@ -97,7 +97,7 @@ async function convertFileUriToDataUrl(uri: string): Promise<string> {
 
 export default function MobileAuthScreen() {
   const { authLoading, error, signIn, signUp } = useAuth();
-  const [role, setRole] = useState<MobileRole>("borrower");
+  const [accountRole, setAccountRole] = useState<MobileRole>("borrower");
   const [mode, setMode] = useState<AuthMode>("login");
   const [registerStep, setRegisterStep] = useState<RegisterStep>("account");
   const [loginForm, setLoginForm] = useState<LoginForm>(initialLoginForm);
@@ -108,32 +108,37 @@ export default function MobileAuthScreen() {
   );
   const [uploadingField, setUploadingField] = useState<UploadFieldKey | null>(null);
 
-  const isBorrower = role === "borrower";
+  const isBorrowerAccount = accountRole === "borrower";
+  const accountRoleLabel = isBorrowerAccount ? "borrower" : "lender";
+  const accountRoleTitle = isBorrowerAccount ? "Borrower" : "Lender";
 
   const heroContent = useMemo(
-    () =>
-      isBorrower
-        ? {
-            eyebrow: "Borrower mobile app",
-            title: "Borrower sign in for your mobile workspace.",
-            copy:
-              "Create your account first, then complete KYC on a separate step before continuing into loans and repayments.",
-          }
-        : {
-            eyebrow: "Lender mobile app",
-            title: "Lender sign in for the shared mobile workspace.",
-            copy:
-              "Lenders can sign in here or create an account, then complete KYC in the second onboarding step.",
-          },
-    [isBorrower],
+    () => {
+      if (mode === "login") {
+        return {
+          eyebrow: "Smart Credit mobile",
+          title: "Secure sign in for your mobile workspace.",
+          copy:
+            "Use your email or phone together with your password. The backend confirms your role after authentication and opens the right mobile experience.",
+        };
+      }
+
+      return {
+        eyebrow: "Smart Credit platform",
+        title: "Join Smart Credit on mobile.",
+        copy:
+          "Set up your account details here, then complete KYC in the second step to access the platform.",
+      };
+    },
+    [accountRoleLabel, accountRoleTitle, mode],
   );
 
   const modeSummary =
     mode === "login"
       ? "Use your email or phone together with your password."
       : registerStep === "account"
-        ? "Start with your account details first."
-        : "Finish the second step with your KYC details.";
+        ? `Start with your ${accountRoleLabel} account details first.`
+        : `Finish the second step to verify your ${accountRoleLabel} account.`;
 
   const documentNumberLabel =
     registerForm.kyc.documentType === "passport"
@@ -154,14 +159,6 @@ export default function MobileAuthScreen() {
     }
   }
 
-  function switchRole(nextRole: MobileRole) {
-    setRole(nextRole);
-    setFieldError("");
-    setMode("login");
-    setRegisterStep("account");
-    setSelectedFiles({});
-  }
-
   async function handleSignIn() {
     if (!loginForm.identifier.trim() || !loginForm.password.trim()) {
       setFieldError("Please enter your email or phone together with your password.");
@@ -173,7 +170,6 @@ export default function MobileAuthScreen() {
       await signIn({
         identifier: loginForm.identifier.trim(),
         password: loginForm.password,
-        role,
       });
     } catch {
       return;
@@ -301,7 +297,7 @@ export default function MobileAuthScreen() {
           email: registerForm.email.trim(),
           phone: registerForm.phone.trim(),
           password: registerForm.password,
-          role,
+          role: accountRole,
         },
         kyc: {
           ...registerForm.kyc,
@@ -357,44 +353,6 @@ export default function MobileAuthScreen() {
               </View>
             </View>
 
-            <View style={styles.roleToggleShell}>
-              <Text style={styles.roleToggleLabel}>App mode</Text>
-              <View style={styles.roleToggleRow}>
-                <Pressable
-                  onPress={() => switchRole("borrower")}
-                  style={[
-                    styles.roleToggleButton,
-                    isBorrower && styles.roleToggleButtonActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.roleToggleText,
-                      isBorrower && styles.roleToggleTextActive,
-                    ]}
-                  >
-                    Borrower
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => switchRole("lender")}
-                  style={[
-                    styles.roleToggleButton,
-                    role === "lender" && styles.roleToggleButtonActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.roleToggleText,
-                      role === "lender" && styles.roleToggleTextActive,
-                    ]}
-                  >
-                    Lender
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
             <Text style={styles.heroTitle}>{heroContent.title}</Text>
             <Text style={styles.heroCopy}>{heroContent.copy}</Text>
           </View>
@@ -407,10 +365,10 @@ export default function MobileAuthScreen() {
                 </Text>
                 <Text style={styles.formTitle}>
                   {mode === "login"
-                    ? `${isBorrower ? "Borrower" : "Lender"} mobile sign in`
+                    ? "Sign in"
                     : registerStep === "account"
-                      ? `${isBorrower ? "Borrower" : "Lender"} account setup`
-                      : `${isBorrower ? "Borrower" : "Lender"} KYC verification`}
+                      ? `${accountRoleTitle} account setup`
+                      : `${accountRoleTitle} KYC verification`}
                 </Text>
               </View>
               {mode === "register" ? (
@@ -460,9 +418,7 @@ export default function MobileAuthScreen() {
               <View style={styles.noticeCard}>
                 <Text style={styles.noticeTitle}>Two-step sign up</Text>
                 <Text style={styles.noticeText}>
-                  {isBorrower
-                    ? "Create your borrower account first, then move to the KYC step."
-                    : "Create your lender account first, then move to the KYC step."}
+                  {`Create your ${accountRoleLabel} account first, then move to the KYC step.`}
                 </Text>
               </View>
             ) : null}
@@ -499,9 +455,7 @@ export default function MobileAuthScreen() {
                 </Button>
 
                 <Text style={styles.footerHint}>
-                  {isBorrower
-                    ? "Borrowers sign in here before loan search, applications, and repayments."
-                    : "Lenders can sign in here to continue into the mobile workspace."}
+                  Your account role is confirmed after sign-in and the app opens the matching mobile workspace automatically.
                 </Text>
               </View>
             ) : (
@@ -514,6 +468,42 @@ export default function MobileAuthScreen() {
                   <>
                     <Text style={styles.sectionTitle}>Account details</Text>
                     <View style={styles.sectionBlock}>
+                      <FieldLabel label='Create account for' />
+                      <View style={styles.accountRoleRow}>
+                        <Pressable
+                          onPress={() => setAccountRole("borrower")}
+                          style={[
+                            styles.accountRoleButton,
+                            isBorrowerAccount && styles.accountRoleButtonActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.accountRoleText,
+                              isBorrowerAccount && styles.accountRoleTextActive,
+                            ]}
+                          >
+                            Borrower
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setAccountRole("lender")}
+                          style={[
+                            styles.accountRoleButton,
+                            !isBorrowerAccount && styles.accountRoleButtonActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.accountRoleText,
+                              !isBorrowerAccount && styles.accountRoleTextActive,
+                            ]}
+                          >
+                            Lender
+                          </Text>
+                        </Pressable>
+                      </View>
+
                       <FieldLabel label='Full name' />
                       <Input
                         value={registerForm.fullName}
@@ -568,7 +558,7 @@ export default function MobileAuthScreen() {
                             confirmPassword: value,
                           }))
                         }
-                        placeholder='Repeat your password'
+                        placeholder='Confirm password'
                         secureTextEntry
                       />
                     </View>
@@ -581,9 +571,7 @@ export default function MobileAuthScreen() {
                   <>
                     <Text style={styles.sectionTitle}>KYC verification</Text>
                     <Text style={styles.sectionSubtitle}>
-                      {isBorrower
-                        ? "Finish this second step to verify your borrower account."
-                        : "Finish this second step to verify your lender account."}
+                      {`Finish this second step to verify your ${accountRoleLabel} account.`}
                     </Text>
 
                     <View style={styles.sectionBlock}>
@@ -919,43 +907,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
   },
-  roleToggleShell: {
-    gap: SPACING.sm,
-  },
-  roleToggleLabel: {
-    color: "rgba(255,255,255,0.72)",
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  roleToggleRow: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-  },
-  roleToggleButton: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: SPACING.md,
-  },
-  roleToggleButtonActive: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#FFFFFF",
-  },
-  roleToggleText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  roleToggleTextActive: {
-    color: COLORS.textPrimary,
-  },
   heroTitle: {
     color: "#FFFFFF",
     fontSize: 32,
@@ -1049,6 +1000,33 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 14,
     lineHeight: 20,
+  },
+  accountRoleRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+  },
+  accountRoleButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#D8E3F0",
+    backgroundColor: "#F8FBFF",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: SPACING.md,
+  },
+  accountRoleButtonActive: {
+    borderColor: "#9FCEFF",
+    backgroundColor: "#E8F3FF",
+  },
+  accountRoleText: {
+    color: COLORS.textSecondary,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  accountRoleTextActive: {
+    color: COLORS.primary,
   },
   errorText: {
     color: "#D92D20",
