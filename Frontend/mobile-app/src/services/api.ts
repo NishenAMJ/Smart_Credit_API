@@ -1,10 +1,6 @@
-import { Platform } from 'react-native';
-
-// Android emulator → 10.0.2.2, iOS simulator → localhost
-const BASE_URL =
-  Platform.OS === 'android'
-    ? 'http://10.0.2.2:3000/api'
-    : 'http://localhost:3000/api';
+// Physical device IP — update if your PC's WiFi IP changes
+// Found via ipconfig → Wi-Fi 2 → IPv4 Address
+const BASE_URL = 'http://192.168.120.219:3000/api';
 
 const handleResponse = async (res: Response) => {
   const json = await res.json();
