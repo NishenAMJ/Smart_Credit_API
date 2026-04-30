@@ -25,14 +25,21 @@ export default function LenderDashboardScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const [sum, requests, prof] = await Promise.all([
+        // Fetch stats first
+        const [sum, requests] = await Promise.all([
           DashboardService.getSummary(),
           LoanRequestsService.getPendingRequests({ pageSize: 3 }),
-          LenderProfileService.getProfile(),
         ]);
         setSummary(sum);
         setRecentApps(requests?.requests ?? []);
-        setProfile(prof);
+
+        // Fetch profile separately so a missing profile doesn't crash the dashboard
+        try {
+          const prof = await LenderProfileService.getProfile();
+          setProfile(prof);
+        } catch (profileError) {
+          console.log('Profile not found or failed to load:', profileError);
+        }
       } catch (e: any) {
         setError(e?.response?.data?.message ?? 'Failed to load dashboard');
       } finally {
@@ -95,7 +102,7 @@ export default function LenderDashboardScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
           <Text style={commonStyles.headerGreeting}>Welcome back</Text>
-          <Text style={commonStyles.headerName}>{profile?.fullName ?? profile?.name ?? 'Loading...'}</Text>
+          <Text style={commonStyles.headerName}>{profile?.fullName ?? profile?.name ?? 'Lender'}</Text>
         </View>
 
         {/* ── STATS ─────────────────────────────────── */}

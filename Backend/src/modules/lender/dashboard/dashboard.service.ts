@@ -427,7 +427,7 @@ export class DashboardService {
               .map((doc) => readString(doc.data().borrowerId))
               .filter((id): id is string => Boolean(id)),
           ),
-        );
+        ) as string[];
         const userDataById = await this.getUsersByIds(db, borrowerIds);
 
         for (const doc of snapshot.docs) {

@@ -28,6 +28,10 @@ export class FirebaseService {
     this.db = getFirestore(this.firebaseApp);
   }
 
+  getDb(): Firestore {
+    return this.db;
+  }
+
   // ── Firestore helpers ──────────────────────────────────────────────────────
 
   /**
