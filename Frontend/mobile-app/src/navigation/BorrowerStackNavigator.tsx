@@ -6,8 +6,10 @@ import BorrowerTabNavigator from "./BorrowerTabNavigator";
 import MyLoansScreen from "../screens/borrower/MyLoansScreen";
 import LoanDetailsScreen from "../screens/borrower/LoanDetailsScreen";
 import LoanApplicationScreen from "../screens/borrower/LoanApplicationScreen";
+import FilterLoansScreen from "../screens/borrower/FilterLoansScreen";
 import MyApplicationsScreen from "../screens/borrower/MyApplicationsScreen";
 import ApplicationDetailsScreen from "../screens/borrower/ApplicationDetailsScreen";
+import TransactionsScreen from "../screens/borrower/TransactionsScreen";
 import TransactionDetailsScreen from "../screens/borrower/TransactionDetailsScreen";
 import CreditScoreScreen from "../screens/borrower/CreditScoreScreen";
 import CreditHistoryScreen from "../screens/borrower/CreditHistoryScreen";
@@ -24,11 +26,13 @@ export default function BorrowerStackNavigator() {
       <Stack.Screen name="MyLoans" component={MyLoansScreen} />
       <Stack.Screen name="LoanDetails" component={LoanDetailsScreen} />
       <Stack.Screen name="LoanApplication" component={LoanApplicationScreen} />
+      <Stack.Screen name="FilterLoans" component={FilterLoansScreen} />
       <Stack.Screen name="MyApplications" component={MyApplicationsScreen} />
       <Stack.Screen
         name="ApplicationDetails"
         component={ApplicationDetailsScreen}
       />
+      <Stack.Screen name="Transactions" component={TransactionsScreen} />
       <Stack.Screen
         name="TransactionDetails"
         component={TransactionDetailsScreen}

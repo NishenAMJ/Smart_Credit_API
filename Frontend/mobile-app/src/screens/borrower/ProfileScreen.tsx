@@ -17,6 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import SidebarMenu from "../../components/common/SidebarMenu";
 import { profileService } from "../../api/services/profile.service";
 import { PROFILE_UPDATE_VERIFICATION_CODE } from "../../constants/demo";
+import { useAuth } from "../../context/AuthContext";
 import {
   getScoreColor,
   getScoreRating,
@@ -45,6 +46,7 @@ const EMPTY_EDITABLE_PROFILE = {
  * Displays borrower profile details and account-related actions.
  */
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
+  const { signOut } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [profile, setProfile] = useState<BorrowerProfile | null>(null);
   const [editableProfile, setEditableProfile] = useState(
@@ -339,6 +341,17 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     profile?.imageUrl ||
     profile?.avatarUrl ||
     "";
+
+  const onLogOut = () => {
+    Alert.alert("Log out", "Do you want to sign out from this borrower app?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: () => signOut(),
+      },
+    ]);
+  };
 
   return (
     <View style={styles.container}>
@@ -729,6 +742,11 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               </>
             )}
           </View>
+
+          <TouchableOpacity style={styles.logoutButton} onPress={onLogOut}>
+            <Feather name="log-out" size={16} color="#DC2626" />
+            <Text style={styles.logoutButtonText}>Log out</Text>
+          </TouchableOpacity>
         </ScrollView>
       )}
 
@@ -1127,5 +1145,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  logoutButton: {
+    marginTop: 4,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  logoutButtonText: {
+    color: "#DC2626",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

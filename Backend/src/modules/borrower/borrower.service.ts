@@ -496,9 +496,51 @@ export class BorrowerService {
     ]);
 
     if (!doc.exists) {
-      throw new NotFoundException(
-        `Borrower profile not found for user ${userId}`,
-      );
+      if (!userDoc.exists) {
+        throw new NotFoundException(
+          `Borrower profile not found for user ${userId}`,
+        );
+      }
+
+      const userData = userDoc.data() ?? {};
+      const fullName = String(userData.fullName ?? '');
+      const email = String(userData.email ?? '');
+      const phone = String(userData.phone ?? '');
+
+      return {
+        userId,
+        fullName,
+        email,
+        phone,
+        dateOfBirth: String(userData.dateOfBirth ?? ''),
+        nic: String(userData.nic ?? ''),
+        address: {
+          line1: String(userData.address?.line1 ?? ''),
+          city: String(userData.address?.city ?? ''),
+          district: String(userData.address?.district ?? ''),
+          province: String(userData.address?.province ?? ''),
+        },
+        employmentStatus: String(userData.employmentStatus ?? ''),
+        monthlyIncome: this.toNumber(userData.monthlyIncome),
+        occupation: String(userData.occupation ?? ''),
+        creditScore: this.toNumber(userData.creditScore, 0),
+        profileComplete: false,
+        kycVerified:
+          String(userData.kycStatus ?? '').toLowerCase() === 'approved',
+        totalLoans: 0,
+        activeLoans: 0,
+        totalBorrowed: 0,
+        totalRepaid: 0,
+        createdAt: this.toTimestamp(userData.createdAt) ?? Timestamp.now(),
+        updatedAt: this.toTimestamp(userData.updatedAt) ?? Timestamp.now(),
+        photoURL: String(userData.photoURL ?? ''),
+        profilePicture: String(userData.profilePicture ?? ''),
+        profilePictureUrl: String(userData.profilePictureUrl ?? ''),
+        profilePicUrl: String(userData.profilePicUrl ?? ''),
+        profilePhotoUrl: String(userData.profilePhotoUrl ?? ''),
+        imageUrl: String(userData.imageUrl ?? ''),
+        avatarUrl: String(userData.avatarUrl ?? ''),
+      };
     }
 
     const profileData = doc.data() ?? {};
@@ -551,12 +593,6 @@ export class BorrowerService {
   ): Promise<BorrowerProfile> {
     const doc = await this.db.collection(this.BORROWERS_COL).doc(userId).get();
 
-    if (!doc.exists) {
-      throw new NotFoundException(
-        `Borrower profile not found for user ${userId}`,
-      );
-    }
-
     const plainDto = this.removeUndefinedDeep(
       instanceToPlain(dto) as UpdateBorrowerProfileDto,
     );
@@ -566,7 +602,47 @@ export class BorrowerService {
       updatedAt: FieldValue.serverTimestamp(),
     };
 
-    await this.db.collection(this.BORROWERS_COL).doc(userId).update(updateData);
+    if (doc.exists) {
+      await this.db.collection(this.BORROWERS_COL).doc(userId).update(updateData);
+    } else {
+      const userDoc = await this.db.collection('users').doc(userId).get();
+      const userData = userDoc.data() ?? {};
+
+      await this.db
+        .collection(this.BORROWERS_COL)
+        .doc(userId)
+        .set({
+          userId,
+          fullName: dto.fullName ?? userData.fullName ?? '',
+          email: dto.email ?? userData.email ?? '',
+          phone: dto.phone ?? userData.phone ?? '',
+          dateOfBirth: userData.dateOfBirth ?? '',
+          nic: userData.nic ?? '',
+          address:
+            dto.address ??
+            userData.address ?? {
+              line1: '',
+              city: '',
+              district: '',
+              province: '',
+            },
+          employmentStatus: dto.employmentStatus ?? userData.employmentStatus ?? '',
+          monthlyIncome:
+            dto.monthlyIncome ?? this.toNumber(userData.monthlyIncome, 0),
+          occupation: dto.occupation ?? userData.occupation ?? '',
+          creditScore: this.toNumber(userData.creditScore, 0),
+          profileComplete: false,
+          kycVerified:
+            String(userData.kycStatus ?? '').toLowerCase() === 'approved',
+          totalLoans: 0,
+          activeLoans: 0,
+          totalBorrowed: 0,
+          totalRepaid: 0,
+          createdAt:
+            this.toTimestamp(userData.createdAt) ?? FieldValue.serverTimestamp(),
+          ...updateData,
+        });
+    }
 
     // Sync to 'users' collection if name changed
     const userUpdate: Record<string, any> = {};

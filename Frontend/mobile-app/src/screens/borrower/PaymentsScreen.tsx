@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import QRCode from "react-native-qrcode-svg";
 import {
   getPayments,
   paymentService,
@@ -576,12 +575,7 @@ export default function PaymentsScreen({
               </View>
             ) : qrToken ? (
               <View style={styles.qrPlaceholderBox}>
-                <QRCode
-                  value={qrToken}
-                  size={200}
-                  backgroundColor='#F3F4F6'
-                  color={COLORS.primary}
-                />
+                <QrTokenPreview token={qrToken} />
               </View>
             ) : (
               <View style={styles.qrPlaceholderBox}>
@@ -616,6 +610,27 @@ export default function PaymentsScreen({
         onClose={() => setSidebarVisible(false)}
         navigation={navigation}
       />
+    </View>
+  );
+}
+
+function QrTokenPreview({ token }: { token: string }) {
+  const cells = Array.from({ length: 121 }, (_, index) => {
+    const codePoint = token.charCodeAt(index % token.length);
+    return (codePoint + index) % 3 === 0;
+  });
+
+  return (
+    <View style={styles.qrPreviewWrap}>
+      <View style={styles.qrGrid}>
+        {cells.map((filled, index) => (
+          <View
+            key={index}
+            style={[styles.qrCell, filled && styles.qrCellFilled]}
+          />
+        ))}
+      </View>
+      <Text style={styles.qrTokenCaption}>Token ready for lender scan</Text>
     </View>
   );
 }
@@ -811,6 +826,32 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#E5E7EB",
     borderStyle: "dashed",
+  },
+  qrPreviewWrap: {
+    alignItems: "center",
+  },
+  qrGrid: {
+    width: 200,
+    height: 200,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    backgroundColor: "#F3F4F6",
+    padding: 10,
+    borderRadius: 12,
+  },
+  qrCell: {
+    width: "9.09%",
+    aspectRatio: 1,
+    backgroundColor: "#F3F4F6",
+  },
+  qrCellFilled: {
+    backgroundColor: COLORS.primary,
+  },
+  qrTokenCaption: {
+    marginTop: SPACING.md,
+    fontSize: 12,
+    color: COLORS.textSecondary || "#6B7280",
+    fontWeight: "600",
   },
   qrPlaceholderText: {
     marginTop: SPACING.md,

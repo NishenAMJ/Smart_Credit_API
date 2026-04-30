@@ -1,6 +1,6 @@
 # Smart Credit+ Auth API Guide
 
-This guide is for teammates using the auth backend before mobile integration.
+This guide explains the current backend-owned auth flow used by Smart Credit+ before mobile integration.
 
 ## Base URL
 
@@ -17,6 +17,41 @@ http://127.0.0.1:3000/api
 3. Save the returned `accessToken`
 4. Send `Authorization: Bearer <accessToken>` on protected requests
 5. Use `GET /auth/session` to confirm the current token and role
+
+## How This Project Authenticates Users
+
+Smart Credit+ does not use Firebase Authentication for sign-in. Instead, the backend manages credentials inside the Firestore `users` collection.
+
+On registration, the backend:
+
+- normalizes the email to `emailLower`
+- normalizes the phone to `phoneNormalized`
+- hashes the plaintext password with `bcrypt`
+- stores the hash as `passwordHash`
+- creates account metadata like `role`, `accountStatus`, `kycStatus`, and `authProvider`
+
+On login, the backend:
+
+- looks up the user by email or phone
+- compares the submitted password against `passwordHash` with `bcrypt.compare`
+- checks that the selected role is allowed for that user
+- signs a JWT with `sub`, `email`, and `role`
+
+The JWT is a signed access token. It is not a Firebase token and it is not a database session record. The frontend stores it locally and sends it back on every protected request.
+
+## What The JWT Contains
+
+Current JWT payload fields:
+
+- `sub`: the Firestore user id
+- `email`: the user email
+- `role`: the active role for this session
+
+`JwtStrategy` verifies the signature with `JWT_SECRET` and attaches the decoded payload to `req.user`.
+
+`JwtAuthGuard` rejects missing or invalid tokens with `401 Unauthorized`.
+
+`RolesGuard` rejects valid tokens that use the wrong role for a route with `403 Forbidden`.
 
 ## Roles
 
@@ -46,6 +81,22 @@ Request:
 }
 ```
 
+Stored Firestore shape includes fields like:
+
+- `uid`
+- `role`
+- `fullName`
+- `email`
+- `emailLower`
+- `phone`
+- `phoneNormalized`
+- `passwordHash`
+- `accountStatus`
+- `kycStatus`
+- `authProvider`
+- `createdAt`
+- `updatedAt`
+
 Response:
 
 ```json
@@ -64,7 +115,7 @@ Response:
 
 ### `POST /auth/login`
 
-Accepts either email or phone as `identifier`.
+Accepts either email or phone as `identifier`. The selected `role` is required and becomes part of the signed JWT payload for that session.
 
 Request:
 
@@ -179,7 +230,27 @@ admin@smartcredit.lk
 
 ## Seeded Firestore Accounts
 
-Existing seeded users were backfilled with auth fields.
+Use the backend seed path for local demo data:
+
+```bash
+cd Backend
+node seed-mock-data-with-lenderborrowers.js --key=../key/snap-221f4-firebase-adminsdk-fbsvc-14aca60c6f.json
+```
+
+If you already have older seeded users without auth fields, backfill them with:
+
+```bash
+cd Backend
+npm run backfill:auth-users
+```
+
+Seeded and backfilled users should contain:
+
+- `passwordHash`
+- `emailLower`
+- `phoneNormalized`
+- `accountStatus`
+- `authProvider`
 
 Shared seeded-user password:
 
@@ -207,4 +278,3 @@ baseUrl = http://127.0.0.1:3000/api
 ```
 
 Log in first, then paste the returned token into the `bearerToken` collection variable.
-

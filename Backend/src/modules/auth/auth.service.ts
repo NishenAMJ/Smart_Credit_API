@@ -22,7 +22,7 @@ import {
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SessionResponseDto } from './dto/session-response.dto';
-import { UserDocument, UserRole } from './auth.types';
+import { UserDocument, UserRole, KycStatus } from './auth.types';
 
 @Injectable()
 export class AuthService {
@@ -267,9 +267,18 @@ export class AuthService {
     };
   }
 
-  private async findUserByIdentifier(
-    identifier: string,
-  ): Promise<UserDocument | null> {
+  async getUserById(userId: string): Promise<UserDocument> {
+    return this.getRequiredUser(userId);
+  }
+
+  async updateUserKycStatus(userId: string, kycStatus: KycStatus): Promise<void> {
+    await this.usersCollection.doc(userId).update({
+      kycStatus,
+      updatedAt: Timestamp.now(),
+    });
+  }
+
+  private async findUserByIdentifier(identifier: string): Promise<UserDocument | null> {
     const trimmedIdentifier = identifier.trim();
 
     if (!trimmedIdentifier) {

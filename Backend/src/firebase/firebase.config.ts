@@ -1,6 +1,11 @@
 import { ServiceAccount } from 'firebase-admin';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+dotenv.config({
+  path: path.resolve(process.cwd(), '.env'),
+});
 
 function parseServiceAccountJson(): ServiceAccount | null {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;

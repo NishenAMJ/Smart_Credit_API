@@ -15,3 +15,4 @@ Backend/firebase-service-account.json
 Backend/your-service-account-key.json
 Backend/.env
 Backend/.env.local
+key/*.json

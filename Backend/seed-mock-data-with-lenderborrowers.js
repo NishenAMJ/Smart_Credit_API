@@ -10,6 +10,7 @@
 
 'use strict';
 
+const bcrypt = require('bcrypt');
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
@@ -22,6 +23,7 @@ const LENDER_BORROWERS_COLLECTION = 'lenderBorrowers';
 const TRANSACTIONS_COLLECTION = 'transactions';
 const DISPUTES_COLLECTION = 'disputes';
 const DEFAULT_KEY_PATH = './your-service-account-key.json';
+const DEFAULT_USER_PASSWORD = 'SmartCredit@123';
 const MAX_BATCH_SIZE = 400;
 
 const PURPOSES = ['education', 'business', 'medical', 'personal', 'vehicle', 'home'];
@@ -59,12 +61,17 @@ const LAST_NAMES = [
  * @property {string} photoURL
  * @property {string} phone
  * @property {string} email
+ * @property {string} emailLower
+ * @property {string} phoneNormalized
+ * @property {string} passwordHash
  * @property {number} creditScore
  * @property {number} rating
  * @property {number} totalLoansCompleted
  * @property {number} totalAmountLent
  * @property {number} totalAmountBorrowed
  * @property {"approved"} kycStatus
+ * @property {"active"} accountStatus
+ * @property {"local"} authProvider
  * @property {FirebaseFirestore.Timestamp} createdAt
  * @property {FirebaseFirestore.Timestamp} updatedAt
  */
@@ -241,6 +248,34 @@ function ts(date) {
   return admin.firestore.Timestamp.fromDate(clampDate(date));
 }
 
+function normalizeEmail(email) {
+  return String(email ?? '').trim().toLowerCase();
+}
+
+function normalizePhone(phone) {
+  const raw = String(phone ?? '').trim();
+  const digitsAndPlus = raw.replace(/[^\d+]/g, '');
+  let normalized = digitsAndPlus;
+
+  if (normalized.startsWith('+')) {
+    normalized = `+${normalized.slice(1).replace(/\D/g, '')}`;
+  } else {
+    normalized = normalized.replace(/\D/g, '');
+
+    if (normalized.startsWith('0')) {
+      normalized = `+94${normalized.slice(1)}`;
+    } else if (normalized.startsWith('94')) {
+      normalized = `+${normalized}`;
+    } else if (normalized.length === 9) {
+      normalized = `+94${normalized}`;
+    } else {
+      normalized = `+${normalized}`;
+    }
+  }
+
+  return normalized;
+}
+
 function photoURL(id) {
   return `https://i.pravatar.cc/300?u=${encodeURIComponent(id)}`;
 }
@@ -317,31 +352,39 @@ async function commitWrites(db, writes, label) {
   }
 }
 
-function createUsers(db, now, rng) {
+async function createUsers(db, now, rng) {
   /** @type {Map<string, UserDoc>} */
   const lenders = new Map();
   /** @type {Map<string, UserDoc>} */
   const borrowers = new Map();
   const writes = [];
+  const passwordHash = await bcrypt.hash(DEFAULT_USER_PASSWORD, 10);
 
   for (let i = 1; i <= 15; i += 1) {
     const uid = `lender_${pad(i, 3)}`;
     const fullName = buildName(i);
     const createdAt = addDays(now, -randomInt(rng, 120, 660));
+    const phone = phoneNumber(i);
+    const email = emailFromName(fullName, `l${pad(i, 2)}`);
     /** @type {UserDoc} */
     const lender = {
       uid,
       role: ['lender'],
       fullName,
       photoURL: photoURL(uid),
-      phone: phoneNumber(i),
-      email: emailFromName(fullName, `l${pad(i, 2)}`),
+      phone,
+      email,
+      emailLower: normalizeEmail(email),
+      phoneNormalized: normalizePhone(phone),
+      passwordHash,
       creditScore: randomInt(rng, 690, 840),
       rating: randomFloat(rng, 4.2, 5, 1),
       totalLoansCompleted: 0,
       totalAmountLent: 0,
       totalAmountBorrowed: 0,
       kycStatus: 'approved',
+      accountStatus: 'active',
+      authProvider: 'local',
       createdAt: ts(createdAt),
       updatedAt: ts(addDays(createdAt, randomInt(rng, 5, 45)))
     };
@@ -353,20 +396,27 @@ function createUsers(db, now, rng) {
     const uid = `borrower_${pad(i, 3)}`;
     const fullName = buildName(i + 100);
     const createdAt = addDays(now, -randomInt(rng, 90, 540));
+    const phone = phoneNumber(i + 50);
+    const email = emailFromName(fullName, `b${pad(i, 2)}`);
     /** @type {UserDoc} */
     const borrower = {
       uid,
       role: ['borrower'],
       fullName,
       photoURL: photoURL(uid),
-      phone: phoneNumber(i + 50),
-      email: emailFromName(fullName, `b${pad(i, 2)}`),
+      phone,
+      email,
+      emailLower: normalizeEmail(email),
+      phoneNormalized: normalizePhone(phone),
+      passwordHash,
       creditScore: randomInt(rng, 480, 790),
       rating: randomFloat(rng, 3.8, 5, 1),
       totalLoansCompleted: 0,
       totalAmountLent: 0,
       totalAmountBorrowed: 0,
       kycStatus: 'approved',
+      accountStatus: 'active',
+      authProvider: 'local',
       createdAt: ts(createdAt),
       updatedAt: ts(addDays(createdAt, randomInt(rng, 5, 35)))
     };
@@ -988,7 +1038,7 @@ async function main() {
   console.log('Starting Smart Credit+ Firestore mock seed...');
   console.log(`Using key file: ${keyPath}`);
 
-  const { lenders, borrowers, writes: userWrites } = createUsers(db, now, rng);
+  const { lenders, borrowers, writes: userWrites } = await createUsers(db, now, rng);
   console.log('Created 15 lenders and 45 borrowers in memory');
 
   const generated = createAdsAndLoans(db, now, rng, lenders, borrowers);
@@ -1028,6 +1078,7 @@ async function main() {
 
   console.log('');
   console.log('Seed complete.');
+  console.log(`shared seeded-user password: ${DEFAULT_USER_PASSWORD}`);
   console.log(`users: ${userWrites.length}`);
   console.log(`ads: ${generated.counts.ads}`);
   console.log(`loanRequests: ${generated.counts.loanRequests}`);
