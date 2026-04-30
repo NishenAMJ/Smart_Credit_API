@@ -3,6 +3,7 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { getScoreColor, getScoreRating } from "../../utils/scoreUtils";
 
 type CreditScoreWidgetProps = {
   score?: number;
@@ -10,19 +11,15 @@ type CreditScoreWidgetProps = {
   onPress?: () => void;
 };
 
+/**
+ * Displays borrower credit score metrics in a compact widget.
+ */
 export default function CreditScoreWidget({
   score = 0,
-  creditLimit = 0,
   onPress,
 }: CreditScoreWidgetProps) {
-  const getScoreLevel = (value: number) => {
-    if (value >= 750) return { text: "EXCELLENT", color: "#10B981" };
-    if (value >= 650) return { text: "GOOD", color: "#3B82F6" };
-    if (value >= 550) return { text: "FAIR", color: "#F59E0B" };
-    return { text: "POOR", color: "#EF4444" };
-  };
-
-  const scoreLevel = getScoreLevel(score);
+  const rating = getScoreRating(score).toUpperCase();
+  const scoreColor = getScoreColor(score);
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress}>
@@ -34,8 +31,8 @@ export default function CreditScoreWidget({
       <View style={styles.scoreContainer}>
         <View style={styles.scoreCircle}>
           <Text style={styles.scoreNumber}>{score}</Text>
-          <Text style={[styles.scoreLevel, { color: scoreLevel.color }]}>
-            {scoreLevel.text}
+          <Text style={[styles.scoreLevel, { color: scoreColor }]}>
+            {rating}
           </Text>
         </View>
 
@@ -52,13 +49,6 @@ export default function CreditScoreWidget({
       </View>
 
       <View style={styles.divider} />
-
-      <View style={styles.footer}>
-        <Text style={styles.limitLabel}>Credit Limit</Text>
-        <Text style={styles.limitAmount}>
-          LKR {creditLimit.toLocaleString()}
-        </Text>
-      </View>
     </TouchableOpacity>
   );
 }
@@ -123,14 +113,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-  },
-  limitLabel: {
-    fontSize: 14,
-    color: "#6B7280",
-  },
-  limitAmount: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1A1A1A",
   },
 });

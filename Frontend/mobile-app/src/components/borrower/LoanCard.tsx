@@ -3,20 +3,22 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import type { BorrowerLoan } from "../../types/borrower";
 
 type LoanCardProps = {
-  loan: {
-    lenderName?: string;
-    minAmount?: number;
-    maxAmount?: number;
-    amount?: number;
-    durationMonths?: number;
-    isFeatured?: boolean;
-  };
+  loan: BorrowerLoan;
   onPress?: () => void;
+  showApplyNow?: boolean;
 };
 
-export default function LoanCard({ loan, onPress }: LoanCardProps) {
+/**
+ * Renders a borrower-facing loan summary card.
+ */
+export default function LoanCard({
+  loan,
+  onPress,
+  showApplyNow = true,
+}: LoanCardProps) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
       <View style={styles.header}>
@@ -29,27 +31,40 @@ export default function LoanCard({ loan, onPress }: LoanCardProps) {
           <Text style={styles.lenderName}>
             {loan.lenderName ?? "Unknown Lender"}
           </Text>
-          <Text style={styles.amount}>
-            LKR {loan.minAmount?.toLocaleString() ?? "0"} - LKR{" "}
-            {loan.maxAmount?.toLocaleString() ?? "0"}
-          </Text>
+          {loan.amount && loan.amount > 0 ? (
+            <Text style={styles.amount}>
+              LKR {loan.amount.toLocaleString()}
+            </Text>
+          ) : (
+            <Text style={styles.amount}>
+              LKR {loan.minAmount?.toLocaleString() ?? "0"} -{" "}
+              LKR {loan.maxAmount?.toLocaleString() ?? "0"}
+            </Text>
+          )}
           <Text style={styles.duration}>{loan.durationMonths ?? 0} months</Text>
         </View>
         <Text style={styles.totalAmount}>
-          LKR {loan.amount?.toLocaleString() ?? "0"}
+          {loan.interestRate ? `${loan.interestRate}% p.a.` : loan.amount ? `LKR ${loan.amount.toLocaleString()}` : ""}
         </Text>
       </View>
 
-      {loan.isFeatured ? (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>High Smart Score</Text>
+      <View style={styles.badgeRow}>
+        <View style={[styles.badge, styles.sponsoredBadge]}>
+          <Text style={styles.sponsoredBadgeText}>SPONSORED</Text>
+        </View>
+        {loan.isFeatured ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>High Smart Score</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {showApplyNow ? (
+        <View style={styles.footer}>
+          <Text style={styles.applyText}>Apply Now</Text>
+          <Feather name="arrow-right" size={16} color="#007AFF" />
         </View>
       ) : null}
-
-      <View style={styles.footer}>
-        <Text style={styles.applyText}>Apply Now</Text>
-        <Feather name='arrow-right' size={16} color='#007AFF' />
-      </View>
     </TouchableOpacity>
   );
 }
@@ -107,13 +122,29 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1A1A1A",
   },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   badge: {
     backgroundColor: "#E0F2FE",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
     alignSelf: "flex-start",
-    marginBottom: 12,
+    marginRight: 8,
+  },
+  sponsoredBadge: {
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+  },
+  sponsoredBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#C2410C",
+    letterSpacing: 0.5,
   },
   badgeText: {
     fontSize: 12,

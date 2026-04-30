@@ -21,6 +21,7 @@ export default function Button({
       style={[styles.button, disabled && styles.disabled, style]}
       onPress={onPress}
       disabled={disabled}
+      activeOpacity={0.9}
     >
       <Text style={styles.text}>{children}</Text>
     </TouchableOpacity>
@@ -30,17 +31,26 @@ export default function Button({
 const styles = StyleSheet.create({
   button: {
     backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
     alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#007AFF",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 6,
   },
   disabled: {
-    opacity: 0.6,
+    opacity: 0.7,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   text: {
     color: "#FFFFFF",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 15,
+    letterSpacing: 0.2,
   },
 });
