@@ -18,13 +18,17 @@ const bcrypt = require('bcrypt');
 
 const USERS_COLLECTION = 'users';
 const ADS_COLLECTION = 'ads';
+const LENDER_ADS_COLLECTION = 'lenderAds';
 const REQUESTS_COLLECTION = 'loanRequests';
+const LOAN_APPLICATIONS_COLLECTION = 'loan_applications';
 const LOANS_COLLECTION = 'loans';
 const LENDER_BORROWERS_COLLECTION = 'lenderBorrowers';
 const TRANSACTIONS_COLLECTION = 'transactions';
 const DISPUTES_COLLECTION = 'disputes';
-const DEFAULT_KEY_PATH = './your-service-account-key.json';
+const NOTIFICATIONS_COLLECTION = 'notifications';
+const DEFAULT_KEY_PATH = './firebase-service-account.json';
 const MAX_BATCH_SIZE = 400;
+const SEED_SOURCE = 'seed-mock-data-with-lenderborrowers';
 
 const PURPOSES = ['education', 'business', 'medical', 'personal', 'vehicle', 'home'];
 const LOCATIONS = [
@@ -64,9 +68,21 @@ const LAST_NAMES = [
  * @property {string} uid
  * @property {string|string[]} role
  * @property {string} fullName
+ * @property {string} firstName
+ * @property {string} lastName
  * @property {string} photoURL
  * @property {string} phone
  * @property {string} email
+ * @property {string} emailLower
+ * @property {"email"} authProvider
+ * @property {"active"|"pending"|"suspended"} accountStatus
+ * @property {string=} nic
+ * @property {string=} dateOfBirth
+ * @property {{ line1: string, city: string, district: string, province: string }=} address
+ * @property {string=} employmentStatus
+ * @property {number=} monthlyIncome
+ * @property {boolean=} profileComplete
+ * @property {boolean=} kycVerified
  * @property {number} creditScore
  * @property {number} rating
  * @property {number} totalLoansCompleted
@@ -87,15 +103,33 @@ const LAST_NAMES = [
  * @property {number} maxAmount
  * @property {number} preferredInterestRate
  * @property {number} minTenureMonths
+ * @property {number} minAmount
  * @property {number} maxTenureMonths
  * @property {string[]} preferredPurposes
- * @property {string} location
+  * @property {string} location
  * @property {"active"} status
  * @property {FirebaseFirestore.Timestamp} createdAt
+ * @property {FirebaseFirestore.Timestamp} updatedAt
  * @property {FirebaseFirestore.Timestamp} expiresAt
  * @property {string} lenderName
  * @property {string} lenderPhotoURL
  * @property {number} lenderRating
+ * @property {string} title
+ * @property {string} description
+ * @property {number} availableCapital
+ * @property {number} applicationCount
+ * @property {number} fundedLoansCount
+ * @property {boolean} isBoosted
+ * @property {number} boostAmount
+ * @property {FirebaseFirestore.Timestamp|null} boostExpiry
+ * @property {FirebaseFirestore.Timestamp|null} boostPaidAt
+ * @property {number} views
+ * @property {number} clicks
+ * @property {string} imageUrl
+ * @property {number} responseTimeHours
+ * @property {string[]} searchKeywords
+ * @property {string} seedBatchId
+ * @property {string} source
  */
 
 /**
@@ -299,6 +333,43 @@ function buildName(index) {
   return `${first} ${last}`;
 }
 
+function splitName(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' ') || ''
+  };
+}
+
+function generateNic(rng) {
+  if (maybe(rng, 0.5)) {
+    return `${randomInt(rng, 100000000, 999999999)}V`;
+  }
+
+  return `199${randomInt(rng, 100000000, 999999999)}`;
+}
+
+function buildBorrowerProfile(rng, index) {
+  const day = pad((index % 28) + 1, 2);
+  const month = pad(((index * 3) % 12) + 1, 2);
+  const year = 1988 + (index % 12);
+
+  return {
+    nic: generateNic(rng),
+    dateOfBirth: `${year}-${month}-${day}`,
+    address: {
+      line1: `No. ${10 + index}, High Level Rd`,
+      city: 'Colombo',
+      district: 'Colombo',
+      province: 'Western'
+    },
+    employmentStatus: pick(rng, ['employed', 'self-employed', 'student']),
+    monthlyIncome: randomInt(rng, 50000, 150000),
+    profileComplete: true,
+    kycVerified: true
+  };
+}
+
 function pickPurposes(rng) {
   return shuffle(rng, PURPOSES).slice(0, randomInt(rng, 2, 3));
 }
@@ -460,6 +531,8 @@ function buildTransactionData(paymentData, transactionId, lender, borrower) {
     type: paymentType,
     status: getTransactionStatus(paymentData),
     verifiedByLender: paymentData.verifiedByLender === true,
+    description: asNonEmptyString(paymentData.description)
+      || `Loan repayment from ${getUserName(borrower, borrowerId) || 'borrower'} to ${getUserName(lender, lenderId) || 'lender'}`,
     paidAt,
     verifiedAt: paymentData.verifiedAt || null,
     createdAt: timestampOrNow(paymentData.createdAt || paidAt),
@@ -480,14 +553,21 @@ function createUsers(db, now, rng) {
 
   const adminUid = 'admin_001';
   const adminCreatedAt = addDays(now, -30);
+  const adminName = 'System Admin';
+  const adminNameParts = splitName(adminName);
   /** @type {UserDoc} */
   const adminUser = {
     uid: adminUid,
     role: 'admin',
-    fullName: 'System Admin',
+    fullName: adminName,
+    firstName: adminNameParts.firstName,
+    lastName: adminNameParts.lastName,
     photoURL: photoURL(adminUid),
     phone: '+94770000000',
     email: 'admin@gmail.com',
+    emailLower: 'admin@gmail.com',
+    authProvider: 'email',
+    accountStatus: 'active',
     creditScore: 0,
     rating: 0,
     totalLoansCompleted: 0,
@@ -505,15 +585,22 @@ function createUsers(db, now, rng) {
   for (let i = 1; i <= 15; i += 1) {
     const uid = `lender_${pad(i, 3)}`;
     const fullName = buildName(i);
+    const nameParts = splitName(fullName);
+    const email = emailFromName(fullName, `l${pad(i, 2)}`);
     const createdAt = addDays(now, -randomInt(rng, 120, 660));
     /** @type {UserDoc} */
     const lender = {
       uid,
       role: ['lender'],
       fullName,
+      firstName: nameParts.firstName,
+      lastName: nameParts.lastName,
       photoURL: photoURL(uid),
       phone: phoneNumber(i),
-      email: emailFromName(fullName, `l${pad(i, 2)}`),
+      email,
+      emailLower: email.toLowerCase(),
+      authProvider: 'email',
+      accountStatus: 'active',
       creditScore: randomInt(rng, 690, 840),
       rating: randomFloat(rng, 4.2, 5, 1),
       totalLoansCompleted: 0,
@@ -530,15 +617,30 @@ function createUsers(db, now, rng) {
   for (let i = 1; i <= 45; i += 1) {
     const uid = `borrower_${pad(i, 3)}`;
     const fullName = buildName(i + 100);
+    const nameParts = splitName(fullName);
+    const email = emailFromName(fullName, `b${pad(i, 2)}`);
+    const borrowerProfile = buildBorrowerProfile(rng, i);
     const createdAt = addDays(now, -randomInt(rng, 90, 540));
     /** @type {UserDoc} */
     const borrower = {
       uid,
       role: ['borrower'],
       fullName,
+      firstName: nameParts.firstName,
+      lastName: nameParts.lastName,
       photoURL: photoURL(uid),
       phone: phoneNumber(i + 50),
-      email: emailFromName(fullName, `b${pad(i, 2)}`),
+      email,
+      emailLower: email.toLowerCase(),
+      authProvider: 'email',
+      accountStatus: 'active',
+      nic: borrowerProfile.nic,
+      dateOfBirth: borrowerProfile.dateOfBirth,
+      address: borrowerProfile.address,
+      employmentStatus: borrowerProfile.employmentStatus,
+      monthlyIncome: borrowerProfile.monthlyIncome,
+      profileComplete: borrowerProfile.profileComplete,
+      kycVerified: borrowerProfile.kycVerified,
       creditScore: randomInt(rng, 480, 790),
       rating: randomFloat(rng, 3.8, 5, 1),
       totalLoansCompleted: 0,
@@ -579,11 +681,14 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
 
   const adWrites = [];
   const requestWrites = [];
+  const loanApplicationWrites = [];
   const loanWrites = [];
   const installmentWrites = [];
   const paymentWrites = [];
   const transactionWrites = [];
   const disputeWrites = [];
+  const lenderAdWrites = [];
+  const notificationWrites = [];
   const disputeCandidates = [];
   const lenderBorrowerMap = new Map();
   /** @type {Map<string, { lenderId: string, borrowerId: string }>} */
@@ -608,7 +713,9 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       borrowerPointer += 1;
 
       const adRef = db.collection(ADS_COLLECTION).doc();
+      const lenderAdRef = db.collection(LENDER_ADS_COLLECTION).doc(adRef.id);
       const requestRef = db.collection(REQUESTS_COLLECTION).doc();
+      const loanApplicationRef = db.collection(LOAN_APPLICATIONS_COLLECTION).doc(requestRef.id);
       const loanRef = db.collection(LOANS_COLLECTION).doc();
 
       const principalAmount = roundCurrency(randomInt(rng, 20000, 500000));
@@ -625,6 +732,18 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       const loanStatus = isCompleted ? 'completed' : 'active';
       const firstInstallmentDate = addMonths(startDate, 1);
       const installmentAmount = Math.round(totalRepayable / tenureMonths);
+      const maxAmount = Math.max(principalAmount, roundCurrency(principalAmount + randomInt(rng, 30000, 180000)));
+      const minAmount = roundCurrency(Math.max(10000, Math.floor(principalAmount * 0.6)));
+      const adLocation = pick(rng, LOCATIONS);
+      const adPurposes = pickPurposes(rng);
+      const adUpdatedAt = addDays(adCreatedAt, randomInt(rng, 3, 30));
+      const isBoosted = maybe(rng, 0.25);
+      const boostPaidAt = isBoosted ? ts(addDays(adCreatedAt, randomInt(rng, 0, 10))) : null;
+      const boostExpiry = isBoosted ? ts(addDays(adCreatedAt, 30)) : null;
+      const adTitle = `${lender.fullName} lending offer`;
+      const adDescription = `${lender.fullName} is offering ${adPurposes.join(', ')} loans in ${adLocation}.`;
+      const applicationCount = 1;
+      const fundedLoansCount = isCompleted ? 1 : 0;
 
       const paidInstallmentsBase = isCompleted
         ? tenureMonths
@@ -641,18 +760,36 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       const adDoc = {
         adId: adRef.id,
         lenderId: lender.uid,
-        maxAmount: Math.max(principalAmount, roundCurrency(principalAmount + randomInt(rng, 30000, 180000))),
+        maxAmount,
         preferredInterestRate: interestRate,
         minTenureMonths: Math.min(6, tenureMonths),
+        minAmount,
         maxTenureMonths: tenureMonths,
-        preferredPurposes: pickPurposes(rng),
-        location: pick(rng, LOCATIONS),
+        preferredPurposes: adPurposes,
+        location: adLocation,
         status: 'active',
         createdAt: ts(adCreatedAt),
+        updatedAt: ts(adUpdatedAt),
         expiresAt: ts(addDays(adCreatedAt, 180)),
         lenderName: lender.fullName,
         lenderPhotoURL: lender.photoURL,
-        lenderRating: lender.rating
+        lenderRating: lender.rating,
+        title: adTitle,
+        description: adDescription,
+        availableCapital: maxAmount,
+        applicationCount,
+        fundedLoansCount,
+        isBoosted,
+        boostAmount: isBoosted ? roundCurrency(randomInt(rng, 1000, 5000)) : 0,
+        boostExpiry,
+        boostPaidAt,
+        views: randomInt(rng, 25, 400),
+        clicks: randomInt(rng, 5, 90),
+        imageUrl: lender.photoURL,
+        responseTimeHours: randomInt(rng, 1, 24),
+        searchKeywords: [adLocation.toLowerCase(), ...adPurposes],
+        seedBatchId: `${SEED_SOURCE}-${now.getFullYear()}`,
+        source: SEED_SOURCE
       };
 
       /** @type {LoanRequestDoc} */
@@ -671,22 +808,45 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
         borrowerCreditScore: borrower.creditScore
       };
 
+      const loanApplicationDoc = {
+        applicationId: loanApplicationRef.id,
+        borrowerId: borrower.uid,
+        adId: adRef.id,
+        loanAmount: principalAmount,
+        loanPurpose: purpose,
+        loanTermMonths: tenureMonths,
+        preferredRepaymentMethod: 'qr_payment',
+        status: requestDoc.status,
+        createdAt: requestDoc.createdAt,
+        updatedAt: ts(addDays(requestCreatedAt, randomInt(rng, 1, 6)))
+      };
+
       /** @type {LoanDoc} */
       const loanDoc = {
         loanId: loanRef.id,
         adId: adRef.id,
         requestId: requestRef.id,
+        applicationId: loanApplicationRef.id,
         lenderId: lender.uid,
         borrowerId: borrower.uid,
         principalAmount,
+        loanAmount: principalAmount,
         interestRate,
         tenureMonths,
+        loanTermMonths: tenureMonths,
         startDate: ts(startDate),
         endDate: ts(addMonths(startDate, tenureMonths)),
+        maturityDate: ts(addMonths(startDate, tenureMonths)),
         nextDueDate: ts(nextDueDateDate),
+        nextPaymentDate: ts(nextDueDateDate),
         status: loanStatus,
         totalRepayable,
+        monthlyInstallment: installmentAmount,
+        outstandingBalance: isCompleted ? 0 : Math.max(0, totalRepayable - installmentAmount * paidInstallmentsBase),
+        repaymentsMade: paidInstallmentsBase,
         createdAt: ts(createdAt),
+        updatedAt: ts(addDays(createdAt, randomInt(rng, 3, 25))),
+        disbursedAt: ts(startDate),
         signedAt: ts(signedAt),
         borrowerName: borrower.fullName,
         borrowerPhotoURL: borrower.photoURL,
@@ -694,7 +854,9 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       };
 
       adWrites.push({ ref: adRef, data: adDoc });
+      lenderAdWrites.push({ ref: lenderAdRef, data: adDoc });
       requestWrites.push({ ref: requestRef, data: requestDoc });
+      loanApplicationWrites.push({ ref: loanApplicationRef, data: loanApplicationDoc });
       loanWrites.push({ ref: loanRef, data: loanDoc });
       loanMeta.set(loanRef.id, {
         lenderId: lender.uid,
@@ -783,6 +945,7 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
                 amount,
                 paidAt: ts(paymentDateCursor),
                 paymentType,
+                description: `Installment ${installmentNumber} repayment`,
                 verifiedByLender: true,
                 verifiedAt: ts(addDays(paymentDateCursor, randomInt(rng, 0, 2))),
                 receiptURL: paymentType === 'receipt' ? `https://example.com/receipts/${paymentRef.id}.jpg` : '',
@@ -813,6 +976,7 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
                 amount,
                 paidAt: ts(paymentDateCursor),
                 paymentType,
+                description: `Installment ${installmentNumber} partial repayment`,
                 verifiedByLender: true,
                 verifiedAt: ts(addDays(paymentDateCursor, randomInt(rng, 0, 3))),
                 receiptURL: paymentType === 'receipt' ? `https://example.com/receipts/${paymentRef.id}.jpg` : '',
@@ -875,26 +1039,51 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
 
     if (entry.totalLoans === 0) {
       const idleAdRef = db.collection(ADS_COLLECTION).doc();
+      const idleLenderAdRef = db.collection(LENDER_ADS_COLLECTION).doc(idleAdRef.id);
       const idleCreatedAt = addDays(now, -randomInt(rng, 60, 240));
+      const idleUpdatedAt = addDays(idleCreatedAt, randomInt(rng, 3, 18));
+      const idleLocation = pick(rng, LOCATIONS);
+      const idlePurposes = pickPurposes(rng);
+      const idleMaxAmount = roundCurrency(randomInt(rng, 80000, 450000));
+      const idleDoc = {
+        adId: idleAdRef.id,
+        lenderId: lender.uid,
+        maxAmount: idleMaxAmount,
+        preferredInterestRate: randomFloat(rng, 9, 18, 1),
+        minTenureMonths: 6,
+        minAmount: roundCurrency(Math.max(10000, Math.floor(idleMaxAmount * 0.4))),
+        maxTenureMonths: pick(rng, [12, 18, 24, 36]),
+        preferredPurposes: idlePurposes,
+        location: idleLocation,
+        status: 'active',
+        createdAt: ts(idleCreatedAt),
+        updatedAt: ts(idleUpdatedAt),
+        expiresAt: ts(addDays(idleCreatedAt, 180)),
+        lenderName: lender.fullName,
+        lenderPhotoURL: lender.photoURL,
+        lenderRating: lender.rating,
+        title: `${lender.fullName} lending offer`,
+        description: `${lender.fullName} is ready to fund ${idlePurposes.join(', ')} loans in ${idleLocation}.`,
+        availableCapital: idleMaxAmount,
+        applicationCount: 0,
+        fundedLoansCount: 0,
+        isBoosted: false,
+        boostAmount: 0,
+        boostExpiry: null,
+        boostPaidAt: null,
+        views: randomInt(rng, 10, 180),
+        clicks: randomInt(rng, 1, 30),
+        imageUrl: lender.photoURL,
+        responseTimeHours: randomInt(rng, 1, 24),
+        searchKeywords: [idleLocation.toLowerCase(), ...idlePurposes],
+        seedBatchId: `${SEED_SOURCE}-${now.getFullYear()}`,
+        source: SEED_SOURCE
+      };
       adWrites.push({
         ref: idleAdRef,
-        data: {
-          adId: idleAdRef.id,
-          lenderId: lender.uid,
-          maxAmount: roundCurrency(randomInt(rng, 80000, 450000)),
-          preferredInterestRate: randomFloat(rng, 9, 18, 1),
-          minTenureMonths: 6,
-          maxTenureMonths: pick(rng, [12, 18, 24, 36]),
-          preferredPurposes: pickPurposes(rng),
-          location: pick(rng, LOCATIONS),
-          status: 'active',
-          createdAt: ts(idleCreatedAt),
-          expiresAt: ts(addDays(idleCreatedAt, 180)),
-          lenderName: lender.fullName,
-          lenderPhotoURL: lender.photoURL,
-          lenderRating: lender.rating
-        }
+        data: idleDoc
       });
+      lenderAdWrites.push({ ref: idleLenderAdRef, data: idleDoc });
       adsCount += 1;
       console.log(`Created ad-only lender profile for ${lender.uid}`);
     }
@@ -976,17 +1165,50 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
     }
 
     disputeWrites.push({ ref: disputeRef, data: disputeDoc });
+    notificationWrites.push({
+      ref: db.collection(NOTIFICATIONS_COLLECTION).doc(`notif_dispute_${pad(index + 1, 3)}`),
+      data: {
+        notificationId: `notif_dispute_${pad(index + 1, 3)}`,
+        userId: candidate.borrower.uid,
+        title: `Dispute ${disputeCode} created`,
+        body: `${category} dispute has been recorded for review.`,
+        type: 'dispute',
+        read: status === 'resolved',
+        createdAt: ts(createdAt),
+        updatedAt: ts(updatedAt)
+      }
+    });
     disputesCount += 1;
+  });
+
+  Array.from(lenders.values()).slice(0, 5).forEach((lender, index) => {
+    const createdAt = ts(addDays(now, -randomInt(rng, 1, 20)));
+    notificationWrites.push({
+      ref: db.collection(NOTIFICATIONS_COLLECTION).doc(`notif_lender_${pad(index + 1, 3)}`),
+      data: {
+        notificationId: `notif_lender_${pad(index + 1, 3)}`,
+        userId: lender.uid,
+        title: 'Ad performance updated',
+        body: 'Your lender ad has fresh borrower activity.',
+        type: 'ad',
+        read: false,
+        createdAt,
+        updatedAt: createdAt
+      }
+    });
   });
 
   return {
     adWrites,
+    lenderAdWrites,
     requestWrites,
+    loanApplicationWrites,
     loanWrites,
     installmentWrites,
     paymentWrites,
     transactionWrites,
     disputeWrites,
+    notificationWrites,
     lenderBorrowerWrites: Array.from(lenderBorrowerMap.values()).map((relation) => ({
       ref: db.collection(LENDER_BORROWERS_COLLECTION).doc(relation.relationId),
       data: relation
@@ -999,7 +1221,10 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
       installments: installmentsCount,
       payments: paymentsCount,
       transactions: transactionsCount,
-      disputes: disputesCount
+      disputes: disputesCount,
+      lenderAds: lenderAdWrites.length,
+      loanApplications: loanApplicationWrites.length,
+      notifications: notificationWrites.length
     }
   };
 }
@@ -1300,8 +1525,14 @@ async function main() {
   console.log('Writing ads...');
   await commitWrites(db, generated.adWrites, 'ads');
 
+  console.log('Writing lender ads...');
+  await commitWrites(db, generated.lenderAdWrites, 'lenderAds');
+
   console.log('Writing loan requests...');
   await commitWrites(db, generated.requestWrites, 'loanRequests');
+
+  console.log('Writing loan applications...');
+  await commitWrites(db, generated.loanApplicationWrites, 'loan_applications');
 
   console.log('Writing loans...');
   await commitWrites(db, generated.loanWrites, 'loans');
@@ -1318,6 +1549,9 @@ async function main() {
   console.log('Writing disputes...');
   await commitWrites(db, generated.disputeWrites, 'disputes');
 
+  console.log('Writing notifications...');
+  await commitWrites(db, generated.notificationWrites, 'notifications');
+
   console.log('Writing lenderBorrowers...');
   await commitWrites(db, generated.lenderBorrowerWrites, 'lenderBorrowers');
 
@@ -1333,12 +1567,15 @@ async function main() {
   console.log('Seed complete.');
   console.log(`users: ${userWrites.length}`);
   console.log(`ads: ${generated.counts.ads}`);
+  console.log(`lenderAds: ${generated.counts.lenderAds}`);
   console.log(`loanRequests: ${generated.counts.loanRequests}`);
+  console.log(`loan_applications: ${generated.counts.loanApplications}`);
   console.log(`loans: ${generated.counts.loans}`);
   console.log(`installments: ${generated.counts.installments}`);
   console.log(`payments: ${generated.counts.payments}`);
   console.log(`transactions: ${generated.counts.transactions}`);
   console.log(`disputes: ${generated.counts.disputes}`);
+  console.log(`notifications: ${generated.counts.notifications}`);
   console.log(`lenderBorrowers: ${generated.lenderBorrowerWrites.length}`);
 }
 
