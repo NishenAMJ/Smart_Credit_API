@@ -1,4 +1,15 @@
-import React, { useState, useCallback } from 'react';
+/**
+ * ChatListScreen.tsx
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Shows all conversations for the current user.
+ *
+ * LOCAL-FIRST:
+ *   - First renders from local SQLite (instant, works offline)
+ *   - Then syncs from backend in background
+ *   - Socket 'receiveMessage' event updates the list in real-time
+ */
+
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,9 +25,11 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
-
-import { Conversation, ChatStackParamList } from '../../types';
-import { conversationService } from '../../services';
+import { commonChatStyles } from '../../styles/chat.styles';
+import { Conversation, ChatStackParamList, Message } from '../../types/chat.types';
+import { conversationService } from '../../services/conversationService';
+import { localDatabase } from '../../services/localDatabase';
+import { chatSocket } from '../../services/socketService';
 import Avatar from '../../components/common/Avatar';
 
 type Props = {
@@ -28,47 +41,79 @@ function formatTime(iso: string): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffDays === 0) {
+  if (diffDays === 0)
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } else if (diffDays === 1) {
-    return 'Yesterday';
-  } else if (diffDays < 7) {
-    return date.toLocaleDateString([], { weekday: 'short' });
-  }
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'short' });
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 export default function ChatListScreen({ navigation }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filtered, setFiltered] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const fetchConversations = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+  // ── Load conversations ────────────────────────────────────────────────────
 
-      const data = await conversationService.getAll();
-      setConversations(data);
-      setFiltered(data);
+  const loadConversations = useCallback(async (isRefresh = false) => {
+    // 1. Show local data immediately (offline-first)
+    const local = localDatabase.getConversations();
+    if (local.length > 0) {
+      setConversations(local);
+      setFiltered(local);
+    }
+
+    // 2. Sync from backend in background
+    if (isRefresh) setRefreshing(true);
+    try {
+      setError(null);
+      const remote = await conversationService.getAll();
+      setConversations(remote);
+      setFiltered(remote);
     } catch {
-      setError('Could not load conversations.');
+      if (local.length === 0) {
+        setError('Could not load conversations.');
+      }
+      // If we have local data, silently ignore the network error
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      fetchConversations();
-    }, [fetchConversations]),
+      loadConversations();
+    }, [loadConversations]),
   );
+
+  // ── Real-time updates ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const onMessage = (msg: Message) => {
+      // Update the conversation preview when a new message arrives
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== msg.conversationId) return c;
+          return {
+            ...c,
+            lastMessage: {
+              text: msg.text,
+              createdAt: msg.createdAt,
+              senderId: msg.senderId,
+            },
+            unreadCount: c.unreadCount + 1,
+          };
+        }),
+      );
+    };
+
+    chatSocket.on('receiveMessage', onMessage);
+    return () => chatSocket.off('receiveMessage', onMessage);
+  }, []);
+
+  // ── Search ────────────────────────────────────────────────────────────────
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
@@ -86,27 +131,27 @@ export default function ChatListScreen({ navigation }: Props) {
     );
   };
 
-  const handleConversationPress = (conv: Conversation) => {
-    navigation.navigate('Chat', {
-      conversationId: conv.id,
-      participant: conv.participant,
-    });
-  };
+  // ── Render ────────────────────────────────────────────────────────────────
 
   const renderItem = ({ item }: { item: Conversation }) => (
     <TouchableOpacity
       style={styles.convRow}
-      onPress={() => handleConversationPress(item)}
+      onPress={() =>
+        navigation.navigate('Chat', {
+          conversationId: item.id,
+          participant: item.participant,
+          isMuted: item.isMuted,
+        })
+      }
       activeOpacity={0.7}
     >
       <Avatar
         name={item.participant.displayName}
-        avatarUrl={item.participant.avatarUrl}
+        avatarUrl={item.participant.avatarUrl || undefined}
         size={50}
         showOnline
         isOnline={item.participant.isOnline}
       />
-
       <View style={styles.convMeta}>
         <View style={styles.convTopRow}>
           <Text style={styles.convName} numberOfLines={1}>
@@ -116,7 +161,6 @@ export default function ChatListScreen({ navigation }: Props) {
             {item.lastMessage ? formatTime(item.lastMessage.createdAt) : ''}
           </Text>
         </View>
-
         <View style={styles.convBottomRow}>
           <Text
             style={[
@@ -134,11 +178,7 @@ export default function ChatListScreen({ navigation }: Props) {
               </Text>
             </View>
           )}
-          {item.isMuted && (
-            <View style={styles.mutedIcon}>
-              <Text style={styles.mutedText}>🔇</Text>
-            </View>
-          )}
+          {item.isMuted && <Text style={styles.mutedText}>🔇</Text>}
         </View>
       </View>
     </TouchableOpacity>
@@ -176,7 +216,9 @@ export default function ChatListScreen({ navigation }: Props) {
       {/* Search */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <SearchIcon />
+          <Text style={{ fontSize: 14, color: COLORS.textSecondary, marginRight: SPACING.sm }}>
+            🔍
+          </Text>
           <TextInput
             style={styles.searchInput}
             placeholder="Search messages"
@@ -189,15 +231,14 @@ export default function ChatListScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {/* Content */}
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      ) : error ? (
+      {/* Error banner (only shown when we have no local data either) */}
+      {error && conversations.length === 0 ? (
         <View style={styles.centered}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => fetchConversations()}>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => loadConversations()}
+          >
             <Text style={styles.retryText}>Try again</Text>
           </TouchableOpacity>
         </View>
@@ -207,12 +248,14 @@ export default function ChatListScreen({ navigation }: Props) {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           ListEmptyComponent={renderEmpty}
-          contentContainerStyle={filtered.length === 0 ? styles.flatListEmpty : undefined}
+          contentContainerStyle={
+            filtered.length === 0 ? styles.flatListEmpty : undefined
+          }
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => fetchConversations(true)}
+              onRefresh={() => loadConversations(true)}
               tintColor={COLORS.primary}
             />
           }
@@ -222,27 +265,9 @@ export default function ChatListScreen({ navigation }: Props) {
   );
 }
 
-function SearchIcon() {
-  return (
-    <View style={{ marginRight: SPACING.sm }}>
-      <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>🔍</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-
-  // Header
+  container: { flex: 1, backgroundColor: COLORS.background },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -253,10 +278,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
   },
-  headerTitle: {
-    ...TYPOGRAPHY.heading,
-    color: COLORS.textPrimary,
-  },
+  headerTitle: { ...TYPOGRAPHY.heading, color: COLORS.textPrimary },
   newChatBtn: {
     width: 34,
     height: 34,
@@ -265,14 +287,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  newChatIcon: {
-    color: COLORS.surface,
-    fontSize: 20,
-    lineHeight: 22,
-    fontWeight: '300',
-  },
-
-  // Search
+  newChatIcon: { color: COLORS.surface, fontSize: 20, lineHeight: 22, fontWeight: '300' },
   searchContainer: {
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
@@ -290,14 +305,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: COLORS.border,
   },
-  searchInput: {
-    flex: 1,
-    ...TYPOGRAPHY.body,
-    color: COLORS.textPrimary,
-    padding: 0,
-  },
-
-  // Conversation row
+  searchInput: { flex: 1, ...TYPOGRAPHY.body, color: COLORS.textPrimary, padding: 0 },
   convRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -308,10 +316,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
   },
-  convMeta: {
-    flex: 1,
-    minWidth: 0,
-  },
+  convMeta: { flex: 1, minWidth: 0 },
   convTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -324,25 +329,10 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: SPACING.sm,
   },
-  convTime: {
-    ...TYPOGRAPHY.small,
-    color: COLORS.textSecondary,
-  },
-  convBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  convPreview: {
-    ...TYPOGRAPHY.small,
-    color: COLORS.textSecondary,
-    flex: 1,
-    fontWeight: '400',
-  },
-  convPreviewUnread: {
-    color: COLORS.textPrimary,
-    fontWeight: '500',
-  },
+  convTime: { ...TYPOGRAPHY.small, color: COLORS.textSecondary },
+  convBottomRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  convPreview: { ...TYPOGRAPHY.small, color: COLORS.textSecondary, flex: 1, fontWeight: '400' },
+  convPreviewUnread: { color: COLORS.textPrimary, fontWeight: '500' },
   badge: {
     backgroundColor: COLORS.primary,
     borderRadius: BORDER_RADIUS.full,
@@ -352,19 +342,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 5,
   },
-  badgeText: {
-    color: COLORS.surface,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  mutedIcon: {
-    opacity: 0.5,
-  },
-  mutedText: {
-    fontSize: 12,
-  },
-
-  // Empty
+  badgeText: { color: COLORS.surface, fontSize: 11, fontWeight: '600' },
+  mutedText: { fontSize: 12, opacity: 0.5 },
   flatListEmpty: { flex: 1 },
   emptyState: {
     flex: 1,
@@ -373,11 +352,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     gap: 8,
   },
-  emptyTitle: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-  },
+  emptyTitle: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, textAlign: 'center' },
   emptySub: {
     ...TYPOGRAPHY.small,
     color: COLORS.textSecondary,
@@ -385,13 +360,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '400',
   },
-
-  // Error
-  errorText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
+  errorText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, textAlign: 'center' },
   retryBtn: {
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
@@ -399,8 +368,5 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.primary,
   },
-  retryText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.primary,
-  },
+  retryText: { ...TYPOGRAPHY.bodyMedium, color: COLORS.primary },
 });

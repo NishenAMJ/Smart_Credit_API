@@ -1,11 +1,22 @@
-// Messages service handles sending and retrieving messages in conversations
-// Supports text messages and media uploads
-
-import { Injectable, NotFoundException } from '@nestjs/common';
+/**
+ * messages.service.ts
+ * ─────────────────────────────────────────────────────────────────────────────
+ * LOCAL-FIRST NOTE:
+ * In normal operation, messages travel via WebSocket (ChatGateway) and are
+ * stored only on each device's local SQLite database — NOT in Firestore.
+ *
+ * This service exists for two fallback scenarios:
+ *   1. First install / re-install: fetch recent messages from Firestore
+ *      so the user's history is not completely empty.
+ *   2. HTTP fallback: if WebSocket is unavailable, the app can POST a
+ *      message via REST and this service stores it temporarily in Firestore.
+ *
+ * In the happy path (WebSocket works), this service is rarely called.
+ */
+import { Injectable } from '@nestjs/common';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { COLLECTIONS, MessageDoc } from '../common/types';
-
 import * as admin from 'firebase-admin';
 
 @Injectable()
@@ -15,17 +26,19 @@ export class MessagesService {
     private conversations: ConversationsService,
   ) {}
 
-  // Send a text message to a conversation
+  /**
+   * sendText (HTTP fallback)
+   * Stores a message in Firestore and updates the conversation preview.
+   * Used only when WebSocket is not available.
+   */
   async sendText(
     conversationId: string,
     senderId: string,
     text: string,
   ): Promise<MessageDoc> {
-    // Verify conversation exists and user is a participant
     const conv = await this.conversations.findOne(conversationId, senderId);
     const recipientId = conv.participantIds.find((id) => id !== senderId)!;
 
-    // ✅ FIXED: was this.firebase.db.collection(...) — db property does not exist
     const ref = await this.firebase
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .add({
@@ -36,10 +49,10 @@ export class MessagesService {
         mediaType: null,
         fileName: null,
         readAt: null,
+        status: 'sent',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-    // Update conversation with last message preview
     await this.conversations.updateLastMessage(
       conversationId,
       senderId,
@@ -51,40 +64,47 @@ export class MessagesService {
     return { id: snap.id, ...snap.data() } as MessageDoc;
   }
 
-  // Get paginated messages from a conversation (newest first)
+  /**
+   * getMessages
+   * Fetches paginated message history from Firestore.
+   * Used on first install or after a re-install to seed the local DB.
+   * After seeding, the app reads from SQLite directly.
+   *
+   * Page is 0-indexed: page=0 → first 30, page=1 → next 30, etc.
+   */
   async getMessages(
     conversationId: string,
     userId: string,
     page: string | number,
     limit: string | number,
   ): Promise<MessageDoc[]> {
-    // Check user has access to this conversation
     await this.conversations.findOne(conversationId, userId);
 
     const pageNum = typeof page === 'string' ? parseInt(page, 10) : page;
     const limitNum = typeof limit === 'string' ? parseInt(limit, 10) : limit;
 
-    // ✅ FIXED: was this.firebase.db.collection(...)
-    const query = this.firebase
+    const snap = await this.firebase
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .orderBy('createdAt', 'desc')
       .limit(limitNum)
-      .offset(pageNum * limitNum);
+      .offset(pageNum * limitNum)
+      .get();
 
-    const snap = await query.get();
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MessageDoc));
   }
 
-  // Mark a message as read
+  /**
+   * markMessageRead
+   * Updates the readAt timestamp on a Firestore message document.
+   * Only relevant when the HTTP fallback was used to send the message.
+   */
   async markMessageRead(
     conversationId: string,
     messageId: string,
     userId: string,
   ): Promise<void> {
-    // Verify user is in this conversation
     await this.conversations.findOne(conversationId, userId);
 
-    // 
     await this.firebase
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .doc(messageId)

@@ -1,51 +1,85 @@
-let io: any;
-let Socket: any;
+/**
+ * chatSocket.ts
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Real-time WebSocket client for the local-first chat system.
+ *
+ * Architecture:
+ *   - Connect once on login, disconnect on logout
+ *   - The gateway routes messages between users — it does NOT store them
+ *   - Every incoming message is saved to localDatabase (SQLite) here
+ *   - UI components subscribe via on() and unsubscribe via off()
+ *
+ * TEMP AUTH:
+ * Currently sends 'lender_004' as the userId in the socket handshake.
+ * When real auth is ready, call chatSocket.connect(realUserId) after login.
+ */
 
+import { localDatabase } from './localDatabase';
+import { getCurrentUserId } from './api';
+import type { Message } from '../types/chat.types';
+
+let io: any;
 try {
   const socketIO = require('socket.io-client');
   io = socketIO.io;
-  Socket = socketIO.Socket;
-} catch (e) {
-  console.warn('socket.io-client not available, chat features will be disabled');
+} catch {
+  console.warn('[ChatSocket] socket.io-client not installed. Chat disabled.');
 }
 
-import type { Message } from '../types/chat.types';
+// ── Event type map ────────────────────────────────────────────────────────────
 
-type SocketEvent =
-  | { event: 'receiveMessage'; data: Message }
-  | { event: 'userTyping'; data: { conversationId: string; userId: string; isTyping: boolean } }
-  | { event: 'messageRead'; data: { conversationId: string; messageId: string } }
-  | { event: 'userOnline'; data: { userId: string; isOnline: boolean } };
+export type SocketEventMap = {
+  receiveMessage:   Message;
+  messageDelivered: { messageId: string; conversationId: string; status: Message['status'] };
+  userTyping:       { conversationId: string; userId: string; isTyping: boolean };
+  messageRead:      { conversationId: string; messageId: string; readBy: string; readAt: string };
+  userOnline:       { userId: string; isOnline: boolean };
+  messageFailed:    { messageId: string; reason: string };
+  socketConnected:  { status: string };
+  socketDisconnected: { reason: string };
+  socketError:      { error: string };
+};
 
-/**
- * ChatSocket Service
- * Handles real-time chat communication via Socket.io WebSocket connection
- * 
- * Expected Backend Events:
- * - receiveMessage: new message in conversation
- * - userTyping: user started/stopped typing
- * - messageRead: user read a message
- * - userOnline: user online/offline status changed
- */
+// ── ChatSocket class ──────────────────────────────────────────────────────────
+
 class ChatSocket {
   private socket: any = null;
-  private listeners: Map<string, Set<Function>> = new Map();
 
   /**
-   * Connect to chat server with JWT token
-   * @param jwtToken - JWT token from auth system
+   * Stores named handler functions per event so off() can remove the exact
+   * function reference (not all listeners for that event globally).
+   * Map<eventName, Map<handlerFn, wrappedFn>>
    */
-  connect(jwtToken: string) {
+  private handlerMap = new Map<string, Map<Function, Function>>();
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+  /**
+   * connect
+   * Call this on login. Connects to the NestJS WebSocket gateway.
+   * userId is sent in the handshake so the backend can identify this socket.
+   *
+   * @param userId  The logged-in user's ID (currently 'lender_004')
+   */
+  connect(userId?: string) {
     if (this.socket?.connected) {
-      console.log('[ChatSocket] Already connected, skipping');
+      console.log('[ChatSocket] Already connected.');
       return;
     }
 
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+    if (!io) {
+      console.warn('[ChatSocket] socket.io-client not available.');
+      return;
+    }
 
-    this.socket = io(apiUrl, {
+    const resolvedUserId = userId ?? getCurrentUserId();
+
+    // Backend WebSocket URL — same host as REST API, no /api prefix
+    const WS_URL = 'http://192.168.120.219:3000';
+
+    this.socket = io(WS_URL, {
       auth: {
-        token: jwtToken, // Backend expects token in auth
+        userId: resolvedUserId, // read by ChatGateway handleConnection
       },
       transports: ['websocket'],
       reconnection: true,
@@ -54,131 +88,201 @@ class ChatSocket {
       reconnectionAttempts: 5,
     });
 
-    // Connection events
+    // ── Core socket lifecycle events ────────────────────────────────────────
+
     this.socket.on('connect', () => {
-      console.log('[ChatSocket] Connected to backend');
-      this.emit('socketConnected', { status: 'connected' });
+      console.log('[ChatSocket] Connected. Socket ID:', this.socket.id);
+      this._emit('socketConnected', { status: 'connected' });
     });
 
     this.socket.on('disconnect', (reason: string) => {
       console.log('[ChatSocket] Disconnected:', reason);
-      this.emit('socketDisconnected', { reason });
+      this._emit('socketDisconnected', { reason });
     });
 
     this.socket.on('connect_error', (err: any) => {
-      console.error('[ChatSocket] Connection error:', err?.message ?? 'Unknown error');
-      this.emit('socketError', { error: err?.message });
+      console.error('[ChatSocket] Connection error:', err?.message);
+      this._emit('socketError', { error: err?.message ?? 'Unknown error' });
     });
 
-    console.log('[ChatSocket] Attempting connection to', apiUrl);
+    // ── Incoming message — save to SQLite immediately ───────────────────────
+    this.socket.on('receiveMessage', (message: Message) => {
+      // 1. Persist to local SQLite (source of truth)
+      localDatabase.insertMessage({ ...message, status: 'delivered' });
+
+      // 2. Update conversation preview in local DB
+      localDatabase.updateConversationLastMessage(
+        message.conversationId,
+        message.text,
+        message.senderId,
+        message.createdAt,
+        true, // increment unread count
+      );
+
+      // 3. Notify UI subscribers (ChatScreen, ChatListScreen)
+      this._emit('receiveMessage', { ...message, status: 'delivered' });
+
+      // 4. Send delivery ack back to backend so sender sees 'delivered' tick
+      this.socket?.emit('messageDelivered', {
+        messageId: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+      });
+    });
+
+    // ── Delivery acknowledgement — update local message status ──────────────
+    this.socket.on(
+      'messageDelivered',
+      (data: { messageId: string; conversationId: string; status: Message['status'] }) => {
+        // Update SQLite so the tick icon reflects 'sent' or 'delivered'
+        localDatabase.updateMessageStatus(data.messageId, data.status);
+        this._emit('messageDelivered', data);
+      },
+    );
+
+    // ── Typing indicator ────────────────────────────────────────────────────
+    this.socket.on('userTyping', (data: SocketEventMap['userTyping']) => {
+      this._emit('userTyping', data);
+    });
+
+    // ── Read receipt — update local status to 'read' ────────────────────────
+    this.socket.on('messageRead', (data: SocketEventMap['messageRead']) => {
+      localDatabase.updateMessageStatus(data.messageId, 'read');
+      this._emit('messageRead', data);
+    });
+
+    // ── Presence ────────────────────────────────────────────────────────────
+    this.socket.on('userOnline', (data: SocketEventMap['userOnline']) => {
+      this._emit('userOnline', data);
+    });
+
+    // ── Failed message ──────────────────────────────────────────────────────
+    this.socket.on('messageFailed', (data: SocketEventMap['messageFailed']) => {
+      localDatabase.updateMessageStatus(data.messageId, 'sending'); // keep as pending
+      this._emit('messageFailed', data);
+    });
+
+    console.log('[ChatSocket] Connecting as', resolvedUserId, 'to', WS_URL);
   }
 
+  /** disconnect — call on logout */
   disconnect() {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
-      console.log('[ChatSocket] Disconnected');
+      this.handlerMap.clear();
+      console.log('[ChatSocket] Disconnected and cleaned up.');
     }
   }
 
-  /**
-   * Join a conversation room for real-time updates
-   */
+  // ── Room management ───────────────────────────────────────────────────────
+
+  /** joinConversation — tells the backend you're actively viewing this chat */
   joinConversation(conversationId: string) {
-    if (!this.socket?.connected) {
-      console.warn('[ChatSocket] Cannot join - socket not connected');
-      return;
-    }
-    this.socket.emit('joinConversation', { conversationId });
-    console.log('[ChatSocket] Joined conversation:', conversationId);
+    this.socket?.emit('joinConversation', { conversationId });
   }
 
-  /**
-   * Leave a conversation room
-   */
+  /** leaveConversation — tells the backend you've left the chat screen */
   leaveConversation(conversationId: string) {
-    if (!this.socket?.connected) {
-      console.warn('[ChatSocket] Cannot leave - socket not connected');
-      return;
-    }
-    this.socket.emit('leaveConversation', { conversationId });
-    console.log('[ChatSocket] Left conversation:', conversationId);
+    this.socket?.emit('leaveConversation', { conversationId });
   }
 
-  /**
-   * Send typing indicator to conversation participants
-   */
-  sendTyping(conversationId: string, isTyping: boolean) {
-    if (!this.socket?.connected) {
-      console.warn('[ChatSocket] Cannot send typing - socket not connected');
-      return;
-    }
-    this.socket.emit('typing', { conversationId, isTyping });
-  }
+  // ── Message sending ───────────────────────────────────────────────────────
 
   /**
-   * Send read receipt for a message
+   * sendMessage
+   * Emits a message to the backend gateway for routing.
+   * The caller must already have saved the message locally with status:'sending'.
    */
-  markMessageRead(conversationId: string, messageId: string) {
+  sendMessage(payload: {
+    conversationId: string;
+    recipientId: string;
+    message: {
+      id: string;
+      senderId: string;
+      text: string;
+      createdAt: string;
+    };
+  }) {
     if (!this.socket?.connected) {
-      console.warn('[ChatSocket] Cannot send read receipt - socket not connected');
-      return;
+      console.warn('[ChatSocket] Cannot send — not connected.');
+      return false;
     }
-    this.socket.emit('readReceipt', { conversationId, messageId });
+    this.socket.emit('sendMessage', payload);
+    return true;
   }
 
-  /**
-   * Register event listener
-   */
-  on<T extends SocketEvent['event']>(
-    event: T,
-    handler: (data: Extract<SocketEvent, { event: T }>['data']) => void,
+  // ── Typing indicator ──────────────────────────────────────────────────────
+
+  sendTyping(conversationId: string, recipientId: string, isTyping: boolean) {
+    this.socket?.emit('typing', { conversationId, recipientId, isTyping });
+  }
+
+  // ── Read receipt ──────────────────────────────────────────────────────────
+
+  markMessageRead(
+    conversationId: string,
+    messageId: string,
+    senderId: string,
   ) {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set());
+    this.socket?.emit('markRead', { conversationId, messageId, senderId });
+  }
+
+  // ── Event subscription ────────────────────────────────────────────────────
+
+  /**
+   * on — subscribe to a socket event.
+   * Keeps a reference to the handler so off() can remove exactly this handler
+   * without touching other subscribers to the same event.
+   */
+  on<K extends keyof SocketEventMap>(
+    event: K,
+    handler: (data: SocketEventMap[K]) => void,
+  ) {
+    if (!this.handlerMap.has(event)) {
+      this.handlerMap.set(event, new Map());
     }
-    this.listeners.get(event)!.add(handler);
-
-    // Register actual socket listener
-    this.socket?.on(event, handler as any);
+    // Store handler → handler mapping (identity for internal _emit use)
+    this.handlerMap.get(event)!.set(handler, handler);
   }
 
   /**
-   * Unregister event listener
+   * off — unsubscribe a specific handler.
+   * Always pass the exact same function reference used in on().
    */
-  off<T extends SocketEvent['event']>(event: T) {
-    this.socket?.off(event);
-    this.listeners.delete(String(event));
+  off<K extends keyof SocketEventMap>(
+    event: K,
+    handler: (data: SocketEventMap[K]) => void,
+  ) {
+    this.handlerMap.get(event)?.delete(handler);
   }
 
-  /**
-   * Emit custom event (internal use)
-   */
-  private emit(event: string, data: any) {
-    const handlers = this.listeners.get(event);
+  // ── Internal emit ─────────────────────────────────────────────────────────
+
+  /** _emit — calls all registered handlers for an internal event */
+  private _emit<K extends keyof SocketEventMap>(
+    event: K,
+    data: SocketEventMap[K],
+  ) {
+    const handlers = this.handlerMap.get(event);
     if (handlers) {
-      handlers.forEach((handler) => handler(data));
+      handlers.forEach((handler) => (handler as Function)(data));
     }
   }
 
-  /**
-   * Check if socket is connected
-   */
-  get isConnected() {
+  // ── Status helpers ────────────────────────────────────────────────────────
+
+  get isConnected(): boolean {
     return this.socket?.connected ?? false;
   }
 
-  /**
-   * Get connection status
-   */
   getStatus() {
     return {
       connected: this.isConnected,
-      socket: this.socket ? 'Initialized' : 'Not initialized',
       id: this.socket?.id ?? 'N/A',
     };
   }
 }
 
-// Export singleton instance
+// Export a single shared instance used across the entire app
 export const chatSocket = new ChatSocket();

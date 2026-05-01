@@ -1,15 +1,13 @@
 import * as admin from 'firebase-admin';
 
 // ── Firestore document shapes ─────────────────────────────────────────────────
-// These mirror exactly what is stored in Firestore documents.
-// All timestamps are Firestore Timestamps (never plain JS Date on the server).
 
 export interface UserDoc {
   id: string;
   username: string;
   displayName: string;
   avatarUrl: string | null;
-  fcmToken: string | null;       // Updated by the mobile app on login / FCM refresh
+  fcmToken: string | null;
   isOnline: boolean;
   lastSeen: admin.firestore.Timestamp | null;
   createdAt: admin.firestore.Timestamp;
@@ -17,15 +15,15 @@ export interface UserDoc {
 
 export interface ConversationDoc {
   id: string;
-  participantIds: [string, string];   // Always exactly 2, sorted alphabetically
-  key: string;                        // participantIds.join('_') — used for fast exact lookup
+  participantIds: [string, string]; // always sorted alphabetically
+  key: string;                      // participantIds.join('_') — for fast lookup
   lastMessage: {
     text: string;
     senderId: string;
     createdAt: admin.firestore.Timestamp;
   } | null;
-  unreadCounts: Record<string, number>; // { [userId]: unreadCount }
-  mutedBy: string[];                    // userIds who have muted this conversation
+  unreadCounts: Record<string, number>;
+  mutedBy: string[];
   createdAt: admin.firestore.Timestamp;
 }
 
@@ -38,6 +36,7 @@ export interface MessageDoc {
   mediaType: 'image' | 'video' | 'file' | null;
   fileName: string | null;
   readAt: admin.firestore.Timestamp | null;
+  status: 'sent' | 'delivered' | 'read';
   createdAt: admin.firestore.Timestamp;
 }
 
@@ -49,11 +48,10 @@ export interface BlockDoc {
 }
 
 // ── Firestore collection paths ────────────────────────────────────────────────
-// Centralised here so changing a collection name is a one-line edit.
+
 export const COLLECTIONS = {
   USERS: 'users',
   CONVERSATIONS: 'conversations',
-  /** Messages are stored as a sub-collection under each conversation */
   MESSAGES: (conversationId: string) =>
     `conversations/${conversationId}/messages`,
   BLOCKS: 'blocks',

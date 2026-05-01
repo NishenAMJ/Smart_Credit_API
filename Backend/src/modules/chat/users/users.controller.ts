@@ -1,14 +1,11 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Body,
-  Query,
-  Param,
-} from '@nestjs/common';
+/**
+ * users.controller.ts
+ * Base path: /users
+ */
+import { Controller, Get, Patch, Body, Query, Param } from '@nestjs/common';
 import { IsString } from 'class-validator';
 import { UsersService } from './users.service';
-import { CurrentUser } from '../common/decorators/current-user.decorator'; // ✅ FIXED: plural folder, hyphen filename
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 class UpdateFcmTokenDto {
   @IsString()
@@ -19,22 +16,19 @@ class UpdateFcmTokenDto {
 export class UsersController {
   constructor(private usersService: UsersService) {}
 
-  // GET /users/search?q=john
+  /** GET /users/search?q=john — search users by username prefix */
   @Get('search')
-  search(
-    @Query('q') q: string,
-    @CurrentUser() userId: string,
-  ) {
+  search(@Query('q') q: string, @CurrentUser() userId: string) {
     return this.usersService.search(q ?? '', userId);
   }
 
-  // GET /users/:id
+  /** GET /users/:id — get a single user's public profile */
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findById(id);
   }
 
-  // PATCH /users/fcm-token  — called by app whenever FCM token refreshes
+  /** PATCH /users/fcm-token — update FCM push token (called on login/refresh) */
   @Patch('fcm-token')
   updateFcmToken(
     @CurrentUser() userId: string,

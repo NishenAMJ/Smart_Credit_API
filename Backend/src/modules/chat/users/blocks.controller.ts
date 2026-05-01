@@ -1,24 +1,22 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Param,
-} from '@nestjs/common';
+/**
+ * blocks.controller.ts
+ * Base path: /users
+ */
+import { Controller, Get, Post, Delete, Param } from '@nestjs/common';
 import { BlocksService } from './blocks.service';
-import { CurrentUser } from '../common/decorators/current-user.decorator'; // ✅ FIXED: plural folder, hyphen filename
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('users')
 export class BlocksController {
   constructor(private blocks: BlocksService) {}
 
-  // GET /users/blocked
+  /** GET /users/blocked — list all users blocked by current user */
   @Get('blocked')
   getBlocked(@CurrentUser() userId: string) {
     return this.blocks.getBlockedUsers(userId);
   }
 
-  // POST /users/block/:targetId
+  /** POST /users/block/:targetId — block a user */
   @Post('block/:targetId')
   block(
     @CurrentUser() userId: string,
@@ -27,7 +25,7 @@ export class BlocksController {
     return this.blocks.blockUser(userId, targetId);
   }
 
-  // DELETE /users/block/:targetId
+  /** DELETE /users/block/:targetId — unblock a user */
   @Delete('block/:targetId')
   unblock(
     @CurrentUser() userId: string,

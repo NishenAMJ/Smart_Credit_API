@@ -1,18 +1,12 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 /**
- * @CurrentUser() — HTTP context
- * ──────────────────────────────────────────────────────────────
- * Extracts the authenticated userId from the incoming HTTP request.
+ * @CurrentUser() — HTTP
+ * Extracts userId from req.user.id (set by JWT guard) or
+ * falls back to x-user-id header (used for temporary lender_004 auth).
  *
- * Your JWT / auth guard (in the parent AppModule) should populate
- * req.user = { id: string } before the request reaches any chat controller.
- *
- * Falls back to the x-user-id header for testing without a full auth guard.
- *
- * Usage:
- *   @Get()
- *   listConversations(@CurrentUser() userId: string) { ... }
+ * TEMP AUTH: Currently the frontend sends 'lender_004' as x-user-id.
+ * When real JWT auth is wired up, req.user.id will take over automatically.
  */
 export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): string => {
@@ -22,15 +16,8 @@ export const CurrentUser = createParamDecorator(
 );
 
 /**
- * @WsCurrentUser() — WebSocket context
- * ──────────────────────────────────────────────────────────────
- * Extracts the userId from a Socket.IO socket for WebSocket handlers.
- *
- * The ChatGateway's handleConnection sets socket.data.userId on connect
- * (reading from handshake.auth.userId sent by the mobile app).
- *
- * Usage in a @SubscribeMessage handler:
- *   handleTyping(@WsCurrentUser() userId: string, ...) { ... }
+ * @WsCurrentUser() — WebSocket
+ * Extracts userId from socket.data.userId (set in handleConnection).
  */
 export const WsCurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): string => {

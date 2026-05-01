@@ -1,3 +1,8 @@
+/**
+ * NewChatScreen.tsx
+ * Search for users and start a new conversation.
+ */
+
 import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -12,8 +17,9 @@ import {
 } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../../constants';
-import { User, Conversation, ChatStackParamList } from '../../types';
-import { userService } from '../../services';
+import { User, ChatStackParamList } from '../../types/chat.types';
+import { userService } from '../../services/userService';
+import { conversationService } from '../../services/conversationService';
 import Avatar from '../../components/common/Avatar';
 
 type Props = {
@@ -26,13 +32,12 @@ export default function NewChatScreen({ navigation }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<User[]>([]);
   const [searchState, setSearchState] = useState<SearchState>('idle');
-  const [startingFor, setStartingFor] = useState<string | null>(null); // userId being started
+  const [startingFor, setStartingFor] = useState<string | null>(null);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearch = useCallback((text: string) => {
     setQuery(text);
-
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
     if (!text.trim()) {
@@ -42,7 +47,6 @@ export default function NewChatScreen({ navigation }: Props) {
     }
 
     setSearchState('loading');
-
     debounceTimer.current = setTimeout(async () => {
       try {
         const data = await userService.search(text.trim());
@@ -58,10 +62,12 @@ export default function NewChatScreen({ navigation }: Props) {
     if (startingFor) return;
     try {
       setStartingFor(user.id);
-      const conversation: Conversation = await userService.startConversation(user.id);
+      // conversationService.start maps to POST /conversations
+      const conversation = await conversationService.start(user.id);
       navigation.replace('Chat', {
         conversationId: conversation.id,
         participant: user,
+        isMuted: false,
       });
     } catch {
       setStartingFor(null);
@@ -77,7 +83,7 @@ export default function NewChatScreen({ navigation }: Props) {
     >
       <Avatar
         name={item.displayName}
-        avatarUrl={item.avatarUrl}
+        avatarUrl={item.avatarUrl || undefined}
         size={46}
         showOnline
         isOnline={item.isOnline}
@@ -100,7 +106,6 @@ export default function NewChatScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backIcon}>‹</Text>
@@ -109,7 +114,6 @@ export default function NewChatScreen({ navigation }: Props) {
         <View style={{ width: 32 }} />
       </View>
 
-      {/* Search bar */}
       <View style={styles.searchWrapper}>
         <View style={styles.searchBar}>
           <Text style={styles.searchIconText}>🔍</Text>
@@ -128,14 +132,15 @@ export default function NewChatScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {/* States */}
       {searchState === 'idle' && (
-        <View style={styles.idleState}>
+        <View style={styles.centered}>
           <View style={styles.idleIcon}>
             <Text style={{ fontSize: 28 }}>💬</Text>
           </View>
           <Text style={styles.idleTitle}>Find people</Text>
-          <Text style={styles.idleSub}>Search by name or @username to start a conversation</Text>
+          <Text style={styles.idleSub}>
+            Search by name or @username to start a conversation
+          </Text>
         </View>
       )}
 
@@ -178,9 +183,7 @@ export default function NewChatScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-
-  // Header
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -192,17 +195,13 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   backBtn: {
-    width: 32,
-    height: 32,
+    width: 32, height: 32,
     borderRadius: BORDER_RADIUS.full,
     backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   backIcon: { fontSize: 22, color: COLORS.primary, lineHeight: 26 },
   headerTitle: { ...TYPOGRAPHY.subtitle, color: COLORS.textPrimary },
-
-  // Search
   searchWrapper: {
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
@@ -222,71 +221,35 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   searchIconText: { fontSize: 14 },
-  searchInput: {
-    flex: 1,
-    ...TYPOGRAPHY.body,
-    color: COLORS.textPrimary,
-    padding: 0,
-  },
-
-  // Idle state
-  idleState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    gap: 10,
-  },
+  searchInput: { flex: 1, ...TYPOGRAPHY.body, color: COLORS.textPrimary, padding: 0 },
   idleIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 64, height: 64, borderRadius: 32,
     backgroundColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
   },
   idleTitle: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, textAlign: 'center' },
-  idleSub: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-
-  // User list
+  idleSub: { fontSize: 13, fontWeight: '400', color: COLORS.textSecondary, textAlign: 'center', lineHeight: 19 },
   listContent: { paddingTop: SPACING.sm },
   separator: { height: 0.5, backgroundColor: COLORS.border, marginLeft: 74 },
   userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.surface,
+    flexDirection: 'row', alignItems: 'center',
+    gap: SPACING.md, paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md, backgroundColor: COLORS.surface,
   },
   userInfo: { flex: 1, minWidth: 0 },
   userName: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary },
   userHandle: { fontSize: 13, color: COLORS.textSecondary, marginTop: 1 },
   startBtn: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.medium,
-    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.medium, backgroundColor: COLORS.primary,
   },
   startBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.surface },
-
-  // Empty / Error
   emptyTitle: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary },
   emptySub: { fontSize: 13, color: COLORS.textSecondary },
   retryBtn: {
-    marginTop: SPACING.sm,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.medium,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
+    marginTop: SPACING.sm, paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md, borderRadius: BORDER_RADIUS.medium,
+    borderWidth: 1.5, borderColor: COLORS.primary,
   },
   retryText: { ...TYPOGRAPHY.bodyMedium, color: COLORS.primary },
 });

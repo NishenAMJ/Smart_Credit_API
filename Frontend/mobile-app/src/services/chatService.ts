@@ -1,55 +1,8 @@
-import axios, { AxiosError } from 'axios';
+import { api } from './api';
 import { Conversation, Message, User, BlockedUser } from '../types/chat.types';
 
-/**
- * API client for chat REST endpoints
- * Configured to communicate with NestJS Backend
- * 
- * Backend Endpoints:
- * - GET /conversations - list conversations for user
- * - POST /conversations - start new 1-on-1 conversation
- * - GET /conversations/:id - get single conversation
- * - PATCH /conversations/:id/read - mark conversation as read
- * - PATCH /conversations/:id/mute - mute/unmute conversation
- * - DELETE /conversations/:id - delete conversation
- * - GET /conversations/:id/messages - list messages with pagination
- * - POST /conversations/:id/messages - send text message
- */
-
-const api = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000',
-  timeout: 10000,
-});
-
-/**
- * Request interceptor: Add JWT token to Authorization header
- * Expects token to be available in your auth store
- */
-api.interceptors.request.use((config) => {
-  // Get token from your auth store (adjust based on your auth implementation)
-  // Example: const token = useAuthStore.getState().token;
-  // if (token) config.headers.Authorization = `Bearer ${token}`;
-
-  // Temporary: You can manually set token after getting it from auth
-  const token = localStorage?.getItem?.('authToken') ?? sessionStorage?.getItem?.('authToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  return config;
-});
-
-/**
- * Response interceptor: Handle errors gracefully
- */
-api.interceptors.response.use(
-  (response) => response,
-  (error: AxiosError) => {
-    const message = error.response?.data?.message ?? error.message;
-    console.error('[ChatAPI] Error:', message);
-    return Promise.reject(error);
-  },
-);
+// TODO: Replace with real auth id
+const getUserId = () => 'lender_004';
 
 /**
  * Conversation Service
@@ -61,8 +14,8 @@ export const conversationService = {
    */
   getAll: async (): Promise<Conversation[]> => {
     try {
-      const response = await api.get('/conversations');
-      return response.data;
+      const userId = getUserId();
+      return await api.get(`/conversations?userId=${userId}`);
     } catch (error) {
       console.error('Failed to load conversations:', error);
       throw error;
@@ -79,11 +32,10 @@ export const conversationService = {
     params: { page: number; limit: number },
   ): Promise<Message[]> => {
     try {
-      const response = await api.get(
-        `/conversations/${conversationId}/messages`,
-        { params },
+      const userId = getUserId();
+      return await api.get(
+        `/conversations/${conversationId}/messages?userId=${userId}&page=${params.page}&limit=${params.limit}`
       );
-      return response.data;
     } catch (error) {
       console.error(`Failed to load messages for ${conversationId}:`, error);
       throw error;
@@ -95,7 +47,8 @@ export const conversationService = {
    */
   markAsRead: async (conversationId: string): Promise<void> => {
     try {
-      await api.patch(`/conversations/${conversationId}/read`);
+      const userId = getUserId();
+      await api.patch(`/conversations/${conversationId}/read`, { userId });
     } catch (error) {
       console.error(`Failed to mark ${conversationId} as read:`, error);
       throw error;
@@ -107,7 +60,8 @@ export const conversationService = {
    */
   delete: async (conversationId: string): Promise<void> => {
     try {
-      await api.delete(`/conversations/${conversationId}`);
+      const userId = getUserId();
+      await api.delete(`/conversations/${conversationId}?userId=${userId}`);
     } catch (error) {
       console.error(`Failed to delete conversation ${conversationId}:`, error);
       throw error;
@@ -121,7 +75,8 @@ export const conversationService = {
    */
   mute: async (conversationId: string, muted: boolean): Promise<void> => {
     try {
-      await api.patch(`/conversations/${conversationId}/mute`, { muted });
+      const userId = getUserId();
+      await api.patch(`/conversations/${conversationId}/mute`, { muted, userId });
     } catch (error) {
       console.error(
         `Failed to ${muted ? 'mute' : 'unmute'} conversation:`,
@@ -146,11 +101,11 @@ export const messageService = {
     text: string,
   ): Promise<Message> => {
     try {
-      const response = await api.post(
+      const userId = getUserId();
+      return await api.post(
         `/conversations/${conversationId}/messages`,
-        { text },
+        { text, senderId: userId },
       );
-      return response.data;
     } catch (error) {
       console.error('Failed to send message:', error);
       throw error;
@@ -166,22 +121,7 @@ export const messageService = {
     conversationId: string,
     file: File,
   ): Promise<Message> => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await api.post(
-        `/conversations/${conversationId}/messages/upload`,
-        formData,
-        {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        },
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Failed to upload media:', error);
-      throw error;
-    }
+    throw new Error('Upload media not supported yet');
   },
 };
 
@@ -196,8 +136,7 @@ export const userService = {
    */
   search: async (query: string): Promise<User[]> => {
     try {
-      const response = await api.get('/users/search', { params: { q: query } });
-      return response.data;
+      return await api.get(`/users/search?q=${query}&userId=${getUserId()}`);
     } catch (error) {
       console.error('Failed to search users:', error);
       throw error;
@@ -211,8 +150,8 @@ export const userService = {
    */
   startConversation: async (targetUserId: string): Promise<Conversation> => {
     try {
-      const response = await api.post('/conversations', { targetUserId });
-      return response.data;
+      const userId = getUserId();
+      return await api.post('/conversations', { targetUserId, userId });
     } catch (error) {
       console.error('Failed to start conversation:', error);
       throw error;
@@ -224,8 +163,8 @@ export const userService = {
    */
   getBlockedUsers: async (): Promise<BlockedUser[]> => {
     try {
-      const response = await api.get('/users/blocked');
-      return response.data;
+      const userId = getUserId();
+      return await api.get(`/users/blocked?userId=${userId}`);
     } catch (error) {
       console.error('Failed to get blocked users:', error);
       throw error;
@@ -236,9 +175,10 @@ export const userService = {
    * Block a user
    * @param userId - User ID to block
    */
-  blockUser: async (userId: string): Promise<void> => {
+  blockUser: async (targetId: string): Promise<void> => {
     try {
-      await api.post(`/users/block/${userId}`);
+      const userId = getUserId();
+      await api.post(`/users/block/${targetId}`, { userId });
     } catch (error) {
       console.error(`Failed to block user ${userId}:`, error);
       throw error;
@@ -249,17 +189,14 @@ export const userService = {
    * Unblock a user
    * @param userId - User ID to unblock
    */
-  unblockUser: async (userId: string): Promise<void> => {
+  unblockUser: async (targetId: string): Promise<void> => {
     try {
-      await api.delete(`/users/block/${userId}`);
+      const userId = getUserId();
+      await api.delete(`/users/block/${targetId}?userId=${userId}`);
     } catch (error) {
       console.error(`Failed to unblock user ${userId}:`, error);
       throw error;
     }
   },
 };
-
-/**
- * Export API instance for advanced usage
- */
-export { api };
+
