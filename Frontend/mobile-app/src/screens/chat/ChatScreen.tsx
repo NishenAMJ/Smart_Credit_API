@@ -237,7 +237,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           {!isMe && (
             <View style={styles.avatarSlot}>
               {showAvatar && (
-                <Avatar name={participant.displayName} avatarUrl={participant.avatarUrl} size={28} />
+                <Avatar name={participant.displayName} avatarUrl={participant.avatarUrl || undefined} size={28} />
               )}
             </View>
           )}
@@ -290,7 +290,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         >
           <Avatar
             name={participant.displayName}
-            avatarUrl={participant.avatarUrl}
+            avatarUrl={participant.avatarUrl || undefined}
             size={36}
             showOnline
             isOnline={participant.isOnline}
