@@ -156,8 +156,16 @@ export const isOverduePayment = (
 export const shouldShowPayButton = (
   paymentStatus: string | undefined,
   paymentType: string | undefined,
+  paymentMethod?: string | undefined,
 ): boolean => {
   const isPaid = isPaidPayment(paymentStatus, paymentType);
+  const s = String(paymentStatus || "").toLowerCase();
+  
+  // Hide Pay button if the payment is a pending bank transfer waiting for admin verification
+  if (s === "pending" && paymentMethod === "bank_transfer") {
+    return false;
+  }
+
   return !isPaid && paymentType !== "disbursement";
 };
 

@@ -86,7 +86,12 @@ export default function PaymentsScreen({
     useState<BorrowerRepayment | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [generatingQr, setGeneratingQr] = useState(false);
-  const [paymentProof, setPaymentProof] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [bankTransferModalVisible, setBankTransferModalVisible] =
+    useState(false);
+  const [selectedBankTransferPayment, setSelectedBankTransferPayment] =
+    useState<BorrowerRepayment | null>(null);
+  const [paymentProof, setPaymentProof] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
 
   const pickReceiptImage = async () => {
@@ -185,7 +190,7 @@ export default function PaymentsScreen({
           {
             paymentId: "dashboard-next",
             amount: dashboardNextPayment.amount,
-            status: "PENDING",
+            status: "UPCOMING",
             dueDate: dashboardNextPayment.dueDate,
             loanId: dashboardNextPayment.loanId,
             lenderName: "Lender",
@@ -207,19 +212,24 @@ export default function PaymentsScreen({
       return s === "paid" || s === "completed";
     });
 
-    const txAsRepayments: BorrowerRepayment[] = transactions.map((t) => ({
-      paymentId: t.transactionId ?? t.repaymentId,
-      transactionId: t.transactionId,
-      repaymentId: t.repaymentId,
-      loanId: t.loanId,
-      amount: t.amount,
-      status: t.status,
-      paidAt: t.paidAt ?? t.timestamp,
-      timestamp: t.timestamp,
-      type: t.type,
-      paymentMethod: t.paymentMethod,
-      lenderName: t.lenderName,
-    }));
+    const txAsRepayments: BorrowerRepayment[] = transactions
+      .filter((t) => {
+        const s = String(t.status || "").toLowerCase();
+        return s === "paid" || s === "completed";
+      })
+      .map((t) => ({
+        paymentId: t.transactionId ?? t.repaymentId,
+        transactionId: t.transactionId,
+        repaymentId: t.repaymentId,
+        loanId: t.loanId,
+        amount: t.amount,
+        status: t.status,
+        paidAt: t.paidAt ?? t.timestamp,
+        timestamp: t.timestamp,
+        type: t.type,
+        paymentMethod: t.paymentMethod,
+        lenderName: t.lenderName,
+      }));
 
     // Merge and deduplicate by ID
     const seen = new Set<string>();
@@ -329,18 +339,13 @@ export default function PaymentsScreen({
       return;
     }
 
-    if (selectedPaymentMethod === "Bank Transfer" && !paymentProof) {
-      Alert.alert(
-        "Receipt Required",
-        "Please upload a payment receipt for Bank Transfer verification.",
-      );
+    if (selectedPaymentMethod === "Bank Transfer") {
+      setSelectedBankTransferPayment(payment);
+      setBankTransferModalVisible(true);
       return;
     }
 
-    const successMessage =
-      selectedPaymentMethod === "Card"
-        ? "Payment completed successfully."
-        : "Payment submitted successfully and is pending verification.";
+    const successMessage = "Payment completed successfully.";
 
     Alert.alert(
       "Confirm Payment",
@@ -362,24 +367,14 @@ export default function PaymentsScreen({
             try {
               setProcessingPaymentId(payment.paymentId || null);
 
-              let proofUrl = undefined;
-              if (paymentProof) {
-                setUploadingReceipt(true);
-                proofUrl = await paymentService.uploadPaymentReceipt(
-                  paymentProof.uri,
-                );
-              }
-
               await paymentService.makeRepayment({
                 loanId: loanId,
                 amount: amount,
                 paymentMethod: paymentMethodApi,
                 transactionReference: `TXN-${Date.now()}`,
-                paymentProofUrl: proofUrl,
               });
 
               Alert.alert("Success", successMessage);
-              setPaymentProof(null);
               void fetchPayments();
             } catch (err) {
               const message = getApiErrorMessage(
@@ -390,12 +385,65 @@ export default function PaymentsScreen({
               Alert.alert("Payment failed", message);
             } finally {
               setProcessingPaymentId(null);
-              setUploadingReceipt(false);
             }
           },
         },
       ],
     );
+  };
+
+  const handleBankTransferConfirm = async () => {
+    if (!selectedBankTransferPayment) return;
+    if (!paymentProof) {
+      Alert.alert(
+        "Receipt Required",
+        "Please upload a payment receipt for Bank Transfer verification.",
+      );
+      return;
+    }
+
+    const { amount, loanId } = selectedBankTransferPayment;
+
+    if (!amount || amount <= 0 || !loanId) {
+      Alert.alert("Error", "Invalid payment amount or missing Loan ID.");
+      return;
+    }
+
+    try {
+      setProcessingPaymentId(selectedBankTransferPayment.paymentId || null);
+      setUploadingReceipt(true);
+
+      const proofUrl = await paymentService.uploadPaymentReceipt(
+        paymentProof.uri,
+      );
+
+      await paymentService.makeRepayment({
+        loanId: loanId,
+        amount: amount,
+        paymentMethod: "bank_transfer",
+        transactionReference: `TXN-${Date.now()}`,
+        paymentProofUrl: proofUrl,
+      });
+
+      Alert.alert(
+        "Success",
+        "Payment submitted successfully and is pending verification.",
+      );
+      setPaymentProof(null);
+      setBankTransferModalVisible(false);
+      setSelectedBankTransferPayment(null);
+      void fetchPayments();
+    } catch (err) {
+      const message = getApiErrorMessage(
+        err,
+        "Failed to process bank transfer. Please try again.",
+      );
+      console.error("Payment error:", message);
+      Alert.alert("Payment failed", message);
+    } finally {
+      setProcessingPaymentId(null);
+      setUploadingReceipt(false);
+    }
   };
 
   const renderPaymentCard = ({ item }: { item: BorrowerRepayment }) => {
@@ -535,24 +583,6 @@ export default function PaymentsScreen({
                 );
               })}
             </View>
-            {selectedPaymentMethod === "Bank Transfer" && (
-              <View style={styles.uploadSection}>
-                <Text style={styles.uploadLabel}>Upload Payment Receipt</Text>
-                <TouchableOpacity
-                  style={styles.uploadButton}
-                  onPress={pickReceiptImage}
-                >
-                  <Feather
-                    name={paymentProof ? "check-circle" : "upload"}
-                    size={20}
-                    color={paymentProof ? COLORS.primary : COLORS.textSecondary}
-                  />
-                  <Text style={styles.uploadButtonText}>
-                    {paymentProof ? "Receipt Selected" : "Tap to select receipt"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
         </View>
       )}
@@ -690,6 +720,71 @@ export default function PaymentsScreen({
                 scanned it.
               </Text>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Bank Transfer Modal */}
+      <Modal
+        visible={bankTransferModalVisible}
+        transparent
+        animationType='slide'
+        onRequestClose={() => setBankTransferModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Bank Transfer</Text>
+              <TouchableOpacity
+                onPress={() => setBankTransferModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Feather
+                  name='x'
+                  size={24}
+                  color={COLORS.textSecondary || "#6B7280"}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalInstructions}>
+              Please transfer{" "}
+              <Text style={{ fontWeight: "700", color: COLORS.textPrimary }}>
+                LKR{" "}
+                {selectedBankTransferPayment?.amount?.toLocaleString() ?? "0"}
+              </Text>{" "}
+              to the lender's bank account and upload the receipt below.
+            </Text>
+
+            <View style={styles.uploadSection}>
+              <Text style={styles.uploadLabel}>Payment Receipt</Text>
+              <TouchableOpacity
+                style={styles.uploadButton}
+                onPress={pickReceiptImage}
+                disabled={uploadingReceipt}
+              >
+                <Feather
+                  name={paymentProof ? "check-circle" : "upload"}
+                  size={24}
+                  color={paymentProof ? COLORS.primary : COLORS.textSecondary}
+                />
+                <Text style={styles.uploadButtonText}>
+                  {paymentProof ? "Receipt Selected" : "Tap to upload image"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { marginTop: SPACING.lg }]}
+              onPress={handleBankTransferConfirm}
+              disabled={uploadingReceipt}
+            >
+              {uploadingReceipt ? (
+                <Loader />
+              ) : (
+                <Text style={styles.primaryButtonText}>Confirm Payment</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -941,5 +1036,17 @@ const styles = StyleSheet.create({
     color: COLORS.primary || "#007AFF",
     lineHeight: 18,
     fontWeight: "500",
+  },
+  primaryButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.medium,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryButtonText: {
+    color: COLORS.surface,
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
