@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Activity, CheckCircle2, Clock3, RefreshCw, Search, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Activity, CheckCircle2, Clock3, RefreshCw, Search, XCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   getTransactions,
-  subscribeToTransactions,
   type AdminTransaction,
 } from "../../lib/api";
 
-type StreamStatus = "connecting" | "live" | "offline";
 type StatusFilter = "all" | "completed" | "pending" | "failed";
 
 const STATUS_FILTERS: Array<{ label: string; value: StatusFilter }> = [
@@ -16,62 +14,44 @@ const STATUS_FILTERS: Array<{ label: string; value: StatusFilter }> = [
   { label: "Failed", value: "failed" },
 ];
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+
 export default function Transactions() {
   const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [streamStatus, setStreamStatus] = useState<StreamStatus>("connecting");
+
+  // Pagination state
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
+  const [totalLoaded, setTotalLoaded] = useState(0);
+
+  const loadTransactions = useCallback(async (cursor?: string) => {
+    setLoading(true);
+    try {
+      const response = await getTransactions(pageSize, cursor);
+      setTransactions(response.transactions);
+      setHasMore(response.hasMore ?? false);
+      setNextCursor(response.nextCursor);
+      setTotalLoaded(response.count);
+      setError(response.error ?? "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load transactions.");
+    } finally {
+      setLoading(false);
+    }
+  }, [pageSize]);
 
   useEffect(() => {
-    let mounted = true;
-
-    async function loadInitialTransactions() {
-      try {
-        const response = await getTransactions();
-        if (!mounted) return;
-
-        setTransactions(response.transactions);
-        setError(response.error ?? "");
-      } catch (err) {
-        if (!mounted) return;
-        setError(err instanceof Error ? err.message : "Failed to load transactions.");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    void loadInitialTransactions();
-
-    try {
-      const source = subscribeToTransactions(
-        (payload) => {
-          if (!mounted) return;
-          setTransactions(payload.transactions);
-          setError(payload.error ?? "");
-          setStreamStatus(payload.success ? "live" : "offline");
-          setLoading(false);
-        },
-        () => {
-          if (!mounted) return;
-          setStreamStatus("offline");
-        },
-      );
-
-      return () => {
-        mounted = false;
-        source.close();
-      };
-    } catch (err) {
-      setStreamStatus("offline");
-      setError(err instanceof Error ? err.message : "Failed to open transaction stream.");
-    }
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    setCurrentPage(1);
+    setCursorStack([]);
+    void loadTransactions();
+  }, [loadTransactions]);
 
   const filteredTransactions = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -100,6 +80,30 @@ export default function Transactions() {
       return matchesStatus && matchesSearch;
     });
   }, [search, statusFilter, transactions]);
+
+  function handleNextPage() {
+    if (!hasMore || !nextCursor) return;
+    setCursorStack((prev) => [...prev, nextCursor]);
+    setCurrentPage((prev) => prev + 1);
+    void loadTransactions(nextCursor);
+  }
+
+  function handlePrevPage() {
+    if (currentPage <= 1) return;
+    const newStack = [...cursorStack];
+    newStack.pop();
+    const prevCursor = newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
+    setCursorStack(newStack);
+    setCurrentPage((prev) => prev - 1);
+    const goToCursor = currentPage <= 2 ? undefined : prevCursor;
+    void loadTransactions(goToCursor);
+  }
+
+  function handlePageSizeChange(newSize: number) {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    setCursorStack([]);
+  }
 
   const stats = useMemo(() => {
     const completed = transactions.filter((transaction) =>
@@ -159,24 +163,6 @@ export default function Transactions() {
           <h1 className="page-title">Transactions</h1>
           <p className="page-subtitle">Payments, repayments, lenders, and borrowers</p>
         </div>
-        <div style={S.streamPill}>
-          <span
-            style={{
-              ...S.streamDot,
-              background:
-                streamStatus === "live"
-                  ? "#10B981"
-                  : streamStatus === "connecting"
-                    ? "#F59E0B"
-                    : "#EF4444",
-            }}
-          />
-          {streamStatus === "live"
-            ? "Live"
-            : streamStatus === "connecting"
-              ? "Connecting"
-              : "Offline"}
-        </div>
       </div>
 
       {error && <div className="card" style={S.errorCard}>{error}</div>}
@@ -226,7 +212,11 @@ export default function Transactions() {
           </div>
           <button
             className="btn-secondary btn-sm"
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setCurrentPage(1);
+              setCursorStack([]);
+              void loadTransactions();
+            }}
             title="Refresh"
           >
             <RefreshCw size={15} />
@@ -290,6 +280,49 @@ export default function Transactions() {
             )}
           </tbody>
         </table>
+
+        {/* Pagination Controls */}
+        <div style={S.paginationBar}>
+          <div style={S.paginationInfo}>
+            <span style={{ fontSize: 13, color: "#6B7280" }}>
+              Showing {filteredTransactions.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
+              –{(currentPage - 1) * pageSize + totalLoaded} {hasMore ? "" : "(last page)"}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                style={S.pageSizeSelect}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={S.paginationButtons}>
+            <button
+              style={S.pageButton(currentPage <= 1)}
+              onClick={handlePrevPage}
+              disabled={currentPage <= 1}
+              title="Previous page"
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+            <span style={S.pageIndicator}>Page {currentPage}</span>
+            <button
+              style={S.pageButton(!hasMore)}
+              onClick={handleNextPage}
+              disabled={!hasMore}
+              title="Next page"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -462,5 +495,58 @@ const S: Record<string, CSSProperties> = {
     textAlign: "center",
     padding: 28,
     color: "#6B7280",
+  },
+  paginationBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 16px",
+    borderTop: "1px solid #F3F4F6",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  paginationInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
+  pageSizeSelect: {
+    padding: "4px 8px",
+    borderRadius: 6,
+    border: "1.5px solid #E5E7EB",
+    fontSize: 13,
+    color: "#374151",
+    background: "#FFFFFF",
+    cursor: "pointer",
+    outline: "none",
+    fontFamily: "inherit",
+  },
+  paginationButtons: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  pageButton: (disabled: boolean): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "6px 14px",
+    borderRadius: 8,
+    border: "1.5px solid #E5E7EB",
+    background: disabled ? "#F9FAFB" : "#FFFFFF",
+    color: disabled ? "#D1D5DB" : "#374151",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: disabled ? "not-allowed" : "pointer",
+    transition: "all 0.15s",
+    fontFamily: "inherit",
+  }),
+  pageIndicator: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#374151",
+    padding: "6px 12px",
+    background: "#F3F4F6",
+    borderRadius: 8,
   },
 };

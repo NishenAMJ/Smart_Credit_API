@@ -107,6 +107,11 @@ export interface UserStatsResponse {
   };
 }
 
+export interface PaginationMeta {
+  hasMore?: boolean;
+  nextCursor?: string;
+}
+
 export interface UsersResponse {
   success: boolean;
   count: number;
@@ -362,6 +367,11 @@ export interface DisputesResponse {
   disputes: AdminDispute[];
 }
 
+export type CursorQueryParams = {
+  limit?: number;
+  cursor?: string;
+};
+
 // Keeps login calls typed so the calling page can store the session safely.
 export function adminLogin(email: string, password: string) {
   return apiRequest<AdminAuthResponse>("/auth/admin/login", {
@@ -391,15 +401,17 @@ export type UserQueryParams = {
 };
 
 // Encapsulates user filters so pages do not have to assemble query strings manually.
-export function getUsers(params?: UserQueryParams) {
+export function getUsers(params?: UserQueryParams & CursorQueryParams) {
   const searchParams = new URLSearchParams();
 
   if (params?.search) searchParams.set("search", params.search);
   if (params?.role && params.role !== "all") searchParams.set("role", params.role);
   if (params?.status && params.status !== "all") searchParams.set("status", params.status);
+  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (params?.cursor) searchParams.set("cursor", params.cursor);
 
   const query = searchParams.toString();
-  return apiRequest<UsersResponse>(`/admin/users${query ? `?${query}` : ""}`, {
+  return apiRequest<UsersResponse & PaginationMeta>(`/admin/users${query ? `?${query}` : ""}`, {
     auth: true,
   });
 }
@@ -430,8 +442,12 @@ export function activateUser(userId: string) {
 }
 
 // Gives the KYC page a single typed entry point for review data.
-export function getPendingKyc() {
-  return apiRequest<KycPendingResponse>("/admin/kyc/pending", {
+export function getPendingKyc(params?: CursorQueryParams) {
+  const searchParams = new URLSearchParams();
+  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (params?.cursor) searchParams.set("cursor", params.cursor);
+  const query = searchParams.toString();
+  return apiRequest<KycPendingResponse & PaginationMeta>(`/admin/kyc/pending${query ? `?${query}` : ""}`, {
     auth: true,
   });
 }
@@ -481,8 +497,11 @@ export function getTransactionsReport() {
   });
 }
 
-export function getTransactions(limit = 100) {
-  return apiRequest<TransactionsResponse>(`/admin/transactions?limit=${limit}`, {
+export function getTransactions(limit = 25, cursor?: string) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("limit", String(limit));
+  if (cursor) searchParams.set("cursor", cursor);
+  return apiRequest<TransactionsResponse & PaginationMeta>(`/admin/transactions?${searchParams.toString()}`, {
     auth: true,
   });
 }
@@ -523,8 +542,12 @@ export function getRevenueReport() {
 }
 
 // Gives the ads page a typed moderation data source.
-export function getAds() {
-  return apiRequest<AdsResponse>("/admin/ads", {
+export function getAds(params?: CursorQueryParams) {
+  const searchParams = new URLSearchParams();
+  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (params?.cursor) searchParams.set("cursor", params.cursor);
+  const query = searchParams.toString();
+  return apiRequest<AdsResponse & PaginationMeta>(`/admin/ads${query ? `?${query}` : ""}`, {
     auth: true,
   });
 }
@@ -561,14 +584,22 @@ export function updateAdStatus(
 }
 
 // Keeps audit pages isolated from raw request details.
-export function getAuditLogs() {
-  return apiRequest<AuditLogsResponse>("/admin/audit-logs", {
+export function getAuditLogs(params?: CursorQueryParams) {
+  const searchParams = new URLSearchParams();
+  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (params?.cursor) searchParams.set("cursor", params.cursor);
+  const query = searchParams.toString();
+  return apiRequest<AuditLogsResponse & PaginationMeta>(`/admin/audit-logs${query ? `?${query}` : ""}`, {
     auth: true,
   });
 }
 
-export function getDisputes() {
-  return apiRequest<DisputesResponse>("/admin/disputes", {
+export function getDisputes(params?: CursorQueryParams) {
+  const searchParams = new URLSearchParams();
+  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (params?.cursor) searchParams.set("cursor", params.cursor);
+  const query = searchParams.toString();
+  return apiRequest<DisputesResponse & PaginationMeta>(`/admin/disputes${query ? `?${query}` : ""}`, {
     auth: true,
   });
 }

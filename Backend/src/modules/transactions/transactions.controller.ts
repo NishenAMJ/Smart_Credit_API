@@ -9,8 +9,14 @@ export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Get()
-  async getTransactions(@Query('limit') limit?: string) {
-    return this.transactionsService.getTransactions(this.parseLimit(limit));
+  async getTransactions(
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.transactionsService.getTransactions(
+      this.parseLimit(limit),
+      cursor,
+    );
   }
 
   @Sse('stream')

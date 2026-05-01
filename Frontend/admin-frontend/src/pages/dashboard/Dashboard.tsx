@@ -19,25 +19,6 @@ import {
   type UsersReportResponse,
 } from "../../lib/api";
 
-function StatusBadge({ active }: { active: boolean }) {
-  return (
-    <span className={active ? "badge badge-success" : "badge badge-gray"}>
-      {active ? "active" : "clear"}
-    </span>
-  );
-}
-
-function Avatar({ label }: { label: string }) {
-  const initials = label
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  return <div style={S.avatar}>{initials}</div>;
-}
-
 export default function Dashboard() {
   const [dashboard, setDashboard] = useState<DashboardAnalyticsResponse["data"] | null>(null);
   const [usersReport, setUsersReport] = useState<UsersReportResponse["data"] | null>(null);
@@ -126,8 +107,6 @@ export default function Dashboard() {
     { label: "Admins", value: usersReport?.usersByRole.admin ?? 0 },
   ];
 
-  const alerts = dashboard?.alerts ?? [];
-
   return (
     <div>
       <div className="page-header">
@@ -171,7 +150,7 @@ export default function Dashboard() {
       </div>
 
       <div style={S.chartsRow}>
-        <div className="card" style={{ flex: 2 }}>
+        <div className="card" style={{ flex: 2, display: "flex", flexDirection: "column" }}>
           <div style={S.cardHeader}>
             <p style={S.cardTitle}>User Role Overview</p>
             <div style={S.legendRow}>
@@ -182,8 +161,9 @@ export default function Dashboard() {
               <span style={legendDot("#8B5CF6")} /> Admins
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={roleBreakdown} barSize={28} barGap={10}>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={roleBreakdown} barSize={32} barGap={10}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
@@ -204,20 +184,21 @@ export default function Dashboard() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
 
-        <div className="card" style={{ flex: 1 }}>
+        <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <div style={S.cardHeader}>
             <p style={S.cardTitle}>Today&apos;s Activity</p>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
-            <PieChart width={160} height={160}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 30 }}>
+            <PieChart width={180} height={180}>
               <Pie
                 data={pieData}
-                cx={75}
-                cy={75}
-                innerRadius={48}
-                outerRadius={72}
+                cx={85}
+                cy={85}
+                innerRadius={55}
+                outerRadius={80}
                 paddingAngle={3}
                 dataKey="value"
               >
@@ -227,7 +208,7 @@ export default function Dashboard() {
               </Pie>
             </PieChart>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 220 }}>
               {pieData.map((item) => (
                 <div key={item.name} style={S.legendItem}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -239,41 +220,6 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 24 }}>
-        <div style={{ ...S.cardHeader, marginBottom: 16 }}>
-          <p style={S.cardTitle}>System Alerts</p>
-          <button className="btn-secondary btn-sm">View All</button>
-        </div>
-
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Alert</th>
-                <th>Type</th>
-                <th>Count</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(alerts.length ? alerts : [{ message: "No critical system alerts", type: "info", count: 0 }]).map((alert) => (
-                <tr key={`${alert.message}-${alert.type}`}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <Avatar label={alert.message} />
-                      <span style={{ fontWeight: 500, fontSize: 14 }}>{alert.message}</span>
-                    </div>
-                  </td>
-                  <td style={{ color: "#6B7280", textTransform: "capitalize" }}>{alert.type}</td>
-                  <td style={{ color: "#6B7280" }}>{alert.count}</td>
-                  <td><StatusBadge active={alert.count > 0} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
@@ -318,7 +264,9 @@ const S: Record<string, React.CSSProperties> = {
   chartsRow: {
     display: "flex",
     gap: 16,
-    alignItems: "flex-start",
+    alignItems: "stretch",
+    height: "calc(100vh - 340px)",
+    minHeight: 320,
   },
   cardHeader: {
     display: "flex",
@@ -341,21 +289,8 @@ const S: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "6px 0",
+    padding: "4px 0",
     borderBottom: "1px solid #F3F4F6",
-  },
-  avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: "50%",
-    background: "#EFF6FF",
-    color: "#007AFF",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 600,
-    flexShrink: 0,
   },
   errorCard: {
     marginBottom: 16,

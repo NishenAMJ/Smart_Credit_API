@@ -11,17 +11,35 @@ import { rethrowFirebaseError } from '../../common/firebase-error';
 
 @Injectable()
 export class TransactionsService {
+  private static readonly MAX_PAGE_SIZE = 100;
+
   constructor(private readonly firebaseService: FirebaseService) {}
 
-  async getTransactions(limit = 100): Promise<TransactionsResponse> {
+  async getTransactions(
+    limit = 25,
+    cursor?: string,
+  ): Promise<TransactionsResponse> {
     try {
-      const snapshot = await this.firebaseService.db
+      let query: FirebaseFirestore.Query = this.firebaseService.db
         .collection('transactions')
         .orderBy('createdAt', 'desc')
-        .limit(limit)
-        .get();
+        .limit(Math.min(limit, TransactionsService.MAX_PAGE_SIZE) + 1);
 
-      return this.buildTransactionsResponse(snapshot);
+      if (cursor) {
+        const cursorDoc = await this.firebaseService.db
+          .collection('transactions')
+          .doc(cursor)
+          .get();
+        if (cursorDoc.exists) {
+          query = query.startAfter(cursorDoc);
+        }
+      }
+
+      const snapshot = await query.get();
+      return this.buildTransactionsResponse(
+        snapshot,
+        Math.min(limit, TransactionsService.MAX_PAGE_SIZE),
+      );
     } catch (error) {
       rethrowFirebaseError(error, 'Failed to load transactions');
     }
@@ -71,9 +89,11 @@ export class TransactionsService {
 
   private async buildTransactionsResponse(
     snapshot: QuerySnapshot,
+    limit = snapshot.size,
   ): Promise<TransactionsResponse> {
-    const usersById = await this.getUsersById(snapshot);
-    const transactions = snapshot.docs.map((doc) =>
+    const pageDocs = snapshot.docs.slice(0, limit);
+    const usersById = await this.getUsersById(pageDocs);
+    const transactions = pageDocs.map((doc) =>
       this.toTransactionRecord(doc.id, doc.data(), usersById),
     );
     const totalAmount = transactions.reduce(
@@ -86,15 +106,18 @@ export class TransactionsService {
       count: transactions.length,
       totalAmount,
       transactions,
+      hasMore: snapshot.size > limit,
+      nextCursor:
+        snapshot.size > limit ? pageDocs[pageDocs.length - 1]?.id : undefined,
     };
   }
 
   private async getUsersById(
-    snapshot: QuerySnapshot,
+    docs: Array<{ data(): DocumentData }>,
   ): Promise<Record<string, UserSummary>> {
     const ids = new Set<string>();
 
-    snapshot.docs.forEach((doc) => {
+    docs.forEach((doc) => {
       const transaction = doc.data();
       if (typeof transaction.lenderId === 'string') ids.add(transaction.lenderId);
       if (typeof transaction.borrowerId === 'string')
@@ -264,6 +287,8 @@ export interface TransactionsResponse {
   count: number;
   totalAmount: number;
   transactions: TransactionRecord[];
+  hasMore?: boolean;
+  nextCursor?: string;
   error?: string;
 }
 

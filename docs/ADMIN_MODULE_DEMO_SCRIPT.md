@@ -12,7 +12,7 @@ npm run start:dev
 
 2. Start the admin frontend:
 ```bash
-cd '/Users/lumithmanujaya/Desktop/Smart credit/Smart_Credit_API/Admin frontend'
+cd '/Users/lumithmanujaya/Desktop/Smart credit/Smart_Credit_API/Frontend/admin-frontend'
 npm run dev
 ```
 

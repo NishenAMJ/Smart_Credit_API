@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AdsService } from './ads.service';
@@ -20,13 +21,13 @@ export class AdsController {
   constructor(private readonly adsService: AdsService) {}
 
   @Get()
-  async getAllAds() {
-    return this.adsService.getAllAds();
+  async getAllAds(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+    return this.adsService.getAllAds(limit, cursor);
   }
 
   @Get('pending')
-  async getPendingAds() {
-    return this.adsService.getPendingAds();
+  async getPendingAds(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+    return this.adsService.getPendingAds(limit, cursor);
   }
 
   @Get(':adId')

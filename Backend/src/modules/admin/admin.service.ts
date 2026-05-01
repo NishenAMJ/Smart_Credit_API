@@ -11,6 +11,9 @@ import { QueryUsersDto } from './dto/query-users.dto';
 
 @Injectable()
 export class AdminService {
+  private static readonly DEFAULT_PAGE_SIZE = 20;
+  private static readonly MAX_PAGE_SIZE = 50;
+
   constructor(private readonly firebaseService: FirebaseService) {}
 
   private get db() {
@@ -119,19 +122,80 @@ export class AdminService {
     return searchableValues.some((value) => value.includes(normalizedSearch));
   }
 
-  // Returns all users after removing sensitive fields and applying optional filters.
-  async getAllUsers(query: QueryUsersDto = {}) {
-    try {
-      const usersSnapshot = await this.db.collection('users').get();
+  private parseLimit(limit?: string) {
+    const parsed = Number(limit ?? AdminService.DEFAULT_PAGE_SIZE);
+    if (!Number.isFinite(parsed)) {
+      return AdminService.DEFAULT_PAGE_SIZE;
+    }
 
-      const users = usersSnapshot.docs
-        .map((doc) => this.sanitizeUser(doc.id, doc.data()))
-        .filter((user) => this.matchesUserFilters(user, query));
+    return Math.min(
+      Math.max(Math.trunc(parsed), 1),
+      AdminService.MAX_PAGE_SIZE,
+    );
+  }
+
+  // Returns all users after removing sensitive fields and applying optional filters.
+  async getAllUsers(query: QueryUsersDto = {}, limit?: string, cursor?: string) {
+    try {
+      const pageSize = this.parseLimit(limit);
+      let usersQuery: FirebaseFirestore.Query = this.db
+        .collection('users')
+        .orderBy('createdAt', 'desc');
+
+      if (cursor) {
+        const cursorDoc = await this.getUserDocument(cursor).get();
+        if (cursorDoc.exists) {
+          usersQuery = usersQuery.startAfter(cursorDoc);
+        }
+      }
+
+      const users: User[] = [];
+      let nextCursor: string | undefined;
+      let exhausted = false;
+      let queryCursorDoc:
+        | FirebaseFirestore.QueryDocumentSnapshot
+        | undefined;
+
+      while (users.length < pageSize && !exhausted) {
+        let pageQuery = usersQuery.limit(Math.max(pageSize * 2, pageSize + 1));
+        if (queryCursorDoc) {
+          pageQuery = usersQuery.startAfter(queryCursorDoc).limit(
+            Math.max(pageSize * 2, pageSize + 1),
+          );
+        }
+
+        const usersSnapshot = await pageQuery.get();
+
+        if (usersSnapshot.empty) {
+          exhausted = true;
+          break;
+        }
+
+        queryCursorDoc = usersSnapshot.docs[usersSnapshot.docs.length - 1];
+
+        usersSnapshot.docs.forEach((doc) => {
+          if (users.length >= pageSize) {
+            return;
+          }
+
+          const user = this.sanitizeUser(doc.id, doc.data());
+          if (this.matchesUserFilters(user, query)) {
+            users.push(user);
+            nextCursor = doc.id;
+          }
+        });
+
+        if (usersSnapshot.size < Math.max(pageSize * 2, pageSize + 1)) {
+          exhausted = true;
+        }
+      }
 
       return {
         success: true,
         count: users.length,
         users,
+        hasMore: !exhausted && Boolean(nextCursor),
+        nextCursor: !exhausted ? nextCursor : undefined,
       };
     } catch (error) {
       console.error('Error fetching users:', error);

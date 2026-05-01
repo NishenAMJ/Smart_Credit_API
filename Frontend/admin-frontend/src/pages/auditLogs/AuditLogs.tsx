@@ -1,7 +1,9 @@
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { Search, Download, AlertTriangle, FileText, Shield, UserCheck, UserX } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Search, Download, AlertTriangle, FileText, Shield, UserCheck, UserX, ChevronLeft, ChevronRight } from "lucide-react";
 import { getAuditLogs, type AuditLogEntry, type AuditSeverity } from "../../lib/api";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 const ACTION_META: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
   kyc_approved: { label: "KYC Approved", icon: UserCheck, color: "#10B981", bg: "#ECFDF5" },
@@ -39,21 +41,34 @@ export default function AuditLogs() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Loads the latest audit feed so filters and counts start from the same dataset.
-    async function loadLogs() {
-      try {
-        const response = await getAuditLogs();
-        setLogs(response.logs);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load audit logs.");
-      } finally {
-        setLoading(false);
-      }
-    }
+  // Pagination state
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
+  const [totalLoaded, setTotalLoaded] = useState(0);
 
+  const loadLogs = useCallback(async (cursor?: string) => {
+    setLoading(true);
+    try {
+      const response = await getAuditLogs({ limit: pageSize, cursor });
+      setLogs(response.logs);
+      setHasMore(response.hasMore ?? false);
+      setNextCursor(response.nextCursor);
+      setTotalLoaded(response.count);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load audit logs.");
+    } finally {
+      setLoading(false);
+    }
+  }, [pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setCursorStack([]);
     void loadLogs();
-  }, []);
+  }, [loadLogs]);
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
@@ -66,6 +81,30 @@ export default function AuditLogs() {
       return matchesSearch && matchesSeverity;
     });
   }, [filterSeverity, logs, search]);
+
+  function handleNextPage() {
+    if (!hasMore || !nextCursor) return;
+    setCursorStack((prev) => [...prev, nextCursor]);
+    setCurrentPage((prev) => prev + 1);
+    void loadLogs(nextCursor);
+  }
+
+  function handlePrevPage() {
+    if (currentPage <= 1) return;
+    const newStack = [...cursorStack];
+    newStack.pop();
+    const prevCursor = newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
+    setCursorStack(newStack);
+    setCurrentPage((prev) => prev - 1);
+    const goToCursor = currentPage <= 2 ? undefined : prevCursor;
+    void loadLogs(goToCursor);
+  }
+
+  function handlePageSizeChange(newSize: number) {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    setCursorStack([]);
+  }
 
   // Exports the filtered view so the downloaded file matches what the admin sees.
   function exportCsv() {
@@ -206,6 +245,49 @@ export default function AuditLogs() {
             )}
           </tbody>
         </table>
+
+        {/* Pagination Controls */}
+        <div style={S.paginationBar}>
+          <div style={S.paginationInfo}>
+            <span style={{ fontSize: 13, color: "#6B7280" }}>
+              Showing {filteredLogs.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
+              –{(currentPage - 1) * pageSize + totalLoaded} {hasMore ? "" : "(last page)"}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                style={S.pageSizeSelect}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={S.paginationButtons}>
+            <button
+              style={S.pageButton(currentPage <= 1)}
+              onClick={handlePrevPage}
+              disabled={currentPage <= 1}
+              title="Previous page"
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+            <span style={S.pageIndicator}>Page {currentPage}</span>
+            <button
+              style={S.pageButton(!hasMore)}
+              onClick={handleNextPage}
+              disabled={!hasMore}
+              title="Next page"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {selectedLog && (
@@ -341,5 +423,58 @@ const S: Record<string, CSSProperties> = {
     border: "1px solid #E2E8F0",
     borderRadius: 12,
     padding: 14,
+  },
+  paginationBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 16px",
+    borderTop: "1px solid #F3F4F6",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  paginationInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
+  pageSizeSelect: {
+    padding: "4px 8px",
+    borderRadius: 6,
+    border: "1.5px solid #E5E7EB",
+    fontSize: 13,
+    color: "#374151",
+    background: "#FFFFFF",
+    cursor: "pointer",
+    outline: "none",
+    fontFamily: "inherit",
+  },
+  paginationButtons: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  pageButton: (disabled: boolean): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "6px 14px",
+    borderRadius: 8,
+    border: "1.5px solid #E5E7EB",
+    background: disabled ? "#F9FAFB" : "#FFFFFF",
+    color: disabled ? "#D1D5DB" : "#374151",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: disabled ? "not-allowed" : "pointer",
+    transition: "all 0.15s",
+    fontFamily: "inherit",
+  }),
+  pageIndicator: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#374151",
+    padding: "6px 12px",
+    background: "#F3F4F6",
+    borderRadius: 8,
   },
 };

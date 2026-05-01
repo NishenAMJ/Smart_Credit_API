@@ -4,21 +4,49 @@ import { Dispute } from './interfaces/dispute.interface';
 
 @Injectable()
 export class DisputesService {
+  private static readonly DEFAULT_PAGE_SIZE = 20;
+  private static readonly MAX_PAGE_SIZE = 50;
+
   constructor(private readonly firebaseService: FirebaseService) {}
 
-  async getAllDisputes(): Promise<{
+  private parseLimit(limit?: string) {
+    const parsed = Number(limit ?? DisputesService.DEFAULT_PAGE_SIZE);
+    if (!Number.isFinite(parsed)) {
+      return DisputesService.DEFAULT_PAGE_SIZE;
+    }
+
+    return Math.min(
+      Math.max(Math.trunc(parsed), 1),
+      DisputesService.MAX_PAGE_SIZE,
+    );
+  }
+
+  async getAllDisputes(limit?: string, cursor?: string): Promise<{
     success: boolean;
     count: number;
     disputes: Dispute[];
+    hasMore: boolean;
+    nextCursor?: string;
   }> {
     try {
       const db = this.firebaseService.db;
-      const disputesRef = db.collection('disputes');
+      const pageSize = this.parseLimit(limit);
+      let disputesRef: FirebaseFirestore.Query = db
+        .collection('disputes')
+        .orderBy('createdAt', 'desc');
 
-      const snapshot = await disputesRef.get();
+      if (cursor) {
+        const cursorDoc = await db.collection('disputes').doc(cursor).get();
+        if (cursorDoc.exists) {
+          disputesRef = disputesRef.startAfter(cursorDoc);
+        }
+      }
+
+      const snapshot = await disputesRef.limit(pageSize + 1).get();
+      const pageDocs = snapshot.docs.slice(0, pageSize);
 
       const disputes: Dispute[] = [];
-      snapshot.forEach((doc) => {
+      pageDocs.forEach((doc) => {
         disputes.push({
           id: doc.id,
           ...doc.data(),
@@ -29,6 +57,9 @@ export class DisputesService {
         success: true,
         count: disputes.length,
         disputes,
+        hasMore: snapshot.size > pageSize,
+        nextCursor:
+          snapshot.size > pageSize ? pageDocs[pageDocs.length - 1]?.id : undefined,
       };
     } catch (error) {
       throw new Error(`Failed to fetch disputes: ${error.message}`);

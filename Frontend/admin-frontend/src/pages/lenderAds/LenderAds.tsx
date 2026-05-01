@@ -1,9 +1,11 @@
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { Search, Eye, Check, X, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Search, Eye, Check, X, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { approveAd, getAds, rejectAd, updateAdStatus, type AdminAd, type AdStatus } from "../../lib/api";
 import { formatFirestoreDate } from "../../lib/admin-format";
 import { DEFAULT_AD_REJECTION_REASON } from "../../constants/admin-actions";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 type LenderAdRow = {
   id: string;
@@ -63,21 +65,34 @@ export default function LenderAds() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    // Loads the moderation queue before the admin starts taking actions.
-    async function loadAds() {
-      try {
-        const response = await getAds();
-        setAds(response.ads.map(mapAd));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load ads.");
-      } finally {
-        setLoading(false);
-      }
-    }
+  // Pagination state
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
+  const [totalLoaded, setTotalLoaded] = useState(0);
 
+  const loadAds = useCallback(async (cursor?: string) => {
+    setLoading(true);
+    try {
+      const response = await getAds({ limit: pageSize, cursor });
+      setAds(response.ads.map(mapAd));
+      setHasMore(response.hasMore ?? false);
+      setNextCursor(response.nextCursor);
+      setTotalLoaded(response.count);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load ads.");
+    } finally {
+      setLoading(false);
+    }
+  }, [pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setCursorStack([]);
     void loadAds();
-  }, []);
+  }, [loadAds]);
 
   const filteredAds = useMemo(() => {
     return ads.filter((ad) => {
@@ -100,6 +115,32 @@ export default function LenderAds() {
     rejected: ads.filter((ad) => ad.status === "rejected").length,
     closed: ads.filter((ad) => ad.status === "closed").length,
   };
+
+  function handleNextPage() {
+    if (!hasMore || !nextCursor) return;
+    setCursorStack((prev) => [...prev, nextCursor]);
+    setCurrentPage((prev) => prev + 1);
+    void loadAds(nextCursor);
+  }
+
+  function handlePrevPage() {
+    if (currentPage <= 1) return;
+    const newStack = [...cursorStack];
+    newStack.pop();
+    const prevCursor = newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
+    setCursorStack(newStack);
+    setCurrentPage((prev) => prev - 1);
+    // For cursor-based: go back to the cursor before the current one
+    // First page has no cursor, subsequent pages use the previous cursor from stack
+    const goToCursor = currentPage <= 2 ? undefined : prevCursor;
+    void loadAds(goToCursor);
+  }
+
+  function handlePageSizeChange(newSize: number) {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    setCursorStack([]);
+  }
 
   function syncAdStatus(adId: string, status: AdStatus) {
     setAds((prev) => prev.map((ad) => (ad.id === adId ? { ...ad, status } : ad)));
@@ -278,6 +319,49 @@ export default function LenderAds() {
             )}
           </tbody>
         </table>
+
+        {/* Pagination Controls */}
+        <div style={S.paginationBar}>
+          <div style={S.paginationInfo}>
+            <span style={{ fontSize: 13, color: "#6B7280" }}>
+              Showing {filteredAds.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
+              –{(currentPage - 1) * pageSize + totalLoaded} {hasMore ? "" : "(last page)"}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                style={S.pageSizeSelect}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={S.paginationButtons}>
+            <button
+              style={S.pageButton(currentPage <= 1)}
+              onClick={handlePrevPage}
+              disabled={currentPage <= 1}
+              title="Previous page"
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+            <span style={S.pageIndicator}>Page {currentPage}</span>
+            <button
+              style={S.pageButton(!hasMore)}
+              onClick={handleNextPage}
+              disabled={!hasMore}
+              title="Next page"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {selectedAd && (
@@ -507,4 +591,57 @@ const S = {
     borderRadius: 12,
     padding: 14,
   },
-} satisfies Record<string, CSSProperties | ((color: string, bg: string) => CSSProperties)>;
+  paginationBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 16px",
+    borderTop: "1px solid #F3F4F6",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  paginationInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
+  pageSizeSelect: {
+    padding: "4px 8px",
+    borderRadius: 6,
+    border: "1.5px solid #E5E7EB",
+    fontSize: 13,
+    color: "#374151",
+    background: "#FFFFFF",
+    cursor: "pointer",
+    outline: "none",
+    fontFamily: "inherit",
+  },
+  paginationButtons: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  pageButton: (disabled: boolean): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "6px 14px",
+    borderRadius: 8,
+    border: "1.5px solid #E5E7EB",
+    background: disabled ? "#F9FAFB" : "#FFFFFF",
+    color: disabled ? "#D1D5DB" : "#374151",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: disabled ? "not-allowed" : "pointer",
+    transition: "all 0.15s",
+    fontFamily: "inherit",
+  }),
+  pageIndicator: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#374151",
+    padding: "6px 12px",
+    background: "#F3F4F6",
+    borderRadius: 8,
+  },
+} satisfies Record<string, CSSProperties | ((...args: any[]) => CSSProperties)>;

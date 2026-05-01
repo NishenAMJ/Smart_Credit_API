@@ -12,6 +12,9 @@ type ModerationStatus = 'pending' | 'approved' | 'rejected';
 
 @Injectable()
 export class AdsService {
+  private static readonly DEFAULT_PAGE_SIZE = 20;
+  private static readonly MAX_PAGE_SIZE = 50;
+
   constructor(private readonly firebaseService: FirebaseService) {}
 
   private mapAd(
@@ -36,46 +39,86 @@ export class AdsService {
     return adDoc;
   }
 
-  async getAllAds(): Promise<{ success: boolean; count: number; ads: Ad[] }> {
+  private parseLimit(limit?: string) {
+    const parsed = Number(limit ?? AdsService.DEFAULT_PAGE_SIZE);
+    if (!Number.isFinite(parsed)) {
+      return AdsService.DEFAULT_PAGE_SIZE;
+    }
+
+    return Math.min(Math.max(Math.trunc(parsed), 1), AdsService.MAX_PAGE_SIZE);
+  }
+
+  async getAllAds(limit?: string, cursor?: string): Promise<{
+    success: boolean;
+    count: number;
+    ads: Ad[];
+    hasMore: boolean;
+    nextCursor?: string;
+  }> {
     try {
       const db = this.firebaseService.db;
-      const snapshot = await db
+      const pageSize = this.parseLimit(limit);
+      let query: FirebaseFirestore.Query = db
         .collection('ads')
-        .where('lenderId', '!=', null)
-        .get();
+        .orderBy('createdAt', 'desc');
 
-      const ads: Ad[] = snapshot.docs.map((doc) => this.mapAd(doc));
+      if (cursor) {
+        const cursorDoc = await db.collection('ads').doc(cursor).get();
+        if (cursorDoc.exists) {
+          query = query.startAfter(cursorDoc);
+        }
+      }
+
+      const snapshot = await query.limit(pageSize + 1).get();
+      const visibleDocs = snapshot.docs.filter((doc) => Boolean(doc.data()?.lenderId));
+      const hasMore = visibleDocs.length > pageSize || snapshot.size > pageSize;
+      const pageDocs = visibleDocs.slice(0, pageSize);
+      const ads: Ad[] = pageDocs.map((doc) => this.mapAd(doc));
 
       return {
         success: true,
         count: ads.length,
         ads,
+        hasMore,
+        nextCursor: hasMore ? pageDocs[pageDocs.length - 1]?.id : undefined,
       };
     } catch (error) {
       rethrowFirebaseError(error, 'Failed to fetch ads');
     }
   }
 
-  async getPendingAds(): Promise<{
+  async getPendingAds(limit?: string, cursor?: string): Promise<{
     success: boolean;
     count: number;
     ads: Ad[];
+    hasMore: boolean;
+    nextCursor?: string;
   }> {
     try {
       const db = this.firebaseService.db;
-      const adsRef = db.collection('ads');
-
-      const snapshot = await adsRef
-        .where('lenderId', '!=', null)
+      const pageSize = this.parseLimit(limit);
+      let query: FirebaseFirestore.Query = db
+        .collection('ads')
         .where('status', '==', 'pending')
-        .get();
+        .orderBy('createdAt', 'desc');
 
-      const ads: Ad[] = snapshot.docs.map((doc) => this.mapAd(doc));
+      if (cursor) {
+        const cursorDoc = await db.collection('ads').doc(cursor).get();
+        if (cursorDoc.exists) {
+          query = query.startAfter(cursorDoc);
+        }
+      }
+
+      const snapshot = await query.limit(pageSize + 1).get();
+      const pageDocs = snapshot.docs.slice(0, pageSize);
+      const ads: Ad[] = pageDocs.map((doc) => this.mapAd(doc));
 
       return {
         success: true,
         count: ads.length,
         ads,
+        hasMore: snapshot.size > pageSize,
+        nextCursor: snapshot.size > pageSize ? pageDocs[pageDocs.length - 1]?.id : undefined,
       };
     } catch (error) {
       rethrowFirebaseError(error, 'Failed to fetch pending ads');

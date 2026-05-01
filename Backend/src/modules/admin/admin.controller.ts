@@ -29,8 +29,12 @@ export class AdminController {
 
   // Returns users that match the optional search, role, and status filters.
   @Get('users')
-  async getAllUsers(@Query() query: QueryUsersDto) {
-    return this.adminService.getAllUsers(query);
+  async getAllUsers(
+    @Query() query: QueryUsersDto,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.adminService.getAllUsers(query, limit, cursor);
   }
 
   // Returns a single user record by document id.

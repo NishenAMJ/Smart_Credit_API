@@ -4,6 +4,7 @@ import {
   Post,
   Param,
   Body,
+  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -19,8 +20,8 @@ export class KycController {
   constructor(private readonly kycService: KycService) {}
 
   @Get('pending')
-  async getPendingKyc() {
-    return this.kycService.getPendingKyc();
+  async getPendingKyc(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+    return this.kycService.getPendingKyc(limit, cursor);
   }
 
   @Get(':userId/documents')

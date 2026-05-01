@@ -7,6 +7,9 @@ import { SubmitKycDto } from './dto/submit-kyc.dto';
 
 @Injectable()
 export class KycService {
+  private static readonly DEFAULT_PAGE_SIZE = 20;
+  private static readonly MAX_PAGE_SIZE = 50;
+
   constructor(private readonly firebaseService: FirebaseService) {}
 
   private get db() {
@@ -34,6 +37,15 @@ export class KycService {
       notes: data.notes,
       rejectionReason: data.rejectionReason,
     };
+  }
+
+  private parseLimit(limit?: string) {
+    const parsed = Number(limit ?? KycService.DEFAULT_PAGE_SIZE);
+    if (!Number.isFinite(parsed)) {
+      return KycService.DEFAULT_PAGE_SIZE;
+    }
+
+    return Math.min(Math.max(Math.trunc(parsed), 1), KycService.MAX_PAGE_SIZE);
   }
 
   async submitMobileKyc(dto: SubmitKycDto) {
@@ -91,14 +103,25 @@ export class KycService {
     }
   }
 
-  async getPendingKyc() {
+  async getPendingKyc(limit?: string, cursor?: string) {
     try {
-      const kycSnapshot = await this.db
+      const pageSize = this.parseLimit(limit);
+      let query: FirebaseFirestore.Query = this.db
         .collection('users')
         .where('kycStatus', '==', 'pending')
-        .get();
+        .orderBy('createdAt', 'desc');
 
-      const documents = kycSnapshot.docs.map((doc) =>
+      if (cursor) {
+        const cursorDoc = await this.db.collection('users').doc(cursor).get();
+        if (cursorDoc.exists) {
+          query = query.startAfter(cursorDoc);
+        }
+      }
+
+      const kycSnapshot = await query.limit(pageSize + 1).get();
+      const pageDocs = kycSnapshot.docs.slice(0, pageSize);
+
+      const documents = pageDocs.map((doc) =>
         this.mapUserToKycDocument(doc),
       );
 
@@ -106,6 +129,9 @@ export class KycService {
         success: true,
         count: documents.length,
         documents,
+        hasMore: kycSnapshot.size > pageSize,
+        nextCursor:
+          kycSnapshot.size > pageSize ? pageDocs[pageDocs.length - 1]?.id : undefined,
       };
     } catch (error) {
       console.error('Error fetching pending KYC documents:', error);

@@ -15,4 +15,12 @@ export class QueryUsersDto {
   @IsString()
   @IsIn(['active', 'suspended', 'pending', 'inactive'])
   status?: UserStatus;
+
+  @IsOptional()
+  @IsString()
+  limit?: string;
+
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 }

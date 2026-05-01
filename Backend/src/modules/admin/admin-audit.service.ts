@@ -33,6 +33,9 @@ type AuditAdRecord = {
 
 @Injectable()
 export class AdminAuditService {
+  private static readonly DEFAULT_PAGE_SIZE = 20;
+  private static readonly MAX_PAGE_SIZE = 50;
+
   constructor(private readonly firebaseService: FirebaseService) {}
 
   private getPrimaryRole(role?: string | string[]) {
@@ -80,14 +83,51 @@ export class AdminAuditService {
     return new Date(dateTime.replace(' ', 'T')).getTime() || 0;
   }
 
+  private parseLimit(limit?: string) {
+    const parsed = Number(limit ?? AdminAuditService.DEFAULT_PAGE_SIZE);
+    if (!Number.isFinite(parsed)) {
+      return AdminAuditService.DEFAULT_PAGE_SIZE;
+    }
+
+    return Math.min(
+      Math.max(Math.trunc(parsed), 1),
+      AdminAuditService.MAX_PAGE_SIZE,
+    );
+  }
+
   // Builds a flat activity feed from admin-relevant Firestore collections.
-  async getAuditLogs() {
+  async getAuditLogs(limit?: string, cursor?: string) {
     try {
       const db = this.firebaseService.db;
+      const pageSize = this.parseLimit(limit);
+      const cursorDate = cursor ? new Date(cursor) : null;
+      const sourceLimit = Math.max(pageSize * 3, pageSize + 5);
+
+      let usersQuery: FirebaseFirestore.Query = db
+        .collection('users')
+        .orderBy('updatedAt', 'desc')
+        .limit(sourceLimit);
+      let adsQuery: FirebaseFirestore.Query = db
+        .collection('ads')
+        .orderBy('updatedAt', 'desc')
+        .limit(sourceLimit);
+
+      if (cursorDate && !Number.isNaN(cursorDate.getTime())) {
+        usersQuery = db
+          .collection('users')
+          .orderBy('updatedAt', 'desc')
+          .startAfter(cursorDate)
+          .limit(sourceLimit);
+        adsQuery = db
+          .collection('ads')
+          .orderBy('updatedAt', 'desc')
+          .startAfter(cursorDate)
+          .limit(sourceLimit);
+      }
 
       const [usersSnapshot, adsSnapshot] = await Promise.all([
-        db.collection('users').get(),
-        db.collection('ads').get(),
+        usersQuery.get(),
+        adsQuery.get(),
       ]);
 
       const logs: AuditLogEntry[] = [];
@@ -194,10 +234,17 @@ export class AdminAuditService {
         (a, b) => this.getSortTime(b.dateTime) - this.getSortTime(a.dateTime),
       );
 
+      const pageLogs = logs.slice(0, pageSize);
+      const hasMore = logs.length > pageSize;
+
       return {
         success: true,
-        count: logs.length,
-        logs: logs.slice(0, 100),
+        count: pageLogs.length,
+        logs: pageLogs,
+        hasMore,
+        nextCursor: hasMore
+          ? pageLogs[pageLogs.length - 1]?.dateTime.replace(' ', 'T')
+          : undefined,
       };
     } catch (error) {
       console.error('Error fetching audit logs:', error);
