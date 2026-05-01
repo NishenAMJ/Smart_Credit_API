@@ -24,6 +24,7 @@ import {
   LoanStatus,
   Repayment,
   RepaymentStatus,
+  RepaymentMethod,
   BorrowerDashboard,
 } from './interfaces/borrower.interface';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
@@ -506,32 +507,29 @@ export class BorrowerService {
 
     const profileData = doc.data() ?? {};
     const userData = userDoc.data() ?? {};
-    const pickProfileImageUrl = (
-      ...values: unknown[]
-    ): string => {
+    const pickProfileImageUrl = (...values: unknown[]): string => {
       const value = values.find(
         (item) => typeof item === 'string' && item.trim().length > 0,
       );
 
       return typeof value === 'string' ? value.trim() : '';
     };
-    const photoURL =
-      pickProfileImageUrl(
-        profileData.photoURL,
-        profileData.profilePictureUrl,
-        profileData.profilePicUrl,
-        profileData.profilePhotoUrl,
-        profileData.profilePicture,
-        profileData.imageUrl,
-        profileData.avatarUrl,
-        userData.photoURL,
-        userData.profilePictureUrl,
-        userData.profilePicUrl,
-        userData.profilePhotoUrl,
-        userData.profilePicture,
-        userData.imageUrl,
-        userData.avatarUrl,
-      );
+    const photoURL = pickProfileImageUrl(
+      profileData.photoURL,
+      profileData.profilePictureUrl,
+      profileData.profilePicUrl,
+      profileData.profilePhotoUrl,
+      profileData.profilePicture,
+      profileData.imageUrl,
+      profileData.avatarUrl,
+      userData.photoURL,
+      userData.profilePictureUrl,
+      userData.profilePicUrl,
+      userData.profilePhotoUrl,
+      userData.profilePicture,
+      userData.imageUrl,
+      userData.avatarUrl,
+    );
 
     return {
       userId: doc.id,
@@ -541,8 +539,7 @@ export class BorrowerService {
       profilePictureUrl:
         profileData.profilePictureUrl ?? userData.profilePictureUrl,
       profilePicUrl: profileData.profilePicUrl ?? userData.profilePicUrl,
-      profilePhotoUrl:
-        profileData.profilePhotoUrl ?? userData.profilePhotoUrl,
+      profilePhotoUrl: profileData.profilePhotoUrl ?? userData.profilePhotoUrl,
       imageUrl: profileData.imageUrl ?? userData.imageUrl,
       avatarUrl: profileData.avatarUrl ?? userData.avatarUrl,
     } as BorrowerProfile;
