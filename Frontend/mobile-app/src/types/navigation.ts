@@ -28,10 +28,8 @@ export type BorrowerStackParamList = {
   MyLoans: undefined;
   LoanDetails: { loan: BorrowerLoan };
   LoanApplication: { loan?: BorrowerLoan } | undefined;
-  FilterLoans: undefined;
   MyApplications: undefined;
   ApplicationDetails: { application?: BorrowerApplication } | undefined;
-  Transactions: undefined;
   TransactionDetails: { transaction: BorrowerTransaction };
   CreditScore: undefined;
   CreditHistory: undefined;

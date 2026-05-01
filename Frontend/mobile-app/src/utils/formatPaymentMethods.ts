@@ -1,8 +1,6 @@
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   bank_transfer: "Bank Transfer",
   qr_payment: "QR Payment",
-  cash: "Cash",
-  "cash (qr)": "Cash (QR)",
   card: "Card",
 };
 

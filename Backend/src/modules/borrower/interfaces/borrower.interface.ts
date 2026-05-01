@@ -1,8 +1,10 @@
 import {
   LoanPurpose,
-  RepaymentMethod,
   LoanApplicationStatus,
+  RepaymentMethod,
 } from '../dto/loan-application.dto';
+
+export { RepaymentMethod };
 
 /**
  * Firestore document shape for `borrowers` records.

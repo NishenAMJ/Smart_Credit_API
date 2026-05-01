@@ -1,5 +1,9 @@
 // modules/loans/loans.service.ts
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { FieldValue } from 'firebase-admin/firestore';
 import { CreateLoanDto } from './dto/create-loan.dto';
@@ -12,9 +16,57 @@ export class LoansService {
     private readonly legalService: LegalService,
   ) {}
 
+  private hasExpectedRole(
+    roleValue: unknown,
+    expectedRole: 'borrower' | 'lender',
+  ): boolean {
+    if (Array.isArray(roleValue)) {
+      return roleValue.includes(expectedRole);
+    }
+
+    return roleValue === expectedRole;
+  }
+
+  private async validateUserRole(
+    userId: string,
+    expectedRole: 'borrower' | 'lender',
+  ) {
+    const doc = await this.firebaseService.db
+      .collection('users')
+      .doc(userId)
+      .get();
+
+    if (!doc.exists) {
+      throw new NotFoundException(`User not found: ${userId}`);
+    }
+
+    const userData = doc.data();
+    if (!this.hasExpectedRole(userData?.role, expectedRole)) {
+      throw new BadRequestException(
+        `User is not a ${expectedRole}. Current role: ${JSON.stringify(
+          userData?.role,
+        )}`,
+      );
+    }
+
+    return userData;
+  }
+
   async createLoan(createLoanDto: CreateLoanDto) {
+    const lenderData = await this.validateUserRole(
+      createLoanDto.lenderId,
+      'lender',
+    );
+    const borrowerData = await this.validateUserRole(
+      createLoanDto.borrowerId,
+      'borrower',
+    );
+
     const docRef = await this.firebaseService.db.collection('loans').add({
       ...createLoanDto,
+      lenderName: lenderData?.fullName,
+      borrowerName: borrowerData?.fullName,
+      borrowerCreditScore: borrowerData?.creditScore,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });

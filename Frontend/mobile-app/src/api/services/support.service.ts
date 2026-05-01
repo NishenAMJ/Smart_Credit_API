@@ -1,6 +1,7 @@
 /** @format */
 
 import apiClient from "../axios.config";
+import { getApiErrorMessage } from "../api-error";
 
 export interface SupportStatus {
   id: string;
@@ -21,7 +22,10 @@ export const supportService = {
       });
       return response.data?.data ?? [];
     } catch (error) {
-      console.error("Error fetching support status:", error);
+      console.error(
+        "Error fetching support status:",
+        getApiErrorMessage(error, "Failed to fetch support status."),
+      );
       return [];
     }
   },

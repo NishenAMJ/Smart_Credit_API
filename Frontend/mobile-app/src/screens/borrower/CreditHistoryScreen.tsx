@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { getApiErrorMessage } from "../../api/api-error";
 import { creditScoreService } from "../../api/services/creditScore.service";
 import type { BorrowerNavigation } from "../../types/navigation";
 
@@ -31,14 +32,21 @@ export default function CreditHistoryScreen({
 }: CreditHistoryScreenProps) {
   const [history, setHistory] = useState<CreditHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     void (async () => {
       try {
+        setErrorMessage("");
         const response = await creditScoreService.getCreditHistory();
         setHistory(response?.data ?? []);
       } catch (error) {
-        console.error("Error fetching credit history:", error);
+        const message = getApiErrorMessage(
+          error,
+          "Failed to load credit history.",
+        );
+        console.error("Error fetching credit history:", message);
+        setErrorMessage(message);
         setHistory([]);
       } finally {
         setLoading(false);
@@ -60,7 +68,9 @@ export default function CreditHistoryScreen({
         {loading ? <ActivityIndicator size="large" color="#007AFF" /> : null}
 
         {!loading && history.length === 0 ? (
-          <Text style={styles.emptyText}>No credit history available.</Text>
+          <Text style={styles.emptyText}>
+            {errorMessage || "No credit history available."}
+          </Text>
         ) : null}
 
         {history.map((item) => (

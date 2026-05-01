@@ -1,6 +1,7 @@
 /** @format */
 
 import apiClient from "../axios.config";
+import { getApiErrorMessage } from "../api-error";
 import { ENDPOINTS } from "../endpoints";
 import { formatAddress, toIsoDate } from "../normalizers";
 import { getUserId } from "../../utils/auth.storage";
@@ -110,10 +111,11 @@ export const profileService = {
         payload,
       );
       return normalizeProfile(response.data ?? {});
-    } catch (err: any) {
-      const backendMsg = err?.response?.data?.message ?? err?.response?.data ?? "No backend message";
-      const status = err?.response?.status;
-      console.error(`[ProfileService] PUT failed ${status}:`, JSON.stringify(backendMsg, null, 2));
+    } catch (err) {
+      console.error(
+        "[ProfileService] PUT failed:",
+        getApiErrorMessage(err, "Profile update failed."),
+      );
       throw err;
     }
   },

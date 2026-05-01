@@ -12,6 +12,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { getApiErrorMessage } from "../../api/api-error";
 import { applicationService } from "../../api/services/application.service";
 import ApplicationCard from "../../components/borrower/ApplicationCard";
 import type { BorrowerApplication } from "../../types/borrower";
@@ -33,6 +34,7 @@ export default function MyApplicationsScreen({
     "all" | "pending" | "approved" | "rejected"
   >("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useFocusEffect(
     React.useCallback(() => {
@@ -42,10 +44,16 @@ export default function MyApplicationsScreen({
 
   const fetchApplications = async () => {
     try {
+      setErrorMessage("");
       const response = await applicationService.getMyApplications();
       setApplications(response?.data ?? []);
     } catch (error) {
-      console.error("Error fetching applications:", error);
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load your applications.",
+      );
+      console.error("Error fetching applications:", message);
+      setErrorMessage(message);
       setApplications([]);
     } finally {
       setLoading(false);
@@ -144,7 +152,9 @@ export default function MyApplicationsScreen({
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Feather name="inbox" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyText}>No applications found</Text>
+            <Text style={styles.emptyText}>
+              {errorMessage || "No applications found"}
+            </Text>
           </View>
         }
       />

@@ -43,7 +43,7 @@ interface IPayment {
 interface IPaymentCardProps {
   /** Payment data object containing amount, dates, status, etc. */
   payment: IPayment;
-  /** Selected payment method (Card, Bank Transfer, Cash (QR)) */
+  /** Selected payment method (Card, Bank Transfer, QR Payment) */
   paymentMethod?: string;
   /** Callback fired when pay button is pressed */
   onPay?: () => void;
@@ -84,7 +84,11 @@ export default function PaymentCard({
     payment.status,
     payment.type,
   );
-  const showPayButton = shouldShowPayButton(payment.status, payment.type);
+  const showPayButton = shouldShowPayButton(
+    payment.status,
+    payment.type,
+    (payment as any).paymentMethod,
+  );
 
   // Determine status colors based on payment state
   let statusColor: string = STATUS_COLORS.PENDING.text;

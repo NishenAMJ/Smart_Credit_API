@@ -1,24 +1,21 @@
 /** @format */
 
 import axios from "axios";
-import { Platform } from "react-native";
-
-const DEFAULT_PORT = 3000;
-
-function getDefaultApiBaseUrl() {
-  if (Platform.OS === "android") {
-    return `http://10.0.2.2:${DEFAULT_PORT}`;
-  }
-  return `http://localhost:${DEFAULT_PORT}`;
-}
+import { getApiBaseUrl } from "./base-url";
+import { toApiError } from "./api-error";
 
 const apiClient = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiBaseUrl(),
+  baseURL: getApiBaseUrl(),
   timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => Promise.reject(toApiError(error)),
+);
 
 export function setAuthToken(token: string | null) {
   if (token) {

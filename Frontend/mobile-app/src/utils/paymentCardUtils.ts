@@ -58,7 +58,8 @@ export const getPaymentTitle = (
   if (paymentType === "disbursement") {
     return PAYMENT_CARD_TITLES.LOAN_RECEIVED;
   }
-  if (paymentStatus === "PAID") {
+  const s = String(paymentStatus || "").toLowerCase();
+  if (s === "paid" || s === "completed") {
     return PAYMENT_CARD_TITLES.PAYMENT_MADE;
   }
   return PAYMENT_CARD_TITLES.NEXT_PAYMENT;
@@ -109,7 +110,8 @@ export const isPaidPayment = (
   paymentStatus: string | undefined,
   paymentType: string | undefined,
 ): boolean => {
-  return paymentStatus === "PAID" || paymentType === "disbursement";
+  const s = String(paymentStatus || "").toLowerCase();
+  return s === "paid" || s === "completed" || paymentType === "disbursement";
 };
 
 /**
@@ -154,8 +156,16 @@ export const isOverduePayment = (
 export const shouldShowPayButton = (
   paymentStatus: string | undefined,
   paymentType: string | undefined,
+  paymentMethod?: string | undefined,
 ): boolean => {
   const isPaid = isPaidPayment(paymentStatus, paymentType);
+  const s = String(paymentStatus || "").toLowerCase();
+  
+  // Hide Pay button if the payment is a pending bank transfer waiting for admin verification
+  if (s === "pending" && paymentMethod === "bank_transfer") {
+    return false;
+  }
+
   return !isPaid && paymentType !== "disbursement";
 };
 
@@ -167,7 +177,7 @@ export const shouldShowPayButton = (
 export const getPaymentButtonLabel = (
   paymentMethod: string | undefined,
 ): string => {
-  return paymentMethod === "Cash (QR)" ? "Show QR" : "Pay Now";
+  return paymentMethod === "QR Payment" ? "Show QR" : "Pay Now";
 };
 
 /**
@@ -178,7 +188,7 @@ export const getPaymentButtonLabel = (
 export const getPaymentButtonIcon = (
   paymentMethod: string | undefined,
 ): { name: string; type: "feather" | "material" } => {
-  if (paymentMethod === "Cash (QR)") {
+  if (paymentMethod === "QR Payment") {
     return { name: "qrcode-scan", type: "material" };
   }
   return { name: "send", type: "feather" };

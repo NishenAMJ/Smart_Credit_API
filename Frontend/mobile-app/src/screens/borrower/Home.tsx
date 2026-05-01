@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
+import { getApiErrorMessage } from "../../api/api-error";
 import LoanCard from "../../components/borrower/LoanCard";
 import TransactionCard from "../../components/borrower/TransactionCard";
 import CreditScoreWidget from "../../components/borrower/CreditScoreWidget";
@@ -66,6 +67,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const HEADER_MAX_HEIGHT = 330;
   const HEADER_MIN_HEIGHT = 120;
@@ -99,6 +101,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
   const fetchData = async () => {
     try {
+      setErrorMessage("");
       const [dashboardResponse, loanData, transactionResponse, creditResponse] =
         await Promise.all([
           dashboardService.getDashboard(),
@@ -124,7 +127,10 @@ export default function Home({ navigation }: MyLoansScreenProps) {
             };
           }
         } catch (profileError) {
-          console.warn("Could not fetch profile separately:", profileError);
+          console.warn(
+            "Could not fetch profile separately:",
+            getApiErrorMessage(profileError, "Profile details are unavailable."),
+          );
         }
       }
 
@@ -161,7 +167,12 @@ export default function Home({ navigation }: MyLoansScreenProps) {
       setLoans(loanData ?? []);
       setTransactions(transactionResponse?.data ?? []);
     } catch (error) {
-      console.error("Error fetching borrower home data:", error);
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load your borrower dashboard.",
+      );
+      console.error("Error fetching borrower home data:", message);
+      setErrorMessage(message);
       setDashboard(null);
       setLoans([]);
       setTransactions([]);
@@ -348,6 +359,13 @@ export default function Home({ navigation }: MyLoansScreenProps) {
           />
         }
       >
+        {errorMessage ? (
+          <View style={styles.errorBanner}>
+            <Feather name="alert-circle" size={16} color={COLORS.error ?? "#DC2626"} />
+            <Text style={styles.errorBannerText}>{errorMessage}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.quickActionsRow}>
           {quickActions.map((action) => (
             <TouchableOpacity
@@ -409,45 +427,79 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
         <View style={styles.section}>
           <View style={styles.nextPaymentCard}>
-            <View style={styles.nextPaymentHeader}>
-              <View>
-                <Text style={styles.cardLabel}>Next Payment</Text>
-                <Text style={styles.nextPaymentAmount}>
-                  {formatCurrency(dashboard?.nextPaymentAmount)}
+            {!dashboard?.nextPaymentAmount ||
+            dashboard.nextPaymentAmount <= 0 ||
+            (dashboard.nextDueDate &&
+              (new Date(dashboard.nextDueDate).getTime() - Date.now()) /
+                (1000 * 60 * 60 * 24) >
+                25) ? (
+              <View style={{ alignItems: "center", paddingVertical: SPACING.sm }}>
+                <Feather
+                  name='check-circle'
+                  size={32}
+                  color={COLORS.primary}
+                  style={{ marginBottom: SPACING.sm }}
+                />
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { fontSize: 16, marginBottom: 4 },
+                  ]}
+                >
+                  No upcoming payment
+                </Text>
+                <Text
+                  style={[
+                    styles.heroSubtitle,
+                    { color: COLORS.textSecondary, textAlign: "center", marginBottom: 0 },
+                  ]}
+                >
+                  You're all caught up!
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.primaryActionButton}
-                onPress={() =>
-                  navigateToBorrowerTab(navigation, "Payments", {
-                    tab: "Upcoming",
-                  })
-                }
-              >
-                <Text style={styles.primaryActionText}>Pay Now</Text>
-              </TouchableOpacity>
-            </View>
+            ) : (
+              <>
+                <View style={styles.nextPaymentHeader}>
+                  <View>
+                    <Text style={styles.cardLabel}>Next Payment</Text>
+                    <Text style={styles.nextPaymentAmount}>
+                      {formatCurrency(dashboard?.nextPaymentAmount)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.primaryActionButton}
+                    onPress={() =>
+                      navigateToBorrowerTab(navigation, "Payments", {
+                        tab: "Upcoming",
+                      })
+                    }
+                  >
+                    <Text style={styles.primaryActionText}>Pay Now</Text>
+                  </TouchableOpacity>
+                </View>
 
-            <View style={styles.nextPaymentMetaRow}>
-              <View style={styles.metaPill}>
-                <Feather name='calendar' size={14} color={COLORS.primary} />
-                <Text style={styles.metaPillText}>
-                  {formatDateLabel(dashboard?.nextDueDate)}
-                </Text>
-              </View>
+                <View style={styles.nextPaymentMetaRow}>
+                  <View style={styles.metaPill}>
+                    <Feather name='calendar' size={14} color={COLORS.primary} />
+                    <Text style={styles.metaPillText}>
+                      {formatDateLabel(dashboard?.nextDueDate)}
+                    </Text>
+                  </View>
 
-              <TouchableOpacity
-                style={styles.metaPill}
-                onPress={() =>
-                  navigateToBorrowerTab(navigation, "Payments", {
-                    tab: "History",
-                  })
-                }
-              >
-                <Feather name='clock' size={14} color={COLORS.primary} />
-                <Text style={styles.metaPillText}>View History</Text>
-              </TouchableOpacity>
-            </View>
+                  <TouchableOpacity
+                    style={styles.metaPill}
+                    onPress={() =>
+                      navigateToBorrowerTab(navigation, "Payments", {
+                        tab: "History",
+                      })
+                    }
+                  >
+                    <Feather name='clock' size={14} color={COLORS.primary} />
+                    <Text style={styles.metaPillText}>View History</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -660,6 +712,20 @@ const styles = StyleSheet.create({
     paddingBottom: 42,
     gap: SPACING.lg,
   },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    padding: SPACING.md,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: COLORS.error ?? "#DC2626",
+    fontSize: TYPOGRAPHY.small.fontSize,
+    lineHeight: 18,
+  },
   quickActionsRow: {
     flexDirection: "row",
     gap: SPACING.sm,
@@ -858,3 +924,4 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 });
+    

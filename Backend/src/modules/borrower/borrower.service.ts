@@ -24,6 +24,7 @@ import {
   LoanStatus,
   Repayment,
   RepaymentStatus,
+  RepaymentMethod,
   BorrowerDashboard,
 } from './interfaces/borrower.interface';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
@@ -130,7 +131,10 @@ export class BorrowerService {
 
             if (!currentNextDate || loanDate < currentNextDate) {
               nextDueDate = loan.nextDueDate;
-              nextPaymentAmount = loan.monthlyInstallment || 0;
+              nextPaymentAmount = Math.min(
+                loan.monthlyInstallment || 0,
+                loan.outstandingBalance || 0,
+              );
             }
           }
         }
@@ -496,81 +500,36 @@ export class BorrowerService {
     ]);
 
     if (!doc.exists) {
-      if (!userDoc.exists) {
-        throw new NotFoundException(
-          `Borrower profile not found for user ${userId}`,
-        );
-      }
-
-      const userData = userDoc.data() ?? {};
-      const fullName = String(userData.fullName ?? '');
-      const email = String(userData.email ?? '');
-      const phone = String(userData.phone ?? '');
-
-      return {
-        userId,
-        fullName,
-        email,
-        phone,
-        dateOfBirth: String(userData.dateOfBirth ?? ''),
-        nic: String(userData.nic ?? ''),
-        address: {
-          line1: String(userData.address?.line1 ?? ''),
-          city: String(userData.address?.city ?? ''),
-          district: String(userData.address?.district ?? ''),
-          province: String(userData.address?.province ?? ''),
-        },
-        employmentStatus: String(userData.employmentStatus ?? ''),
-        monthlyIncome: this.toNumber(userData.monthlyIncome),
-        occupation: String(userData.occupation ?? ''),
-        creditScore: this.toNumber(userData.creditScore, 0),
-        profileComplete: false,
-        kycVerified:
-          String(userData.kycStatus ?? '').toLowerCase() === 'approved',
-        totalLoans: 0,
-        activeLoans: 0,
-        totalBorrowed: 0,
-        totalRepaid: 0,
-        createdAt: this.toTimestamp(userData.createdAt) ?? Timestamp.now(),
-        updatedAt: this.toTimestamp(userData.updatedAt) ?? Timestamp.now(),
-        photoURL: String(userData.photoURL ?? ''),
-        profilePicture: String(userData.profilePicture ?? ''),
-        profilePictureUrl: String(userData.profilePictureUrl ?? ''),
-        profilePicUrl: String(userData.profilePicUrl ?? ''),
-        profilePhotoUrl: String(userData.profilePhotoUrl ?? ''),
-        imageUrl: String(userData.imageUrl ?? ''),
-        avatarUrl: String(userData.avatarUrl ?? ''),
-      };
+      throw new NotFoundException(
+        `Borrower profile not found for user ${userId}`,
+      );
     }
 
     const profileData = doc.data() ?? {};
     const userData = userDoc.data() ?? {};
-    const pickProfileImageUrl = (
-      ...values: unknown[]
-    ): string => {
+    const pickProfileImageUrl = (...values: unknown[]): string => {
       const value = values.find(
         (item) => typeof item === 'string' && item.trim().length > 0,
       );
 
       return typeof value === 'string' ? value.trim() : '';
     };
-    const photoURL =
-      pickProfileImageUrl(
-        profileData.photoURL,
-        profileData.profilePictureUrl,
-        profileData.profilePicUrl,
-        profileData.profilePhotoUrl,
-        profileData.profilePicture,
-        profileData.imageUrl,
-        profileData.avatarUrl,
-        userData.photoURL,
-        userData.profilePictureUrl,
-        userData.profilePicUrl,
-        userData.profilePhotoUrl,
-        userData.profilePicture,
-        userData.imageUrl,
-        userData.avatarUrl,
-      );
+    const photoURL = pickProfileImageUrl(
+      profileData.photoURL,
+      profileData.profilePictureUrl,
+      profileData.profilePicUrl,
+      profileData.profilePhotoUrl,
+      profileData.profilePicture,
+      profileData.imageUrl,
+      profileData.avatarUrl,
+      userData.photoURL,
+      userData.profilePictureUrl,
+      userData.profilePicUrl,
+      userData.profilePhotoUrl,
+      userData.profilePicture,
+      userData.imageUrl,
+      userData.avatarUrl,
+    );
 
     return {
       userId: doc.id,
@@ -580,8 +539,7 @@ export class BorrowerService {
       profilePictureUrl:
         profileData.profilePictureUrl ?? userData.profilePictureUrl,
       profilePicUrl: profileData.profilePicUrl ?? userData.profilePicUrl,
-      profilePhotoUrl:
-        profileData.profilePhotoUrl ?? userData.profilePhotoUrl,
+      profilePhotoUrl: profileData.profilePhotoUrl ?? userData.profilePhotoUrl,
       imageUrl: profileData.imageUrl ?? userData.imageUrl,
       avatarUrl: profileData.avatarUrl ?? userData.avatarUrl,
     } as BorrowerProfile;
@@ -593,6 +551,12 @@ export class BorrowerService {
   ): Promise<BorrowerProfile> {
     const doc = await this.db.collection(this.BORROWERS_COL).doc(userId).get();
 
+    if (!doc.exists) {
+      throw new NotFoundException(
+        `Borrower profile not found for user ${userId}`,
+      );
+    }
+
     const plainDto = this.removeUndefinedDeep(
       instanceToPlain(dto) as UpdateBorrowerProfileDto,
     );
@@ -602,47 +566,7 @@ export class BorrowerService {
       updatedAt: FieldValue.serverTimestamp(),
     };
 
-    if (doc.exists) {
-      await this.db.collection(this.BORROWERS_COL).doc(userId).update(updateData);
-    } else {
-      const userDoc = await this.db.collection('users').doc(userId).get();
-      const userData = userDoc.data() ?? {};
-
-      await this.db
-        .collection(this.BORROWERS_COL)
-        .doc(userId)
-        .set({
-          userId,
-          fullName: dto.fullName ?? userData.fullName ?? '',
-          email: dto.email ?? userData.email ?? '',
-          phone: dto.phone ?? userData.phone ?? '',
-          dateOfBirth: userData.dateOfBirth ?? '',
-          nic: userData.nic ?? '',
-          address:
-            dto.address ??
-            userData.address ?? {
-              line1: '',
-              city: '',
-              district: '',
-              province: '',
-            },
-          employmentStatus: dto.employmentStatus ?? userData.employmentStatus ?? '',
-          monthlyIncome:
-            dto.monthlyIncome ?? this.toNumber(userData.monthlyIncome, 0),
-          occupation: dto.occupation ?? userData.occupation ?? '',
-          creditScore: this.toNumber(userData.creditScore, 0),
-          profileComplete: false,
-          kycVerified:
-            String(userData.kycStatus ?? '').toLowerCase() === 'approved',
-          totalLoans: 0,
-          activeLoans: 0,
-          totalBorrowed: 0,
-          totalRepaid: 0,
-          createdAt:
-            this.toTimestamp(userData.createdAt) ?? FieldValue.serverTimestamp(),
-          ...updateData,
-        });
-    }
+    await this.db.collection(this.BORROWERS_COL).doc(userId).update(updateData);
 
     // Sync to 'users' collection if name changed
     const userUpdate: Record<string, any> = {};
@@ -1059,6 +983,11 @@ export class BorrowerService {
 
     const installmentNumber = loan.repaymentsMade + 1;
 
+    const status =
+      dto.paymentMethod === RepaymentMethod.CARD
+        ? RepaymentStatus.COMPLETED
+        : RepaymentStatus.PENDING;
+
     const repaymentData = {
       repaymentId: repaymentRef.id,
       loanId: dto.loanId,
@@ -1070,7 +999,7 @@ export class BorrowerService {
       paymentMethod: dto.paymentMethod,
       transactionReference: dto.transactionReference ?? null,
       paymentProofUrl: dto.paymentProofUrl ?? null,
-      status: RepaymentStatus.COMPLETED,
+      status: status,
       dueDate: loan.nextDueDate,
       paidAt: now,
       installmentNumber,
@@ -1086,31 +1015,35 @@ export class BorrowerService {
     const nextDueDate = new Date();
     nextDueDate.setMonth(nextDueDate.getMonth() + 1);
 
-    // Keep loan progress and borrower aggregates in sync in the same batch.
-    batch.update(this.db.collection(this.LOANS_COL).doc(dto.loanId), {
-      outstandingBalance: newOutstanding,
-      repaymentsMade: FieldValue.increment(1),
-      status: isFullyRepaid ? LoanStatus.COMPLETED : loan.status,
-      nextDueDate: isFullyRepaid ? null : nextDueDate,
-      updatedAt: now,
-    });
+    if (status === RepaymentStatus.COMPLETED) {
+      // Keep loan progress and borrower aggregates in sync in the same batch.
+      batch.update(this.db.collection(this.LOANS_COL).doc(dto.loanId), {
+        outstandingBalance: newOutstanding,
+        repaymentsMade: FieldValue.increment(1),
+        status: isFullyRepaid ? LoanStatus.COMPLETED : loan.status,
+        nextDueDate: isFullyRepaid ? null : nextDueDate,
+        updatedAt: now,
+      });
 
-    // Update borrower's totalRepaid
-    batch.update(this.db.collection(this.BORROWERS_COL).doc(dto.borrowerId), {
-      totalRepaid: FieldValue.increment(dto.amount),
-      activeLoans: isFullyRepaid
-        ? FieldValue.increment(-1)
-        : FieldValue.increment(0),
-      updatedAt: now,
-    });
+      // Update borrower's totalRepaid
+      batch.update(this.db.collection(this.BORROWERS_COL).doc(dto.borrowerId), {
+        totalRepaid: FieldValue.increment(dto.amount),
+        activeLoans: isFullyRepaid
+          ? FieldValue.increment(-1)
+          : FieldValue.increment(0),
+        updatedAt: now,
+      });
+    }
 
     await batch.commit();
 
-    this.creditScoreService
-      .calculateCreditScore(dto.borrowerId)
-      .catch((error) =>
-        console.error('[CreditScore] Recalc failed after repayment:', error),
-      );
+    if (status === RepaymentStatus.COMPLETED) {
+      this.creditScoreService
+        .calculateCreditScore(dto.borrowerId)
+        .catch((error) =>
+          console.error('[CreditScore] Recalc failed after repayment:', error),
+        );
+    }
 
     const created = await repaymentRef.get();
     return { ...created.data() } as Repayment;

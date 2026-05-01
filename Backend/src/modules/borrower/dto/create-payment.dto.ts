@@ -4,7 +4,6 @@ export enum PaymentMethod {
   BANK_TRANSFER = 'BANK_TRANSFER',
   QR_CODE = 'QR_CODE',
   CARD = 'CARD',
-  CASH = 'CASH',
 }
 
 export class CreatePaymentDto {

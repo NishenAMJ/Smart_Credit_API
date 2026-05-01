@@ -1,3 +1,6 @@
+postman/
+.env
+
 # Dependencies
 node_modules/
 Frontend/node_modules/
@@ -10,7 +13,6 @@ yarn-error.log*
 **/.DS_Store
 
 # Environments
-.env
 .env.local
 .env.development.local
 .env.test.local
@@ -21,8 +23,8 @@ yarn-error.log*
 key/
 *.pem
 *.key
- serviceAccountKey.json
- firebase-service-account.json
+serviceAccountKey.json
+firebase-service-account.json
 
 # IDE
 .vscode/

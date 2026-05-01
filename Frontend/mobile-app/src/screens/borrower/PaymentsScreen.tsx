@@ -13,10 +13,13 @@ import {
   View,
 } from "react-native";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import QRCode from "react-native-qrcode-svg";
 import {
   getPayments,
   paymentService,
 } from "../../api/services/payment.service";
+import { getApiErrorMessage } from "../../api/api-error";
 import { getTransactions } from "../../api/services/transaction.service";
 import { dashboardService } from "../../api/services/dashboard.service";
 import EmptyState from "../../components/common/EmptyState";
@@ -38,7 +41,7 @@ type PaymentsScreenProps = {
   route?: RouteProp<any, any>;
 };
 
-type PaymentMethod = "Card" | "Bank Transfer" | "Cash (QR)";
+type PaymentMethod = "Card" | "Bank Transfer" | "QR Payment";
 
 type PaymentMethodConfig =
   | {
@@ -47,7 +50,7 @@ type PaymentMethodConfig =
       icon: React.ComponentProps<typeof Feather>["name"];
     }
   | {
-      label: "Cash (QR)";
+      label: "QR Payment";
       iconSet: "material";
       icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
     };
@@ -83,11 +86,35 @@ export default function PaymentsScreen({
     useState<BorrowerRepayment | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [generatingQr, setGeneratingQr] = useState(false);
+  const [bankTransferModalVisible, setBankTransferModalVisible] =
+    useState(false);
+  const [selectedBankTransferPayment, setSelectedBankTransferPayment] =
+    useState<BorrowerRepayment | null>(null);
+  const [paymentProof, setPaymentProof] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+
+  const pickReceiptImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setPaymentProof(result.assets[0]);
+      }
+    } catch (err) {
+      console.error("Error picking image:", err);
+      Alert.alert("Error", "Could not select image. Please try again.");
+    }
+  };
 
   const paymentMethods: PaymentMethodConfig[] = [
     { label: "Card", iconSet: "feather", icon: "credit-card" },
     { label: "Bank Transfer", iconSet: "feather", icon: "repeat" },
-    { label: "Cash (QR)", iconSet: "material", icon: "qrcode-scan" },
+    { label: "QR Payment", iconSet: "material", icon: "qrcode-scan" },
   ];
 
   const fetchPayments = async () => {
@@ -113,8 +140,12 @@ export default function PaymentsScreen({
         setDashboardNextPayment(null);
       }
     } catch (err) {
-      console.error("Error fetching payments/transactions:", err);
-      setError("Failed to load data. Please try again.");
+      const message = getApiErrorMessage(
+        err,
+        "Failed to load payment data. Please try again.",
+      );
+      console.error("Error fetching payments/transactions:", message);
+      setError(message);
       setPayments([]);
       setTransactions([]);
     } finally {
@@ -140,18 +171,26 @@ export default function PaymentsScreen({
 
   const filteredPayments = useMemo(() => {
     if (activeTab === "Upcoming") {
-      let upcoming = payments.filter(
-        (p) => p.status !== "PAID" && p.status !== "COMPLETED",
-      );
+      let upcoming = payments.filter((p) => {
+        const s = String(p.status || "").toLowerCase();
+        return s !== "paid" && s !== "completed";
+      });
 
       // If the backend returned no upcoming stubs but the dashboard shows a next
       // payment, inject a synthetic entry so the list is never misleadingly empty.
-      if (upcoming.length === 0 && dashboardNextPayment?.amount) {
+      if (
+        upcoming.length === 0 &&
+        dashboardNextPayment?.amount &&
+        (!dashboardNextPayment.dueDate ||
+          (new Date(dashboardNextPayment.dueDate).getTime() - Date.now()) /
+            (1000 * 60 * 60 * 24) <=
+            25)
+      ) {
         upcoming = [
           {
             paymentId: "dashboard-next",
             amount: dashboardNextPayment.amount,
-            status: "PENDING",
+            status: "UPCOMING",
             dueDate: dashboardNextPayment.dueDate,
             loanId: dashboardNextPayment.loanId,
             lenderName: "Lender",
@@ -168,23 +207,29 @@ export default function PaymentsScreen({
     }
 
     // Merge paid repayments from `payments` + all `transactions`, deduplicate by ID
-    const paidRepayments = payments.filter(
-      (p) => p.status === "PAID" || p.status === "COMPLETED",
-    );
+    const paidRepayments = payments.filter((p) => {
+      const s = String(p.status || "").toLowerCase();
+      return s === "paid" || s === "completed";
+    });
 
-    const txAsRepayments: BorrowerRepayment[] = transactions.map((t) => ({
-      paymentId: t.transactionId ?? t.repaymentId,
-      transactionId: t.transactionId,
-      repaymentId: t.repaymentId,
-      loanId: t.loanId,
-      amount: t.amount,
-      status: t.status,
-      paidAt: t.paidAt ?? t.timestamp,
-      timestamp: t.timestamp,
-      type: t.type,
-      paymentMethod: t.paymentMethod,
-      lenderName: t.lenderName,
-    }));
+    const txAsRepayments: BorrowerRepayment[] = transactions
+      .filter((t) => {
+        const s = String(t.status || "").toLowerCase();
+        return s === "paid" || s === "completed";
+      })
+      .map((t) => ({
+        paymentId: t.transactionId ?? t.repaymentId,
+        transactionId: t.transactionId,
+        repaymentId: t.repaymentId,
+        loanId: t.loanId,
+        amount: t.amount,
+        status: t.status,
+        paidAt: t.paidAt ?? t.timestamp,
+        timestamp: t.timestamp,
+        type: t.type,
+        paymentMethod: t.paymentMethod,
+        lenderName: t.lenderName,
+      }));
 
     // Merge and deduplicate by ID
     const seen = new Set<string>();
@@ -238,8 +283,12 @@ export default function PaymentsScreen({
         throw new Error("Invalid response");
       }
     } catch (err) {
-      console.error("QR Generation error:", err);
-      Alert.alert("Error", "Failed to generate QR code. Please try again.");
+      const message = getApiErrorMessage(
+        err,
+        "Failed to generate QR code. Please try again.",
+      );
+      console.error("QR Generation error:", message);
+      Alert.alert("QR unavailable", message);
       setQrModalVisible(false);
     } finally {
       setGeneratingQr(false);
@@ -269,13 +318,14 @@ export default function PaymentsScreen({
       currency: "LKR",
     }).format(payment.amount ?? 0);
 
-    let paymentMethodApi: "bank_transfer" | "qr_payment" | "card";
-    if (selectedPaymentMethod === "Card") paymentMethodApi = "card";
-    if (selectedPaymentMethod === "Bank Transfer")
-      paymentMethodApi = "bank_transfer";
-    if (selectedPaymentMethod === "Cash (QR)") paymentMethodApi = "qr_payment";
+    const paymentMethodApi =
+      selectedPaymentMethod === "Card"
+        ? "card"
+        : selectedPaymentMethod === "QR Payment"
+          ? "qr_payment"
+          : "bank_transfer";
 
-    if (selectedPaymentMethod === "Cash (QR)") {
+    if (selectedPaymentMethod === "QR Payment") {
       if (!payment.loanId) {
         Alert.alert(
           "Invalid Payment",
@@ -288,6 +338,14 @@ export default function PaymentsScreen({
       generateQRCodeToken(payment);
       return;
     }
+
+    if (selectedPaymentMethod === "Bank Transfer") {
+      setSelectedBankTransferPayment(payment);
+      setBankTransferModalVisible(true);
+      return;
+    }
+
+    const successMessage = "Payment completed successfully.";
 
     Alert.alert(
       "Confirm Payment",
@@ -316,17 +374,15 @@ export default function PaymentsScreen({
                 transactionReference: `TXN-${Date.now()}`,
               });
 
-              Alert.alert(
-                "Success",
-                "Payment submitted successfully and is pending verification.",
-              );
+              Alert.alert("Success", successMessage);
               void fetchPayments();
             } catch (err) {
-              console.error("Payment error:", err);
-              Alert.alert(
-                "Error",
+              const message = getApiErrorMessage(
+                err,
                 "Failed to process payment. Please try again.",
               );
+              console.error("Payment error:", message);
+              Alert.alert("Payment failed", message);
             } finally {
               setProcessingPaymentId(null);
             }
@@ -334,6 +390,60 @@ export default function PaymentsScreen({
         },
       ],
     );
+  };
+
+  const handleBankTransferConfirm = async () => {
+    if (!selectedBankTransferPayment) return;
+    if (!paymentProof) {
+      Alert.alert(
+        "Receipt Required",
+        "Please upload a payment receipt for Bank Transfer verification.",
+      );
+      return;
+    }
+
+    const { amount, loanId } = selectedBankTransferPayment;
+
+    if (!amount || amount <= 0 || !loanId) {
+      Alert.alert("Error", "Invalid payment amount or missing Loan ID.");
+      return;
+    }
+
+    try {
+      setProcessingPaymentId(selectedBankTransferPayment.paymentId || null);
+      setUploadingReceipt(true);
+
+      const proofUrl = await paymentService.uploadPaymentReceipt(
+        paymentProof.uri,
+      );
+
+      await paymentService.makeRepayment({
+        loanId: loanId,
+        amount: amount,
+        paymentMethod: "bank_transfer",
+        transactionReference: `TXN-${Date.now()}`,
+        paymentProofUrl: proofUrl,
+      });
+
+      Alert.alert(
+        "Success",
+        "Payment submitted successfully and is pending verification.",
+      );
+      setPaymentProof(null);
+      setBankTransferModalVisible(false);
+      setSelectedBankTransferPayment(null);
+      void fetchPayments();
+    } catch (err) {
+      const message = getApiErrorMessage(
+        err,
+        "Failed to process bank transfer. Please try again.",
+      );
+      console.error("Payment error:", message);
+      Alert.alert("Payment failed", message);
+    } finally {
+      setProcessingPaymentId(null);
+      setUploadingReceipt(false);
+    }
   };
 
   const renderPaymentCard = ({ item }: { item: BorrowerRepayment }) => {
@@ -524,13 +634,17 @@ export default function PaymentsScreen({
             </View>
           ) : (
             <EmptyState
-              title={`No ${activeTab.toLowerCase()} payments found.`}
+              title={
+                activeTab === "Upcoming"
+                  ? "No upcoming payment"
+                  : "No history found"
+              }
             />
           )
         }
       />
 
-      {/* QR Code Modal for Cash Payments */}
+      {/* QR Code Modal for QR payments */}
       <Modal
         visible={qrModalVisible}
         transparent
@@ -544,7 +658,7 @@ export default function PaymentsScreen({
           />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Cash Payment</Text>
+              <Text style={styles.modalTitle}>QR Payment</Text>
               <TouchableOpacity
                 onPress={() => setQrModalVisible(false)}
                 style={styles.modalCloseBtn}
@@ -559,7 +673,7 @@ export default function PaymentsScreen({
 
             <Text style={styles.modalInstructions}>
               Show this QR code to your lender. They will scan it to instantly
-              verify and record your cash payment of{" "}
+              verify and record your QR payment of{" "}
               <Text style={{ fontWeight: "700", color: COLORS.textPrimary }}>
                 LKR {selectedQRPayment?.amount?.toLocaleString() ?? "0"}
               </Text>
@@ -575,7 +689,12 @@ export default function PaymentsScreen({
               </View>
             ) : qrToken ? (
               <View style={styles.qrPlaceholderBox}>
-                <QrTokenPreview token={qrToken} />
+                <QRCode
+                  value={qrToken}
+                  size={200}
+                  backgroundColor='#F3F4F6'
+                  color={COLORS.primary}
+                />
               </View>
             ) : (
               <View style={styles.qrPlaceholderBox}>
@@ -605,32 +724,76 @@ export default function PaymentsScreen({
         </View>
       </Modal>
 
+      {/* Bank Transfer Modal */}
+      <Modal
+        visible={bankTransferModalVisible}
+        transparent
+        animationType='slide'
+        onRequestClose={() => setBankTransferModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Bank Transfer</Text>
+              <TouchableOpacity
+                onPress={() => setBankTransferModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Feather
+                  name='x'
+                  size={24}
+                  color={COLORS.textSecondary || "#6B7280"}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalInstructions}>
+              Please transfer{" "}
+              <Text style={{ fontWeight: "700", color: COLORS.textPrimary }}>
+                LKR{" "}
+                {selectedBankTransferPayment?.amount?.toLocaleString() ?? "0"}
+              </Text>{" "}
+              to the lender's bank account and upload the receipt below.
+            </Text>
+
+            <View style={styles.uploadSection}>
+              <Text style={styles.uploadLabel}>Payment Receipt</Text>
+              <TouchableOpacity
+                style={styles.uploadButton}
+                onPress={pickReceiptImage}
+                disabled={uploadingReceipt}
+              >
+                <Feather
+                  name={paymentProof ? "check-circle" : "upload"}
+                  size={24}
+                  color={paymentProof ? COLORS.primary : COLORS.textSecondary}
+                />
+                <Text style={styles.uploadButtonText}>
+                  {paymentProof ? "Receipt Selected" : "Tap to upload image"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { marginTop: SPACING.lg }]}
+              onPress={handleBankTransferConfirm}
+              disabled={uploadingReceipt}
+            >
+              {uploadingReceipt ? (
+                <Loader />
+              ) : (
+                <Text style={styles.primaryButtonText}>Confirm Payment</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <SidebarMenu
         visible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
         navigation={navigation}
       />
-    </View>
-  );
-}
-
-function QrTokenPreview({ token }: { token: string }) {
-  const cells = Array.from({ length: 121 }, (_, index) => {
-    const codePoint = token.charCodeAt(index % token.length);
-    return (codePoint + index) % 3 === 0;
-  });
-
-  return (
-    <View style={styles.qrPreviewWrap}>
-      <View style={styles.qrGrid}>
-        {cells.map((filled, index) => (
-          <View
-            key={index}
-            style={[styles.qrCell, filled && styles.qrCellFilled]}
-          />
-        ))}
-      </View>
-      <Text style={styles.qrTokenCaption}>Token ready for lender scan</Text>
     </View>
   );
 }
@@ -731,6 +894,32 @@ const styles = StyleSheet.create({
   activeMethodChipText: {
     color: COLORS.surface,
   },
+  uploadSection: {
+    marginTop: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+  },
+  uploadLabel: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontWeight: "500",
+    marginBottom: SPACING.sm,
+  },
+  uploadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.md,
+    backgroundColor: COLORS.background,
+    borderRadius: BORDER_RADIUS.medium,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: "dashed",
+  },
+  uploadButtonText: {
+    marginLeft: SPACING.sm,
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
   paymentList: {
     paddingHorizontal: SPACING.lg,
     paddingBottom: 40,
@@ -827,32 +1016,6 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     borderStyle: "dashed",
   },
-  qrPreviewWrap: {
-    alignItems: "center",
-  },
-  qrGrid: {
-    width: 200,
-    height: 200,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    backgroundColor: "#F3F4F6",
-    padding: 10,
-    borderRadius: 12,
-  },
-  qrCell: {
-    width: "9.09%",
-    aspectRatio: 1,
-    backgroundColor: "#F3F4F6",
-  },
-  qrCellFilled: {
-    backgroundColor: COLORS.primary,
-  },
-  qrTokenCaption: {
-    marginTop: SPACING.md,
-    fontSize: 12,
-    color: COLORS.textSecondary || "#6B7280",
-    fontWeight: "600",
-  },
   qrPlaceholderText: {
     marginTop: SPACING.md,
     fontSize: 14,
@@ -873,5 +1036,17 @@ const styles = StyleSheet.create({
     color: COLORS.primary || "#007AFF",
     lineHeight: 18,
     fontWeight: "500",
+  },
+  primaryButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.medium,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryButtonText: {
+    color: COLORS.surface,
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

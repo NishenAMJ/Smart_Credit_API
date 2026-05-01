@@ -15,6 +15,7 @@ import {
   applicationService,
   createApplication,
 } from "../../api/services/application.service";
+import { getApiErrorMessage } from "../../api/api-error";
 import { profileService } from "../../api/services/profile.service";
 import { navigateToBorrowerTab } from "../../utils/borrowerNavigation";
 import { isValidAmount } from "../../utils/validation";
@@ -90,7 +91,10 @@ export default function LoanApplicationScreen({
           }
         }
       } catch (error) {
-        console.error("Error checking borrower eligibility:", error);
+        console.error(
+          "Error checking borrower eligibility:",
+          getApiErrorMessage(error, "Could not check borrower eligibility."),
+        );
       } finally {
         if (isMounted) {
           setCheckingEligibility(false);
@@ -259,10 +263,14 @@ export default function LoanApplicationScreen({
         },
       ]);
     } catch (error) {
-      console.error("Error submitting application:", error);
-      Alert.alert(
-        "Error",
+      const message = getApiErrorMessage(
+        error,
         "Failed to submit application. Please review your details and try again.",
+      );
+      console.error("Error submitting application:", message);
+      Alert.alert(
+        "Application failed",
+        message,
       );
     } finally {
       setLoading(false);

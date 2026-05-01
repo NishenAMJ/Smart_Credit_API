@@ -3,7 +3,7 @@
 import { NativeModules, Platform } from "react-native";
 
 const DEFAULT_PORT = 3000;
-const API_PREFIX = "api";
+const API_PREFIX_PATTERN = /\/api\/?$/i;
 
 function getMetroHostName() {
   const scriptUrl = NativeModules.SourceCode?.scriptURL;
@@ -41,14 +41,12 @@ function getDefaultApiBaseUrl() {
   return `http://localhost:${DEFAULT_PORT}`;
 }
 
-function withApiPrefix(baseUrl: string) {
-  const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, "");
-
-  return normalizedBaseUrl.endsWith(`/${API_PREFIX}`)
-    ? normalizedBaseUrl
-    : `${normalizedBaseUrl}/${API_PREFIX}`;
+function withoutApiPrefix(baseUrl: string) {
+  return baseUrl.trim().replace(/\/+$/, "").replace(API_PREFIX_PATTERN, "");
 }
 
 export function getApiBaseUrl() {
-  return withApiPrefix(process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiBaseUrl());
+  return withoutApiPrefix(
+    process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiBaseUrl(),
+  );
 }
