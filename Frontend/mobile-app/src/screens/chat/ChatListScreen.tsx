@@ -25,7 +25,6 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
-import { commonChatStyles } from '../../styles/chat.styles';
 import { Conversation, ChatStackParamList, Message } from '../../types/chat.types';
 import { conversationService } from '../../services/conversationService';
 import { localDatabase } from '../../services/localDatabase';
@@ -52,32 +51,39 @@ export default function ChatListScreen({ navigation }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filtered, setFiltered] = useState<Conversation[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // ── Load conversations ────────────────────────────────────────────────────
 
   const loadConversations = useCallback(async (isRefresh = false) => {
-    // 1. Show local data immediately (offline-first)
-    const local = localDatabase.getConversations();
-    if (local.length > 0) {
-      setConversations(local);
-      setFiltered(local);
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    // 1. Load from local SQLite instantly (works offline)
+    const localData = localDatabase.getConversations();
+    if (localData.length > 0) {
+      setConversations(localData);
+      setFiltered(localData);
+      setLoading(false); // show local data immediately
     }
 
     // 2. Sync from backend in background
-    if (isRefresh) setRefreshing(true);
     try {
-      setError(null);
-      const remote = await conversationService.getAll();
-      setConversations(remote);
-      setFiltered(remote);
+      const serverData = await conversationService.getAll();
+      // Cache server data locally
+      serverData.forEach((conv) => localDatabase.upsertConversation(conv));
+      setConversations(serverData);
+      setFiltered(serverData);
     } catch {
-      if (local.length === 0) {
+      // Backend unreachable — local data is already shown above
+      if (localData.length === 0) {
         setError('Could not load conversations.');
       }
-      // If we have local data, silently ignore the network error
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
   }, []);

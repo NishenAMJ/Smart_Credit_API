@@ -1,34 +1,65 @@
-﻿import React, { useState } from 'react';
-import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  ScrollView, View, TouchableOpacity, Text, StyleSheet,
+  SafeAreaView, ActivityIndicator,
+} from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { LenderHeader } from '../../components/lender';
+import { LenderHeader, AlertBanner } from '../../components/lender';
+import { LoanOffersService } from '../../services/lender.service';
+
+type FilterType = 'all' | 'active' | 'withdrawn' | 'accepted';
 
 export default function MyOffersScreen({ navigation }: any) {
-  const [filter, setFilter] = useState<'all' | 'active' | 'withdrawn' | 'accepted'>('all');
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [offers, setOffers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const offers = [
-    { id: 'OFR-001', borrower: 'Kasun Silva', amount: 150000, roi: 18, status: 'active', duration: '12 months' },
-    { id: 'OFR-002', borrower: 'Priya Perera', amount: 100000, roi: 20, status: 'accepted', duration: '6 months' },
-    { id: 'OFR-003', borrower: 'Vijay Kumar', amount: 200000, roi: 16, status: 'withdrawn', duration: '24 months' },
-  ];
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await LoanOffersService.getMyOffers();
+        // Backend returns an array directly from GET /api/lender/:id/offers
+        setOffers(Array.isArray(data) ? data : (data?.offers ?? []));
+      } catch (e: any) {
+        setError(e?.response?.data?.message ?? 'Failed to load offers');
+        setOffers([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-  const filtered = offers.filter(o => filter === 'all' || o.status === filter);
+  const filtered = offers.filter(o => filter === 'all' || (o.status ?? 'active') === filter);
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return COLORS.success;
+      case 'active':    return COLORS.success;
       case 'withdrawn': return COLORS.danger;
-      case 'accepted': return COLORS.primary;
-      default: return COLORS.textSecondary;
+      case 'accepted':  return COLORS.primary;
+      default:          return COLORS.textSecondary;
     }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <LenderHeader title="My Offers" onBackPress={() => navigation.goBack()} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={commonStyles.safe}>
       <LenderHeader title="My Offers" onBackPress={() => navigation.goBack()} />
-      
+
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {error && (
+          <AlertBanner type="error" title="Error" message={error} />
+        )}
+
         <View style={styles.filters}>
           {(['all', 'active', 'withdrawn', 'accepted'] as const).map(f => (
             <TouchableOpacity
@@ -43,45 +74,60 @@ export default function MyOffersScreen({ navigation }: any) {
           ))}
         </View>
 
-        {filtered.map((offer) => (
-          <TouchableOpacity
-            key={offer.id}
-            style={commonStyles.card}
-            onPress={() => navigation.push('LoanDetails', { offerId: offer.id })}
-          >
-            <View style={commonStyles.rowSpaceBetween}>
-              <View style={{ flex: 1 }}>
-                <Text style={commonStyles.sectionTitle}>{offer.borrower}</Text>
-                <Text style={commonStyles.textSecondary}>{offer.id}</Text>
+        {filtered.length === 0 ? (
+          <AlertBanner type="info" title="No Offers" message={`No ${filter === 'all' ? '' : filter + ' '}offers found`} />
+        ) : (
+          filtered.map((offer) => (
+            <TouchableOpacity
+              key={offer.id}
+              style={commonStyles.card}
+              onPress={() => navigation.push('LoanDetails', { offerId: offer.id })}
+            >
+              <View style={commonStyles.rowSpaceBetween}>
+                <View style={{ flex: 1 }}>
+                  <Text style={commonStyles.sectionTitle}>
+                    {offer.loanType ?? offer.type ?? 'Loan Offer'}
+                  </Text>
+                  <Text style={commonStyles.textSecondary}>{offer.id}</Text>
+                </View>
+                <View style={[styles.badge, { backgroundColor: getStatusColor(offer.status ?? 'active') }]}>
+                  <Text style={styles.badgeText}>
+                    {(offer.status ?? 'active').toUpperCase()}
+                  </Text>
+                </View>
               </View>
-              <View style={[styles.badge, { backgroundColor: getStatusColor(offer.status) }]}>
-                <Text style={styles.badgeText}>{offer.status.toUpperCase()}</Text>
+
+              <View style={commonStyles.spacer32} />
+
+              <View style={commonStyles.rowSpaceBetween}>
+                <View>
+                  <Text style={commonStyles.textSecondary}>Min – Max Amount</Text>
+                  <Text style={commonStyles.textPrimary}>
+                    LKR {((offer.minAmount ?? 0) / 1000).toFixed(0)}K – {((offer.maxAmount ?? 0) / 1000).toFixed(0)}K
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={commonStyles.textSecondary}>Interest Rate</Text>
+                  <Text style={commonStyles.textPrimary}>{offer.interestRate ?? offer.roi ?? '--'}%</Text>
+                </View>
               </View>
-            </View>
 
-            <View style={commonStyles.spacer32} />
+              <Text style={[commonStyles.textSecondary, { marginTop: 12 }]}>
+                Tenure: {offer.tenureMonths ?? offer.duration ?? '--'} months
+              </Text>
 
-            <View style={commonStyles.rowSpaceBetween}>
-              <View>
-                <Text style={commonStyles.textSecondary}>Offered Amount</Text>
-                <Text style={commonStyles.textPrimary}>LKR {(offer.amount / 1000).toFixed(0)}K</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={commonStyles.textSecondary}>ROI</Text>
-                <Text style={commonStyles.textPrimary}>{offer.roi}%</Text>
-              </View>
-            </View>
-
-            <Text style={[commonStyles.textSecondary, { marginTop: 12 }]}>Duration: {offer.duration}</Text>
-
-            {offer.status === 'active' && (
-              <TouchableOpacity style={[commonStyles.primaryButton, { marginTop: 12 }]}>
-                <Feather name="edit" size={16} color="#fff" />
-                <Text style={commonStyles.buttonText}>Edit Offer</Text>
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
-        ))}
+              {(offer.status ?? 'active') === 'active' && (
+                <TouchableOpacity
+                  style={[commonStyles.primaryButton, { marginTop: 12 }]}
+                  onPress={() => navigation.push('EditOffer', { offerId: offer.id })}
+                >
+                  <Feather name="edit" size={16} color="#fff" />
+                  <Text style={commonStyles.buttonText}>Edit Offer</Text>
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );

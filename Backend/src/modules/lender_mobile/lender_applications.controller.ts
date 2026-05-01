@@ -2,7 +2,7 @@ import { Controller, Get, Param, Post, Body, NotFoundException } from '@nestjs/c
 import { LenderApplicationsService } from './lender_applications.service';
 import type { Application } from './lender_applications.service';
 
-@Controller('api/lender/applications')
+@Controller('lender-mobile/applications')
 export class LenderApplicationsController {
   constructor(private readonly applicationsService: LenderApplicationsService) {}
 

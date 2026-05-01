@@ -8,30 +8,37 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader } from '../../components/lender';
 import { DashboardService } from '../../services/lender.service';
 
-// ── Helper Functions ──────────────────────────────────
+/**
+ * Dashboard API returns borrowers with these fields:
+ *   id, fullName, email, creditScore, kycStatus,
+ *   loanCount, activeLoansCount, totalBorrowedAmount,
+ *   outstandingAmount, latestLoanStatus, isActive, createdAt
+ */
+
 const getScoreColor = (score: number) => {
   if (score >= 750) return COLORS.success;
   if (score >= 650) return COLORS.warning;
-  return COLORS.danger || '#EF4444';
+  return COLORS.danger;
 };
 
-// ── Main Component ──────────────────────────────────
 export default function MyBorrowersScreen({ navigation }: any) {
-  const [search, setSearch] = useState('');
+  const [search, setSearch]             = useState('');
   const [allBorrowers, setAllBorrowers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const data = await DashboardService.getBorrowers(20);
-        setAllBorrowers(data?.borrowers ?? []);
+        const data = await DashboardService.getBorrowers(50);
+        // API can return { borrowers: [...] } or a raw array
+        setAllBorrowers(data?.borrowers ?? (Array.isArray(data) ? data : []));
       } catch {
         setAllBorrowers([]);
       } finally {
@@ -40,51 +47,102 @@ export default function MyBorrowersScreen({ navigation }: any) {
     })();
   }, []);
 
+  // The API field for the borrower's name is 'fullName'
   const filtered = allBorrowers.filter((b) =>
-    (b.borrowerName ?? b.name ?? '').toLowerCase().includes(search.toLowerCase())
+    (b.fullName ?? b.borrowerName ?? b.name ?? '')
+      .toLowerCase()
+      .includes(search.toLowerCase())
   );
 
-  const renderCard = ({ item }: any) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => navigation.navigate('BorrowerDetail', { borrower: item })} // Changed to better screen name
-      activeOpacity={0.8}
-    >
-      <View style={commonStyles.rowSpaceBetween}>
-        <View style={commonStyles.row}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(item.borrowerName ?? item.name ?? '?')[0]}</Text>
+  const renderCard = ({ item }: any) => {
+    // Support both flat and nested field names for safety
+    const name          = item.fullName ?? item.borrowerName ?? item.name ?? 'Unknown';
+    const creditScore   = item.creditScore ?? item.score ?? 0;
+    const activeLoans   = item.activeLoansCount ?? item.activeLoans ?? item.loans ?? 0;
+    const totalBorrowed = item.totalBorrowedAmount ?? item.totalBorrowed ?? item.total ?? null;
+    const loanCount     = item.loanCount ?? item.loans ?? 0;
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => navigation.navigate('BorrowerDetail', { borrower: item })}
+        activeOpacity={0.8}
+      >
+        <View style={commonStyles.rowSpaceBetween}>
+          <View style={commonStyles.row}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{name[0]?.toUpperCase() ?? '?'}</Text>
+            </View>
+            <View>
+              <Text style={commonStyles.textPrimary}>{name}</Text>
+              <Text style={[styles.scoreText, { color: getScoreColor(creditScore) }]}>
+                Score: {creditScore > 0 ? creditScore : '--'}
+                {item.rating != null ? ` • ★${item.rating}` : ''}
+              </Text>
+            </View>
+          </View>
+          <Feather name="chevron-right" size={18} color={COLORS.textSecondary} />
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={commonStyles.rowSpaceBetween}>
+          <View>
+            <Text style={styles.cardLabel}>Total Loans</Text>
+            <Text style={commonStyles.textPrimary}>{loanCount}</Text>
           </View>
           <View>
-            <Text style={commonStyles.textPrimary}>{item.borrowerName ?? item.name}</Text>
-            <Text style={[styles.scoreText, { color: getScoreColor(item.creditScore ?? item.score ?? 0) }]}>
-              Score: {item.creditScore ?? item.score ?? '--'} • ★{item.rating ?? '--'}
+            <Text style={styles.cardLabel}>Active</Text>
+            <Text style={commonStyles.textPrimary}>{activeLoans}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.cardLabel}>Total Borrowed</Text>
+            <Text style={commonStyles.textPrimary}>
+              {totalBorrowed != null
+                ? `LKR ${(totalBorrowed / 1000).toFixed(0)}K`
+                : '--'}
             </Text>
           </View>
         </View>
-        <Feather name="chevron-right" size={18} color={COLORS.textSecondary} />
-      </View>
 
-      <View style={styles.divider} />
+        {/* KYC & status badges */}
+        <View style={[commonStyles.row, { marginTop: 10, gap: 8 }]}>
+          {item.kycStatus && (
+            <View style={[styles.badge, {
+              backgroundColor: item.kycStatus === 'approved' ? '#ECFDF5' : '#FEF2F2',
+            }]}>
+              <Text style={[styles.badgeText, {
+                color: item.kycStatus === 'approved' ? COLORS.success : COLORS.danger,
+              }]}>
+                KYC {item.kycStatus}
+              </Text>
+            </View>
+          )}
+          {item.latestLoanStatus && (
+            <View style={[styles.badge, { backgroundColor: '#EBF4FF' }]}>
+              <Text style={[styles.badgeText, { color: COLORS.primary }]}>
+                {item.latestLoanStatus}
+              </Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
-      <View style={commonStyles.rowSpaceBetween}>
-        <View>
-          <Text style={styles.cardLabel}>Active Loans</Text>
-          <Text style={commonStyles.textPrimary}>{item.activeLoans ?? item.loans ?? '--'}</Text>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.cardLabel}>Total Borrowed</Text>
-          <Text style={commonStyles.textPrimary}>{item.totalBorrowed != null ? `${(item.totalBorrowed / 1000).toFixed(0)}K LKR` : (item.total ? `${item.total} LKR` : '--')}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <LenderHeader title="My Borrowers" onBackPress={() => navigation.goBack()} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={commonStyles.safe}>
       <LenderHeader title="My Borrowers" onBackPress={() => navigation.goBack()} />
 
-      {/* SEARCH BAR */}
       <View style={styles.searchWrap}>
         <Feather name="search" size={18} color={COLORS.textSecondary} />
         <TextInput
@@ -94,25 +152,29 @@ export default function MyBorrowersScreen({ navigation }: any) {
           value={search}
           onChangeText={setSearch}
         />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')}>
+            <Feather name="x" size={16} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Borrower Count */}
       <View style={styles.countRow}>
-        <Text style={commonStyles.sectionTitle}>
-          {filtered.length} Borrowers
-        </Text>
+        <Text style={commonStyles.sectionTitle}>{filtered.length} Borrowers</Text>
       </View>
 
-      {/* LIST */}
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id ?? item.borrowerId ?? Math.random().toString()}
         renderItem={renderCard}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No borrowers found</Text>
+            <Feather name="users" size={48} color={COLORS.border} style={{ marginBottom: 12 }} />
+            <Text style={styles.emptyText}>
+              {search ? 'No borrowers match your search' : 'No borrowers yet'}
+            </Text>
           </View>
         }
       />
@@ -120,15 +182,14 @@ export default function MyBorrowersScreen({ navigation }: any) {
   );
 }
 
-// ── Styles ──────────────────────────────────────────
 const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: commonStyles.card.backgroundColor,
+    backgroundColor: '#fff',
     marginHorizontal: 16,
     marginTop: 12,
-    marginBottom: 16,
+    marginBottom: 8,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -142,10 +203,10 @@ const styles = StyleSheet.create({
   },
   countRow: {
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   card: {
-    backgroundColor: commonStyles.card.backgroundColor,
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -167,7 +228,6 @@ const styles = StyleSheet.create({
   },
   scoreText: {
     fontSize: 13,
-    color: COLORS.success,
     marginTop: 4,
   },
   divider: {
@@ -181,18 +241,26 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontWeight: '500',
   },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 32,
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 100,
+    marginTop: 80,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 15,
     color: COLORS.textSecondary,
+    textAlign: 'center',
   },
 });

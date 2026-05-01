@@ -2,7 +2,7 @@ import { Controller, Get, Param, InternalServerErrorException, Logger, NotFoundE
 import { LenderBorrowersService } from './lender_borrowers.service';
 import type { Borrower, BorrowerHistory } from './lender_borrowers.service';
 
-@Controller('api/lender/borrowers')
+@Controller('lender-mobile/borrowers')
 export class LenderBorrowersController {
   private readonly logger = new Logger(LenderBorrowersController.name);
 

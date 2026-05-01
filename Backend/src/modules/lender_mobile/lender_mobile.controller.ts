@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { LenderMobileService } from './lender_mobile.service';
 
-@Controller('api/lender/dashboard')
+@Controller('lender-mobile/dashboard')
 export class LenderMobileController {
   private readonly logger = new Logger(LenderMobileController.name);
 

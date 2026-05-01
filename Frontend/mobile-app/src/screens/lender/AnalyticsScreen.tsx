@@ -6,14 +6,22 @@ import { LenderHeader, StatCard } from '../../components/lender';
 import { ActivityIndicator } from 'react-native';
 import { AnalyticsService } from '../../services/lender.service';
 
-// ── Main Component ──────────────────────────────────
+/**
+ * AnalyticsSummaryResponse shape from backend:
+ * {
+ *   summary:     { totalLent, totalCollected, activeLoans, repaymentSuccessRate }
+ *   performance: { activeAds, requestsReceived, acceptedRequests, requestToLoanConversionRate }
+ *   portfolio:   { outstandingAmount, averageLoanSize, averageInterestRate, averageTenureMonths }
+ *   risk:        { overdueLoans, defaultedLoans, openDisputes, averageBorrowerCreditScore }
+ * }
+ */
+
 export default function AnalyticsScreen({ navigation }: any) {
   const [period, setPeriod] = useState('month');
-  const [summary, setSummary] = useState<any>(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Map UI period labels to backend range keys
   const rangeMap: Record<string, '30d' | '90d' | '365d'> = {
     week: '30d',
     month: '30d',
@@ -25,8 +33,9 @@ export default function AnalyticsScreen({ navigation }: any) {
     (async () => {
       try {
         setLoading(true);
-        const data = await AnalyticsService.getSummary(rangeMap[period] ?? '90d');
-        setSummary(data);
+        setError(null);
+        const res = await AnalyticsService.getSummary(rangeMap[period] ?? '90d');
+        setData(res);
       } catch (e: any) {
         setError(e?.response?.data?.message ?? 'Failed to load analytics');
       } finally {
@@ -35,24 +44,27 @@ export default function AnalyticsScreen({ navigation }: any) {
     })();
   }, [period]);
 
-  const stats = {
-    totalDisbursed: summary ? ((summary.totalDisbursed ?? 0) / 1000).toFixed(0) + 'K' : '--',
-    totalCollected: summary ? ((summary.totalCollected ?? 0) / 1000).toFixed(0) + 'K' : '--',
-    defaultRate:    summary ? String(summary.defaultRate ?? '0') : '--',
-    avgInterestEarned: summary ? ((summary.interestEarned ?? 0) / 1000).toFixed(0) + 'K' : '--',
-  };
+  // Safely pull values from nested response structure
+  const sum  = data?.summary     ?? {};
+  const port = data?.portfolio   ?? {};
+  const risk = data?.risk        ?? {};
+  const perf = data?.performance ?? {};
 
-  const breakdown = summary
-    ? [
-        { type: 'Active',    count: String(summary.activeLoans    ?? 0), color: COLORS.success },
-        { type: 'Completed', count: String(summary.completedLoans ?? 0), color: COLORS.primary },
-        { type: 'Defaulted', count: String(summary.defaultedLoans ?? 0), color: COLORS.danger  },
-      ]
-    : [
-        { type: 'Active',    count: '--', color: COLORS.success },
-        { type: 'Completed', count: '--', color: COLORS.primary },
-        { type: 'Defaulted', count: '--', color: COLORS.danger  },
-      ];
+  const fmt = (val: number | undefined) =>
+    val != null ? `LKR ${(val / 1000).toFixed(1)}K` : '--';
+
+  const pct = (val: number | undefined) =>
+    val != null ? `${Number(val).toFixed(1)}%` : '--';
+
+  const num = (val: number | undefined) =>
+    val != null ? String(val) : '--';
+
+  const breakdown = [
+    { type: 'Active Loans',    count: num(sum.activeLoans),        color: COLORS.success },
+    { type: 'Overdue Loans',   count: num(risk.overdueLoans),      color: COLORS.warning },
+    { type: 'Defaulted Loans', count: num(risk.defaultedLoans),    color: COLORS.danger  },
+    { type: 'Open Disputes',   count: num(risk.openDisputes),      color: '#8B5CF6'      },
+  ];
 
   if (loading) {
     return (
@@ -66,11 +78,12 @@ export default function AnalyticsScreen({ navigation }: any) {
   return (
     <SafeAreaView style={commonStyles.safe}>
       <LenderHeader title="Analytics" onBackPress={() => navigation.goBack()} />
-      
+
       <ScrollView showsVerticalScrollIndicator={false} style={styles.container}>
+
         {/* Period Selector */}
         <View style={styles.periodSelector}>
-          {['week', 'month', 'quarter', 'year'].map((p) => (
+          {(['week', 'month', 'quarter', 'year'] as const).map((p) => (
             <TouchableOpacity
               key={p}
               style={[styles.periodBtn, period === p && styles.periodBtnActive]}
@@ -83,49 +96,85 @@ export default function AnalyticsScreen({ navigation }: any) {
           ))}
         </View>
 
-        {/* Key Metrics */}
+        {error && (
+          <View style={styles.errorBox}>
+            <Feather name="alert-circle" size={16} color={COLORS.danger} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
+        {/* Key Metrics Row 1 */}
         <View style={styles.metricsGrid}>
-          <StatCard icon="trending-up" color={COLORS.success} value={stats.totalDisbursed} label="Total Disbursed" />
-          <StatCard icon="check-circle" color={COLORS.primary} value={stats.totalCollected} label="Total Collected" />
+          <StatCard icon="trending-up"  color={COLORS.success} value={fmt(sum.totalLent)}      label="Total Lent"      />
+          <StatCard icon="check-circle" color={COLORS.primary} value={fmt(sum.totalCollected)}  label="Collected"       />
         </View>
 
+        {/* Key Metrics Row 2 */}
         <View style={styles.metricsGrid}>
-          <StatCard icon="alert-circle" color={COLORS.danger} value={`${stats.defaultRate}%`} label="Default Rate" />
-          <StatCard icon="dollar-sign" color={COLORS.warning} value={stats.avgInterestEarned} label="Interest Earned" />
+          <StatCard icon="activity"     color={COLORS.warning} value={pct(sum.repaymentSuccessRate)} label="Repayment Rate" />
+          <StatCard icon="dollar-sign"  color="#8B5CF6"        value={fmt(port.outstandingAmount)}   label="Outstanding"   />
         </View>
 
-        {/* Breakdown */}
+        {/* Portfolio Info */}
+        <View style={commonStyles.card}>
+          <Text style={commonStyles.sectionTitle}>Portfolio</Text>
+          <View style={[commonStyles.rowSpaceBetween, { marginTop: 8 }]}>
+            <Text style={commonStyles.textSecondary}>Avg Loan Size</Text>
+            <Text style={commonStyles.textPrimary}>{fmt(port.averageLoanSize)}</Text>
+          </View>
+          <View style={[commonStyles.rowSpaceBetween, { marginTop: 8 }]}>
+            <Text style={commonStyles.textSecondary}>Avg Interest Rate</Text>
+            <Text style={commonStyles.textPrimary}>{pct(port.averageInterestRate)}</Text>
+          </View>
+          <View style={[commonStyles.rowSpaceBetween, { marginTop: 8 }]}>
+            <Text style={commonStyles.textSecondary}>Avg Tenure</Text>
+            <Text style={commonStyles.textPrimary}>
+              {port.averageTenureMonths != null ? `${Number(port.averageTenureMonths).toFixed(0)} months` : '--'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Performance */}
+        <View style={commonStyles.card}>
+          <Text style={commonStyles.sectionTitle}>Performance</Text>
+          <View style={[commonStyles.rowSpaceBetween, { marginTop: 8 }]}>
+            <Text style={commonStyles.textSecondary}>Active Ads</Text>
+            <Text style={commonStyles.textPrimary}>{num(perf.activeAds)}</Text>
+          </View>
+          <View style={[commonStyles.rowSpaceBetween, { marginTop: 8 }]}>
+            <Text style={commonStyles.textSecondary}>Requests Received</Text>
+            <Text style={commonStyles.textPrimary}>{num(perf.requestsReceived)}</Text>
+          </View>
+          <View style={[commonStyles.rowSpaceBetween, { marginTop: 8 }]}>
+            <Text style={commonStyles.textSecondary}>Conversion Rate</Text>
+            <Text style={commonStyles.textPrimary}>{pct(perf.requestToLoanConversionRate)}</Text>
+          </View>
+        </View>
+
+        {/* Loan Breakdown */}
         <View style={commonStyles.card}>
           <Text style={commonStyles.sectionTitle}>Loan Breakdown</Text>
-          
           {breakdown.map((item) => (
-            <View key={item.type} style={commonStyles.rowSpaceBetween}>
+            <View key={item.type} style={[commonStyles.rowSpaceBetween, { marginTop: 10 }]}>
               <View style={commonStyles.row}>
                 <View style={[styles.dot, { backgroundColor: item.color }]} />
                 <Text style={commonStyles.textPrimary}>{item.type}</Text>
               </View>
-              <Text style={commonStyles.textPrimary}>{item.count}</Text>
+              <Text style={[commonStyles.textPrimary, { fontWeight: '700', color: item.color }]}>
+                {item.count}
+              </Text>
             </View>
           ))}
         </View>
 
-        {/* Chart Placeholder */}
-        <View style={commonStyles.card}>
-          <Text style={commonStyles.sectionTitle}>Revenue Trend</Text>
-          <View style={styles.chartPlaceholder}>
-            <Feather name="bar-chart-2" size={48} color={COLORS.border} />
-            <Text style={commonStyles.textSecondary}>Chart visualization</Text>
-          </View>
-        </View>
+        <View style={commonStyles.spacer32} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingVertical: 12,
-  },
+  container: { paddingVertical: 12 },
   periodSelector: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -141,35 +190,25 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     alignItems: 'center',
   },
-  periodBtnActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  periodText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
-  periodTextActive: {
-    color: '#fff',
-  },
+  periodBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  periodText: { fontSize: 12, fontWeight: '500', color: COLORS.textSecondary },
+  periodTextActive: { color: '#fff' },
   metricsGrid: {
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 16,
     marginBottom: 12,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  chartPlaceholder: {
-    height: 200,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+  errorBox: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 12,
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    borderRadius: 8,
   },
+  errorText: { color: COLORS.danger, fontSize: 13, flex: 1 },
 });

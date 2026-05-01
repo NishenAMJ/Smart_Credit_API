@@ -49,26 +49,28 @@ export default function LenderDashboardScreen({ navigation }: any) {
   }, []);
 
   // ── Build stats array from API summary ──────────────────
-  const STATS = summary
+  // Dashboard API returns: { summary: { totalBorrowers, todaysCollection, overduePayments, activeAds } }
+  const summaryData = summary?.summary ?? summary ?? {};
+  const STATS = summaryData
     ? [
-        { id: '1', icon: 'trending-up',   color: COLORS.success, value: `LKR ${((summary.totalDisbursed ?? 0) / 1000).toFixed(0)}K`, label: 'Total Lent'      },
-        { id: '2', icon: 'dollar-sign',   color: COLORS.primary, value: `LKR ${((summary.totalCollected ?? 0) / 1000).toFixed(0)}K`, label: 'Total Collected'  },
-        { id: '3', icon: 'file-text',     color: COLORS.warning, value: String(summary.pendingRequests ?? 0),    label: 'Pending Apps'    },
-        { id: '4', icon: 'trending-down', color: COLORS.danger,  value: String(summary.overdueCount ?? 0),       label: 'Overdue'         },
+        { id: '1', icon: 'users',         color: COLORS.primary, value: String(summaryData.totalBorrowers ?? 0),                                                      label: 'Borrowers'       },
+        { id: '2', icon: 'dollar-sign',   color: COLORS.success, value: `LKR ${((summaryData.todaysCollection ?? 0) / 1000).toFixed(1)}K`, label: "Today's Collection" },
+        { id: '3', icon: 'radio',         color: COLORS.warning, value: String(summaryData.activeAds ?? 0),                                                           label: 'Active Ads'      },
+        { id: '4', icon: 'alert-circle',  color: COLORS.danger,  value: String(summaryData.overduePayments ?? 0),                                                     label: 'Overdue'         },
       ]
     : [];
 
-  const overdueCount: number = summary?.overdueCount ?? 0;
+  const overdueCount: number = summaryData?.overduePayments ?? 0;
 
   const getStatusColor = (status: string) => {
-    if (status === 'Approved') return COLORS.success;
-    if (status === 'Rejected') return COLORS.danger;
+    if (status === 'Approved' || status === 'approved') return COLORS.success;
+    if (status === 'Rejected' || status === 'rejected') return COLORS.danger;
     return COLORS.warning;
   };
 
   const getStatusBg = (status: string) => {
-    if (status === 'Approved') return '#ECFDF5';
-    if (status === 'Rejected') return '#FEF2F2';
+    if (status === 'Approved' || status === 'approved') return '#ECFDF5';
+    if (status === 'Rejected' || status === 'rejected') return '#FEF2F2';
     return '#FFFBEB';
   };
 
@@ -87,16 +89,15 @@ export default function LenderDashboardScreen({ navigation }: any) {
         {/* ── HEADER ────────────────────────────────── */}
         <View style={styles.header}>
           <View style={commonStyles.rowSpaceBetween}>
-            <TouchableOpacity>
-              <Feather name="menu" size={24} color="#fff" />
-            </TouchableOpacity>
+            {/* Spacer instead of burger button */}
+            <View style={{ width: 40 }} />
             <TouchableOpacity
               onPress={() => navigation.navigate('LenderProfile')}
               activeOpacity={0.8}
             >
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {profile?.fullName ? profile.fullName[0].toUpperCase() : (profile?.name ? profile.name[0].toUpperCase() : '?')}
+                  {profile?.fullName ? profile.fullName[0].toUpperCase() : (profile?.name ? profile.name[0].toUpperCase() : 'L')}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -143,10 +144,10 @@ export default function LenderDashboardScreen({ navigation }: any) {
         </View>
 
         {/* ── PENDING BANNER ────────────────────────── */}
-        {(summary?.pendingRequests ?? 0) > 0 && (
+        {recentApps.length > 0 && (
           <AlertBanner
             type="warning"
-            title={`${summary.pendingRequests ?? 0} Pending Loan Requests`}
+            title={`${recentApps.length} Pending Loan Requests`}
             message="Review and approve borrower requests"
             icon="inbox"
           />
