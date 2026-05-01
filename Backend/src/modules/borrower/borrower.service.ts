@@ -986,6 +986,11 @@ export class BorrowerService {
 
     const installmentNumber = loan.repaymentsMade + 1;
 
+    const status =
+      dto.paymentMethod === RepaymentMethod.CARD
+        ? RepaymentStatus.COMPLETED
+        : RepaymentStatus.PENDING;
+
     const repaymentData = {
       repaymentId: repaymentRef.id,
       loanId: dto.loanId,
@@ -997,7 +1002,7 @@ export class BorrowerService {
       paymentMethod: dto.paymentMethod,
       transactionReference: dto.transactionReference ?? null,
       paymentProofUrl: dto.paymentProofUrl ?? null,
-      status: RepaymentStatus.COMPLETED,
+      status: status,
       dueDate: loan.nextDueDate,
       paidAt: now,
       installmentNumber,
@@ -1013,31 +1018,35 @@ export class BorrowerService {
     const nextDueDate = new Date();
     nextDueDate.setMonth(nextDueDate.getMonth() + 1);
 
-    // Keep loan progress and borrower aggregates in sync in the same batch.
-    batch.update(this.db.collection(this.LOANS_COL).doc(dto.loanId), {
-      outstandingBalance: newOutstanding,
-      repaymentsMade: FieldValue.increment(1),
-      status: isFullyRepaid ? LoanStatus.COMPLETED : loan.status,
-      nextDueDate: isFullyRepaid ? null : nextDueDate,
-      updatedAt: now,
-    });
+    if (status === RepaymentStatus.COMPLETED) {
+      // Keep loan progress and borrower aggregates in sync in the same batch.
+      batch.update(this.db.collection(this.LOANS_COL).doc(dto.loanId), {
+        outstandingBalance: newOutstanding,
+        repaymentsMade: FieldValue.increment(1),
+        status: isFullyRepaid ? LoanStatus.COMPLETED : loan.status,
+        nextDueDate: isFullyRepaid ? null : nextDueDate,
+        updatedAt: now,
+      });
 
-    // Update borrower's totalRepaid
-    batch.update(this.db.collection(this.BORROWERS_COL).doc(dto.borrowerId), {
-      totalRepaid: FieldValue.increment(dto.amount),
-      activeLoans: isFullyRepaid
-        ? FieldValue.increment(-1)
-        : FieldValue.increment(0),
-      updatedAt: now,
-    });
+      // Update borrower's totalRepaid
+      batch.update(this.db.collection(this.BORROWERS_COL).doc(dto.borrowerId), {
+        totalRepaid: FieldValue.increment(dto.amount),
+        activeLoans: isFullyRepaid
+          ? FieldValue.increment(-1)
+          : FieldValue.increment(0),
+        updatedAt: now,
+      });
+    }
 
     await batch.commit();
 
-    this.creditScoreService
-      .calculateCreditScore(dto.borrowerId)
-      .catch((error) =>
-        console.error('[CreditScore] Recalc failed after repayment:', error),
-      );
+    if (status === RepaymentStatus.COMPLETED) {
+      this.creditScoreService
+        .calculateCreditScore(dto.borrowerId)
+        .catch((error) =>
+          console.error('[CreditScore] Recalc failed after repayment:', error),
+        );
+    }
 
     const created = await repaymentRef.get();
     return { ...created.data() } as Repayment;

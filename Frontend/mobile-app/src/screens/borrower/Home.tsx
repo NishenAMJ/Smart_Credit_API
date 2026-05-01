@@ -427,45 +427,79 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
         <View style={styles.section}>
           <View style={styles.nextPaymentCard}>
-            <View style={styles.nextPaymentHeader}>
-              <View>
-                <Text style={styles.cardLabel}>Next Payment</Text>
-                <Text style={styles.nextPaymentAmount}>
-                  {formatCurrency(dashboard?.nextPaymentAmount)}
+            {!dashboard?.nextPaymentAmount ||
+            dashboard.nextPaymentAmount <= 0 ||
+            (dashboard.nextDueDate &&
+              (new Date(dashboard.nextDueDate).getTime() - Date.now()) /
+                (1000 * 60 * 60 * 24) >
+                25) ? (
+              <View style={{ alignItems: "center", paddingVertical: SPACING.sm }}>
+                <Feather
+                  name='check-circle'
+                  size={32}
+                  color={COLORS.primary}
+                  style={{ marginBottom: SPACING.sm }}
+                />
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { fontSize: 16, marginBottom: 4 },
+                  ]}
+                >
+                  No upcoming payment
+                </Text>
+                <Text
+                  style={[
+                    styles.heroSubtitle,
+                    { color: COLORS.textSecondary, textAlign: "center", marginBottom: 0 },
+                  ]}
+                >
+                  You're all caught up!
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.primaryActionButton}
-                onPress={() =>
-                  navigateToBorrowerTab(navigation, "Payments", {
-                    tab: "Upcoming",
-                  })
-                }
-              >
-                <Text style={styles.primaryActionText}>Pay Now</Text>
-              </TouchableOpacity>
-            </View>
+            ) : (
+              <>
+                <View style={styles.nextPaymentHeader}>
+                  <View>
+                    <Text style={styles.cardLabel}>Next Payment</Text>
+                    <Text style={styles.nextPaymentAmount}>
+                      {formatCurrency(dashboard?.nextPaymentAmount)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.primaryActionButton}
+                    onPress={() =>
+                      navigateToBorrowerTab(navigation, "Payments", {
+                        tab: "Upcoming",
+                      })
+                    }
+                  >
+                    <Text style={styles.primaryActionText}>Pay Now</Text>
+                  </TouchableOpacity>
+                </View>
 
-            <View style={styles.nextPaymentMetaRow}>
-              <View style={styles.metaPill}>
-                <Feather name='calendar' size={14} color={COLORS.primary} />
-                <Text style={styles.metaPillText}>
-                  {formatDateLabel(dashboard?.nextDueDate)}
-                </Text>
-              </View>
+                <View style={styles.nextPaymentMetaRow}>
+                  <View style={styles.metaPill}>
+                    <Feather name='calendar' size={14} color={COLORS.primary} />
+                    <Text style={styles.metaPillText}>
+                      {formatDateLabel(dashboard?.nextDueDate)}
+                    </Text>
+                  </View>
 
-              <TouchableOpacity
-                style={styles.metaPill}
-                onPress={() =>
-                  navigateToBorrowerTab(navigation, "Payments", {
-                    tab: "History",
-                  })
-                }
-              >
-                <Feather name='clock' size={14} color={COLORS.primary} />
-                <Text style={styles.metaPillText}>View History</Text>
-              </TouchableOpacity>
-            </View>
+                  <TouchableOpacity
+                    style={styles.metaPill}
+                    onPress={() =>
+                      navigateToBorrowerTab(navigation, "Payments", {
+                        tab: "History",
+                      })
+                    }
+                  >
+                    <Feather name='clock' size={14} color={COLORS.primary} />
+                    <Text style={styles.metaPillText}>View History</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -890,3 +924,4 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 });
+    

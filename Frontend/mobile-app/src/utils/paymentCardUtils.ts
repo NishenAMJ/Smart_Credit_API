@@ -58,7 +58,8 @@ export const getPaymentTitle = (
   if (paymentType === "disbursement") {
     return PAYMENT_CARD_TITLES.LOAN_RECEIVED;
   }
-  if (paymentStatus === "PAID") {
+  const s = String(paymentStatus || "").toLowerCase();
+  if (s === "paid" || s === "completed") {
     return PAYMENT_CARD_TITLES.PAYMENT_MADE;
   }
   return PAYMENT_CARD_TITLES.NEXT_PAYMENT;
@@ -109,7 +110,8 @@ export const isPaidPayment = (
   paymentStatus: string | undefined,
   paymentType: string | undefined,
 ): boolean => {
-  return paymentStatus === "PAID" || paymentType === "disbursement";
+  const s = String(paymentStatus || "").toLowerCase();
+  return s === "paid" || s === "completed" || paymentType === "disbursement";
 };
 
 /**

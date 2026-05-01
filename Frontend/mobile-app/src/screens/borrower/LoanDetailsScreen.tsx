@@ -49,8 +49,14 @@ export default function LoanDetailsScreen({
     }
   }, [loan?.loanId]);
 
-  const upcomingPayments = payments.filter((p) => p.status !== "PAID");
-  const pastPayments = payments.filter((p) => p.status === "PAID");
+  const upcomingPayments = payments.filter((p) => {
+    const s = String(p.status || "").toLowerCase();
+    return s !== "paid" && s !== "completed";
+  });
+  const pastPayments = payments.filter((p) => {
+    const s = String(p.status || "").toLowerCase();
+    return s === "paid" || s === "completed";
+  });
 
   const totalPaid = pastPayments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
   const outstanding =
@@ -91,7 +97,7 @@ export default function LoanDetailsScreen({
             />
           ))
         ) : (
-          <EmptyState title='No upcoming payments' />
+          <EmptyState title='No upcoming payment' />
         )}
 
         {pastPayments.length > 0 && (
@@ -207,3 +213,4 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
 });
+ 

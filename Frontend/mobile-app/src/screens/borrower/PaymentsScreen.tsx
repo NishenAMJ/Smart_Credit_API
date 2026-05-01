@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import QRCode from "react-native-qrcode-svg";
 import {
   getPayments,
@@ -85,6 +86,25 @@ export default function PaymentsScreen({
     useState<BorrowerRepayment | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [generatingQr, setGeneratingQr] = useState(false);
+  const [paymentProof, setPaymentProof] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+
+  const pickReceiptImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setPaymentProof(result.assets[0]);
+      }
+    } catch (err) {
+      console.error("Error picking image:", err);
+      Alert.alert("Error", "Could not select image. Please try again.");
+    }
+  };
 
   const paymentMethods: PaymentMethodConfig[] = [
     { label: "Card", iconSet: "feather", icon: "credit-card" },
@@ -146,13 +166,21 @@ export default function PaymentsScreen({
 
   const filteredPayments = useMemo(() => {
     if (activeTab === "Upcoming") {
-      let upcoming = payments.filter(
-        (p) => p.status !== "PAID" && p.status !== "COMPLETED",
-      );
+      let upcoming = payments.filter((p) => {
+        const s = String(p.status || "").toLowerCase();
+        return s !== "paid" && s !== "completed";
+      });
 
       // If the backend returned no upcoming stubs but the dashboard shows a next
       // payment, inject a synthetic entry so the list is never misleadingly empty.
-      if (upcoming.length === 0 && dashboardNextPayment?.amount) {
+      if (
+        upcoming.length === 0 &&
+        dashboardNextPayment?.amount &&
+        (!dashboardNextPayment.dueDate ||
+          (new Date(dashboardNextPayment.dueDate).getTime() - Date.now()) /
+            (1000 * 60 * 60 * 24) <=
+            25)
+      ) {
         upcoming = [
           {
             paymentId: "dashboard-next",
@@ -174,9 +202,10 @@ export default function PaymentsScreen({
     }
 
     // Merge paid repayments from `payments` + all `transactions`, deduplicate by ID
-    const paidRepayments = payments.filter(
-      (p) => p.status === "PAID" || p.status === "COMPLETED",
-    );
+    const paidRepayments = payments.filter((p) => {
+      const s = String(p.status || "").toLowerCase();
+      return s === "paid" || s === "completed";
+    });
 
     const txAsRepayments: BorrowerRepayment[] = transactions.map((t) => ({
       paymentId: t.transactionId ?? t.repaymentId,
@@ -300,6 +329,19 @@ export default function PaymentsScreen({
       return;
     }
 
+    if (selectedPaymentMethod === "Bank Transfer" && !paymentProof) {
+      Alert.alert(
+        "Receipt Required",
+        "Please upload a payment receipt for Bank Transfer verification.",
+      );
+      return;
+    }
+
+    const successMessage =
+      selectedPaymentMethod === "Card"
+        ? "Payment completed successfully."
+        : "Payment submitted successfully and is pending verification.";
+
     Alert.alert(
       "Confirm Payment",
       `Proceeding with ${selectedPaymentMethod} for ${formattedAmount}.`,
@@ -320,17 +362,24 @@ export default function PaymentsScreen({
             try {
               setProcessingPaymentId(payment.paymentId || null);
 
+              let proofUrl = undefined;
+              if (paymentProof) {
+                setUploadingReceipt(true);
+                proofUrl = await paymentService.uploadPaymentReceipt(
+                  paymentProof.uri,
+                );
+              }
+
               await paymentService.makeRepayment({
                 loanId: loanId,
                 amount: amount,
                 paymentMethod: paymentMethodApi,
                 transactionReference: `TXN-${Date.now()}`,
+                paymentProofUrl: proofUrl,
               });
 
-              Alert.alert(
-                "Success",
-                "Payment submitted successfully and is pending verification.",
-              );
+              Alert.alert("Success", successMessage);
+              setPaymentProof(null);
               void fetchPayments();
             } catch (err) {
               const message = getApiErrorMessage(
@@ -341,6 +390,7 @@ export default function PaymentsScreen({
               Alert.alert("Payment failed", message);
             } finally {
               setProcessingPaymentId(null);
+              setUploadingReceipt(false);
             }
           },
         },
@@ -485,6 +535,24 @@ export default function PaymentsScreen({
                 );
               })}
             </View>
+            {selectedPaymentMethod === "Bank Transfer" && (
+              <View style={styles.uploadSection}>
+                <Text style={styles.uploadLabel}>Upload Payment Receipt</Text>
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={pickReceiptImage}
+                >
+                  <Feather
+                    name={paymentProof ? "check-circle" : "upload"}
+                    size={20}
+                    color={paymentProof ? COLORS.primary : COLORS.textSecondary}
+                  />
+                  <Text style={styles.uploadButtonText}>
+                    {paymentProof ? "Receipt Selected" : "Tap to select receipt"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       )}
@@ -536,7 +604,11 @@ export default function PaymentsScreen({
             </View>
           ) : (
             <EmptyState
-              title={`No ${activeTab.toLowerCase()} payments found.`}
+              title={
+                activeTab === "Upcoming"
+                  ? "No upcoming payment"
+                  : "No history found"
+              }
             />
           )
         }
@@ -726,6 +798,32 @@ const styles = StyleSheet.create({
   },
   activeMethodChipText: {
     color: COLORS.surface,
+  },
+  uploadSection: {
+    marginTop: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+  },
+  uploadLabel: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontWeight: "500",
+    marginBottom: SPACING.sm,
+  },
+  uploadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.md,
+    backgroundColor: COLORS.background,
+    borderRadius: BORDER_RADIUS.medium,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: "dashed",
+  },
+  uploadButtonText: {
+    marginLeft: SPACING.sm,
+    color: COLORS.textSecondary,
+    fontSize: 14,
   },
   paymentList: {
     paddingHorizontal: SPACING.lg,
