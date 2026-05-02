@@ -175,7 +175,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
     const loadRecentAds = async () => {
       try {
         setIsRecentAdsLoading(true);
-        const ads = await fetchLenderAds(session.lenderId, 4);
+        const ads = await fetchLenderAds(4);
 
         if (isMounted) {
           setRecentAds(ads);
@@ -229,8 +229,6 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
       setPublishMessage(null);
 
       const createdAd = await createLenderAd({
-        lenderId: session.lenderId,
-        lenderName: session.displayName,
         headline: draft.headline.trim(),
         minAmount: Number(draft.minAmount),
         maxAmount: Number(draft.maxAmount),

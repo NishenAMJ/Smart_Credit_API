@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Controller,
   DefaultValuePipe,
   Get,
@@ -7,7 +6,13 @@ import {
   Param,
   ParseIntPipe,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import { DashboardService } from './dashboard.service';
 import {
   BorrowerDetailsResponse,
@@ -16,33 +21,27 @@ import {
 } from './dashboard.types';
 
 @Controller('dashboard')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
   getSummary(
-    @Query('lenderId') lenderId: string | undefined,
+    @Req() req: AuthenticatedRequest,
   ): Promise<DashboardSummaryResponse> {
-    if (!lenderId?.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
-    return this.dashboardService.getSummary(lenderId.trim());
+    return this.dashboardService.getSummary(req.user.sub);
   }
 
   @Get('borrowers')
   getBorrowers(
-    @Query('lenderId') lenderId: string | undefined,
+    @Req() req: AuthenticatedRequest,
     @Query('pageSize', new DefaultValuePipe(8), ParseIntPipe) pageSize: number,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ): Promise<DashboardBorrowersResponse> {
-    if (!lenderId?.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     return this.dashboardService.getBorrowers(
-      lenderId.trim(),
+      req.user.sub,
       Number.isFinite(Number(limit)) ? Number(limit) : pageSize,
       cursor?.trim() || null,
     );
@@ -50,15 +49,11 @@ export class DashboardController {
 
   @Get('borrowers/:id')
   async getBorrowerDetails(
+    @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
-    @Query('lenderId') lenderId: string | undefined,
   ): Promise<BorrowerDetailsResponse> {
-    if (!lenderId?.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     const borrower = await this.dashboardService.getBorrowerDetails(
-      lenderId.trim(),
+      req.user.sub,
       id,
     );
 

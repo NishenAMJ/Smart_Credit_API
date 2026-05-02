@@ -5,7 +5,13 @@ import {
   Get,
   Post,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import {
   CreateLenderAdInput,
   LenderAdResponse,
@@ -29,36 +35,40 @@ type CreateLenderAdBody = {
 };
 
 @Controller('lender-ads')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
 export class LenderAdsController {
   constructor(private readonly lenderAdsService: LenderAdsService) {}
 
   @Post()
-  createAd(@Body() body: CreateLenderAdBody): Promise<LenderAdResponse> {
-    return this.lenderAdsService.createAd(this.toCreateInput(body));
+  createAd(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: CreateLenderAdBody,
+  ): Promise<LenderAdResponse> {
+    return this.lenderAdsService.createAd(this.toCreateInput(req.user.sub, body));
   }
 
   @Get()
   getAdsForLender(
-    @Query('lenderId') lenderId: string | undefined,
+    @Req() req: AuthenticatedRequest,
     @Query('pageSize') pageSize?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ): Promise<LenderAdsListResponse> {
-    if (!lenderId?.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     return this.lenderAdsService.getAdsForLender(
-      lenderId.trim(),
+      req.user.sub,
       this.toOptionalNumber(pageSize) ?? this.toOptionalNumber(limit) ?? 6,
       cursor?.trim() || null,
     );
   }
 
-  private toCreateInput(body: CreateLenderAdBody): CreateLenderAdInput {
+  private toCreateInput(
+    lenderId: string,
+    body: CreateLenderAdBody,
+  ): CreateLenderAdInput {
     return {
-      lenderId: typeof body.lenderId === 'string' ? body.lenderId : '',
-      lenderName: typeof body.lenderName === 'string' ? body.lenderName : null,
+      lenderId,
+      lenderName: null,
       headline: typeof body.headline === 'string' ? body.headline : '',
       minAmount: this.toNumber(body.minAmount, 'minAmount'),
       maxAmount: this.toNumber(body.maxAmount, 'maxAmount'),

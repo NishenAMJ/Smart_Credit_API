@@ -219,13 +219,8 @@ export default function NotificationsPage({
 
   async function loadNotifications() {
     const [summaryResponse, listResponse] = await Promise.all([
-      fetchLenderNotificationSummary(session.lenderId),
-      fetchLenderNotifications(
-        session.lenderId,
-        selectedCategory,
-        selectedState,
-        80,
-      ),
+      fetchLenderNotificationSummary(),
+      fetchLenderNotifications(selectedCategory, selectedState, 80),
     ]);
 
     setSummary(summaryResponse);
@@ -240,13 +235,8 @@ export default function NotificationsPage({
         setIsLoading(true);
         setError(null);
         const [summaryResponse, listResponse] = await Promise.all([
-          fetchLenderNotificationSummary(session.lenderId),
-          fetchLenderNotifications(
-            session.lenderId,
-            selectedCategory,
-            selectedState,
-            80,
-          ),
+          fetchLenderNotificationSummary(),
+          fetchLenderNotifications(selectedCategory, selectedState, 80),
         ]);
 
         if (isMounted) {
@@ -278,10 +268,7 @@ export default function NotificationsPage({
   async function handleNotificationAction(notification: LenderNotification) {
     try {
       if (!notification.isRead) {
-        const updated = await markNotificationAsRead(
-          session.lenderId,
-          notification.id,
-        );
+        const updated = await markNotificationAsRead(notification.id);
         setNotifications((current) =>
           selectedState === "unread"
             ? current.filter((item) => item.id !== updated.id)
@@ -313,11 +300,7 @@ export default function NotificationsPage({
     try {
       setIsMarkingAll(true);
       setError(null);
-      await markAllNotificationsAsRead(
-        session.lenderId,
-        selectedCategory,
-        selectedState,
-      );
+      await markAllNotificationsAsRead(selectedCategory, selectedState);
       await loadNotifications();
     } catch (markError) {
       setError(

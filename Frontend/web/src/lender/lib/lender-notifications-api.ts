@@ -1,8 +1,8 @@
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    "",
-  ) ?? "http://localhost:3000/api";
+import {
+  fetchLenderApi,
+  fetchLenderApiWithQuery,
+  parseApiError,
+} from "./api-client";
 
 export type NotificationCategory =
   | "loan_request"
@@ -75,33 +75,12 @@ export type LenderNotificationsSummaryResponse = {
   countsByCategory: Record<NotificationCategory, number>;
 };
 
-async function parseError(
-  response: Response,
-  fallback: string,
-): Promise<never> {
-  try {
-    const body = (await response.json()) as { message?: string | string[] };
-    const message = Array.isArray(body.message)
-      ? body.message.join(", ")
-      : body.message;
-    throw new Error(message || fallback);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new Error(fallback);
-  }
-}
-
 export async function fetchLenderNotifications(
-  lenderId: string,
   category: string,
   state: NotificationStateFilter,
   limit = 80,
 ): Promise<LenderNotificationsListResponse> {
   const searchParams = new URLSearchParams({
-    lenderId,
     state,
     limit: String(limit),
   });
@@ -110,60 +89,51 @@ export async function fetchLenderNotifications(
     searchParams.set("category", category);
   }
 
-  const response = await fetch(
-    `${API_BASE_URL}/lender-notifications?${searchParams.toString()}`,
+  const response = await fetchLenderApiWithQuery(
+    "/lender-notifications",
+    searchParams,
   );
 
   if (!response.ok) {
-    return parseError(response, "Failed to load lender notifications.");
+    return parseApiError(response, "Failed to load lender notifications.");
   }
 
   return response.json();
 }
 
 export async function fetchLenderNotificationSummary(
-  lenderId: string,
 ): Promise<LenderNotificationsSummaryResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/lender-notifications/summary?lenderId=${encodeURIComponent(lenderId)}`,
-  );
+  const response = await fetchLenderApi("/lender-notifications/summary");
 
   if (!response.ok) {
-    return parseError(response, "Failed to load notification summary.");
+    return parseApiError(response, "Failed to load notification summary.");
   }
 
   return response.json();
 }
 
 export async function markNotificationAsRead(
-  lenderId: string,
   notificationId: string,
 ): Promise<LenderNotification> {
-  const response = await fetch(
-    `${API_BASE_URL}/lender-notifications/${encodeURIComponent(notificationId)}/read`,
+  const response = await fetchLenderApi(
+    `/lender-notifications/${encodeURIComponent(notificationId)}/read`,
     {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ lenderId }),
     },
   );
 
   if (!response.ok) {
-    return parseError(response, "Failed to mark notification as read.");
+    return parseApiError(response, "Failed to mark notification as read.");
   }
 
   return response.json();
 }
 
 export async function markAllNotificationsAsRead(
-  lenderId: string,
   category: string,
   state: NotificationStateFilter,
 ): Promise<void> {
   const searchParams = new URLSearchParams({
-    lenderId,
     state,
   });
 
@@ -171,14 +141,15 @@ export async function markAllNotificationsAsRead(
     searchParams.set("category", category);
   }
 
-  const response = await fetch(
-    `${API_BASE_URL}/lender-notifications/mark-all-read?${searchParams.toString()}`,
+  const response = await fetchLenderApiWithQuery(
+    "/lender-notifications/mark-all-read",
+    searchParams,
     {
       method: "PATCH",
     },
   );
 
   if (!response.ok) {
-    return parseError(response, "Failed to mark notifications as read.");
+    return parseApiError(response, "Failed to mark notifications as read.");
   }
 }

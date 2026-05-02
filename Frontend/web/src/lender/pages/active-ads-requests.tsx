@@ -92,7 +92,6 @@ export default function ActiveAdsRequestsPage({
         setSelectedAd(null)
         setRequestsResponse(null)
         const data = await fetchAnalyticsDrilldown(
-          session.lenderId,
           'active-ads',
           '90d',
           {
@@ -150,7 +149,7 @@ export default function ActiveAdsRequestsPage({
         setIsRequestsLoading(true)
         setRequestsError(null)
         setRequestsResponse(null)
-        const data = await fetchPendingRequests(session.lenderId, {
+        const data = await fetchPendingRequests({
           limit: REQUEST_LIMIT,
           adId: selectedAd.id,
           includeSummary: false,

@@ -145,7 +145,6 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
         setIsLoading(true);
         setError(null);
         const data = await fetchAnalyticsOverview(
-          session.lenderId,
           selectedRange,
         );
 
@@ -186,7 +185,6 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
         setIsDrilldownLoading(true);
         setDrilldownError(null);
         const data = await fetchAnalyticsDrilldown(
-          session.lenderId,
           drilldownType,
           selectedRange,
         );

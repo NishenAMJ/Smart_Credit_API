@@ -1,3 +1,9 @@
+import {
+  fetchLenderApi,
+  fetchLenderApiWithQuery,
+  parseApiError,
+} from "./api-client";
+
 export type DashboardSummary = {
   totalBorrowers: number;
   todaysCollection: number;
@@ -61,74 +67,42 @@ export type BorrowerLoan = {
   createdAt: string | null;
 };
 
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    "",
-  ) ?? "http://localhost:3000/api";
-
-async function parseError(
-  response: Response,
-  fallback: string,
-): Promise<never> {
-  try {
-    const body = (await response.json()) as { message?: string | string[] };
-    const message = Array.isArray(body.message)
-      ? body.message.join(", ")
-      : body.message;
-    throw new Error(message || fallback);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new Error(fallback);
-  }
-}
-
-export async function fetchDashboardSummary(
-  lenderId: string,
-): Promise<DashboardSummaryResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/dashboard/summary?lenderId=${encodeURIComponent(lenderId)}`,
-  );
+export async function fetchDashboardSummary(): Promise<DashboardSummaryResponse> {
+  const response = await fetchLenderApi("/dashboard/summary");
 
   if (!response.ok) {
-    return parseError(response, "Failed to load dashboard summary.");
+    return parseApiError(response, "Failed to load dashboard summary.");
   }
 
   return response.json();
 }
 
 export async function fetchDashboardBorrowers(
-  lenderId: string,
   limit = 24,
 ): Promise<DashboardBorrowersResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/dashboard/borrowers?lenderId=${encodeURIComponent(
-      lenderId,
-    )}&limit=${limit}`,
+  const response = await fetchLenderApiWithQuery(
+    "/dashboard/borrowers",
+    new URLSearchParams({
+      limit: String(limit),
+    }),
   );
 
   if (!response.ok) {
-    return parseError(response, "Failed to load dashboard borrowers.");
+    return parseApiError(response, "Failed to load dashboard borrowers.");
   }
 
   return response.json();
 }
 
 export async function fetchBorrowerDetails(
-  lenderId: string,
   borrowerId: string,
 ): Promise<BorrowerDetails> {
-  const response = await fetch(
-    `${API_BASE_URL}/dashboard/borrowers/${borrowerId}?lenderId=${encodeURIComponent(
-      lenderId,
-    )}`,
+  const response = await fetchLenderApi(
+    `/dashboard/borrowers/${encodeURIComponent(borrowerId)}`,
   );
 
   if (!response.ok) {
-    return parseError(response, "Failed to load borrower details.");
+    return parseApiError(response, "Failed to load borrower details.");
   }
 
   return response.json();

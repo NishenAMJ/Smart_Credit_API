@@ -86,6 +86,25 @@ export function getSessionFromSearchParams(): LenderSession | null {
   const displayName = params.get("displayName");
   const email = params.get("email");
   const accessToken = params.get("accessToken");
+  const hasLegacyHandoffParams =
+    params.has("lenderId") ||
+    params.has("displayName") ||
+    params.has("email") ||
+    params.has("accessToken");
+
+  if (hasLegacyHandoffParams) {
+    params.delete("lenderId");
+    params.delete("displayName");
+    params.delete("email");
+    params.delete("accessToken");
+
+    const nextSearch = params.toString();
+    const nextUrl = `${window.location.pathname}${
+      nextSearch ? `?${nextSearch}` : ""
+    }${window.location.hash}`;
+
+    window.history.replaceState({}, document.title, nextUrl);
+  }
 
   if (!lenderId || !displayName || !accessToken) {
     return null;

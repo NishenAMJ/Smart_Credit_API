@@ -78,7 +78,7 @@ export default function LenderProfileModal({
         setIsLoading(true)
         setError(null)
         setSuccessMessage(null)
-        const loadedProfile = await fetchLenderProfile(session.lenderId)
+        const loadedProfile = await fetchLenderProfile()
 
         if (isMounted) {
           setProfile(loadedProfile)
@@ -158,7 +158,7 @@ export default function LenderProfileModal({
     try {
       setIsSaving(true)
       setError(null)
-      const updatedProfile = await updateLenderProfile(session.lenderId, {
+      const updatedProfile = await updateLenderProfile({
         fullName: formState.fullName,
         email: formState.email,
         phone: formState.phone,

@@ -1,8 +1,4 @@
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    "",
-  ) ?? "http://localhost:3000/api";
+import { fetchLenderApi, parseApiError } from "./api-client";
 
 export type DefaultLandingPage = "dashboard" | "analytics";
 export type DefaultAnalyticsRange = "30d" | "90d" | "365d";
@@ -53,45 +49,21 @@ export type UpdateLenderSettingsPayload = {
   workspace: LenderSettingsWorkspace;
 };
 
-async function parseError(
-  response: Response,
-  fallback: string,
-): Promise<never> {
-  try {
-    const body = (await response.json()) as { message?: string | string[] };
-    const message = Array.isArray(body.message)
-      ? body.message.join(", ")
-      : body.message;
-    throw new Error(message || fallback);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new Error(fallback);
-  }
-}
-
-export async function fetchLenderSettings(
-  lenderId: string,
-): Promise<LenderSettings> {
-  const response = await fetch(
-    `${API_BASE_URL}/lender-settings/${encodeURIComponent(lenderId)}`,
-  );
+export async function fetchLenderSettings(): Promise<LenderSettings> {
+  const response = await fetchLenderApi("/lender-settings/me");
 
   if (!response.ok) {
-    return parseError(response, "Failed to load lender settings.");
+    return parseApiError(response, "Failed to load lender settings.");
   }
 
   return response.json();
 }
 
 export async function updateLenderSettings(
-  lenderId: string,
   payload: UpdateLenderSettingsPayload,
 ): Promise<LenderSettings> {
-  const response = await fetch(
-    `${API_BASE_URL}/lender-settings/${encodeURIComponent(lenderId)}`,
+  const response = await fetchLenderApi(
+    "/lender-settings/me",
     {
       method: "PATCH",
       headers: {
@@ -102,7 +74,7 @@ export async function updateLenderSettings(
   );
 
   if (!response.ok) {
-    return parseError(response, "Failed to update lender settings.");
+    return parseApiError(response, "Failed to update lender settings.");
   }
 
   return response.json();

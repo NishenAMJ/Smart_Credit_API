@@ -36,9 +36,13 @@ export class LenderAdsService {
     const title = input.headline.trim();
     const preferredPurposes = this.buildPreferredPurposes(input);
     const lenderName =
-      typeof lenderData?.businessName === 'string' && lenderData.businessName.trim().length > 0
+      typeof lenderData?.businessName === 'string' &&
+      lenderData.businessName.trim().length > 0
         ? lenderData.businessName
-        : input.lenderName;
+        : typeof lenderData?.fullName === 'string' &&
+            lenderData.fullName.trim().length > 0
+          ? lenderData.fullName
+          : null;
     const location =
       typeof lenderData?.city === 'string' && lenderData.city.trim().length > 0
         ? lenderData.city

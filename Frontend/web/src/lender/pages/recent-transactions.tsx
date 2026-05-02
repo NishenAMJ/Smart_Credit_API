@@ -118,7 +118,7 @@ export default function RecentTransactionsPage({
     setError(null);
 
     try {
-      const data = await fetchRecentTransactions(session.lenderId, {
+      const data = await fetchRecentTransactions({
         pageSize: PAGE_SIZE,
         cursor: options?.cursor ?? activeCursor,
         includeSummary: false,
@@ -165,7 +165,7 @@ export default function RecentTransactionsPage({
         setIsLoading(true);
         setError(null);
 
-        const data = await fetchRecentTransactions(session.lenderId, {
+        const data = await fetchRecentTransactions({
           pageSize: PAGE_SIZE,
           cursor: activeCursor,
           includeSummary: false,
@@ -210,11 +210,8 @@ export default function RecentTransactionsPage({
         setDetailError(null);
 
         const [borrowerData, loanData] = await Promise.all([
-          fetchBorrowerDetails(
-            session.lenderId,
-            selectedTransaction.borrowerId,
-          ),
-          fetchLoanLedgerDetails(session.lenderId, selectedTransaction.loanId),
+          fetchBorrowerDetails(selectedTransaction.borrowerId),
+          fetchLoanLedgerDetails(selectedTransaction.loanId),
         ]);
 
         if (isMounted) {
@@ -313,7 +310,6 @@ export default function RecentTransactionsPage({
       }));
 
       const updatedLoanDetails = await recordInstallmentPayment(
-        session.lenderId,
         selectedTransaction.loanId,
         installmentId,
         {

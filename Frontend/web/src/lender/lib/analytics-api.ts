@@ -1,3 +1,5 @@
+import { fetchLenderApiWithQuery } from "./api-client";
+
 export type AnalyticsRange = {
   key: string;
   label: string;
@@ -78,20 +80,14 @@ export type AnalyticsDrilldownResponse = {
   };
 };
 
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    "",
-  ) ?? "http://localhost:3000/api";
-
 export async function fetchAnalyticsOverview(
-  lenderId: string,
   range: string,
 ): Promise<AnalyticsOverviewResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/analytics/overview?lenderId=${encodeURIComponent(
-      lenderId,
-    )}&range=${encodeURIComponent(range)}`,
+  const response = await fetchLenderApiWithQuery(
+    "/analytics/overview",
+    new URLSearchParams({
+      range,
+    }),
   );
 
   if (!response.ok) {
@@ -102,7 +98,6 @@ export async function fetchAnalyticsOverview(
 }
 
 export async function fetchAnalyticsDrilldown(
-  lenderId: string,
   type: string,
   range: string,
   options?: {
@@ -111,7 +106,6 @@ export async function fetchAnalyticsDrilldown(
   },
 ): Promise<AnalyticsDrilldownResponse> {
   const searchParams = new URLSearchParams({
-    lenderId,
     type,
     range,
   });
@@ -124,8 +118,9 @@ export async function fetchAnalyticsDrilldown(
     searchParams.set("cursor", options.cursor);
   }
 
-  const response = await fetch(
-    `${API_BASE_URL}/analytics/drilldown?${searchParams.toString()}`,
+  const response = await fetchLenderApiWithQuery(
+    "/analytics/drilldown",
+    searchParams,
   );
 
   if (!response.ok) {

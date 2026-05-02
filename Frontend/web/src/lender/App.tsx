@@ -26,18 +26,18 @@ function App() {
   const navigate = useNavigate()
   const [session, setSession] = useState<LenderSession | null>(() => {
     const storedSession = getStoredSession()
+    const handoffSession = getSessionFromSearchParams()
+
+    if (handoffSession) {
+      updateStoredSession(handoffSession)
+      return handoffSession
+    }
 
     if (storedSession) {
       return storedSession
     }
 
-    const handoffSession = getSessionFromSearchParams()
-
-    if (handoffSession) {
-      updateStoredSession(handoffSession)
-    }
-
-    return handoffSession
+    return null
   })
   const [isProfileOpen, setIsProfileOpen] = useState(false)
 

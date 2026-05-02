@@ -1,8 +1,8 @@
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    "",
-  ) ?? "http://localhost:3000/api";
+import {
+  fetchLenderApi,
+  fetchLenderApiWithQuery,
+  parseApiError,
+} from "./api-client";
 
 export type LenderAd = {
   id: string;
@@ -44,8 +44,6 @@ export type LenderAdsListResponse = {
 };
 
 export type CreateLenderAdPayload = {
-  lenderId: string;
-  lenderName: string;
   headline: string;
   minAmount: number;
   maxAmount: number;
@@ -58,30 +56,10 @@ export type CreateLenderAdPayload = {
   supportNote: string;
 };
 
-async function extractError(
-  response: Response,
-  fallback: string,
-): Promise<never> {
-  try {
-    const body = (await response.json()) as { message?: string | string[] };
-    const message = Array.isArray(body.message)
-      ? body.message.join(", ")
-      : body.message;
-
-    throw new Error(message || fallback);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new Error(fallback);
-  }
-}
-
 export async function createLenderAd(
   payload: CreateLenderAdPayload,
 ): Promise<LenderAd> {
-  const response = await fetch(`${API_BASE_URL}/lender-ads`, {
+  const response = await fetchLenderApi("/lender-ads", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -90,22 +68,22 @@ export async function createLenderAd(
   });
 
   if (!response.ok) {
-    return extractError(response, "Failed to publish lender ad.");
+    return parseApiError(response, "Failed to publish lender ad.");
   }
 
   return response.json();
 }
 
-export async function fetchLenderAds(
-  lenderId: string,
-  limit = 4,
-): Promise<LenderAd[]> {
-  const response = await fetch(
-    `${API_BASE_URL}/lender-ads?lenderId=${encodeURIComponent(lenderId)}&limit=${limit}`,
+export async function fetchLenderAds(limit = 4): Promise<LenderAd[]> {
+  const response = await fetchLenderApiWithQuery(
+    "/lender-ads",
+    new URLSearchParams({
+      limit: String(limit),
+    }),
   );
 
   if (!response.ok) {
-    return extractError(response, "Failed to load lender ads.");
+    return parseApiError(response, "Failed to load lender ads.");
   }
 
   const body = (await response.json()) as LenderAdsListResponse;

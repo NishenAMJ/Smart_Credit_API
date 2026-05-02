@@ -164,8 +164,8 @@ export default function DashboardPage({
         setIsLoading(true);
         setError(null);
         const [summaryData, borrowersData] = await Promise.all([
-          fetchDashboardSummary(session.lenderId),
-          fetchDashboardBorrowers(session.lenderId, BORROWER_FETCH_LIMIT),
+          fetchDashboardSummary(),
+          fetchDashboardBorrowers(BORROWER_FETCH_LIMIT),
         ]);
 
         if (isMounted) {
@@ -210,7 +210,6 @@ export default function DashboardPage({
         setIsBorrowerLoading(true);
         setBorrowerError(null);
         const details = await fetchBorrowerDetails(
-          session.lenderId,
           selectedBorrowerId,
         );
 

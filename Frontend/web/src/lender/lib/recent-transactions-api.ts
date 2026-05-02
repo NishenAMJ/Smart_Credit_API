@@ -1,8 +1,8 @@
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    "",
-  ) ?? "http://localhost:3000/api";
+import {
+  fetchLenderApi,
+  fetchLenderApiWithQuery,
+  parseApiError,
+} from "./api-client";
 
 export type RecentTransactionsSummary = {
   totalTransactions: number;
@@ -96,31 +96,10 @@ export type FetchRecentTransactionsOptions = {
   search?: string | null;
 };
 
-async function parseError(
-  response: Response,
-  fallback: string,
-): Promise<never> {
-  try {
-    const body = (await response.json()) as { message?: string | string[] };
-    const message = Array.isArray(body.message)
-      ? body.message.join(", ")
-      : body.message;
-    throw new Error(message || fallback);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new Error(fallback);
-  }
-}
-
 export async function fetchRecentTransactions(
-  lenderId: string,
   options: FetchRecentTransactionsOptions = {},
 ): Promise<RecentTransactionsResponse> {
   const params = new URLSearchParams({
-    lenderId,
     pageSize: String(options.pageSize ?? 15),
   });
 
@@ -136,46 +115,38 @@ export async function fetchRecentTransactions(
     params.set("search", options.search.trim());
   }
 
-  const response = await fetch(
-    `${API_BASE_URL}/recent-transactions?${params.toString()}`,
-  );
+  const response = await fetchLenderApiWithQuery("/recent-transactions", params);
 
   if (!response.ok) {
-    return parseError(response, "Failed to load recent transactions.");
+    return parseApiError(response, "Failed to load recent transactions.");
   }
 
   return response.json();
 }
 
 export async function fetchLoanLedgerDetails(
-  lenderId: string,
   loanId: string,
 ): Promise<LoanLedgerDetailsResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/recent-transactions/loans/${encodeURIComponent(
-      loanId,
-    )}?lenderId=${encodeURIComponent(lenderId)}`,
+  const response = await fetchLenderApi(
+    `/recent-transactions/loans/${encodeURIComponent(loanId)}`,
   );
 
   if (!response.ok) {
-    return parseError(response, "Failed to load loan ledger details.");
+    return parseApiError(response, "Failed to load loan ledger details.");
   }
 
   return response.json();
 }
 
 export async function recordInstallmentPayment(
-  lenderId: string,
   loanId: string,
   installmentId: string,
   input: RecordInstallmentPaymentInput,
 ): Promise<LoanLedgerDetailsResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/recent-transactions/loans/${encodeURIComponent(
+  const response = await fetchLenderApi(
+    `/recent-transactions/loans/${encodeURIComponent(
       loanId,
-    )}/installments/${encodeURIComponent(installmentId)}/payments?lenderId=${encodeURIComponent(
-      lenderId,
-    )}`,
+    )}/installments/${encodeURIComponent(installmentId)}/payments`,
     {
       method: "POST",
       headers: {
@@ -186,7 +157,7 @@ export async function recordInstallmentPayment(
   );
 
   if (!response.ok) {
-    return parseError(response, "Failed to record installment payment.");
+    return parseApiError(response, "Failed to record installment payment.");
   }
 
   return response.json();

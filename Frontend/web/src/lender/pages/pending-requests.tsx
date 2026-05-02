@@ -89,7 +89,7 @@ export default function PendingRequestsPage({
       try {
         setIsLoading(true);
         setError(null);
-        const data = await fetchPendingRequests(session.lenderId, API_LIMIT);
+        const data = await fetchPendingRequests(API_LIMIT);
 
         if (isMounted) {
           setResponse(data);

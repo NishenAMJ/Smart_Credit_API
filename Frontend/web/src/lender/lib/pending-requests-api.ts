@@ -1,8 +1,4 @@
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    "",
-  ) ?? "http://localhost:3000/api";
+import { fetchLenderApiWithQuery } from "./api-client";
 
 export type PendingRequestsSummary = {
   totalPendingRequests: number;
@@ -62,14 +58,12 @@ export type FetchPendingRequestsOptions = {
 };
 
 export async function fetchPendingRequests(
-  lenderId: string,
   options: number | FetchPendingRequestsOptions = 30,
 ): Promise<PendingRequestsResponse> {
   const normalizedOptions: FetchPendingRequestsOptions =
     typeof options === "number" ? { limit: options } : options;
 
   const searchParams = new URLSearchParams({
-    lenderId,
     limit: String(normalizedOptions.limit ?? 30),
   });
 
@@ -89,8 +83,9 @@ export async function fetchPendingRequests(
     searchParams.set("cursor", normalizedOptions.cursor);
   }
 
-  const response = await fetch(
-    `${API_BASE_URL}/loan-requests/pending?${searchParams.toString()}`,
+  const response = await fetchLenderApiWithQuery(
+    "/loan-requests/pending",
+    searchParams,
   );
 
   if (!response.ok) {

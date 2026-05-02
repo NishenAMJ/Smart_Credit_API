@@ -1,13 +1,19 @@
 import {
-  Body,
   BadRequestException,
+  Body,
   Controller,
   Get,
   NotFoundException,
   Param,
   Post,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import { RecentTransactionsResponse } from './recent-transactions.types';
 import type {
   LoanLedgerDetailsResponse,
@@ -16,6 +22,8 @@ import type {
 import { RecentTransactionsService } from './recent-transactions.service';
 
 @Controller('recent-transactions')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
 export class RecentTransactionsController {
   constructor(
     private readonly recentTransactionsService: RecentTransactionsService,
@@ -23,7 +31,7 @@ export class RecentTransactionsController {
 
   @Get()
   getRecentTransactions(
-    @Query('lenderId') lenderId: string,
+    @Req() req: AuthenticatedRequest,
     @Query('pageSize') pageSize?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
@@ -31,14 +39,8 @@ export class RecentTransactionsController {
     @Query('includeSearchCount') includeSearchCount?: string,
     @Query('search') search?: string,
   ): Promise<RecentTransactionsResponse> {
-    const normalizedLenderId = lenderId?.trim();
-
-    if (!normalizedLenderId) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     return this.recentTransactionsService.getRecentTransactions(
-      normalizedLenderId,
+      req.user.sub,
       this.toNumber(pageSize) ?? this.toNumber(limit) ?? 30,
       cursor?.trim() || null,
       includeSummary !== 'false',
@@ -49,17 +51,11 @@ export class RecentTransactionsController {
 
   @Get('loans/:loanId')
   async getLoanLedgerDetails(
+    @Req() req: AuthenticatedRequest,
     @Param('loanId') loanId: string,
-    @Query('lenderId') lenderId: string,
   ): Promise<LoanLedgerDetailsResponse> {
-    const normalizedLenderId = lenderId?.trim();
-
-    if (!normalizedLenderId) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     const details = await this.recentTransactionsService.getLoanLedgerDetails(
-      normalizedLenderId,
+      req.user.sub,
       loanId,
     );
 
@@ -74,17 +70,11 @@ export class RecentTransactionsController {
 
   @Post('loans/:loanId/installments/:installmentId/payments')
   async recordInstallmentPayment(
+    @Req() req: AuthenticatedRequest,
     @Param('loanId') loanId: string,
     @Param('installmentId') installmentId: string,
-    @Query('lenderId') lenderId: string,
     @Body() body: RecordInstallmentPaymentInput,
   ): Promise<LoanLedgerDetailsResponse> {
-    const normalizedLenderId = lenderId?.trim();
-
-    if (!normalizedLenderId) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     if (
       !body ||
       typeof body.amount !== 'number' ||
@@ -95,7 +85,7 @@ export class RecentTransactionsController {
 
     const details =
       await this.recentTransactionsService.recordInstallmentPayment(
-        normalizedLenderId,
+        req.user.sub,
         loanId,
         installmentId,
         body,

@@ -153,7 +153,7 @@ export default function SettingsPage({
         setIsLoading(true);
         setError(null);
         setSuccessMessage(null);
-        const loadedSettings = await fetchLenderSettings(session.lenderId);
+        const loadedSettings = await fetchLenderSettings();
 
         if (isMounted) {
           setSettings(loadedSettings);
@@ -249,7 +249,7 @@ export default function SettingsPage({
     try {
       setIsSaving(true);
       setError(null);
-      const updatedSettings = await updateLenderSettings(session.lenderId, {
+      const updatedSettings = await updateLenderSettings({
         notifications: formState.notifications,
         lendingDefaults: {
           defaultInterestRate: Number(

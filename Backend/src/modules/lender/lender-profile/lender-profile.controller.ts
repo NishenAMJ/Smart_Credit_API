@@ -1,4 +1,8 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import { LenderProfileService } from './lender-profile.service';
 import {
   LenderProfileResponse,
@@ -18,29 +22,23 @@ type UpdateLenderProfileBody = {
 };
 
 @Controller('lender-profile')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
 export class LenderProfileController {
   constructor(private readonly lenderProfileService: LenderProfileService) {}
 
-  @Get(':lenderId')
-  getProfile(@Param('lenderId') lenderId: string): Promise<LenderProfileResponse> {
-    if (!lenderId.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
-    return this.lenderProfileService.getProfile(lenderId.trim());
+  @Get('me')
+  getProfile(@Req() req: AuthenticatedRequest): Promise<LenderProfileResponse> {
+    return this.lenderProfileService.getProfile(req.user.sub);
   }
 
-  @Patch(':lenderId')
+  @Patch('me')
   updateProfile(
-    @Param('lenderId') lenderId: string,
+    @Req() req: AuthenticatedRequest,
     @Body() body: UpdateLenderProfileBody,
   ): Promise<LenderProfileResponse> {
-    if (!lenderId.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     return this.lenderProfileService.updateProfile(
-      lenderId.trim(),
+      req.user.sub,
       this.toUpdateInput(body),
     );
   }

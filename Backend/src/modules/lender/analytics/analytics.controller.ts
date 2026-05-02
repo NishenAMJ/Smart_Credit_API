@@ -1,4 +1,16 @@
-import { BadRequestException, Controller, DefaultValuePipe, Get, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  DefaultValuePipe,
+  Get,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import {
   AnalyticsDrilldownResponse,
   AnalyticsOverviewResponse,
@@ -7,52 +19,42 @@ import {
 import { AnalyticsService } from './analytics.service';
 
 @Controller('analytics')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('summary')
   getSummary(
-    @Query('lenderId') lenderId?: string,
+    @Req() req: AuthenticatedRequest,
     @Query('range', new DefaultValuePipe('90d')) range?: string,
   ): Promise<AnalyticsSummaryResponse> {
-    if (!lenderId || lenderId.trim().length === 0) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
-    return this.analyticsService.getSummary(lenderId, range);
+    return this.analyticsService.getSummary(req.user.sub, range);
   }
 
   @Get('overview')
   getOverview(
-    @Query('lenderId') lenderId?: string,
+    @Req() req: AuthenticatedRequest,
     @Query('range', new DefaultValuePipe('90d')) range?: string,
   ): Promise<AnalyticsOverviewResponse> {
-    if (!lenderId || lenderId.trim().length === 0) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
-    return this.analyticsService.getOverview(lenderId, range);
+    return this.analyticsService.getOverview(req.user.sub, range);
   }
 
   @Get('drilldown')
   getDrilldown(
-    @Query('lenderId') lenderId?: string,
+    @Req() req: AuthenticatedRequest,
     @Query('type') type?: string,
     @Query('range', new DefaultValuePipe('90d')) range?: string,
     @Query('pageSize') pageSize?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ): Promise<AnalyticsDrilldownResponse> {
-    if (!lenderId || lenderId.trim().length === 0) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     if (!type || type.trim().length === 0) {
       throw new BadRequestException('type is required.');
     }
 
     return this.analyticsService.getDrilldown(
-      lenderId,
+      req.user.sub,
       type,
       range,
       this.toNumber(pageSize) ?? this.toNumber(limit) ?? 30,
