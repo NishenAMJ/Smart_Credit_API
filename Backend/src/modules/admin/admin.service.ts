@@ -8,6 +8,7 @@ import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
 import { User, UserRole, UserStatus } from './interfaces/user.interface';
 import { QueryUsersDto } from './dto/query-users.dto';
+import { UserDocument, AccountStatus } from '../auth/auth.types';
 
 @Injectable()
 export class AdminService {
@@ -20,64 +21,46 @@ export class AdminService {
     return this.firebaseService.db;
   }
 
-  private getPrimaryRole(role?: User['role']): UserRole {
+  private getPrimaryRole(role: unknown): UserRole | null {
     if (Array.isArray(role)) {
-      return role[0] ?? 'borrower';
+      const firstRole = role[0];
+      return typeof firstRole === 'string'
+        ? (firstRole as UserRole)
+        : null;
     }
-
-    return role ?? 'borrower';
+    return typeof role === 'string' ? (role as UserRole) : null;
   }
 
-  private getDerivedStatus(data: FirebaseFirestore.DocumentData): UserStatus {
-    if (data.status) {
-      return data.status as UserStatus;
+  private getDerivedStatus(user: any): UserStatus {
+    if (user.accountStatus === 'suspended' || user.status === 'suspended') {
+      return 'suspended';
     }
-
-    if (data.kycStatus === 'pending') {
+    if (user.kycStatus === 'pending') {
       return 'pending';
     }
-
     return 'active';
   }
 
-  private splitName(fullName?: string) {
-    if (!fullName) {
-      return { firstName: undefined, lastName: undefined };
-    }
+  private sanitizeUser(id: string, data: any): User {
+    const {
+      passwordHash,
+      emailLower,
+      phoneNormalized,
+      ...sanitizedData
+    } = data;
 
-    const [firstName, ...rest] = fullName.split(' ');
-    return {
-      firstName,
-      lastName: rest.join(' ') || undefined,
-    };
-  }
+    const storedUid = sanitizedData.uid || id;
+    const storedFullName = sanitizedData.fullName || 'Unnamed User';
+    const storedFirstName = sanitizedData.firstName;
+    const storedLastName = sanitizedData.lastName;
 
-  // Removes sensitive fields before user records are returned to the client.
-  private sanitizeUser(id: string, data: FirebaseFirestore.DocumentData): User {
-    const sanitizedData = { ...data } as Partial<User> &
-      Record<string, unknown>;
-    delete sanitizedData.passwordHash;
-
-    const storedFullName =
-      typeof sanitizedData.fullName === 'string'
-        ? sanitizedData.fullName
-        : undefined;
-    const storedFirstName =
-      typeof sanitizedData.firstName === 'string'
-        ? sanitizedData.firstName
-        : undefined;
-    const storedLastName =
-      typeof sanitizedData.lastName === 'string'
-        ? sanitizedData.lastName
-        : undefined;
-    const storedUid =
-      typeof sanitizedData.uid === 'string' ? sanitizedData.uid : id;
-    const { firstName, lastName } = this.splitName(storedFullName);
+    const [firstName, ...rest] = storedFullName.split(' ');
+    const lastName = rest.join(' ');
 
     return {
       id,
       uid: storedUid,
-      role: this.getPrimaryRole(sanitizedData.role),
+      role: this.getPrimaryRole(sanitizedData.role) || 'borrower',
       status: this.getDerivedStatus(sanitizedData),
       fullName: storedFullName,
       firstName: storedFirstName ?? firstName,
@@ -86,12 +69,10 @@ export class AdminService {
     } as User;
   }
 
-  // Returns a Firestore document reference for a user id.
   private getUserDocument(userId: string) {
     return this.db.collection('users').doc(userId);
   }
 
-  // Checks whether a user matches the requested admin-side filters.
   private matchesUserFilters(user: User, query: QueryUsersDto): boolean {
     const normalizedSearch = query.search?.trim().toLowerCase();
     const primaryRole = this.getPrimaryRole(user.role);
@@ -122,7 +103,7 @@ export class AdminService {
     return searchableValues.some((value) => value.includes(normalizedSearch));
   }
 
-  private parseLimit(limit?: string) {
+  private parseLimit(limit?: string | number) {
     const parsed = Number(limit ?? AdminService.DEFAULT_PAGE_SIZE);
     if (!Number.isFinite(parsed)) {
       return AdminService.DEFAULT_PAGE_SIZE;
@@ -134,16 +115,15 @@ export class AdminService {
     );
   }
 
-  // Returns all users after removing sensitive fields and applying optional filters.
-  async getAllUsers(query: QueryUsersDto = {}, limit?: string, cursor?: string) {
+  async getUsers(params: QueryUsersDto) {
     try {
-      const pageSize = this.parseLimit(limit);
+      const pageSize = this.parseLimit(params.limit);
       let usersQuery: FirebaseFirestore.Query = this.db
         .collection('users')
         .orderBy('createdAt', 'desc');
 
-      if (cursor) {
-        const cursorDoc = await this.getUserDocument(cursor).get();
+      if (params.cursor) {
+        const cursorDoc = await this.getUserDocument(params.cursor).get();
         if (cursorDoc.exists) {
           usersQuery = usersQuery.startAfter(cursorDoc);
         }
@@ -179,7 +159,7 @@ export class AdminService {
           }
 
           const user = this.sanitizeUser(doc.id, doc.data());
-          if (this.matchesUserFilters(user, query)) {
+          if (this.matchesUserFilters(user, params)) {
             users.push(user);
             nextCursor = doc.id;
           }
@@ -203,7 +183,6 @@ export class AdminService {
     }
   }
 
-  // Returns a single sanitized user record for the requested id.
   async getUserById(userId: string) {
     try {
       const userDoc = await this.getUserDocument(userId).get();
@@ -223,7 +202,6 @@ export class AdminService {
     }
   }
 
-  // Aggregates user counts by status and role for admin reporting.
   async getUserStats() {
     try {
       const usersSnapshot = await this.db.collection('users').get();
@@ -239,7 +217,7 @@ export class AdminService {
       };
 
       usersSnapshot.forEach((doc) => {
-        const user = doc.data() as Omit<User, 'id'>;
+        const user = doc.data() as any;
         const primaryRole = this.getPrimaryRole(user.role);
         const status = this.getDerivedStatus(user);
 
@@ -262,7 +240,6 @@ export class AdminService {
     }
   }
 
-  // Suspends the selected user and persists the audit-related metadata.
   async suspendUser(userId: string, reason?: string) {
     try {
       const userRef = this.getUserDocument(userId);
@@ -273,7 +250,7 @@ export class AdminService {
       }
 
       await userRef.update({
-        status: 'suspended',
+        accountStatus: 'suspended',
         suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
         suspensionReason: reason || 'No reason provided',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -291,7 +268,6 @@ export class AdminService {
     }
   }
 
-  // Restores a suspended user to the active state and clears suspension metadata.
   async activateUser(userId: string) {
     try {
       const userRef = this.getUserDocument(userId);
@@ -302,7 +278,7 @@ export class AdminService {
       }
 
       await userRef.update({
-        status: 'active',
+        accountStatus: 'active',
         activatedAt: admin.firestore.FieldValue.serverTimestamp(),
         suspendedAt: admin.firestore.FieldValue.delete(),
         suspensionReason: admin.firestore.FieldValue.delete(),
@@ -321,7 +297,6 @@ export class AdminService {
     }
   }
 
-  // Deletes a user document after confirming that it exists.
   async deleteUser(userId: string) {
     try {
       const userRef = this.getUserDocument(userId);
@@ -342,6 +317,78 @@ export class AdminService {
       if (error instanceof NotFoundException) throw error;
       console.error('Error deleting user:', error);
       throw new InternalServerErrorException('Failed to delete user');
+    }
+  }
+
+  // Preserve existing KYC and Transaction methods
+  async getPendingKyc(params: { limit?: number; cursor?: string }) {
+    const { limit = 10, cursor } = params;
+    let query = this.db
+      .collection('kyc_submissions')
+      .where('status', '==', 'pending')
+      .limit(limit);
+
+    if (cursor) {
+      const cursorDoc = await this.db.collection('kyc_submissions').doc(cursor).get();
+      if (cursorDoc.exists) {
+        query = query.startAfter(cursorDoc);
+      }
+    }
+
+    const snapshot = await query.get();
+    const documents = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    return {
+      success: true,
+      count: documents.length,
+      documents,
+      hasMore: snapshot.docs.length === limit,
+      nextCursor: snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null,
+    };
+  }
+
+  async updateKycStatus(
+    submissionId: string,
+    updateDto: { status: string; reviewNotes?: string },
+    reviewedBy: string,
+  ) {
+    try {
+      const submissionRef = this.db.collection('kyc_submissions').doc(submissionId);
+      const submissionDoc = await submissionRef.get();
+
+      if (!submissionDoc.exists) {
+        throw new NotFoundException('KYC submission not found');
+      }
+
+      const submission = submissionDoc.data() as any;
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      await submissionRef.update({
+        status: updateDto.status,
+        reviewNotes: updateDto.reviewNotes,
+        reviewedAt: now,
+        reviewedBy,
+      });
+
+      // Also update the user document's kycStatus to keep them in sync
+      if (submission.userId) {
+        await this.db.collection('users').doc(submission.userId).update({
+          kycStatus: updateDto.status,
+          updatedAt: now,
+        });
+      }
+
+      return {
+        success: true,
+        message: `KYC submission ${updateDto.status} successfully`,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      console.error('Error updating KYC status:', error);
+      throw new InternalServerErrorException('Failed to update KYC status');
     }
   }
 }

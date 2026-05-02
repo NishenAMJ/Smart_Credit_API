@@ -1,36 +1,35 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Reflector } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
-import type { StringValue } from 'ms';
+import { PassportModule } from '@nestjs/passport';
+
 import { FirebaseModule } from '../../firebase/firebase.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { RolesGuard } from './guards/roles.guard';
+import { JwtStrategy } from './jwt.strategy';
 
 @Module({
   imports: [
     ConfigModule,
     FirebaseModule,
+    PassportModule.register({
+      defaultStrategy: 'jwt',
+    }),
     JwtModule.registerAsync({
+      imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const jwtSecret = configService.get<string>('JWT_SECRET');
-
-        if (!jwtSecret) {
-          throw new Error('JWT_SECRET is not configured');
-        }
-
-        return {
-          secret: jwtSecret,
-          signOptions: {
-            expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ??
-              '1d') as StringValue,
-          },
-        };
-      },
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET') ?? 'development-secret',
+        signOptions: {
+          expiresIn: '1d',
+        },
+      }),
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, JwtStrategy, RolesGuard, Reflector],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

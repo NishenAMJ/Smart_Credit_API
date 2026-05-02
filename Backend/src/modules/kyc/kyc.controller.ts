@@ -1,49 +1,92 @@
 import {
+  Body,
   Controller,
   Get,
-  Post,
   Param,
-  Body,
-  Query,
-  HttpCode,
-  HttpStatus,
+  Patch,
+  Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
 import { KycService } from './kyc.service';
-import { ApproveKycDto } from './dto/approve-kyc.dto';
-import { RejectKycDto } from './dto/reject-kyc.dto';
-import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
+import { SubmitKycDto, UpdateKycStatusDto } from './dto/kyc.dto';
 
-@Controller('admin/kyc')
-@UseGuards(AdminJwtGuard)
+@Controller('kyc')
 export class KycController {
   constructor(private readonly kycService: KycService) {}
 
+  @Post('submit')
+  @UseGuards(JwtAuthGuard)
+  async submitKyc(
+    @Req() req: AuthenticatedRequest,
+    @Body() submitKycDto: SubmitKycDto,
+  ) {
+    const result = await this.kycService.submitKyc(req.user.sub, submitKycDto);
+    return {
+      message: 'KYC submission received successfully. Status will be updated after review.',
+      submission: result,
+    };
+  }
+
+  @Get('my-submission')
+  @UseGuards(JwtAuthGuard)
+  async getMyKycSubmission(@Req() req: AuthenticatedRequest) {
+    const submission = await this.kycService.getUserKycSubmission(req.user.sub);
+    return {
+      submission,
+    };
+  }
+
+  @Get('submissions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async getAllSubmissions() {
+    const submissions = await this.kycService.getAllKycSubmissions();
+    return {
+      submissions,
+    };
+  }
+
   @Get('pending')
-  async getPendingKyc(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
-    return this.kycService.getPendingKyc(limit, cursor);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async getPendingSubmissions() {
+    const submissions = await this.kycService.getKycSubmissionsByStatus('pending' as any);
+    return {
+      submissions,
+    };
   }
 
-  @Get(':userId/documents')
-  async getUserDocuments(@Param('userId') userId: string) {
-    return this.kycService.getUserDocuments(userId);
+  @Get('submissions/:status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async getSubmissionsByStatus(@Param('status') status: string) {
+    const submissions = await this.kycService.getKycSubmissionsByStatus(status as any);
+    return {
+      submissions,
+    };
   }
 
-  @Post(':documentId/approve')
-  @HttpCode(HttpStatus.OK)
-  async approveDocument(
-    @Param('documentId') documentId: string,
-    @Body() dto: ApproveKycDto,
+  @Patch('submissions/:id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async updateKycStatus(
+    @Param('id') submissionId: string,
+    @Body() updateDto: UpdateKycStatusDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.kycService.approveDocument(documentId, dto.notes);
-  }
-
-  @Post(':documentId/reject')
-  @HttpCode(HttpStatus.OK)
-  async rejectDocument(
-    @Param('documentId') documentId: string,
-    @Body() dto: RejectKycDto,
-  ) {
-    return this.kycService.rejectDocument(documentId, dto.reason);
+    const result = await this.kycService.updateKycStatus(
+      submissionId,
+      updateDto,
+      req.user.sub,
+    );
+    return {
+      message: `KYC submission ${updateDto.status}`,
+      submission: result,
+    };
   }
 }

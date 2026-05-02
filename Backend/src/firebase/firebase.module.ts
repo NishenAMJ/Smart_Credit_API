@@ -3,44 +3,31 @@ import * as admin from 'firebase-admin';
 import { firebaseConfig } from './firebase.config';
 import { FirebaseService } from './firebase.service';
 
-function hasFirebaseCredentials(config: admin.ServiceAccount): boolean {
-  return Boolean(
-    config.projectId &&
-      config.clientEmail &&
-      config.privateKey &&
-      config.projectId !== 'undefined' &&
-      config.clientEmail !== 'undefined' &&
-      config.privateKey !== 'undefined',
-  );
-}
-
-@Global()
+@Global() // Makes Firebase available everywhere without re-importing
 @Module({
   providers: [
     {
       provide: 'FIREBASE_APP',
       useFactory: () => {
-        if (!admin.apps.length) {
-          const appOptions: admin.AppOptions = hasFirebaseCredentials(
-            firebaseConfig,
-          )
-            ? {
-                credential: admin.credential.cert(firebaseConfig),
-              }
-            : {
-                projectId:
-                  process.env.FIREBASE_PROJECT_ID || 'smart-credit-local',
-              };
-
-          if (!hasFirebaseCredentials(firebaseConfig)) {
-            console.warn(
-              'Firebase credentials were not found. Starting backend with local Firebase config only.',
-            );
-          }
-
-          admin.initializeApp(appOptions);
+        try {
+          console.log('Initializing Firebase...');
+          const projectId =
+            (firebaseConfig as any).project_id ??
+            (firebaseConfig as any).projectId;
+          const storageBucket =
+            process.env.FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`;
+          const app = admin.initializeApp({
+            credential: admin.credential.cert(firebaseConfig),
+            storageBucket,
+          });
+          console.log('✓ Firebase initialized successfully');
+          console.log('Project ID:', projectId);
+          console.log('Storage Bucket:', storageBucket);
+          return app;
+        } catch (error) {
+          console.error('✗ Firebase initialization failed:', error.message);
+          throw error;
         }
-        return admin.app();
       },
     },
     FirebaseService,

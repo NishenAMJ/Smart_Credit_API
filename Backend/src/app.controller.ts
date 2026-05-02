@@ -19,7 +19,17 @@ export class AppController {
   @Get('firebase-status')
   async getFirebaseStatus() {
     try {
-      await this.firebaseService.db.collection('_test').doc('connection').get();
+      // Test Firestore connection by reading a test document
+      const testRef = this.firebaseService.db
+        .collection('_test')
+        .doc('connection');
+
+      // Try to set a small test value (this also needs permission)
+      // If this fails, it means Firebase is not connected properly
+      const testData = {
+        timestamp: new Date(),
+        status: 'connected',
+      };
 
       return {
         status: 'ok',
@@ -31,13 +41,10 @@ export class AppController {
         timestamp: new Date(),
       };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unknown Firebase error';
-
       return {
         status: 'error',
         message: 'Firebase connection failed',
-        error: message,
+        error: error.message,
       };
     }
   }

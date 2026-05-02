@@ -11,7 +11,7 @@ import {
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(private readonly firebaseService: FirebaseService) { }
 
   private getPrimaryRole(
     role: unknown,
@@ -60,7 +60,7 @@ export class ReportsService {
         if (primaryRole === 'lender') lenders++;
         if (primaryRole === 'admin') admins++;
 
-        if (user.createdAt) {
+        if (user.createdAt && typeof user.createdAt.toDate === 'function') {
           const createdDate = user.createdAt.toDate();
           if (
             createdDate.getMonth() === currentMonth &&
@@ -338,28 +338,31 @@ export class ReportsService {
           activeDisputes++;
         }
 
-        if (dispute.resolvedAt?.toDate?.() >= today) {
+        const resolvedAt = dispute.resolvedAt?.toDate?.() || (dispute.resolvedAt instanceof Date ? dispute.resolvedAt : null);
+        if (resolvedAt && resolvedAt >= today) {
           disputesResolvedToday++;
         }
       });
 
       usersSnapshot.forEach((doc) => {
         const user = doc.data();
-        if (user.createdAt?.toDate?.() >= today) {
+        const createdAt = user.createdAt?.toDate?.() || (user.createdAt instanceof Date ? user.createdAt : null);
+        if (createdAt && createdAt >= today) {
           newUsersToday++;
         }
       });
 
       requestsSnapshot.forEach((doc) => {
         const request = doc.data();
-        if (request.createdAt?.toDate?.() >= today) {
+        const createdAt = request.createdAt?.toDate?.() || (request.createdAt instanceof Date ? request.createdAt : null);
+        if (createdAt && createdAt >= today) {
           loansCreatedToday++;
         }
       });
 
       txnSnapshot.forEach((doc) => {
         const txn = doc.data();
-        const createdAt = txn.paidAt?.toDate?.() ?? txn.createdAt?.toDate?.();
+        const createdAt = txn.paidAt?.toDate?.() ?? txn.createdAt?.toDate?.() ?? (txn.paidAt instanceof Date ? txn.paidAt : (txn.createdAt instanceof Date ? txn.createdAt : null));
 
         if (createdAt && createdAt >= today) {
           transactionsToday++;
@@ -431,12 +434,12 @@ export class ReportsService {
             disputeResolutionRate:
               disputesSnapshot.size > 0
                 ? Number(
-                    (
-                      disputesSnapshot.docs.filter(
-                        (doc) => doc.data().status === 'resolved',
-                      ).length / disputesSnapshot.size
-                    ).toFixed(2),
-                  )
+                  (
+                    disputesSnapshot.docs.filter(
+                      (doc) => doc.data().status === 'resolved',
+                    ).length / disputesSnapshot.size
+                  ).toFixed(2),
+                )
                 : 0,
           },
           alerts,

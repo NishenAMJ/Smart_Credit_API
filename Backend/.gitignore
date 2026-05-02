@@ -39,7 +39,6 @@ coverage
 # Firebase
 serviceAccountKey.json
 firebase-service-account.json
-qq.json
 *firebase-adminsdk*
 smart-credit-b0f6d-firebase-adminsdk-fbsvc-3ffa5833f5
 

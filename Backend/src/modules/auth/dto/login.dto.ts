@@ -1,11 +1,20 @@
-import { IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+
+import { USER_ROLES } from '../auth.types';
 
 export class LoginDto {
   @IsString()
-  @IsNotEmpty()
-  identifier: string;
+  @IsNotEmpty({ message: 'Email or phone is required.' })
+  identifier!: string;
 
   @IsString()
-  @MinLength(6)
-  password: string;
+  @IsNotEmpty({ message: 'Password is required.' })
+  password!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(USER_ROLES, {
+    message: 'Role must be borrower, lender, or admin.',
+  })
+  role?: (typeof USER_ROLES)[number];
 }

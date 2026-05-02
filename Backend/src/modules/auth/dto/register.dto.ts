@@ -1,36 +1,34 @@
-import {
-  IsEmail,
-  IsIn,
-  IsNotEmpty,
-  IsString,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
+
+import { PUBLIC_USER_ROLES } from '../auth.types';
 
 export class RegisterDto {
   @IsString()
-  @IsIn(['borrower', 'lender'])
-  role: 'borrower' | 'lender';
+  @IsNotEmpty({ message: 'Full name is required.' })
+  fullName!: string;
+
+  @IsEmail({}, { message: 'Please provide a valid email address.' })
+  @IsNotEmpty({ message: 'Email is required.' })
+  email!: string;
 
   @IsString()
-  @IsNotEmpty()
-  fullName: string;
-
-  @IsEmail()
-  email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  phoneNumber: string;
+  @IsNotEmpty({ message: 'Phone is required.' })
+  @Matches(/^[0-9+\-\s()]{9,20}$/, {
+    message: 'Please provide a valid phone number.',
+  })
+  phone!: string;
 
   @IsString()
-  @IsNotEmpty()
-  nic: string;
+  @IsNotEmpty({ message: 'Password is required.' })
+  @MinLength(8, {
+    message: 'Password must be at least 8 characters long.',
+  })
+  password!: string;
 
   @IsString()
-  @IsNotEmpty()
-  birthDate: string;
-
-  @IsString()
-  @MinLength(6)
-  password: string;
+  @IsIn(PUBLIC_USER_ROLES, {
+    message: 'Role must be either borrower or lender.',
+  })
+  role!: (typeof PUBLIC_USER_ROLES)[number];
 }
+
