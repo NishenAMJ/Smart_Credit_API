@@ -683,3 +683,34 @@ export function escalateDispute(
     body: JSON.stringify({ reason, notes }),
   });
 }
+
+export interface AdminLegalDocumentParty {
+  userId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: "borrower" | "lender";
+}
+
+export interface AdminLegalDocument {
+  id: string;
+  loanId: string;
+  title: string;
+  summary: string;
+  documentType: string;
+  status: string;
+  borrower: AdminLegalDocumentParty;
+  lender: AdminLegalDocumentParty;
+  updatedAt: string;
+  pdfDownloadPath?: string;
+}
+
+export interface AdminLegalDocumentsResponse {
+  documents: AdminLegalDocument[];
+}
+
+export function getLegalAgreements() {
+  return apiRequest<AdminLegalDocumentsResponse>("/legal/documents", {
+    auth: true,
+  });
+}

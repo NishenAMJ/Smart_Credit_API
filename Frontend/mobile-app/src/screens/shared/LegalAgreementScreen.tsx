@@ -1,6 +1,6 @@
 /** @format */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Alert,
   Linking,
@@ -26,13 +26,15 @@ import type { LegalDocument, MobileRole } from "../../types/auth";
 
 type LegalAgreementScreenProps = {
   role: MobileRole;
+  initialLoanId?: string;
 };
 
 export default function LegalAgreementScreen({
   role,
+  initialLoanId,
 }: LegalAgreementScreenProps) {
   const { refreshing, refreshWorkspace, session } = useAuth();
-  const [loanId, setLoanId] = useState("");
+  const [loanId, setLoanId] = useState(initialLoanId || "");
   const [signedName, setSignedName] = useState("");
   const [document, setDocument] = useState<LegalDocument | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,8 +46,8 @@ export default function LegalAgreementScreen({
   const isPartyAccepted =
     role === "borrower" ? document?.borrowerAccepted : document?.lenderAccepted;
 
-  async function handleLoadLatest() {
-    const trimmedLoanId = loanId.trim();
+  async function handleLoadLatest(idToLoad?: string) {
+    const trimmedLoanId = (idToLoad || loanId).trim();
 
     if (!trimmedLoanId) {
       setError("Loan ID is required.");
@@ -118,7 +120,13 @@ export default function LegalAgreementScreen({
         signedName: signedName.trim(),
       });
       setDocument(response.document);
-      setMessage(response.message ?? "Agreement acceptance recorded.");
+      
+      if (response.document.status === 'fully_accepted') {
+        setMessage("Loan is now ACTIVE! Both parties have accepted the agreement.");
+      } else {
+        setMessage(response.message ?? "Agreement acceptance recorded.");
+      }
+      
       await refreshWorkspace();
     } catch (nextError) {
       setError(
@@ -130,6 +138,13 @@ export default function LegalAgreementScreen({
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (initialLoanId) {
+      void handleLoadLatest(initialLoanId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLoanId]);
 
   async function handleDownload() {
     if (!document || !session?.accessToken) {
@@ -183,6 +198,7 @@ export default function LegalAgreementScreen({
             onChangeText={setLoanId}
             placeholder='Paste a loan document ID'
             autoCapitalize='none'
+            editable={!initialLoanId}
           />
         </View>
 

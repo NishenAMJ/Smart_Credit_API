@@ -88,3 +88,10 @@ export async function acceptLegalDocument(
   );
   return response.data;
 }
+
+export async function listLegalDocuments() {
+  const response = await apiClient.get<{ documents: LegalDocument[] }>(
+    ENDPOINTS.legal.list,
+  );
+  return response.data;
+}

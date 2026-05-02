@@ -54,4 +54,5 @@ export interface LegalDocument {
   pdfDownloadPath?: string;
   signedPdfStoragePath?: string;
   signedPdfGeneratedAt?: Timestamp;
+  pdfSha256Hash?: string;
 }

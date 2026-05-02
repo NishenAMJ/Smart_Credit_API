@@ -39,6 +39,7 @@ export const ENDPOINTS = {
     latestByLoan: (loanId: string) => `/legal/documents/loan/${loanId}/latest`,
     accept: (documentId: string) => `/legal/documents/${documentId}/accept`,
     download: (documentId: string) => `/legal/documents/${documentId}/download`,
+    list: "/legal/documents",
   },
   loans: {
     featured: "/borrower/loans/featured",

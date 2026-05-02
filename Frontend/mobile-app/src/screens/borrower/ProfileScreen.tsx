@@ -495,6 +495,14 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 </View>
                 <View style={styles.financeValueRow}>
                   <Text style={styles.detailValue}>{row.value}</Text>
+                  {row.label === "KYC Status" && !profile?.kycVerified && (
+                    <TouchableOpacity
+                      style={{ marginLeft: 10, backgroundColor: '#007AFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}
+                      onPress={() => Alert.alert('Complete KYC', 'Please log out and log in via the signup flow to complete your KYC submission, or contact support.')}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 12 }}>Complete KYC</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             ))}

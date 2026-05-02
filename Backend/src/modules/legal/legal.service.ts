@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
 import puppeteer from 'puppeteer';
 import {
   type CollectionReference,
@@ -138,6 +139,23 @@ export class LegalService {
     return document ? this.toDto(document) : null;
   }
 
+  async listDocuments(
+    userId: string,
+    userRole: UserRole,
+  ): Promise<LegalDocumentDto[]> {
+    let query: FirebaseFirestore.Query<LegalDocument> = this.legalCollection;
+
+    if (userRole === 'borrower') {
+      query = query.where('borrower.userId', '==', userId);
+    } else if (userRole === 'lender') {
+      query = query.where('lender.userId', '==', userId);
+    }
+    // admin gets all documents
+
+    const snapshot = await query.orderBy('updatedAt', 'desc').get();
+    return snapshot.docs.map(doc => this.toDto(doc.data() as LegalDocument));
+  }
+
   async acceptDocument(
     documentId: string,
     userId: string,
@@ -209,9 +227,18 @@ export class LegalService {
     merged.htmlContent = this.buildAgreementHtml(merged);
 
     if (merged.status === 'fully_accepted') {
-      const storagePath = await this.persistSignedPdf(merged);
+      const { storagePath, hash } = await this.persistSignedPdf(merged);
       merged.signedPdfStoragePath = storagePath;
       merged.signedPdfGeneratedAt = now;
+      merged.pdfSha256Hash = hash;
+      
+      // Update the loan document to ACTIVE
+      await this.firebaseService.db.collection('loans').doc(document.loanId).update({
+        status: 'ACTIVE',
+        activatedAt: now,
+        signedPdfHash: hash,
+        signedPdfAt: now,
+      });
     }
 
     await docRef.update({
@@ -222,6 +249,7 @@ export class LegalService {
         ? {
             signedPdfStoragePath: merged.signedPdfStoragePath,
             signedPdfGeneratedAt: merged.signedPdfGeneratedAt,
+            pdfSha256Hash: merged.pdfSha256Hash,
           }
         : {}),
     });
@@ -594,6 +622,7 @@ export class LegalService {
       signedPdfGeneratedAt: document.signedPdfGeneratedAt
         ?.toDate()
         .toISOString(),
+      pdfSha256Hash: document.pdfSha256Hash,
     };
   }
 
@@ -645,7 +674,7 @@ export class LegalService {
     return `smart-credit-loan-agreement-${document.loanId}.pdf`;
   }
 
-  private async persistSignedPdf(document: LegalDocument): Promise<string> {
+  private async persistSignedPdf(document: LegalDocument): Promise<{ storagePath: string, hash: string }> {
     const fileName = this.buildPdfFileName(document);
     const storagePath = `legal-documents/${document.loanId}/${fileName}`;
     const buffer = await this.buildAgreementPdf(document);
@@ -658,8 +687,10 @@ export class LegalService {
         contentType: 'application/pdf',
       },
     });
+    
+    const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
-    return storagePath;
+    return { storagePath, hash };
   }
 
   private createSimplePdfBuffer(lines: string[]): Buffer {

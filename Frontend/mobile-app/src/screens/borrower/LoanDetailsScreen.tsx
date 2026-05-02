@@ -12,6 +12,7 @@ import {
 import LoanDetailsHeader from "../../components/borrower/LoanDetailsHeader";
 import PaymentCard from "../../components/borrower/PaymentCard";
 import EmptyState from "../../components/common/EmptyState";
+import Button from "../../components/common/Button";
 import { getPayments } from "../../api/services/payment.service";
 import { formatCurrency } from "../../utils/formatters";
 import { COLORS } from "../../constants/colors";
@@ -65,6 +66,13 @@ export default function LoanDetailsScreen({
 
   const renderActiveView = () => (
     <>
+      <View style={{ marginBottom: SPACING.lg }}>
+        <Button
+          onPress={() => navigation.navigate("LoanAgreement", { initialLoanId: loan?.loanId })}
+        >
+          View Agreement
+        </Button>
+      </View>
       <View style={styles.metricsRow}>
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>Outstanding</Text>

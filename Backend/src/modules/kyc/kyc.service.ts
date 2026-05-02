@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { KycDocument } from './interfaces/kyc-document.interface';
@@ -48,9 +48,66 @@ export class KycService {
     return Math.min(Math.max(Math.trunc(parsed), 1), KycService.MAX_PAGE_SIZE);
   }
 
+  private async uploadBase64ToStorage(userId: string, fieldName: string, dataUrl: string): Promise<string> {
+    if (!dataUrl.startsWith('data:')) {
+      return dataUrl;
+    }
+
+    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return dataUrl;
+    }
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    let extension = 'bin';
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) extension = 'jpg';
+    else if (mimeType.includes('png')) extension = 'png';
+    else if (mimeType.includes('pdf')) extension = 'pdf';
+
+    const timestamp = Date.now();
+    const filePath = `kyc-documents/${userId}/${fieldName}_${timestamp}.${extension}`;
+    const file = this.firebaseService.bucket.file(filePath);
+
+    await file.save(buffer, {
+      metadata: { contentType: mimeType },
+    });
+    
+    const bucketName = this.firebaseService.bucket.name;
+    const encodedPath = encodeURIComponent(filePath);
+    return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media`;
+  }
+
+  private async processKycUrls(
+    userId: string, 
+    fields: Record<string, string | undefined>
+  ): Promise<Record<string, string | undefined>> {
+    const result: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value && value.startsWith('data:')) {
+        result[key] = await this.uploadBase64ToStorage(userId, key, value);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
   async submitMobileKyc(dto: SubmitKycDto) {
     try {
       const docId = dto.userId || `${dto.role}_${Date.now()}`;
+
+      // Process any base64 URLs to Firebase Storage
+      const processedUrls = await this.processKycUrls(docId, {
+        nicFrontUrl: dto.nicFrontUrl,
+        nicBackUrl: dto.nicBackUrl,
+        addressProofUrl: dto.addressProofUrl,
+        bankDocumentUrl: dto.bankDocumentUrl,
+        profilePhotoUrl: dto.profilePhotoUrl,
+      });
+
       const docRef = this.db.collection('users').doc(docId);
 
       await docRef.set(
@@ -62,7 +119,7 @@ export class KycService {
           phone: dto.phoneNumber.trim(),
           nic: dto.nic.trim(),
           dateOfBirth: dto.birthDate.trim(),
-          photoURL: dto.profilePhotoUrl,
+          photoURL: processedUrls.profilePhotoUrl || dto.profilePhotoUrl,
           passwordHash: dto.passwordHash,
           creditScore: 0,
           rating: 0,
@@ -73,16 +130,16 @@ export class KycService {
           notes: '',
           rejectionReason: '',
           kycFiles: {
-            nicFrontUrl: dto.nicFrontUrl,
-            nicBackUrl: dto.nicBackUrl,
+            nicFrontUrl: processedUrls.nicFrontUrl || dto.nicFrontUrl,
+            nicBackUrl: processedUrls.nicBackUrl || dto.nicBackUrl,
             addressProofNumber: dto.addressProofNumber,
-            addressProofUrl: dto.addressProofUrl,
+            addressProofUrl: processedUrls.addressProofUrl || dto.addressProofUrl,
             bankAccountNumber: dto.bankAccountNumber,
             bankName: dto.bankName,
             branchCode: dto.branchCode,
             accountType: dto.accountType,
-            bankDocumentUrl: dto.bankDocumentUrl,
-            profilePhotoUrl: dto.profilePhotoUrl,
+            bankDocumentUrl: processedUrls.bankDocumentUrl || dto.bankDocumentUrl,
+            profilePhotoUrl: processedUrls.profilePhotoUrl || dto.profilePhotoUrl,
             submittedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),

@@ -22,6 +22,7 @@ import type {
   AcceptLegalDocumentDto,
   GenerateLegalDocumentResponseDto,
   GetLegalDocumentResponseDto,
+  ListLegalDocumentsResponseDto,
 } from './dto/legal-document.dto';
 
 @Controller('legal')
@@ -47,6 +48,19 @@ export class LegalController {
       message: 'Loan agreement generated successfully.',
       document,
     };
+  }
+
+  @Get('documents')
+  @UseGuards(JwtAuthGuard)
+  async listDocuments(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<ListLegalDocumentsResponseDto> {
+    const documents = await this.legalService.listDocuments(
+      req.user.sub,
+      req.user.role,
+    );
+
+    return { documents };
   }
 
   @Get('documents/:documentId')
