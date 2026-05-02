@@ -135,7 +135,7 @@ describe('AuthService', () => {
     } as unknown as FirebaseService;
 
     jwtService = {
-      sign: jest.fn(() => 'signed-jwt'),
+      sign: jest.fn().mockReturnValue('signed-jwt'),
     };
 
     service = new AuthService(

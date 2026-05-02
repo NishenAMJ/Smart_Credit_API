@@ -4,7 +4,7 @@ import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import AuthStackNavigator from "./AuthStackNavigator";
 import BorrowerStackNavigator from "./BorrowerStackNavigator";
-import LenderTabNavigator from "./LenderTabNavigator";
+import LenderStackNavigator from "./LenderStackNavigator";
 import { useAuth } from "../context/AuthContext";
 import { COLORS } from "../constants/colors";
 
@@ -15,7 +15,9 @@ export default function RootNavigator() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size='large' color={COLORS.primary} />
-        <Text style={styles.loadingText}>Preparing your Smart Credit+ workspace...</Text>
+        <Text style={styles.loadingText}>
+          Preparing your Smart Credit+ workspace...
+        </Text>
       </View>
     );
   }
@@ -25,7 +27,7 @@ export default function RootNavigator() {
   }
 
   if (session.user.role === "lender") {
-    return <LenderTabNavigator />;
+    return <LenderStackNavigator />;
   }
 
   if (session.user.role === "borrower") {
@@ -34,7 +36,9 @@ export default function RootNavigator() {
 
   return (
     <View style={styles.loadingContainer}>
-      <Text style={styles.unsupportedTitle}>Mobile access is unavailable for this role.</Text>
+      <Text style={styles.unsupportedTitle}>
+        Mobile access is unavailable for this role.
+      </Text>
       <Text style={styles.loadingText}>
         Admin accounts are supported on the website only.
       </Text>

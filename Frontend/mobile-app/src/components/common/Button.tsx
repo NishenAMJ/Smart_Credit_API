@@ -31,16 +31,11 @@ export default function Button({
 const styles = StyleSheet.create({
   button: {
     backgroundColor: COLORS.primary,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 18,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#007AFF",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 6,
   },
   disabled: {
     opacity: 0.7,

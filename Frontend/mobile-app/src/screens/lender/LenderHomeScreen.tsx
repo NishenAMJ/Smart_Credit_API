@@ -18,30 +18,31 @@ export default function LenderHomeScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => void refreshWorkspace()}
-          tintColor={COLORS.primary}
+          tintColor={COLORS.surface}
         />
       }
     >
       <View style={styles.hero}>
         <Text style={styles.badge}>Lender Mobile</Text>
         <Text style={styles.title}>
-          {dashboard?.headline ?? `Welcome back, ${session?.user.fullName ?? "Lender"}`}
+          {dashboard?.headline ?? `Welcome back, ${session?.user.fullName?.split(' ')[0] ?? "Lender"}`}
         </Text>
         <Text style={styles.summary}>
           {dashboard?.summary ??
-            "Your lender dashboard is connected. Pull to refresh live platform data from the backend."}
+            "Track performance, manage requests, and review your portfolio."}
         </Text>
+
+        <View style={styles.heroMetricsGrid}>
+          {(dashboard?.metrics ?? []).slice(0, 2).map((metric) => (
+            <View key={metric.label} style={styles.heroMetricCard}>
+              <Text style={styles.heroMetricLabel}>{metric.label}</Text>
+              <Text style={styles.heroMetricValue}>{metric.value}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
-      <View style={styles.metricsGrid}>
-        {(dashboard?.metrics ?? []).map((metric) => (
-          <Card key={metric.label} style={styles.metricCard}>
-            <Text style={styles.metricLabel}>{metric.label}</Text>
-            <Text style={styles.metricValue}>{metric.value}</Text>
-            <Text style={styles.metricHelper}>{metric.helper}</Text>
-          </Card>
-        ))}
-      </View>
+      <View style={styles.mainContent}>
 
       <Card style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>
@@ -90,6 +91,7 @@ export default function LenderHomeScreen() {
           </Text>
         )}
       </Card>
+      </View>
     </ScrollView>
   );
 }
@@ -100,61 +102,73 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   content: {
+    paddingBottom: 42,
+  },
+  mainContent: {
     padding: SPACING.lg,
     gap: SPACING.lg,
   },
   hero: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: SPACING.xxl,
+    backgroundColor: COLORS.primary,
+    paddingTop: 60,
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.xl,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   badge: {
     alignSelf: "flex-start",
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#EAF4FF",
-    color: COLORS.primary,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "600",
   },
   title: {
     marginTop: SPACING.lg,
-    color: COLORS.textPrimary,
+    color: "#FFFFFF",
     fontSize: 28,
     lineHeight: 34,
     fontWeight: "700",
   },
   summary: {
-    marginTop: SPACING.md,
-    color: COLORS.textSecondary,
+    marginTop: SPACING.sm,
+    color: "rgba(255,255,255,0.88)",
     fontSize: 15,
     lineHeight: 22,
+    marginBottom: SPACING.xl,
   },
-  metricsGrid: {
+  heroMetricsGrid: {
+    flexDirection: "row",
     gap: SPACING.md,
   },
-  metricCard: {
-    gap: SPACING.sm,
+  heroMetricCard: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderRadius: 16,
+    padding: SPACING.lg,
   },
-  metricLabel: {
-    color: COLORS.textSecondary,
+  heroMetricLabel: {
+    color: "rgba(255,255,255,0.74)",
     fontSize: 12,
     fontWeight: "500",
-    textTransform: "uppercase",
+    marginBottom: 4,
   },
-  metricValue: {
-    color: COLORS.textPrimary,
-    fontSize: 24,
+  heroMetricValue: {
+    color: "#FFFFFF",
+    fontSize: 20,
     fontWeight: "700",
-  },
-  metricHelper: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
   },
   sectionCard: {
     gap: SPACING.md,
+    padding: SPACING.lg,
   },
   sectionTitle: {
     color: COLORS.textPrimary,

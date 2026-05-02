@@ -1,6 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { app } from 'firebase-admin';
-import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getFirestore, Firestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import type { Bucket } from '@google-cloud/storage';
 
@@ -12,6 +12,16 @@ export class FirebaseService {
   constructor(@Inject('FIREBASE_APP') private firebaseApp: app.App) {
     this.db = getFirestore(this.firebaseApp);
     this.bucket = getStorage(this.firebaseApp).bucket();
+  }
+
+  /** Returns a Firestore collection reference */
+  collection(name: string) {
+    return this.db.collection(name);
+  }
+
+  /** Returns the current server timestamp */
+  serverTimestamp(): FieldValue {
+    return FieldValue.serverTimestamp();
   }
 
   /**

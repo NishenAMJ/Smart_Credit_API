@@ -1,0 +1,80 @@
+// src/screens/lender/MyBorrowersScreen.tsx
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  ActivityIndicator,
+} from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { commonStyles, COLORS } from '../../styles/lender.styles';
+import { LenderHeader } from '../../components/lender';
+import { DashboardService } from '../../services/lender.service';
+
+/**
+ * Dashboard API returns borrowers with these fields:
+ *   id, fullName, email, creditScore, kycStatus,
+ *   loanCount, activeLoansCount, totalBorrowedAmount,
+ *   outstandingAmount, latestLoanStatus, isActive, createdAt
+ */
+
+const getScoreColor = (score: number) => {
+  if (score >= 750) return COLORS.success;
+  if (score >= 650) return COLORS.warning;
+  return COLORS.danger;
+};
+
+export default function MyBorrowersScreen({ navigation }: any) {
+  const [search, setSearch]             = useState('');
+  const [allBorrowers, setAllBorrowers] = useState<any[]>([]);
+  const [loading, setLoading]           = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await DashboardService.getBorrowers(50);
+        // API can return { borrowers: [...] } or a raw array
+        setAllBorrowers(data?.borrowers ?? (Array.isArray(data) ? data : []));
+      } catch {
+        setAllBorrowers([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // The API field for the borrower's name is 'fullName'
+  const filtered = allBorrowers.filter((b) =>
+    (b.fullName ?? b.borrowerName ?? b.name ?? '')
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  );
+
+  const renderCard = ({ item }: any) => {
+    // Support both flat and nested field names for safety
+    const name          = item.fullName ?? item.borrowerName ?? item.name ?? 'Unknown';
+    const creditScore   = item.creditScore ?? item.score ?? 0;
+    const activeLoans   = item.activeLoansCount ?? item.activeLoans ?? item.loans ?? 0;
+    const totalBorrowed = item.totalBorrowedAmount ?? item.totalBorrowed ?? item.total ?? null;
+    const loanCount     = item.loanCount ?? item.loans ?? 0;
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => navigation.navigate('BorrowerDetail', { borrower: item })}
+        activeOpacity={0.8}
+      >
+        <View style={commonStyles.rowSpaceBetween}>
+          <View style={commonStyles.row}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{name[0]?.toUpperCase() ?? '?'}</Text>
+            </View>
+            <View>
+              <Text style={commonStyles.textPrimary}>{name}</Text>
+              <Text style={[styles.scoreText, { color: getScoreColor(creditScore) }]}>
+                Score: {creditScore > 0 ? creditScore : '--'}
+                {item.rating != null ? ` • ★${item.rating}` : ''}
