@@ -11,7 +11,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/main.js",
     "backfill:lender-scope": "node scripts/backfill-lender-scope.js",
     "seed": "node seed-master.js",
     "seed:nimal": "node seed-master.js --skip-base",

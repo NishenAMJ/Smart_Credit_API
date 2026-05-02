@@ -1,0 +1,54 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "lenderBorrowers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "lenderId", "order": "ASCENDING" },
+        { "fieldPath": "latestLoanCreatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "lenderBorrowers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "lenderId", "order": "ASCENDING" },
+        { "fieldPath": "searchKeywords", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "latestLoanCreatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "lenderId", "order": "ASCENDING" },
+        { "fieldPath": "paidAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "loanRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "targetLenderId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "loanRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "matchedLenderIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "loanRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "adId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

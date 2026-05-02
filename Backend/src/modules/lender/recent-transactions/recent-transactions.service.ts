@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   DocumentData,
   FieldValue,
@@ -77,6 +77,7 @@ type CachedValue<T> = {
 };
 
 type LenderLedgerContext = {
+  lenderId: string;
   loans: LoanRecord[];
   loanIds: Set<string>;
   loanIdsList: string[];
@@ -86,6 +87,7 @@ type LenderLedgerContext = {
 
 @Injectable()
 export class RecentTransactionsService {
+  private readonly logger = new Logger(RecentTransactionsService.name);
   private readonly cacheTtlMs = 60_000;
   private readonly lenderContextCache = new Map<
     string,
@@ -115,12 +117,7 @@ export class RecentTransactionsService {
     if (loanIds.size === 0) {
       return {
         lenderId,
-        summary: {
-          totalTransactions: 0,
-          totalCollected: 0,
-          loansWithActivity: 0,
-          overdueInstallments: 0,
-        },
+        summary: this.createEmptySummary(),
         searchResultCount: null,
         transactions: [],
         pageInfo: {
@@ -148,15 +145,13 @@ export class RecentTransactionsService {
     );
     const installmentSummaries =
       await this.getInstallmentSummaries(activeLoanIds);
-    const summary = await this.getSummaryForLender(
-      lenderId,
-      loanIds,
-      loanIdsList,
-      includeSummary,
-    );
-    const searchResultCount = normalizedSearch && includeSearchCount
-      ? await this.getSearchResultCount(lenderId, context, normalizedSearch)
-      : null;
+    const summary = includeSummary
+      ? await this.getSummaryForLender(lenderId, loanIds, loanIdsList)
+      : this.createEmptySummary();
+    const searchResultCount =
+      normalizedSearch && includeSearchCount
+        ? await this.getSearchResultCount(lenderId, context, normalizedSearch)
+        : null;
 
     const transactions: RecentTransactionListItem[] = visibleTransactions.map(
       (transaction) => {
@@ -432,6 +427,7 @@ export class RecentTransactionsService {
     );
     const borrowerMap = await this.getBorrowerMap(uniqueBorrowerIds);
     const context = {
+      lenderId,
       loans,
       loanIds: new Set<string>(loanIdsList),
       loanIdsList,
@@ -450,7 +446,6 @@ export class RecentTransactionsService {
     lenderId: string,
     loanIds: Set<string>,
     loanIdsList: string[],
-    _includeSummary: boolean,
   ): Promise<RecentTransactionsSummary> {
     const cached = this.getCachedValue(this.summaryCache, lenderId);
 
@@ -458,7 +453,10 @@ export class RecentTransactionsService {
       return cached;
     }
 
-    const allScopedTransactions = await this.getAllRecentPayments(loanIds);
+    const allScopedTransactions = await this.getAllRecentPayments(
+      lenderId,
+      loanIds,
+    );
     const installmentSummaries =
       await this.getInstallmentSummaries(loanIdsList);
     const summary = {
@@ -495,6 +493,7 @@ export class RecentTransactionsService {
     }
 
     const allScopedTransactions = await this.getAllRecentPayments(
+      lenderId,
       context.loanIds,
     );
     const count = allScopedTransactions.filter((transaction) =>
@@ -522,7 +521,12 @@ export class RecentTransactionsService {
 
       while (items.length < pageSize + 1 && !exhausted) {
         const snapshot = await applyDateCursor(
-          orderByDateAndId(db.collectionGroup('payments'), 'paidAt'),
+          orderByDateAndId(
+            db
+              .collectionGroup('payments')
+              .where('lenderId', '==', context.lenderId),
+            'paidAt',
+          ),
           currentCursor,
         )
           .limit(Math.max(pageSize * 2, 40))
@@ -567,8 +571,37 @@ export class RecentTransactionsService {
       if (items.length > 0 || usedCollectionGroup) {
         return { items };
       }
-    } catch {}
+    } catch (error) {
+      this.logFallback(
+        'recent-payments:collection-group',
+        'Falling back from lender-scoped payments collection group query.',
+        error,
+      );
+    }
 
+    const topLevelTransactions = this.paginateTransactions(
+      (await this.getTopLevelRepaymentsByLoanIds(context.loanIds))
+        .filter((transaction) =>
+          this.matchesTransactionFilters(
+            transaction,
+            context,
+            search ?? null,
+          ),
+        ),
+      pageSize,
+      cursor,
+    );
+
+    if (topLevelTransactions.length > 0) {
+      this.logger.warn(
+        'Using degraded top-level transactions fallback for recent payments page.',
+      );
+      return { items: topLevelTransactions };
+    }
+
+    this.logger.warn(
+      'Using degraded traversed nested-payments fallback for recent payments page.',
+    );
     return {
       items: await this.getTraversedPaymentsByLoanIds(
         context.loanIdsList,
@@ -581,6 +614,7 @@ export class RecentTransactionsService {
   }
 
   private async getAllRecentPayments(
+    lenderId: string,
     loanIds: Set<string>,
   ): Promise<TransactionRecord[]> {
     const db = this.firebaseService.getDb();
@@ -588,6 +622,7 @@ export class RecentTransactionsService {
     try {
       const snapshot = await db
         .collectionGroup('payments')
+        .where('lenderId', '==', lenderId)
         .orderBy('paidAt', 'desc')
         .get();
 
@@ -604,7 +639,13 @@ export class RecentTransactionsService {
       if (payments.length > 0) {
         return payments;
       }
-    } catch {}
+    } catch (error) {
+      this.logFallback(
+        'recent-payments:full-collection-group',
+        'Falling back from full lender-scoped payments history query.',
+        error,
+      );
+    }
 
     const topLevel = await this.getTopLevelRepaymentsByLoanIds(loanIds);
 
@@ -897,8 +938,6 @@ export class RecentTransactionsService {
 
   private async getTopLevelRepaymentsByLoanIds(
     loanIds: Set<string>,
-    pageSize?: number,
-    cursor?: string | null,
   ): Promise<TransactionRecord[]> {
     if (loanIds.size === 0) {
       return [];
@@ -908,18 +947,9 @@ export class RecentTransactionsService {
     const loanIdChunks = chunkValues(Array.from(loanIds), 10);
     const snapshots = await Promise.all(
       loanIdChunks.map((loanIdChunk) => {
-        let query = db
+        const query = db
           .collection('transactions')
           .where('loanId', 'in', loanIdChunk);
-
-        if (pageSize) {
-          query = applyDateCursor(
-            orderByDateAndId(query, 'createdAt'),
-            cursor,
-          ).limit(pageSize + 1);
-          return query.get();
-        }
-
         return query.get();
       }),
     );
@@ -938,8 +968,7 @@ export class RecentTransactionsService {
         const rightTime = right.createdAt ? right.createdAt.getTime() : 0;
         return rightTime - leftTime;
       });
-
-    return pageSize ? transactions.slice(0, pageSize + 1) : transactions;
+    return transactions;
   }
 
   private async getTraversedPaymentsByLoanIds(
@@ -1066,6 +1095,15 @@ export class RecentTransactionsService {
 
   private toNumber(value: unknown): number {
     return readNumber(value);
+  }
+
+  private createEmptySummary(): RecentTransactionsSummary {
+    return {
+      totalTransactions: 0,
+      totalCollected: 0,
+      loansWithActivity: 0,
+      overdueInstallments: 0,
+    };
   }
 
   private clamp(value: number, min: number, max: number): number {
@@ -1225,5 +1263,34 @@ export class RecentTransactionsService {
 
   private sum(values: number[]): number {
     return values.reduce((total, value) => total + value, 0);
+  }
+
+  private paginateTransactions(
+    transactions: TransactionRecord[],
+    pageSize: number,
+    cursor?: string | null,
+  ): TransactionRecord[] {
+    const decodedCursor = decodeCursor(cursor);
+    const startIndex = decodedCursor
+      ? transactions.findIndex(
+          (transaction) =>
+            transaction.id === decodedCursor.id &&
+            transaction.createdAt?.toISOString() ===
+              decodedCursor.date.toISOString(),
+        ) + 1
+      : 0;
+    const safeStartIndex = startIndex > 0 ? startIndex : 0;
+
+    return transactions.slice(safeStartIndex, safeStartIndex + pageSize + 1);
+  }
+
+  private logFallback(
+    label: string,
+    message: string,
+    error: unknown,
+  ): void {
+    const detail =
+      error instanceof Error ? error.message : 'Unknown Firestore query error';
+    this.logger.warn(`${message} [${label}] ${detail}`);
   }
 }

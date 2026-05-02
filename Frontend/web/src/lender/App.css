@@ -2378,8 +2378,38 @@
   pointer-events: none;
 }
 
+.search-field__submit {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  line-height: 1;
+  z-index: 1;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-medium);
+  border: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+}
+
+.search-field__submit:disabled {
+  cursor: default;
+  opacity: 0.64;
+}
+
+.search-field__submit:hover,
+.search-field__submit:active,
+.search-field__submit:focus-visible {
+  transform: translateY(-50%);
+}
+
 .search-field .input {
-  padding-left: 72px;
+  padding-left: 78px;
 }
 
 .dashboard-table {

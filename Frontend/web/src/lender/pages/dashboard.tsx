@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import type { LenderView } from "../components/common/LenderSidebar";
 import type {
   BorrowerDetails,
@@ -13,8 +13,6 @@ import {
 import type { LenderSession } from "../lib/lender-session";
 
 const ITEMS_PER_PAGE = 8;
-const BORROWER_FETCH_LIMIT = 24;
-
 const currencyFormatter = new Intl.NumberFormat("en-LK", {
   style: "currency",
   currency: "LKR",
@@ -144,10 +142,15 @@ export default function DashboardPage({
 }: DashboardPageProps) {
   const [borrowers, setBorrowers] = useState<DashboardBorrower[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
+  const [hasMoreBorrowers, setHasMoreBorrowers] = useState(false);
+  const [borrowerSearchDraft, setBorrowerSearchDraft] = useState("");
+  const [borrowerSearch, setBorrowerSearch] = useState("");
+  const [isSummaryLoading, setIsSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [isBorrowersLoading, setIsBorrowersLoading] = useState(true);
+  const [borrowersError, setBorrowersError] = useState<string | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
     null,
   );
@@ -155,26 +158,23 @@ export default function DashboardPage({
     useState<BorrowerDetails | null>(null);
   const [isBorrowerLoading, setIsBorrowerLoading] = useState(false);
   const [borrowerError, setBorrowerError] = useState<string | null>(null);
+  const activeCursor = pageCursors[currentPage - 1] ?? null;
 
   useEffect(() => {
     let isMounted = true;
 
-    const loadDashboard = async () => {
+    const loadSummary = async () => {
       try {
-        setIsLoading(true);
-        setError(null);
-        const [summaryData, borrowersData] = await Promise.all([
-          fetchDashboardSummary(),
-          fetchDashboardBorrowers(BORROWER_FETCH_LIMIT),
-        ]);
+        setIsSummaryLoading(true);
+        setSummaryError(null);
+        const summaryData = await fetchDashboardSummary();
 
         if (isMounted) {
           setSummary(summaryData.summary);
-          setBorrowers(borrowersData.borrowers);
         }
       } catch (loadError) {
         if (isMounted) {
-          setError(
+          setSummaryError(
             loadError instanceof Error
               ? loadError.message
               : "Failed to load dashboard data.",
@@ -182,12 +182,12 @@ export default function DashboardPage({
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsSummaryLoading(false);
         }
       }
     };
 
-    void loadDashboard();
+    void loadSummary();
 
     return () => {
       isMounted = false;
@@ -196,7 +196,65 @@ export default function DashboardPage({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+    setPageCursors([null]);
+    setBorrowers([]);
+    setHasMoreBorrowers(false);
+  }, [session.lenderId]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setPageCursors([null]);
+    setBorrowers([]);
+    setHasMoreBorrowers(false);
+  }, [borrowerSearch]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBorrowers = async () => {
+      try {
+        setIsBorrowersLoading(true);
+        setBorrowersError(null);
+        const borrowersData = await fetchDashboardBorrowers(
+          ITEMS_PER_PAGE,
+          activeCursor,
+          borrowerSearch,
+        );
+
+        if (isMounted) {
+          setBorrowers(borrowersData.borrowers);
+          setHasMoreBorrowers(borrowersData.pageInfo.hasMore);
+          setPageCursors((current) => {
+            const next = current.slice(0, currentPage);
+
+            if (borrowersData.pageInfo.nextCursor) {
+              next[currentPage] = borrowersData.pageInfo.nextCursor;
+            }
+
+            return next;
+          });
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setBorrowersError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Failed to load borrower list.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsBorrowersLoading(false);
+        }
+      }
+    };
+
+    void loadBorrowers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeCursor, currentPage, borrowerSearch, session.lenderId]);
 
   useEffect(() => {
     if (!selectedBorrowerId) {
@@ -253,42 +311,7 @@ export default function DashboardPage({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedBorrowerId]);
 
-  const filteredBorrowers = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return borrowers;
-    }
-
-    return borrowers.filter((borrower) => {
-      return (
-        borrower.fullName.toLowerCase().includes(normalizedQuery) ||
-        borrower.email.toLowerCase().includes(normalizedQuery) ||
-        formatLabel(borrower.kycStatus)
-          .toLowerCase()
-          .includes(normalizedQuery) ||
-        String(borrower.creditScore ?? "").includes(normalizedQuery) ||
-        formatLabel(borrower.latestLoanStatus)
-          .toLowerCase()
-          .includes(normalizedQuery)
-      );
-    });
-  }, [borrowers, searchQuery]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredBorrowers.length / ITEMS_PER_PAGE),
-  );
-  const visibleBorrowers = filteredBorrowers.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE,
-  );
-  const visibleStart =
-    visibleBorrowers.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const visibleEnd = Math.min(
-    currentPage * ITEMS_PER_PAGE,
-    filteredBorrowers.length,
-  );
+  const visibleBorrowers = borrowers;
 
   const summaryCards = [
     {
@@ -383,6 +406,11 @@ export default function DashboardPage({
     setBorrowerError(null);
   }
 
+  function handleBorrowerSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBorrowerSearch(borrowerSearchDraft.trim());
+  }
+
   return (
     <>
       <section className="dashboard-panel">
@@ -430,14 +458,14 @@ export default function DashboardPage({
           </div>
         </header>
 
-        {isLoading ? (
+        {isSummaryLoading ? (
           <section className="card loading-card">
             <p>Loading dashboard data...</p>
           </section>
-        ) : error ? (
+        ) : summaryError ? (
           <section className="card error-card">
             <h2>Dashboard data is not available yet</h2>
-            <p>{error}</p>
+            <p>{summaryError}</p>
             <p>
               Check whether the Nest API is running, Firebase credentials are
               valid, and the lender has loan records.
@@ -473,18 +501,26 @@ export default function DashboardPage({
                     loans stay out of this view.
                   </p>
                 </div>
-                <label className="search-field">
-                  <span className="search-field__icon" aria-hidden="true">
+                <form className="search-field" onSubmit={handleBorrowerSearchSubmit}>
+                  <button
+                    type="submit"
+                    className="search-field__icon search-field__submit"
+                    aria-label="Search borrowers"
+                    disabled={isBorrowersLoading}
+                  >
                     Search
-                  </span>
+                  </button>
                   <input
-                    className="input"
                     type="search"
-                    placeholder="Search name, email, KYC, score, loan status"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
+                    className="input"
+                    placeholder="Search borrowers by name or email"
+                    value={borrowerSearchDraft}
+                    onChange={(event) =>
+                      setBorrowerSearchDraft(event.target.value)
+                    }
+                    aria-label="Search borrowers"
                   />
-                </label>
+                </form>
               </div>
 
               <div className="table-container">
@@ -500,7 +536,19 @@ export default function DashboardPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleBorrowers.length > 0 ? (
+                    {isBorrowersLoading ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          Loading borrower list...
+                        </td>
+                      </tr>
+                    ) : borrowersError ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          {borrowersError}
+                        </td>
+                      </tr>
+                    ) : visibleBorrowers.length > 0 ? (
                       visibleBorrowers.map((borrower) => (
                         <tr
                           key={borrower.id}
@@ -551,8 +599,8 @@ export default function DashboardPage({
                     ) : (
                       <tr>
                         <td className="table-empty" colSpan={6}>
-                          {searchQuery
-                            ? `No borrowers found for "${searchQuery}".`
+                          {borrowerSearch
+                            ? "No borrowers matched your search."
                             : "No lender-linked borrower data available yet."}
                         </td>
                       </tr>
@@ -563,8 +611,11 @@ export default function DashboardPage({
 
               <div className="table-footer">
                 <p>
-                  Showing {visibleStart}-{visibleEnd} of{" "}
-                  {filteredBorrowers.length} lender-linked borrowers
+                  Showing {visibleBorrowers.length} lender-linked borrowers on
+                  page {currentPage}
+                  {borrowerSearch
+                    ? ` for "${borrowerSearch}"`
+                    : ""}
                 </p>
 
                 <div className="pagination">
@@ -580,16 +631,14 @@ export default function DashboardPage({
                   </button>
 
                   <span className="pagination-status">
-                    Page {currentPage} of {totalPages}
+                    Page {currentPage}
                   </span>
 
                   <button
                     type="button"
                     className="pagination-button"
-                    onClick={() =>
-                      setCurrentPage((page) => Math.min(totalPages, page + 1))
-                    }
-                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((page) => page + 1)}
+                    disabled={!hasMoreBorrowers}
                   >
                     Next
                   </button>

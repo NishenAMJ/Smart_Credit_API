@@ -96,6 +96,7 @@ export class DashboardService {
     lenderId: string,
     pageSize = 8,
     cursor?: string | null,
+    search?: string | null,
   ): Promise<DashboardBorrowersResponse> {
     const db = this.firebaseService.getDb();
     const safePageSize = this.clamp(pageSize, 8, 50);
@@ -105,26 +106,31 @@ export class DashboardService {
       lenderId,
       safePageSize,
       cursor,
+      search,
     );
 
     if (relationBorrowers) {
       return {
-        borrowers: relationBorrowers.borrowers,
-        pageInfo: relationBorrowers.pageInfo,
+        ...relationBorrowers,
         generatedAt: new Date().toISOString(),
       };
     }
 
-    const loansSnapshot = await db
+    const lenderLoansSnapshot = await db
       .collection('loans')
       .where('lenderId', '==', lenderId)
       .get();
     const lenderLoans = await Promise.all(
-      loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
+      lenderLoansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
     );
 
     return {
-      ...(await this.getRecentBorrowers(db, lenderLoans, safePageSize, cursor)),
+      ...(await this.getRecentBorrowers(
+        db,
+        lenderLoans,
+        safePageSize,
+        cursor,
+      )),
       generatedAt: new Date().toISOString(),
     };
   }
@@ -396,14 +402,24 @@ export class DashboardService {
     lenderId: string,
     pageSize: number,
     cursor?: string | null,
+    search?: string | null,
   ): Promise<{
     borrowers: DashboardBorrower[];
     pageInfo: CursorPageInfo;
   } | null> {
     try {
-      const query = db
+      const searchTerm = this.normalizeBorrowerSearch(search);
+      const searchKeyword = searchTerm
+        ? this.getPrimarySearchKeyword(searchTerm)
+        : null;
+      let query = db
         .collection('lenderBorrowers')
         .where('lenderId', '==', lenderId);
+
+      if (searchKeyword) {
+        query = query.where('searchKeywords', 'array-contains', searchKeyword);
+      }
+
       const batchSize = Math.max(pageSize * 2, pageSize);
       let currentCursor = cursor ?? null;
       let exhausted = false;
@@ -433,7 +449,10 @@ export class DashboardService {
         for (const doc of snapshot.docs) {
           const mapped = this.mapBorrowerFromRelation(doc.data(), userDataById);
 
-          if (!mapped) {
+          if (
+            !mapped ||
+            (searchTerm && !this.borrowerMatchesSearch(mapped, searchTerm))
+          ) {
             continue;
           }
 
@@ -546,6 +565,41 @@ export class DashboardService {
       isActive: userData?.isActive !== false,
       createdAt: this.toIsoString(userData?.createdAt),
     };
+  }
+
+  private normalizeBorrowerSearch(search?: string | null): string | null {
+    if (typeof search !== 'string') {
+      return null;
+    }
+
+    const normalized = search
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9@._-]+/g, ' ');
+
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private borrowerMatchesSearch(
+    borrower: DashboardBorrower,
+    searchTerm: string,
+  ): boolean {
+    const haystack = [borrower.fullName, borrower.email, borrower.id]
+      .filter((value) => value.trim().length > 0)
+      .join(' ')
+      .toLowerCase();
+    const searchTerms = searchTerm.split(/\s+/).filter(Boolean);
+
+    return searchTerms.every((term) => haystack.includes(term));
+  }
+
+  private getPrimarySearchKeyword(searchTerm: string): string | null {
+    const [keyword] = searchTerm
+      .split(/\s+/)
+      .filter((term) => term.length >= 2)
+      .sort((left, right) => right.length - left.length);
+
+    return keyword ?? null;
   }
 
   private async getCountWithFallback(

@@ -23,6 +23,7 @@ function createContext(loanIds: string[]) {
   }));
 
   return {
+    lenderId: 'lender_001',
     loans,
     loanIds: new Set(loanIds),
     loanIdsList: loanIds,
@@ -46,6 +47,7 @@ describe('RecentTransactionsService', () => {
 
   it('builds paginated payment activity from nested payment paths', async () => {
     const query = {
+      where: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnValue({
         get: jest.fn().mockResolvedValue({
           empty: false,
@@ -102,6 +104,7 @@ describe('RecentTransactionsService', () => {
 
   it('treats seed payment methods as loan repayments for the ledger', async () => {
     const query = {
+      where: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnValue({
         get: jest.fn().mockResolvedValue({
           empty: false,
@@ -148,6 +151,7 @@ describe('RecentTransactionsService', () => {
 
   it('supports server-side search by installment id', async () => {
     const query = {
+      where: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnValue({
         get: jest.fn().mockResolvedValue({
           empty: false,
@@ -216,6 +220,7 @@ describe('RecentTransactionsService', () => {
     };
     const db = {
       collectionGroup: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnValue({
           get: jest.fn().mockRejectedValue(new Error('missing index')),
@@ -223,6 +228,13 @@ describe('RecentTransactionsService', () => {
       }),
       collection: jest.fn().mockReturnValue({
         doc: jest.fn().mockReturnValue(loanDocRef),
+        where: jest.fn().mockReturnValue({
+          orderBy: jest.fn().mockReturnThis(),
+          get: jest.fn().mockResolvedValue({ docs: [] }),
+          limit: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({ docs: [] }),
+          }),
+        }),
       }),
     };
     const firebaseService = { getDb: () => db } as any;
@@ -273,6 +285,7 @@ describe('RecentTransactionsService', () => {
     };
     const db = {
       collectionGroup: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnValue({
           get: jest.fn().mockRejectedValue(new Error('missing index')),
@@ -280,6 +293,13 @@ describe('RecentTransactionsService', () => {
       }),
       collection: jest.fn().mockReturnValue({
         doc: jest.fn().mockReturnValue(loanDocRef),
+        where: jest.fn().mockReturnValue({
+          orderBy: jest.fn().mockReturnThis(),
+          get: jest.fn().mockResolvedValue({ docs: [] }),
+          limit: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({ docs: [] }),
+          }),
+        }),
       }),
     };
     const firebaseService = { getDb: () => db } as any;
@@ -341,13 +361,11 @@ describe('RecentTransactionsService', () => {
       'lender_001',
       new Set(['loan_1']),
       ['loan_1'],
-      true,
     );
     const second = await (service as any).getSummaryForLender(
       'lender_001',
       new Set(['loan_1']),
       ['loan_1'],
-      true,
     );
 
     expect(first).toEqual(second);
@@ -403,5 +421,63 @@ describe('RecentTransactionsService', () => {
     );
 
     expect(count).toBe(2);
+  });
+
+  it('skips summary and search count work when both are disabled', async () => {
+    const service = new RecentTransactionsService({ getDb: () => ({}) } as any);
+    jest.spyOn(service as any, 'getLenderContext').mockResolvedValue(
+      createContext(['loan_1']),
+    );
+    jest.spyOn(service as any, 'getRecentPaymentsPage').mockResolvedValue({
+      items: [
+        {
+          id: 'payment_1',
+          loanId: 'loan_1',
+          installmentId: 'installment_1',
+          paymentId: 'payment_1',
+          type: 'repayment',
+          status: 'completed',
+          amount: 5000,
+          createdAt: new Date('2026-04-21T10:00:00.000Z'),
+          source: 'payment',
+          note: null,
+        },
+      ],
+    });
+    jest.spyOn(service as any, 'getInstallmentSummaries').mockResolvedValue(
+      new Map([
+        [
+          'loan_1',
+          {
+            totalInstallments: 3,
+            paidInstallments: 1,
+            overdueInstallments: 0,
+            nextDueDate: '2026-05-01T00:00:00.000Z',
+            latestInstallmentStatus: 'paid',
+          },
+        ],
+      ]),
+    );
+    const getSummaryForLender = jest.spyOn(service as any, 'getSummaryForLender');
+    const getSearchResultCount = jest.spyOn(service as any, 'getSearchResultCount');
+
+    const result = await service.getRecentTransactions(
+      'lender_001',
+      15,
+      null,
+      false,
+      false,
+      null,
+    );
+
+    expect(getSummaryForLender).not.toHaveBeenCalled();
+    expect(getSearchResultCount).not.toHaveBeenCalled();
+    expect(result.summary).toEqual({
+      totalTransactions: 0,
+      totalCollected: 0,
+      loansWithActivity: 0,
+      overdueInstallments: 0,
+    });
+    expect(result.searchResultCount).toBeNull();
   });
 });
