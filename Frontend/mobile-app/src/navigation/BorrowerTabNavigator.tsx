@@ -2,6 +2,7 @@
 
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import FindLoansScreen from "../screens/borrower/FindLoansScreen";
 import MyLoansScreen from "../screens/borrower/MyLoansScreen";
@@ -12,6 +13,8 @@ import ChatNavigator from "./ChatNavigator";
 const Tab = createBottomTabNavigator();
 
 export default function BorrowerTabNavigator() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -19,8 +22,8 @@ export default function BorrowerTabNavigator() {
         tabBarActiveTintColor: "#007AFF",
         tabBarInactiveTintColor: "#9CA3AF",
         tabBarStyle: {
-          height: 70,
-          paddingBottom: 10,
+          height: 70 + insets.bottom,
+          paddingBottom: insets.bottom + 10,
           paddingTop: 10,
           borderTopWidth: 1,
           borderTopColor: "#F3F4F6",

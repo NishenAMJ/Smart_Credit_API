@@ -9,11 +9,9 @@ import { LenderHeader, AlertBanner } from '../../components/lender';
 import { RecentTransactionsService } from '../../services/lender.service';
 
 /**
- * RecentTransactionListItem fields used here:
- *   loanId, borrowerName, amount (principal), remainingAmount,
- *   loanStatus ('active'|'completed'|'overdue'), status (installment status),
- *   createdAt, installmentSummary { paidInstallments, totalInstallments, nextDueDate, overdueInstallments }
- */
+ 
+   loanStatus ('active'|'completed'|'overdue'), status (installment status),
+ **/
 
 type FilterType = 'all' | 'active' | 'completed' | 'overdue';
 

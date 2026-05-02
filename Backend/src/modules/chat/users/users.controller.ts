@@ -1,10 +1,33 @@
 /**
  * users.controller.ts
- * Base path: /users
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CRITICAL FIX: Previously UsersController and BlocksController BOTH used
+ * @Controller('users') as the base path. NestJS loads them in unpredictable
+ * order and GET /users/search was being caught by GET /users/blocked or
+ * GET /users/:id before reaching the search handler.
+ *
+ * Fix: merge everything into ONE controller so route order is guaranteed.
+ *
+ * Route order matters in NestJS (and Express):
+ *   GET /users/search   ← must be declared BEFORE /users/:id
+ *   GET /users/blocked  ← must be declared BEFORE /users/:id
+ *   GET /users/:id      ← catch-all, must be LAST
  */
-import { Controller, Get, Patch, Body, Query, Param } from '@nestjs/common';
+
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Patch,
+  Body,
+  Query,
+  Param,
+  Logger,
+} from '@nestjs/common';
 import { IsString } from 'class-validator';
 import { UsersService } from './users.service';
+import { BlocksService } from './blocks.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 class UpdateFcmTokenDto {
@@ -14,26 +37,72 @@ class UpdateFcmTokenDto {
 
 @Controller('users')
 export class UsersController {
-  constructor(private usersService: UsersService) {}
+  private readonly logger = new Logger(UsersController.name);
 
-  /** GET /users/search?q=john — search users by username prefix */
+  constructor(
+    private usersService: UsersService,
+    private blocksService: BlocksService,
+  ) {}
+
+  // ── Search — MUST be first, before any :param routes ─────────────────────
+
+  /**
+   * GET /users/search?q=fathima
+   * Returns users whose displayName or username contains the query string.
+   * Case-insensitive partial match.
+   */
   @Get('search')
-  search(@Query('q') q: string, @CurrentUser() userId: string) {
-    return this.usersService.search(q ?? '', userId);
+  async search(
+    @Query('q') q: string,
+    @CurrentUser() userId: string,
+  ) {
+    this.logger.log(`[search] q="${q}" userId="${userId}"`);
+    const results = await this.usersService.search(q ?? '', userId);
+    this.logger.log(`[search] returning ${results.length} results`);
+    // Return plain array — no wrapping so frontend receives [] or [user, ...]
+    return results;
   }
 
-  /** GET /users/:id — get a single user's public profile */
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findById(id);
+  // ── Blocked users — MUST be before :id ───────────────────────────────────
+
+  /** GET /users/blocked — list all users blocked by current user */
+  @Get('blocked')
+  getBlocked(@CurrentUser() userId: string) {
+    return this.blocksService.getBlockedUsers(userId);
   }
 
-  /** PATCH /users/fcm-token — update FCM push token (called on login/refresh) */
+  /** POST /users/block/:targetId — block a user */
+  @Post('block/:targetId')
+  block(
+    @CurrentUser() userId: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return this.blocksService.blockUser(userId, targetId);
+  }
+
+  /** DELETE /users/block/:targetId — unblock a user */
+  @Delete('block/:targetId')
+  unblock(
+    @CurrentUser() userId: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return this.blocksService.unblockUser(userId, targetId);
+  }
+
+  /** PATCH /users/fcm-token — update device push token */
   @Patch('fcm-token')
   updateFcmToken(
     @CurrentUser() userId: string,
     @Body() dto: UpdateFcmTokenDto,
   ) {
     return this.usersService.updateFcmToken(userId, dto.fcmToken);
+  }
+
+  // ── Single user — MUST be last (catches anything that didn't match above) ─
+
+  /** GET /users/:id — get a single user's public profile */
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.usersService.findById(id);
   }
 }

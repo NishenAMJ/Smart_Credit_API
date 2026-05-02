@@ -2,6 +2,7 @@ import React from 'react';
 import { TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
 // Only import screens that EXIST right now
@@ -27,6 +28,8 @@ function QRTabButton({ onPress }: any) {
 }
 
 export default function LenderTabNavigator() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -34,8 +37,8 @@ export default function LenderTabNavigator() {
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
-          height: 70,
-          paddingBottom: 10,
+          height: 70 + insets.bottom,
+          paddingBottom: insets.bottom + 10,
           paddingTop: 10,
           borderTopWidth: 1,
           borderTopColor: '#F3F4F6',

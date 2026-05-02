@@ -11,8 +11,6 @@ import { DashboardService, LoanRequestsService, LenderProfileService } from '../
 
 const { width } = Dimensions.get('window');
 
-// ── Data ─────────────────────────────────────────────────
-
 // ── Main Component ────────────────────────────────────────
 export default function LenderDashboardScreen({ navigation }: any) {
   const [activeSlide, setActiveSlide] = useState(0);
@@ -25,7 +23,6 @@ export default function LenderDashboardScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        // Fetch stats first
         const [sum, requests] = await Promise.all([
           DashboardService.getSummary(),
           LoanRequestsService.getPendingRequests({ pageSize: 3 }),
@@ -33,7 +30,6 @@ export default function LenderDashboardScreen({ navigation }: any) {
         setSummary(sum);
         setRecentApps(requests?.requests ?? []);
 
-        // Fetch profile separately so a missing profile doesn't crash the dashboard
         try {
           const prof = await LenderProfileService.getProfile();
           setProfile(prof);
@@ -48,8 +44,6 @@ export default function LenderDashboardScreen({ navigation }: any) {
     })();
   }, []);
 
-  // ── Build stats array from API summary ──────────────────
-  // Dashboard API returns: { summary: { totalBorrowers, todaysCollection, overduePayments, activeAds } }
   const summaryData = summary?.summary ?? summary ?? {};
   const STATS = summaryData
     ? [
@@ -89,7 +83,6 @@ export default function LenderDashboardScreen({ navigation }: any) {
         {/* ── HEADER ────────────────────────────────── */}
         <View style={styles.header}>
           <View style={commonStyles.rowSpaceBetween}>
-            {/* Spacer instead of burger button */}
             <View style={{ width: 40 }} />
             <TouchableOpacity
               onPress={() => navigation.navigate('LenderProfile')}
@@ -187,7 +180,6 @@ export default function LenderDashboardScreen({ navigation }: any) {
         </View>
 
         {/* ── SECOND ROW QUICK ACTIONS ──────────────── */}
-        {/* Advertisement actions */}
         <View style={styles.quickRow}>
           <QuickAction
             icon="radio"
@@ -228,43 +220,6 @@ export default function LenderDashboardScreen({ navigation }: any) {
             icon="alert-circle"
           />
         )}
-
-        {/* ── RECENT APPLICATIONS ───────────────────── */}
-        <Text style={commonStyles.sectionTitle}>Recent Applications</Text>
-        {recentApps.map((app: any) => (
-          <TouchableOpacity
-            key={app.id}
-            style={commonStyles.card}
-            onPress={() => navigation.navigate('ReviewApplication', { app })}
-            activeOpacity={0.8}
-          >
-            <View style={commonStyles.rowSpaceBetween}>
-              <View style={commonStyles.row}>
-                <View style={styles.appAvatar}>
-                  <Text style={styles.appAvatarText}>{(app.borrowerName ?? app.name ?? '?')[0]}</Text>
-                </View>
-                <View>
-                  <Text style={commonStyles.textPrimary}>{app.borrowerName ?? app.name}</Text>
-                  <Text style={commonStyles.textSecondary}>{app.adHeadline ?? app.offer ?? ''}</Text>
-                </View>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={commonStyles.textPrimary}>{app.requestedAmount ? `LKR ${(app.requestedAmount / 1000).toFixed(0)}K` : (app.amount ?? '')}</Text>
-                <View style={[
-                  styles.badge,
-                  { backgroundColor: getStatusBg(app.status ?? 'Pending') }
-                ]}>
-                  <Text style={[
-                    styles.badgeText,
-                    { color: getStatusColor(app.status ?? 'Pending') }
-                  ]}>
-                    {app.status ?? 'Pending'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
 
         {/* ── MORE ACTIONS ──────────────────────────── */}
         <Text style={commonStyles.sectionTitle}>More Actions</Text>

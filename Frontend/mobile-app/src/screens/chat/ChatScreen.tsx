@@ -1,3 +1,19 @@
+/**
+ * ChatScreen.tsx
+ * ─────────────────────────────────────────────────────────────────────────────
+ * LOCAL-FIRST chat screen.
+ *
+ * On mount:
+ *   1. Reads messages instantly from local SQLite (no loading spinner)
+ *   2. Resets unread count locally and on backend
+ *   3. Subscribes to real-time socket events for new messages / typing / read
+ *
+ * Sending a message:
+ *   1. Optimistically renders it immediately with status:'sending'
+ *   2. messageService.send() saves to SQLite + emits via WebSocket
+ *   3. On 'messageDelivered' ack → status updates to 'sent'/'delivered'
+ */
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -17,10 +33,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { COLORS, SPACING } from '../../constants';
 import { commonChatStyles } from '../../styles/chat.styles';
-import { Message, ChatStackParamList } from '../../types';
-import { localDatabase } from '../../services/localDatabase';
+import { Message, ChatStackParamList } from '../../types/chat.types';
+import { conversationService } from '../../services/conversationService';
+import { messageService } from '../../services/messageService';
 import { chatSocket } from '../../services/socketService';
-import { conversationService } from '../../services/chatService';
+import { localDatabase } from '../../services/localDatabase';
 import { getCurrentUserId } from '../../services/api';
 import Avatar from '../../components/common/Avatar';
 
@@ -32,190 +49,164 @@ type Props = {
 const PAGE_SIZE = 30;
 
 function formatBubbleTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export default function ChatScreen({ navigation, route }: Props) {
-  const { conversationId, participant } = route.params;
+  const { conversationId, participant, isMuted } = route.params;
 
-  // Current user id — from the shared auth helper
-  const CURRENT_USER_ID = getCurrentUserId();
+  // TEMP: use lender_004. Replace with real auth hook when ready.
+  const currentUserId = getCurrentUserId();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
   const [isTyping, setIsTyping] = useState(false); // other user typing
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [seeding, setSeeding] = useState(false); // initial backend seed
 
   const flatRef = useRef<FlatList>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Initial load ─────────────────────────────────────────────────────────────
+  // ── Mount ─────────────────────────────────────────────────────────────────
+
   useEffect(() => {
-    // Ensure socket is connected
-    if (!chatSocket.isConnected) {
-      chatSocket.connect(CURRENT_USER_ID);
+    // 1. Load from local SQLite immediately (no loading spinner needed)
+    const local = messageService.list(conversationId, { page: 0, limit: PAGE_SIZE });
+    setMessages(local);
+    setHasMore(local.length === PAGE_SIZE);
+
+    // 2. If no local messages — first install or re-install — seed from backend
+    if (local.length === 0) {
+      setSeeding(true);
+      messageService
+        .seedFromBackend(conversationId, 0, PAGE_SIZE)
+        .then((seeded) => {
+          setMessages(seeded);
+          setHasMore(seeded.length === PAGE_SIZE);
+        })
+        .catch(() => {/* seed silently fails — user can still chat */})
+        .finally(() => setSeeding(false));
     }
 
-    // Load first page from LOCAL SQLite (instant, works offline)
-    loadLocalMessages(0, true);
-
-    // Reset unread count locally and on backend
-    localDatabase.resetUnreadCount(conversationId);
+    // 3. Reset unread count
     conversationService.markAsRead(conversationId).catch(() => {});
 
-    // Join the WebSocket room for this conversation
-    chatSocket.joinConversation(conversationId);
-
-    // ── Subscribe to real-time events ─────────────────────────────────────────
-
-    // New incoming message — socketService already saved it to SQLite
-    const onReceiveMessage = (msg: Message) => {
+    // 4. Socket subscriptions — defined as named functions for proper cleanup
+    const onMessage = (msg: Message) => {
       if (msg.conversationId !== conversationId) return;
-      setMessages((prev) => [msg, ...prev]);
-      // Mark as read immediately since screen is open
-      localDatabase.resetUnreadCount(conversationId);
+      setMessages((prev) => {
+        // Avoid duplicates (socket may redeliver on reconnect)
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [msg, ...prev];
+      });
+      // Mark as read since user is actively in the screen
       conversationService.markAsRead(conversationId).catch(() => {});
+      // Send read receipt to the sender
       chatSocket.markMessageRead(conversationId, msg.id, msg.senderId);
     };
 
-    // Our sent message was delivered to recipient's device
-    const onDelivered = (data: { messageId: string; conversationId: string; status: Message['status'] }) => {
-      if (data.conversationId !== conversationId) return;
-      setMessages((prev) =>
-        prev.map((m) => (m.id === data.messageId ? { ...m, status: data.status } : m)),
-      );
-    };
-
-    // Recipient has read our message
-    const onRead = (data: { conversationId: string; messageId: string; readBy: string; readAt: string }) => {
-      if (data.conversationId !== conversationId) return;
-      setMessages((prev) =>
-        prev.map((m) => (m.id === data.messageId ? { ...m, status: 'read' } : m)),
-      );
-    };
-
-    // Typing indicator
-    const onTyping = ({ conversationId: cid, userId, isTyping: typing }: {
-      conversationId: string; userId: string; isTyping: boolean;
+    const onDelivered = (data: {
+      messageId: string;
+      conversationId: string;
+      status: Message['status'];
     }) => {
-      if (cid !== conversationId || userId === CURRENT_USER_ID) return;
-      setIsTyping(typing);
-    };
-
-    // Message delivery failed
-    const onFailed = ({ messageId }: { messageId: string; reason: string }) => {
+      if (data.conversationId !== conversationId) return;
       setMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, status: 'sending' } : m)),
+        prev.map((m) =>
+          m.id === data.messageId ? { ...m, status: data.status } : m,
+        ),
       );
     };
 
-    chatSocket.on('receiveMessage', onReceiveMessage);
+    const onTyping = (data: {
+      conversationId: string;
+      userId: string;
+      isTyping: boolean;
+    }) => {
+      if (data.conversationId !== conversationId) return;
+      if (data.userId === currentUserId) return;
+      setIsTyping(data.isTyping);
+    };
+
+    const onRead = (data: {
+      conversationId: string;
+      messageId: string;
+    }) => {
+      if (data.conversationId !== conversationId) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === data.messageId ? { ...m, status: 'read' } : m,
+        ),
+      );
+    };
+
+    chatSocket.on('receiveMessage', onMessage);
     chatSocket.on('messageDelivered', onDelivered);
-    chatSocket.on('messageRead', onRead);
     chatSocket.on('userTyping', onTyping);
-    chatSocket.on('messageFailed', onFailed);
+    chatSocket.on('messageRead', onRead);
 
     return () => {
-      chatSocket.leaveConversation(conversationId);
-      chatSocket.off('receiveMessage', onReceiveMessage);
+      // Clean up exact handlers — does NOT remove other screens' listeners
+      chatSocket.off('receiveMessage', onMessage);
       chatSocket.off('messageDelivered', onDelivered);
-      chatSocket.off('messageRead', onRead);
       chatSocket.off('userTyping', onTyping);
-      chatSocket.off('messageFailed', onFailed);
+      chatSocket.off('messageRead', onRead);
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
     };
-  }, [conversationId]);
+  }, [conversationId, currentUserId]);
 
-  // ── Load from local SQLite ────────────────────────────────────────────────────
-  const loadLocalMessages = (pageNum: number, reset = false) => {
-    try {
-      if (reset) setLoading(true);
-      else setLoadingMore(true);
-
-      const offset = pageNum * PAGE_SIZE;
-      // Synchronous SQLite read — no network, instant
-      const data = localDatabase.getMessages(conversationId, PAGE_SIZE, offset);
-
-      if (reset) {
-        setMessages(data);
-      } else {
-        setMessages((prev) => [...prev, ...data]);
-      }
-
-      setHasMore(data.length === PAGE_SIZE);
-      setPage(pageNum);
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  };
+  // ── Load more (older messages) ────────────────────────────────────────────
 
   const handleLoadMore = () => {
     if (!hasMore || loadingMore) return;
-    loadLocalMessages(page + 1);
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const older = messageService.list(conversationId, {
+      page: nextPage,
+      limit: PAGE_SIZE,
+    });
+    setMessages((prev) => [...prev, ...older]);
+    setHasMore(older.length === PAGE_SIZE);
+    setPage(nextPage);
+    setLoadingMore(false);
   };
 
-  // ── Sending ───────────────────────────────────────────────────────────────────
-  const handleSend = () => {
+  // ── Send ──────────────────────────────────────────────────────────────────
+
+  const handleSend = async () => {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    if (!trimmed) return;
 
     setText('');
     Keyboard.dismiss();
 
-    const optimisticId = `opt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    const now = new Date().toISOString();
+    // Stop typing indicator
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    chatSocket.sendTyping(conversationId, participant.id, false);
 
-    // Optimistic message — shown immediately
-    const optimistic: Message = {
-      id: optimisticId,
-      conversationId,
-      senderId: CURRENT_USER_ID,
-      text: trimmed,
-      createdAt: now,
-      status: 'sending',
-    };
-
-    // 1. Save to local SQLite right away (source of truth)
-    localDatabase.insertMessage(optimistic);
-    localDatabase.updateConversationLastMessage(conversationId, trimmed, CURRENT_USER_ID, now, false);
-
-    // 2. Show in UI instantly
-    setMessages((prev) => [optimistic, ...prev]);
-
-    // 3. Route via WebSocket to recipient
-    setSending(true);
-    const sent = chatSocket.sendMessage({
-      conversationId,
-      recipientId: participant.id,
-      message: {
-        id: optimisticId,
-        senderId: CURRENT_USER_ID,
-        text: trimmed,
-        createdAt: now,
-      },
-    });
-
-    if (sent) {
-      // Update status to 'sent' locally once emitted
-      localDatabase.updateMessageStatus(optimisticId, 'sent');
-      setMessages((prev) =>
-        prev.map((m) => (m.id === optimisticId ? { ...m, status: 'sent' } : m)),
+    try {
+      const msg = await messageService.send(
+        conversationId,
+        participant.id,
+        trimmed,
       );
-    } else {
-      // Socket disconnected — message stays as 'sending' (pending queue)
-      console.warn('[ChatScreen] Socket not connected. Message queued locally.');
+      // Optimistically add to the list
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [msg, ...prev];
+      });
+    } catch {
+      // messageService handles fallback internally
     }
-    setSending(false);
   };
 
-  // ── Typing indicator emit ─────────────────────────────────────────────────────
+  // ── Typing indicator ──────────────────────────────────────────────────────
+
   const handleTyping = (val: string) => {
     setText(val);
     chatSocket.sendTyping(conversationId, participant.id, true);
@@ -225,10 +216,11 @@ export default function ChatScreen({ navigation, route }: Props) {
     }, 1500);
   };
 
-  // ── Render bubble ─────────────────────────────────────────────────────────────
+  // ── Render bubble ─────────────────────────────────────────────────────────
+
   const renderItem = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
-      const isMe = item.senderId === CURRENT_USER_ID;
+      const isMe = item.senderId === currentUserId;
       const prevMsg = messages[index + 1];
       const showAvatar = !isMe && prevMsg?.senderId !== item.senderId;
 
@@ -237,13 +229,21 @@ export default function ChatScreen({ navigation, route }: Props) {
           {!isMe && (
             <View style={styles.avatarSlot}>
               {showAvatar && (
-                <Avatar name={participant.displayName} avatarUrl={participant.avatarUrl || undefined} size={28} />
+                <Avatar
+                  name={participant.displayName}
+                  avatarUrl={participant.avatarUrl ||undefined}
+                  size={28}
+                />
               )}
             </View>
           )}
-
           <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-            <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextThem]}>
+            <Text
+              style={[
+                styles.bubbleText,
+                isMe ? styles.bubbleTextMe : styles.bubbleTextThem,
+              ]}
+            >
               {item.text}
             </Text>
             <View style={styles.bubbleMeta}>
@@ -251,9 +251,16 @@ export default function ChatScreen({ navigation, route }: Props) {
                 {formatBubbleTime(item.createdAt)}
               </Text>
               {isMe && (
-                <Text style={styles.statusTick}>
+                <Text
+                  style={[
+                    styles.statusTick,
+                    item.status === 'failed' && styles.statusFailed,
+                  ]}
+                >
                   {item.status === 'sending'
                     ? '○'
+                    : item.status === 'failed'
+                    ? '✕'
                     : item.status === 'read'
                     ? '✓✓'
                     : '✓'}
@@ -264,7 +271,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         </View>
       );
     },
-    [messages, participant],
+    [messages, participant, currentUserId],
   );
 
   return (
@@ -273,7 +280,10 @@ export default function ChatScreen({ navigation, route }: Props) {
 
       {/* Header */}
       <View style={commonChatStyles.header}>
-        <TouchableOpacity style={commonChatStyles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={commonChatStyles.backBtn}
+          onPress={() => navigation.goBack()}
+        >
           <Text style={commonChatStyles.backIcon}>‹</Text>
         </TouchableOpacity>
 
@@ -283,7 +293,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             navigation.navigate('ChatInfo', {
               conversationId,
               participant,
-              isMuted: false,
+              isMuted: isMuted ?? false,
             })
           }
           activeOpacity={0.8}
@@ -313,7 +323,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             navigation.navigate('ChatInfo', {
               conversationId,
               participant,
-              isMuted: false,
+              isMuted: isMuted ?? false,
             })
           }
         >
@@ -327,9 +337,12 @@ export default function ChatScreen({ navigation, route }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        {loading ? (
+        {seeding && messages.length === 0 ? (
           <View style={commonChatStyles.centered}>
             <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={{ color: COLORS.textSecondary, marginTop: 8, fontSize: 13 }}>
+              Loading messages…
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -377,16 +390,15 @@ export default function ChatScreen({ navigation, route }: Props) {
             returnKeyType="default"
           />
           <TouchableOpacity
-            style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
+            style={[
+              styles.sendBtn,
+              !text.trim() && styles.sendBtnDisabled,
+            ]}
             onPress={handleSend}
-            disabled={!text.trim() || sending}
+            disabled={!text.trim()}
             activeOpacity={0.8}
           >
-            {sending ? (
-              <ActivityIndicator size="small" color={COLORS.surface} />
-            ) : (
-              <Text style={styles.sendIcon}>↑</Text>
-            )}
+            <Text style={styles.sendIcon}>↑</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -395,7 +407,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  // Header - screen specific
   headerCenter: {
     flex: 1,
     flexDirection: 'row',
@@ -403,18 +414,9 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   headerInfo: { flex: 1 },
-  headerName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  headerStatus: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 1,
-  },
+  headerName: { fontSize: 15, fontWeight: '600', color: COLORS.textPrimary },
+  headerStatus: { fontSize: 12, color: COLORS.textSecondary, marginTop: 1 },
 
-  // Messages
   msgList: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
@@ -435,10 +437,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     borderRadius: 18,
   },
-  bubbleMe: {
-    backgroundColor: COLORS.primary,
-    borderBottomRightRadius: 4,
-  },
+  bubbleMe: { backgroundColor: COLORS.primary, borderBottomRightRadius: 4 },
   bubbleThem: {
     backgroundColor: COLORS.surface,
     borderBottomLeftRadius: 4,
@@ -458,8 +457,8 @@ const styles = StyleSheet.create({
   bubbleTime: { fontSize: 10, color: COLORS.textSecondary },
   bubbleTimeMe: { color: 'rgba(255,255,255,0.65)' },
   statusTick: { fontSize: 10, color: 'rgba(255,255,255,0.65)' },
+  statusFailed: { color: '#FF6B6B' },
 
-  // Typing
   typingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -477,7 +476,6 @@ const styles = StyleSheet.create({
   },
   typingText: { fontSize: 13, color: COLORS.textSecondary, fontStyle: 'italic' },
 
-  // Input bar
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
