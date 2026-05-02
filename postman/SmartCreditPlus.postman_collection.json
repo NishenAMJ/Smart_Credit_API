@@ -1,0 +1,577 @@
+{
+  "info": {
+    "_postman_id": "1f7c6d84-6c5d-4b66-9f8e-2d7b4f8b8c01",
+    "name": "Smart Credit+ Backend API",
+    "description": "NestJS backend endpoints for Smart Credit+. Import this collection together with the local environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Firebase Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/firebase-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["firebase-status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"borrower1@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Borrower",
+      "item": [
+        {
+          "name": "Create Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"borrower_001\",\n  \"fullName\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"phone\": \"+94771234567\",\n  \"dateOfBirth\": \"1995-05-18\",\n  \"nic\": \"199512345678\",\n  \"address\": {\n    \"line1\": \"12 Main Street\",\n    \"line2\": \"Apt 4\",\n    \"city\": \"Colombo\",\n    \"district\": \"Colombo\",\n    \"province\": \"Western\"\n  },\n  \"employmentStatus\": \"employed\",\n  \"monthlyIncome\": 125000,\n  \"occupation\": \"Software Engineer\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/borrower/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrower/profile/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "profile", "{{userId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"John A. Doe\",\n  \"phone\": \"+94771234567\",\n  \"address\": {\n    \"line1\": \"25 Market Road\",\n    \"city\": \"Kandy\",\n    \"district\": \"Kandy\",\n    \"province\": \"Central\"\n  },\n  \"employmentStatus\": \"self_employed\",\n  \"monthlyIncome\": 150000,\n  \"occupation\": \"Consultant\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/borrower/profile/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "profile", "{{userId}}"]
+            }
+          }
+        },
+        {
+          "name": "Featured Loans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrower/loans/featured?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "loans", "featured"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Loans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrower/loans/search?keyword={{keyword}}&borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "loans", "search"],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "{{keyword}}"
+                },
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Loan Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrower/loans/{{loanId}}?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "loans", "{{loanId}}"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filter Loans",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minAmount\": 10000,\n  \"maxAmount\": 100000,\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/borrower/loans/filter?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "loans", "filter"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Applications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrower/applications?borrowerId={{borrowerId}}&status={{applicationStatus}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "applications"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                },
+                {
+                  "key": "status",
+                  "value": "{{applicationStatus}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Application Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrower/applications/{{applicationId}}?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "applications", "{{applicationId}}"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestedAmount\": 50000,\n  \"purpose\": \"business\",\n  \"description\": \"Working capital for inventory\",\n  \"loanTermMonths\": 12,\n  \"preferredRepaymentMethod\": \"qr_payment\",\n  \"borrowerId\": \"borrower_001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/borrower/applications?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "applications"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Application",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestedAmount\": 75000,\n  \"description\": \"Updated business expansion plan\",\n  \"loanTermMonths\": 18\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/borrower/applications/{{applicationId}}?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "applications", "{{applicationId}}"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Application",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrower/applications/{{applicationId}}?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "applications", "{{applicationId}}"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrower/payments?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "payments"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loanId\": \"loan_001\",\n  \"amount\": 1000,\n  \"paymentMethod\": \"qr_payment\",\n  \"transactionReference\": \"TXN-123456\",\n  \"paymentProofUrl\": \"https://storage.example.com/receipt.png\",\n  \"borrowerId\": \"borrower_001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/borrower/payments?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "payments"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Generate QR",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loanId\": \"loan_001\",\n  \"borrowerId\": \"borrower_001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/borrower/payments/generate-qr?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "payments", "generate-qr"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Upload Receipt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loanId\": \"loan_001\",\n  \"receiptUrl\": \"https://storage.example.com/receipt.png\",\n  \"notes\": \"Uploaded from Postman\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/borrower/payments/upload-receipt",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "payments", "upload-receipt"]
+            }
+          }
+        },
+        {
+          "name": "List Transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrower/transactions?borrowerId={{borrowerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["borrower", "transactions"],
+              "query": [
+                {
+                  "key": "borrowerId",
+                  "value": "{{borrowerId}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lender Dashboard",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/dashboard/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "dashboard", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/dashboard/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "dashboard", "stats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lender Applications",
+      "item": [
+        {
+          "name": "Get All Applications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "applications"]
+            }
+          }
+        },
+        {
+          "name": "Get Pending Applications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/applications/pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "applications", "pending"]
+            }
+          }
+        },
+        {
+          "name": "Get Application By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/applications/{{applicationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "applications", "{{applicationId}}"]
+            }
+          }
+        },
+        {
+          "name": "Approve Application",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/lender/applications/{{applicationId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "applications", "{{applicationId}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "Reject Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Insufficient business history\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lender/applications/{{applicationId}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["lender", "applications", "{{applicationId}}", "reject"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "userId",
+      "value": "borrower_001"
+    },
+    {
+      "key": "borrowerId",
+      "value": "borrower_001"
+    },
+    {
+      "key": "loanId",
+      "value": "loan_001"
+    },
+    {
+      "key": "applicationId",
+      "value": "application_001"
+    },
+    {
+      "key": "keyword",
+      "value": "loan"
+    },
+    {
+      "key": "applicationStatus",
+      "value": "pending"
+    }
+  ]
+}

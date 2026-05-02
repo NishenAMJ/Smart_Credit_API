@@ -22,6 +22,7 @@ import {
   getMobileSession,
   saveMobileSession,
 } from "../utils/auth.storage";
+import { setCurrentUserId } from "../services/api";
 import type {
   AuthResponse,
   DashboardResponse,
@@ -62,19 +63,32 @@ type AuthContextValue = {
   refreshWorkspace: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+export const AuthContext = createContext<AuthContextValue | undefined>(
+  undefined,
+);
+
+// Also export for direct useContext usage if needed
+export default AuthContext;
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<MobileSession | null>(null);
-  const [sessionStatus, setSessionStatus] = useState<SessionResponse | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<SessionResponse | null>(
+    null,
+  );
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
-  const [kycSubmission, setKycSubmission] = useState<KycSubmission | null>(null);
+  const [kycSubmission, setKycSubmission] = useState<KycSubmission | null>(
+    null,
+  );
   const [authLoading, setAuthLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  async function hydrateWorkspace(accessToken: string, user: AuthResponse["user"]) {
+  async function hydrateWorkspace(
+    accessToken: string,
+    user: AuthResponse["user"],
+  ) {
     setAuthToken(accessToken);
+    setCurrentUserId(user?.uid);
     const nextSessionStatus = await getSession();
     const dashboardPromise =
       nextSessionStatus.activeRole === "lender"
@@ -101,6 +115,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   function resetWorkspaceState() {
     setAuthToken(null);
+    setCurrentUserId(null);
     setSession(null);
     setSessionStatus(null);
     setDashboard(null);
@@ -233,7 +248,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signOut,
       refreshWorkspace,
     }),
-    [authLoading, dashboard, error, kycSubmission, refreshing, session, sessionStatus],
+    [
+      authLoading,
+      dashboard,
+      error,
+      kycSubmission,
+      refreshing,
+      session,
+      sessionStatus,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

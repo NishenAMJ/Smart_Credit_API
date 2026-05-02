@@ -1,39 +1,14 @@
-import {
-  Injectable,
-  Logger,
-  InternalServerErrorException,
-} from '@nestjs/common';
-
-export interface LenderDashboardSummary {
-  totalLoans: number;
-  totalEarnings: number;
-  pendingApprovals: number;
-}
-
-export interface LenderDashboard extends LenderDashboardSummary {
-  charts: {
-    monthlyEarnings: number[];
-    loanCounts: number[];
-  };
-}
-
-export interface LenderDashboardStats {
-  stats: Array<{ label: string; value: number }>;
-  charts: LenderDashboard['charts'];
-}
+import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 
 @Injectable()
 export class LenderMobileService {
   private readonly logger = new Logger(LenderMobileService.name);
 
-  /**
-   * Builds the full lender dashboard payload used by the mobile app.
-   */
-  getDashboard(): LenderDashboard {
+  getDashboard() {
     this.logger.log('Fetching lender dashboard data...');
 
     try {
-      const data: LenderDashboard = {
+      const data = {
         totalLoans: 120,
         totalEarnings: 54000,
         pendingApprovals: 8,
@@ -45,24 +20,24 @@ export class LenderMobileService {
 
       this.logger.debug(`Dashboard data loaded: ${JSON.stringify(data)}`);
       return data;
+
     } catch (error) {
       this.logger.error(
         'Error while fetching lender dashboard data',
-        error instanceof Error ? error.stack : String(error),
+        error.stack,
       );
 
-      throw new InternalServerErrorException('Failed to load dashboard data');
+      throw new InternalServerErrorException(
+        'Failed to load dashboard data',
+      );
     }
   }
 
-  /**
-   * Returns the compact dashboard counters shown above the charts.
-   */
-  getDashboardSummary(): LenderDashboardSummary {
+  getDashboardSummary() {
     this.logger.log('Fetching lender dashboard summary...');
 
     try {
-      const summary: LenderDashboardSummary = {
+      const summary = {
         totalLoans: 120,
         totalEarnings: 54000,
         pendingApprovals: 8,
@@ -70,10 +45,11 @@ export class LenderMobileService {
 
       this.logger.debug(`Dashboard summary loaded: ${JSON.stringify(summary)}`);
       return summary;
+
     } catch (error) {
       this.logger.error(
         'Error while fetching lender dashboard summary',
-        error instanceof Error ? error.stack : String(error),
+        error.stack,
       );
 
       throw new InternalServerErrorException(
@@ -82,14 +58,11 @@ export class LenderMobileService {
     }
   }
 
-  /**
-   * Returns chart-ready statistics for the lender dashboard.
-   */
-  getDashboardStats(): LenderDashboardStats {
+  getDashboardStats() {
     this.logger.log('Fetching lender dashboard statistics...');
 
     try {
-      const stats: LenderDashboardStats = {
+      const stats = {
         stats: [
           { label: 'Total Loans', value: 120 },
           { label: 'Total Earnings', value: 54000 },
@@ -103,10 +76,11 @@ export class LenderMobileService {
 
       this.logger.debug(`Dashboard stats loaded: ${JSON.stringify(stats)}`);
       return stats;
+
     } catch (error) {
       this.logger.error(
         'Error while fetching lender dashboard stats',
-        error instanceof Error ? error.stack : String(error),
+        error.stack,
       );
 
       throw new InternalServerErrorException(

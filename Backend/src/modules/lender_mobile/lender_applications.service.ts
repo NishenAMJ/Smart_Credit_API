@@ -1,11 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
-export interface ApplicationDecision {
-  success: boolean;
-  message: string;
-  application: Application;
-}
-
 export interface Application {
   id: string;
   borrower: string;
@@ -20,66 +14,34 @@ export class LenderApplicationsService {
     { id: '1', borrower: 'John Doe', amount: 1000, status: 'pending' },
     { id: '2', borrower: 'Jane Smith', amount: 2000, status: 'approved' },
     { id: '3', borrower: 'Alice', amount: 1500, status: 'pending' },
-    {
-      id: '4',
-      borrower: 'Bob',
-      amount: 1200,
-      status: 'rejected',
-      reason: 'Low credit score',
-    },
+    { id: '4', borrower: 'Bob', amount: 1200, status: 'rejected', reason: 'Low credit score' },
   ];
 
-  /**
-   * Returns every lender application shown in the mobile dashboard.
-   */
-  getAllApplications(): Application[] {
+  getAllApplications() {
     return this.applications;
   }
 
-  /**
-   * Filters the dashboard list to applications waiting for review.
-   */
-  getPendingApplications(): Application[] {
-    return this.applications.filter((application) => {
-      return application.status === 'pending';
-    });
+  getPendingApplications() {
+    return this.applications.filter(app => app.status === 'pending');
   }
 
-  getApplicationById(id: string): Application | undefined {
-    return this.applications.find((application) => application.id === id);
+  getApplicationById(id: string) {
+    return this.applications.find(app => app.id === id);
   }
 
-  approveApplication(id: string): ApplicationDecision {
-    const application = this.getApplicationById(id);
-
-    if (!application) {
-      throw new NotFoundException('Application not found');
-    }
-
-    application.status = 'approved';
-    delete application.reason;
-
-    return {
-      success: true,
-      message: 'Application approved',
-      application,
-    };
+  approveApplication(id: string) {
+    const app = this.getApplicationById(id);
+    if (!app) throw new NotFoundException('Application not found');
+    app.status = 'approved';
+    delete app.reason;
+    return { success: true, message: 'Application approved', application: app };
   }
 
-  rejectApplication(id: string, reason: string): ApplicationDecision {
-    const application = this.getApplicationById(id);
-
-    if (!application) {
-      throw new NotFoundException('Application not found');
-    }
-
-    application.status = 'rejected';
-    application.reason = reason || 'No reason provided';
-
-    return {
-      success: true,
-      message: 'Application rejected',
-      application,
-    };
+  rejectApplication(id: string, reason: string) {
+    const app = this.getApplicationById(id);
+    if (!app) throw new NotFoundException('Application not found');
+    app.status = 'rejected';
+    app.reason = reason || 'No reason provided';
+    return { success: true, message: 'Application rejected', application: app };
   }
 }

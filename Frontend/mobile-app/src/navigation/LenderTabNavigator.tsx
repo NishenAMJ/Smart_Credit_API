@@ -1,76 +1,137 @@
-/** @format */
+import React from 'react';
+import { TouchableOpacity, StyleSheet } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 
-import React from "react";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Feather } from "@expo/vector-icons";
-import { COLORS } from "../constants/colors";
-import LenderHomeScreen from "../screens/lender/LenderHomeScreen";
-import LenderKycScreen from "../screens/lender/LenderKycScreen";
-import LenderProfileScreen from "../screens/lender/LenderProfileScreen";
-import LegalAgreementScreen from "../screens/lender/LegalAgreementScreen";
+// Only import screens that EXIST right now
+import LenderDashboardScreen from '../screens/lender/LenderDashboardScreen';
+import LenderProfileScreen   from '../screens/lender/LenderProfileScreen';
+import MyBorrowersScreen     from '../screens/lender/MyBorrowersScreen';
+import QRScannerScreen from '../screens/lender/QRScannerScreen'
+import ChatNavigator from './ChatNavigator';
 
 const Tab = createBottomTabNavigator();
 
+// ── Big round QR button in center ────────────────────
+function QRTabButton({ onPress }: any) {
+  return (
+    <TouchableOpacity 
+      style={styles.qrButton} 
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <Feather name="maximize" size={26} color="#fff" />
+    </TouchableOpacity>
+  );
+}
+
 export default function LenderTabNavigator() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: "#9CA3AF",
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
-          height: 70,
-          paddingBottom: 10,
+          height: 70 + insets.bottom,
+          paddingBottom: insets.bottom + 10,
           paddingTop: 10,
           borderTopWidth: 1,
-          borderTopColor: COLORS.border,
+          borderTopColor: '#F3F4F6',
+          backgroundColor: '#FFFFFF',
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "500",
+          fontSize: 11,
+          fontWeight: '500',
+          marginTop: 4,
         },
       }}
     >
+      {/* Tab 1 — Home */}
       <Tab.Screen
-        name='LenderHome'
-        component={LenderHomeScreen}
+        name="Home"
+        component={LenderDashboardScreen}
         options={{
-          title: "Home",
+          tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Feather name='home' size={size} color={color} />
+            <Feather name="home" size={size} color={color} />
           ),
         }}
       />
+
+      {/* Tab 2 — Borrowers */}
       <Tab.Screen
-        name='LenderKyc'
-        component={LenderKycScreen}
+        name="BorrowersTab"
+        component={MyBorrowersScreen}
         options={{
-          title: "KYC",
+          tabBarLabel: 'Borrowers',
           tabBarIcon: ({ color, size }) => (
-            <Feather name='shield' size={size} color={color} />
+            <Feather name="users" size={size} color={color} />
           ),
         }}
       />
+
+      {/* Tab 3 — QR Scanner (center button) */}
       <Tab.Screen
-        name='LenderAgreement'
-        component={LegalAgreementScreen}
+        name="QRScannerTab"
+        component={QRScannerScreen}
         options={{
-          title: "Agreement",
+          tabBarLabel: '',
+          tabBarIcon: () => null,
+          tabBarButton: (props) => <QRTabButton {...props} />,
+        }}
+      />
+
+      {/* Tab 4 — Chat/Applications */}
+      <Tab.Screen
+        name="chat"
+        component={ChatNavigator}
+        options={{
+          tabBarLabel: 'Messages',
           tabBarIcon: ({ color, size }) => (
-            <Feather name='file-text' size={size} color={color} />
+            <Feather name="inbox" size={size} color={color} />
           ),
         }}
       />
+
+      {/* Tab 5 — Profile */}
       <Tab.Screen
-        name='LenderProfile'
+        name="ProfileTab"
         component={LenderProfileScreen}
         options={{
-          title: "Profile",
+          tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <Feather name='user' size={size} color={color} />
+            <Feather name="user" size={size} color={color} />
           ),
         }}
       />
+
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  qrButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+});

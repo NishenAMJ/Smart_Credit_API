@@ -45,7 +45,7 @@ describe('AuthController', () => {
       email: 'nimal@example.com',
       phone: '0771234567',
       password: 'SmartPass123',
-      role: 'borrower',
+      role: 'borrower' as const,
     };
 
     await controller.register(payload);

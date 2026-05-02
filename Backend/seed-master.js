@@ -5,7 +5,10 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const admin = require('firebase-admin');
 
-const DEFAULT_KEY_PATH = path.resolve(__dirname, 'firebase-service-account.json');
+const DEFAULT_KEY_PATH = path.resolve(
+  __dirname,
+  'firebase-service-account.json',
+);
 
 function parseArgs(argv) {
   const options = { key: DEFAULT_KEY_PATH };
@@ -51,7 +54,9 @@ async function clearFirestore(db) {
 
   const loansSnapshot = await db.collection('loans').get();
   for (const loanDoc of loansSnapshot.docs) {
-    const installmentsSnapshot = await loanDoc.ref.collection('installments').get();
+    const installmentsSnapshot = await loanDoc.ref
+      .collection('installments')
+      .get();
     for (const installmentDoc of installmentsSnapshot.docs) {
       await clearCollection(installmentDoc.ref.collection('payments'));
       await installmentDoc.ref.delete();
@@ -87,10 +92,10 @@ async function seedRealisticData(db) {
     {
       uid: 'lender_001',
       role: ['lender'],
-      fullName: 'Kamal Rathnayake',
-      email: 'kamal.rathnayake.l01@smartcredit.lk',
+      fullName: 'Saman Perera',
+      email: 'samn@gmail.com',
       phone: '+94710000073',
-      password: 'SmartCredit@123',
+      password: 'Saman123',
       creditScore: 0,
       rating: 4.8,
       totalLoansCompleted: 2,
@@ -98,6 +103,14 @@ async function seedRealisticData(db) {
       totalAmountBorrowed: 0,
       kycStatus: 'approved',
       profileComplete: true,
+      businessName: 'Saman Capital Loans',
+      businessType: 'private_lender',
+      location: 'Colombo',
+      yearsActive: 6,
+      averageApprovalTimeHours: 12,
+      minimumCreditScore: 680,
+      preferredBorrowerProfiles: ['salary_earner', 'self_employed'],
+      investmentCapacity: 1800000,
     },
     {
       uid: 'borrower_001',
@@ -283,7 +296,7 @@ async function seedRealisticData(db) {
     data: {
       ...ad,
       id: ad.adId,
-      lenderName: 'Kamal Rathnayake',
+      lenderName: 'Saman Perera',
       lenderPhotoURL: 'https://i.pravatar.cc/300?u=lender_001',
       lenderRating: 4.8,
       isBoosted: false,
@@ -382,7 +395,8 @@ async function seedRealisticData(db) {
     ref: db.collection('loans').doc(loan.loanId),
     data: {
       ...loan,
-      borrowerName: loan.borrowerId === 'borrower_001' ? 'Amal Perera' : 'Nimal Perera',
+      borrowerName:
+        loan.borrowerId === 'borrower_001' ? 'Amal Perera' : 'Nimal Perera',
       lenderName: 'Kamal Rathnayake',
       lenderRating: 4.8,
     },
@@ -452,7 +466,7 @@ async function seedRealisticData(db) {
         relationId: 'lender_001__borrower_001',
         lenderId: 'lender_001',
         borrowerId: 'borrower_001',
-        lenderName: 'Kamal Rathnayake',
+        lenderName: 'Saman Perera',
         borrowerName: 'Amal Perera',
         borrowerCreditScore: 701,
         loanIds: [activeLoanId],
@@ -467,12 +481,14 @@ async function seedRealisticData(db) {
       },
     },
     {
-      ref: db.collection('lenderBorrowers').doc('lender_001__borrower_nimal_001'),
+      ref: db
+        .collection('lenderBorrowers')
+        .doc('lender_001__borrower_nimal_001'),
       data: {
         relationId: 'lender_001__borrower_nimal_001',
         lenderId: 'lender_001',
         borrowerId: 'borrower_nimal_001',
-        lenderName: 'Kamal Rathnayake',
+        lenderName: 'Saman Perera',
         borrowerName: 'Nimal Perera',
         borrowerCreditScore: 742,
         loanIds: [completedLoanId],
@@ -536,8 +552,20 @@ async function seedRealisticData(db) {
   }
 
   const loanInstallments = [
-    { loanId: activeLoanId, borrowerId: 'borrower_001', paidCount: 2, total: 10, amount: 10260 },
-    { loanId: completedLoanId, borrowerId: 'borrower_nimal_001', paidCount: 6, total: 6, amount: 21200 },
+    {
+      loanId: activeLoanId,
+      borrowerId: 'borrower_001',
+      paidCount: 2,
+      total: 10,
+      amount: 10260,
+    },
+    {
+      loanId: completedLoanId,
+      borrowerId: 'borrower_nimal_001',
+      paidCount: 6,
+      total: 6,
+      amount: 21200,
+    },
   ];
 
   for (const loanData of loanInstallments) {
@@ -545,7 +573,9 @@ async function seedRealisticData(db) {
     for (let i = 1; i <= loanData.total; i += 1) {
       const dueDate = addMonths(now, i - loanData.paidCount - 1);
       const paid = i <= loanData.paidCount;
-      const installmentRef = loanRef.collection('installments').doc(`installment_${String(i).padStart(3, '0')}`);
+      const installmentRef = loanRef
+        .collection('installments')
+        .doc(`installment_${String(i).padStart(3, '0')}`);
 
       await installmentRef.set({
         installmentId: installmentRef.id,
@@ -563,7 +593,9 @@ async function seedRealisticData(db) {
       });
 
       if (paid) {
-        const paymentRef = installmentRef.collection('payments').doc(`payment_${String(i).padStart(3, '0')}`);
+        const paymentRef = installmentRef
+          .collection('payments')
+          .doc(`payment_${String(i).padStart(3, '0')}`);
         await paymentRef.set({
           paymentId: paymentRef.id,
           lenderId: 'lender_001',
@@ -585,7 +617,7 @@ async function seedRealisticData(db) {
   }
 
   console.log('Seed complete with realistic lender/borrower/admin dataset.');
-  console.log('Lender login:   kamal.rathnayake.l01@smartcredit.lk / SmartCredit@123');
+  console.log('Lender login:   samn@gmail.com / Saman123');
   console.log('Borrower login: amal@gmail.com / Amal@123');
   console.log('Borrower login: nimal@gmail.com / Nimal123');
   console.log('Admin login:    admin@smartcredit.lk / Admin@123');

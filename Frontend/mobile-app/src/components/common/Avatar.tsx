@@ -6,11 +6,16 @@ import { COLORS } from "../../constants/colors";
 import { firstChar } from "../../utils/helpers";
 
 type AvatarProps = {
+  name?: string;
   label?: string;
   size?: number;
+  avatarUrl?: string | null;
+  showOnline?: boolean;
+  isOnline?: boolean;
 };
 
-export default function Avatar({ label, size = 40 }: AvatarProps) {
+export default function Avatar({ name, label, size = 40, avatarUrl, showOnline, isOnline }: AvatarProps) {
+  const displayLabel = name || label;
   return (
     <View
       style={[
@@ -18,7 +23,7 @@ export default function Avatar({ label, size = 40 }: AvatarProps) {
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      <Text style={styles.text}>{firstChar(label, "U")}</Text>
+      <Text style={styles.text}>{firstChar(displayLabel, "U")}</Text>
     </View>
   );
 }
