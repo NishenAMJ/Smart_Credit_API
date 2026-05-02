@@ -162,6 +162,29 @@ describe('AdsService', () => {
     expect(result.status).toBe('active');
   });
 
+  it('returns aggregate ad stats from firestore counts', async () => {
+    countGetMock
+      .mockResolvedValueOnce({ data: () => ({ count: 10 }) })
+      .mockResolvedValueOnce({ data: () => ({ count: 2 }) })
+      .mockResolvedValueOnce({ data: () => ({ count: 3 }) })
+      .mockResolvedValueOnce({ data: () => ({ count: 1 }) })
+      .mockResolvedValueOnce({ data: () => ({ count: 2 }) })
+      .mockResolvedValueOnce({ data: () => ({ count: 2 }) });
+
+    const result = await service.getAdStats();
+
+    expect(collectionMock).toHaveBeenCalledWith('ads');
+    expect(countMock).toHaveBeenCalled();
+    expect(result.stats).toEqual({
+      all: 10,
+      active: 2,
+      approved: 3,
+      pending: 1,
+      rejected: 2,
+      closed: 2,
+    });
+  });
+
   it('rejects moderation of non-lender ads', async () => {
     getMock.mockResolvedValue({
       exists: true,
