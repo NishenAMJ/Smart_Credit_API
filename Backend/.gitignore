@@ -42,6 +42,18 @@ firebase-service-account.json
 *firebase-adminsdk*
 smart-credit-b0f6d-firebase-adminsdk-fbsvc-3ffa5833f5
 
+# Dev/Seed utility scripts
+add-more-kyc.js
+check-admin.js
+check-txns.js
+inspect-nimal.js
+list-users.js
+recreate-admin.js
+seed-borrower-amal.js
+seed-master.js
+seed-mock-data-with-lenderborrowers.js
+seed-nimal-mahinsa.js
+
 # Misc
 *.pid
 *.seed
