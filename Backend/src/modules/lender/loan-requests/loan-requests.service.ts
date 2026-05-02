@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   DocumentData,
   Firestore,
@@ -62,6 +62,8 @@ const PENDING_STATUSES = new Set<string>([
 
 @Injectable()
 export class LoanRequestsService {
+  private readonly logger = new Logger(LoanRequestsService.name);
+
   constructor(private readonly firebaseService: FirebaseService) {}
 
   async getPendingRequests(
@@ -75,18 +77,34 @@ export class LoanRequestsService {
     const safePageSize = Math.min(Math.max(pageSize, 8), 60);
     const db = this.firebaseService.getDb();
 
-    const adsSnapshot = await db.collection('ads').where('lenderId', '==', lenderId).get();
-    const adTitleMap = new Map<string, string>(
-      adsSnapshot.docs.map((doc) => {
-        const data = doc.data();
-        return [
-          doc.id,
-          typeof data.title === 'string' && data.title.trim().length > 0
-            ? data.title
-            : `Ad ${doc.id}`,
-        ] as const;
-      }),
-    );
+    let adTitleMap = new Map<string, string>();
+
+    try {
+      const adsSnapshot = await db
+        .collection('ads')
+        .where('lenderId', '==', lenderId)
+        .get();
+
+      adTitleMap = new Map<string, string>(
+        adsSnapshot.docs.map((doc) => {
+          const data = doc.data();
+
+          return [
+            doc.id,
+            typeof data.title === 'string' && data.title.trim().length > 0
+              ? data.title
+              : `Ad ${doc.id}`,
+          ] as const;
+        }),
+      );
+    } catch (error) {
+      this.logFallback(
+        'pending-requests:ads',
+        'Falling back from lender ad lookup while loading pending requests.',
+        error,
+      );
+    }
+
     const adIds = new Set<string>(adTitleMap.keys());
     const pagedRequests = await this.getRequestsPage(
       db,
@@ -255,13 +273,28 @@ export class LoanRequestsService {
     cursor?: string | null,
     adId?: string | null,
   ): Promise<QueryDocumentSnapshot<DocumentData>[]> {
-    const snapshots = await Promise.all(
+    const snapshots = await Promise.allSettled(
       this.buildRequestQueries(db, lenderId, adIds, cursor, adId).map((query) =>
         query.limit(limit).get(),
       ),
     );
 
-    return this.mergeRequestDocs(snapshots.flatMap((snapshot) => snapshot.docs), limit);
+    snapshots.forEach((snapshot, index) => {
+      if (snapshot.status === 'rejected') {
+        this.logFallback(
+          `pending-requests:page-query-${index}`,
+          'Falling back from one pending requests page query branch.',
+          snapshot.reason,
+        );
+      }
+    });
+
+    return this.mergeRequestDocs(
+      snapshots.flatMap((snapshot) =>
+        snapshot.status === 'fulfilled' ? snapshot.value.docs : [],
+      ),
+      limit,
+    );
   }
 
   private async fetchAllMatchingRequestDocs(
@@ -277,7 +310,18 @@ export class LoanRequestsService {
       let hasMore = true;
 
       while (hasMore) {
-        const snapshot = await applyDateCursor(query, nextCursor).limit(80).get();
+        let snapshot;
+
+        try {
+          snapshot = await applyDateCursor(query, nextCursor).limit(80).get();
+        } catch (error) {
+          this.logFallback(
+            'pending-requests:summary-query',
+            'Falling back from one pending requests summary query branch.',
+            error,
+          );
+          break;
+        }
 
         snapshot.docs.forEach((doc) => {
           docsById.set(doc.id, doc);
@@ -476,5 +520,11 @@ export class LoanRequestsService {
 
   private toDate(value: unknown): Date | null {
     return readDate(value);
+  }
+
+  private logFallback(label: string, message: string, error: unknown): void {
+    const detail =
+      error instanceof Error ? error.message : 'Unknown Firestore query error';
+    this.logger.warn(`${message} [${label}] ${detail}`);
   }
 }

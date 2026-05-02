@@ -83,8 +83,12 @@ export default function RecentTransactionsPage({
   const [response, setResponse] = useState<RecentTransactionsResponse | null>(
     null,
   );
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isListLoading, setIsListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summary, setSummary] =
+    useState<RecentTransactionsResponse["summary"] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -114,25 +118,27 @@ export default function RecentTransactionsPage({
     cursor?: string | null;
     search?: string;
   }) {
-    setIsLoading(true);
-    setError(null);
+    setIsListLoading(true);
+    setListError(null);
 
     try {
+      const normalizedSearch = options?.search ?? debouncedSearchQuery;
       const data = await fetchRecentTransactions({
         pageSize: PAGE_SIZE,
         cursor: options?.cursor ?? activeCursor,
         includeSummary: false,
-        search: options?.search ?? debouncedSearchQuery,
+        includeSearchCount: normalizedSearch.trim().length > 0,
+        search: normalizedSearch,
       });
       setResponse(data);
     } catch (loadError) {
-      setError(
+      setListError(
         loadError instanceof Error
           ? loadError.message
           : "Failed to load recent transactions.",
       );
     } finally {
-      setIsLoading(false);
+      setIsListLoading(false);
     }
   }
 
@@ -140,6 +146,7 @@ export default function RecentTransactionsPage({
     setCurrentPage(1);
     setPageCursors([null]);
     setResponse(null);
+    setSummary(null);
     setSearchQuery("");
     setDebouncedSearchQuery("");
   }, [session.lenderId]);
@@ -162,13 +169,14 @@ export default function RecentTransactionsPage({
 
     const loadTransactions = async () => {
       try {
-        setIsLoading(true);
-        setError(null);
+        setIsListLoading(true);
+        setListError(null);
 
         const data = await fetchRecentTransactions({
           pageSize: PAGE_SIZE,
           cursor: activeCursor,
           includeSummary: false,
+          includeSearchCount: debouncedSearchQuery.trim().length > 0,
           search: debouncedSearchQuery,
         });
 
@@ -177,7 +185,7 @@ export default function RecentTransactionsPage({
         }
       } catch (loadError) {
         if (isMounted) {
-          setError(
+          setListError(
             loadError instanceof Error
               ? loadError.message
               : "Failed to load recent transactions.",
@@ -185,7 +193,7 @@ export default function RecentTransactionsPage({
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsListLoading(false);
         }
       }
     };
@@ -196,6 +204,49 @@ export default function RecentTransactionsPage({
       isMounted = false;
     };
   }, [activeCursor, currentPage, debouncedSearchQuery, session.lenderId]);
+
+  useEffect(() => {
+    if (!response || summary) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadSummary = async () => {
+      try {
+        setIsSummaryLoading(true);
+        setSummaryError(null);
+
+        const data = await fetchRecentTransactions({
+          pageSize: PAGE_SIZE,
+          includeSummary: true,
+          includeSearchCount: false,
+        });
+
+        if (isMounted) {
+          setSummary(data.summary);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setSummaryError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Failed to load payments summary.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsSummaryLoading(false);
+        }
+      }
+    };
+
+    void loadSummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [response, session.lenderId, summary]);
 
   useEffect(() => {
     if (!selectedTransaction) {
@@ -335,6 +386,24 @@ export default function RecentTransactionsPage({
         cursor: null,
         search: debouncedSearchQuery,
       });
+      try {
+        setIsSummaryLoading(true);
+        setSummaryError(null);
+        const summaryData = await fetchRecentTransactions({
+          pageSize: PAGE_SIZE,
+          includeSummary: true,
+          includeSearchCount: false,
+        });
+        setSummary(summaryData.summary);
+      } catch (loadError) {
+        setSummaryError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Failed to load payments summary.",
+        );
+      } finally {
+        setIsSummaryLoading(false);
+      }
     } catch (saveError) {
       setPaymentForm((current) => ({
         ...current,
@@ -362,6 +431,12 @@ export default function RecentTransactionsPage({
   const isSearchActive = debouncedSearchQuery.trim().length > 0;
   const matchedPaymentsCount =
     response?.searchResultCount ?? (isSearchActive ? transactions.length : 0);
+  const displaySummary = summary ?? {
+    totalTransactions: 0,
+    totalCollected: 0,
+    loansWithActivity: 0,
+    overdueInstallments: 0,
+  };
 
   function goToPreviousPage() {
     setCurrentPage((page) => Math.max(1, page - 1));
@@ -401,14 +476,14 @@ export default function RecentTransactionsPage({
           </div>
         </header>
 
-        {isLoading ? (
+        {isListLoading && !response ? (
           <section className="card loading-card">
             <p>Loading loan activity ledger...</p>
           </section>
-        ) : error ? (
+        ) : listError && !response ? (
           <section className="card error-card">
             <h2>Loan activity ledger is not available yet</h2>
-            <p>{error}</p>
+            <p>{listError}</p>
             <p>
               Check the lender loan ledger API, lender-linked loan data, and
               whether payment or transaction records exist in Firestore.
@@ -416,6 +491,70 @@ export default function RecentTransactionsPage({
           </section>
         ) : (
           <>
+            <section className="summary-grid" aria-label="Loan activity summary">
+              <article className="card metric-card">
+                <div className="metric-icon metric-icon--primary" aria-hidden="true">
+                  PM
+                </div>
+                <div className="metric-copy">
+                  <p className="metric-label">Total Payments</p>
+                  <p className="metric-value">
+                    {isSummaryLoading ? "..." : String(displaySummary.totalTransactions)}
+                  </p>
+                  <p className="metric-caption">
+                    {summaryError ??
+                      "Completed lender-linked payment rows across your loan book"}
+                  </p>
+                </div>
+              </article>
+              <article className="card metric-card">
+                <div className="metric-icon metric-icon--success" aria-hidden="true">
+                  LKR
+                </div>
+                <div className="metric-copy">
+                  <p className="metric-label">Total Collected</p>
+                  <p className="metric-value">
+                    {isSummaryLoading
+                      ? "..."
+                      : formatCurrency(displaySummary.totalCollected)}
+                  </p>
+                  <p className="metric-caption">
+                    Repayments collected across all linked loans
+                  </p>
+                </div>
+              </article>
+              <article className="card metric-card">
+                <div className="metric-icon metric-icon--warning" aria-hidden="true">
+                  LN
+                </div>
+                <div className="metric-copy">
+                  <p className="metric-label">Loans With Activity</p>
+                  <p className="metric-value">
+                    {isSummaryLoading ? "..." : String(displaySummary.loansWithActivity)}
+                  </p>
+                  <p className="metric-caption">
+                    Loans with at least one recorded repayment
+                  </p>
+                </div>
+              </article>
+              <article className="card metric-card">
+                <div className="metric-icon metric-icon--danger" aria-hidden="true">
+                  OD
+                </div>
+                <div className="metric-copy">
+                  <p className="metric-label">Overdue Installments</p>
+                  <p className="metric-value">
+                    {isSummaryLoading
+                      ? "..."
+                      : String(displaySummary.overdueInstallments)}
+                  </p>
+                  <p className="metric-caption">
+                    Overdue installments in your current portfolio
+                  </p>
+                </div>
+              </article>
+            </section>
+
             <section className="card pending-requests-card">
               <div className="borrowers-toolbar">
                 <div>
@@ -458,7 +597,7 @@ export default function RecentTransactionsPage({
                     <div className="metric-copy">
                       <p className="metric-label">Total Payments</p>
                       <p className="metric-value">
-                        {isLoading ? "..." : String(matchedPaymentsCount)}
+                        {isListLoading ? "..." : String(matchedPaymentsCount)}
                       </p>
                       <p className="metric-caption">
                         Total matched payment rows across all pages for this
@@ -482,7 +621,19 @@ export default function RecentTransactionsPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.length > 0 ? (
+                    {isListLoading ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          Loading lender-linked payment activity...
+                        </td>
+                      </tr>
+                    ) : listError ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          {listError}
+                        </td>
+                      </tr>
+                    ) : transactions.length > 0 ? (
                       transactions.map((transaction) => (
                         <tr
                           key={transaction.transactionId}
@@ -609,7 +760,7 @@ export default function RecentTransactionsPage({
                     type="button"
                     className="pagination-button"
                     onClick={goToPreviousPage}
-                    disabled={currentPage === 1 || isLoading}
+                    disabled={currentPage === 1 || isListLoading}
                   >
                     Previous
                   </button>
@@ -620,7 +771,7 @@ export default function RecentTransactionsPage({
                     type="button"
                     className="pagination-button"
                     onClick={goToNextPage}
-                    disabled={!response?.pageInfo.hasMore || isLoading}
+                    disabled={!response?.pageInfo.hasMore || isListLoading}
                   >
                     Next
                   </button>

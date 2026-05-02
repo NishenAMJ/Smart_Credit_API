@@ -82,7 +82,7 @@ function App() {
         ) : activeView === 'recent-transactions' ? (
           <RecentTransactionsPage session={session} />
         ) : activeView === 'analytics' ? (
-          <AnalyticsPage session={session} onNavigate={setActiveView} />
+          <AnalyticsPage session={session} />
         ) : activeView === 'active-ads-requests' ? (
           <ActiveAdsRequestsPage session={session} onNavigate={setActiveView} />
         ) : activeView === 'create-ad' ? (

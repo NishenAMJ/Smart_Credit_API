@@ -88,6 +88,92 @@ describe('DashboardService', () => {
     expect(result.generatedAt).toEqual(expect.any(String));
   });
 
+  it('falls back to loan-derived borrowers when relation data is unavailable', async () => {
+    const db = {
+      collection: jest
+        .fn()
+        .mockImplementation((collectionName: string) => {
+          if (collectionName === 'lenderBorrowers') {
+            return {
+              where: jest.fn(() => ({
+                get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+              })),
+            };
+          }
+
+          if (collectionName === 'users') {
+            return {
+              doc: jest.fn((borrowerId: string) => ({ id: borrowerId })),
+            };
+          }
+
+          if (collectionName === 'loans') {
+            return {
+              where: jest.fn(() => ({
+                get: jest.fn().mockResolvedValue({
+                  docs: [
+                    {
+                      id: 'loan_1',
+                      data: () => ({
+                        borrowerId: 'borrower_1',
+                        amount: 100000,
+                        remainingAmount: 40000,
+                        interestRate: 12,
+                        tenureMonths: 12,
+                        status: 'active',
+                        createdAt: '2026-04-01T00:00:00.000Z',
+                      }),
+                    },
+                  ],
+                }),
+              })),
+            };
+          }
+
+          return {};
+        }),
+      getAll: jest.fn().mockResolvedValue([
+        {
+          id: 'borrower_1',
+          data: () => ({
+            role: 'borrower',
+            fullName: 'Borrower One',
+            email: 'borrower1@example.com',
+            creditScore: 720,
+            kycStatus: 'verified',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          }),
+        },
+      ]),
+      doc: jest.fn(),
+    };
+
+    const service = new DashboardService({ getDb: () => db } as any);
+
+    jest.spyOn(service as any, 'getBorrowersFromRelations').mockResolvedValue(null);
+    jest.spyOn(service as any, 'mapLoan').mockResolvedValue({
+      id: 'loan_1',
+      borrowerId: 'borrower_1',
+      amount: 100000,
+      remainingAmount: 40000,
+      interestRate: 12,
+      tenureMonths: 12,
+      status: 'active',
+      createdAt: new Date('2026-04-01T00:00:00.000Z'),
+    });
+
+    const result = await service.getBorrowers('lender_1', 8, null);
+
+    expect(result.borrowers).toHaveLength(1);
+    expect(result.borrowers[0]).toMatchObject({
+      id: 'borrower_1',
+      fullName: 'Borrower One',
+      email: 'borrower1@example.com',
+      loanCount: 1,
+      outstandingAmount: 40000,
+    });
+  });
+
   it('falls back overdue count to nested installments when aggregate query fails', async () => {
     const overdueInstallment = createDoc('inst_overdue', { status: 'overdue' });
     const nonOverdueInstallment = createDoc('inst_paid', { status: 'paid' });

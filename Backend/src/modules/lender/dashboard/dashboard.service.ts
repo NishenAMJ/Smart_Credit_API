@@ -109,9 +109,28 @@ export class DashboardService {
       search,
     );
 
+    if (relationBorrowers) {
+      return {
+        ...relationBorrowers,
+        generatedAt: new Date().toISOString(),
+      };
+    }
+
+    const lenderLoansSnapshot = await db
+      .collection('loans')
+      .where('lenderId', '==', lenderId)
+      .get();
+    const lenderLoans = await Promise.all(
+      lenderLoansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
+    );
+
     return {
-      ...(relationBorrowers ??
-        this.createBorrowerPage([], safePageSize, false)),
+      ...(await this.getRecentBorrowers(
+        db,
+        lenderLoans,
+        safePageSize,
+        cursor,
+      )),
       generatedAt: new Date().toISOString(),
     };
   }
