@@ -34,6 +34,11 @@ export type DashboardSummaryResponse = {
 
 export type DashboardBorrowersResponse = {
   borrowers: DashboardBorrower[];
+  pageInfo: {
+    pageSize: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
   generatedAt: string;
 };
 
@@ -78,13 +83,25 @@ export async function fetchDashboardSummary(): Promise<DashboardSummaryResponse>
 }
 
 export async function fetchDashboardBorrowers(
-  limit = 24,
+  pageSize = 8,
+  cursor?: string | null,
+  search?: string,
 ): Promise<DashboardBorrowersResponse> {
+  const searchParams = new URLSearchParams({
+    pageSize: String(pageSize),
+  });
+
+  if (cursor) {
+    searchParams.set("cursor", cursor);
+  }
+
+  if (search && search.trim().length > 0) {
+    searchParams.set("search", search.trim());
+  }
+
   const response = await fetchLenderApiWithQuery(
     "/dashboard/borrowers",
-    new URLSearchParams({
-      limit: String(limit),
-    }),
+    searchParams,
   );
 
   if (!response.ok) {

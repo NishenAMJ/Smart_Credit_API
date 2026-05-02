@@ -38,12 +38,14 @@ export class DashboardController {
     @Req() req: AuthenticatedRequest,
     @Query('pageSize', new DefaultValuePipe(8), ParseIntPipe) pageSize: number,
     @Query('cursor') cursor?: string,
+    @Query('search') search?: string,
     @Query('limit') limit?: string,
   ): Promise<DashboardBorrowersResponse> {
     return this.dashboardService.getBorrowers(
       req.user.sub,
       Number.isFinite(Number(limit)) ? Number(limit) : pageSize,
       cursor?.trim() || null,
+      search?.trim() || null,
     );
   }
 

@@ -81,6 +81,8 @@ export async function computeLoanRemainingAmount(
   loanId: string,
   data: DocumentData,
 ): Promise<number> {
+  void db;
+  void loanId;
   const storedRemaining = readNumber(data.remainingAmount);
 
   if (storedRemaining > 0 || data.remainingAmount === 0) {
@@ -89,19 +91,40 @@ export async function computeLoanRemainingAmount(
 
   const totalRepayable = readNumber(data.totalRepayable, data.amount, data.principalAmount);
 
-  if (totalRepayable <= 0) {
-    return 0;
-  }
-
-  const snapshot = await db.collection('loans').doc(loanId).collection('installments').get();
-  const paidTotal = snapshot.docs.reduce(
-    (total, installmentDoc) => total + getNormalizedInstallment(installmentDoc.data()).paidAmount,
-    0,
-  );
-
-  return Math.max(0, totalRepayable - paidTotal);
+  return totalRepayable > 0 ? totalRepayable : 0;
 }
 
 export function readMatchedLenderIds(data: DocumentData): string[] {
   return readStringArray(data.matchedLenderIds);
+}
+
+function normalizeSearchValue(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, ' ');
+}
+
+export function buildSearchKeywords(...values: Array<string | null | undefined>): string[] {
+  const keywords = new Set<string>();
+
+  values.forEach((value) => {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      return;
+    }
+
+    const normalized = normalizeSearchValue(value);
+
+    if (!normalized) {
+      return;
+    }
+
+    normalized
+      .split(/\s+/)
+      .filter((token) => token.length >= 2)
+      .forEach((token) => {
+        for (let index = 2; index <= token.length; index += 1) {
+          keywords.add(token.slice(0, index));
+        }
+      });
+  });
+
+  return Array.from(keywords);
 }

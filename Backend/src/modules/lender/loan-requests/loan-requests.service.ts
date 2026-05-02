@@ -8,12 +8,12 @@ import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   applyDateCursor,
   buildPageInfo,
+  chunkValues,
   orderByDateAndId,
   readDate,
   readNumber,
   readString,
   readStringArray,
-  scanQueryPage,
 } from '../../../firebase/firestore-query.utils';
 import {
   PendingRequestListItem,
@@ -171,34 +171,23 @@ export class LoanRequestsService {
     adId?: string | null,
     includeAllStatuses = false,
   ): Promise<{ items: RawLoanRequest[] }> {
-    return scanQueryPage({
-      pageSize,
+    const requestDocs = await this.fetchMatchingRequestDocs(
+      db,
+      lenderId,
+      adIds,
+      pageSize + 1,
       cursor,
-      batchSize: Math.max(pageSize * 2, 40),
-      fetchChunk: async (nextCursor, batchSize) => {
-        const snapshot = await applyDateCursor(
-          orderByDateAndId(db.collection('loanRequests'), 'createdAt'),
-          nextCursor,
-        )
-          .limit(batchSize)
-          .get();
+      adId,
+    );
+    const items = requestDocs
+      .map((doc) => this.mapLoanRequest(doc))
+      .filter((request) =>
+        this.isStatusIncluded(request.status, includeAllStatuses),
+      );
 
-        return snapshot.docs;
-      },
-      mapDoc: async (doc) => {
-        const request = this.mapLoanRequest(doc);
-
-        if (!this.isRequestVisibleToLender(request, lenderId, adIds, adId)) {
-          return null;
-        }
-
-        if (!this.isStatusIncluded(request.status, includeAllStatuses)) {
-          return null;
-        }
-
-        return request;
-      },
-    });
+    return {
+      items: items.slice(0, pageSize + 1),
+    };
   }
 
   private async buildSummary(
@@ -208,44 +197,17 @@ export class LoanRequestsService {
     adId?: string | null,
     includeAllStatuses = false,
   ) {
-    const requests: RawLoanRequest[] = [];
-    let cursor: string | null = null;
-    let hasMore = true;
-
-    while (hasMore) {
-      const snapshot = await applyDateCursor(
-        orderByDateAndId(db.collection('loanRequests'), 'createdAt'),
-        cursor,
-      )
-        .limit(80)
-        .get();
-
-      snapshot.docs.forEach((doc) => {
-        const request = this.mapLoanRequest(doc);
-
-        if (
-          this.isRequestVisibleToLender(request, lenderId, adIds, adId) &&
-          this.isStatusIncluded(request.status, includeAllStatuses)
-        ) {
-          requests.push(request);
-        }
-      });
-
-      hasMore = snapshot.docs.length === 80;
-      const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-      cursor =
-        lastDoc && hasMore
-          ? Buffer.from(
-              JSON.stringify({
-                timestamp:
-                  readDate(lastDoc.get('createdAt'))?.toISOString() ??
-                  new Date(0).toISOString(),
-                id: lastDoc.id,
-              }),
-              'utf8',
-            ).toString('base64url')
-          : null;
-    }
+    const requestDocs = await this.fetchAllMatchingRequestDocs(
+      db,
+      lenderId,
+      adIds,
+      adId,
+    );
+    const requests = requestDocs
+      .map((doc) => this.mapLoanRequest(doc))
+      .filter((request) =>
+        this.isStatusIncluded(request.status, includeAllStatuses),
+      );
 
     return this.buildSummaryFromRequests(requests);
   }
@@ -283,6 +245,134 @@ export class LoanRequestsService {
     includeAllStatuses: boolean,
   ): boolean {
     return includeAllStatuses || PENDING_STATUSES.has(status);
+  }
+
+  private async fetchMatchingRequestDocs(
+    db: Firestore,
+    lenderId: string,
+    adIds: Set<string>,
+    limit: number,
+    cursor?: string | null,
+    adId?: string | null,
+  ): Promise<QueryDocumentSnapshot<DocumentData>[]> {
+    const snapshots = await Promise.all(
+      this.buildRequestQueries(db, lenderId, adIds, cursor, adId).map((query) =>
+        query.limit(limit).get(),
+      ),
+    );
+
+    return this.mergeRequestDocs(snapshots.flatMap((snapshot) => snapshot.docs), limit);
+  }
+
+  private async fetchAllMatchingRequestDocs(
+    db: Firestore,
+    lenderId: string,
+    adIds: Set<string>,
+    adId?: string | null,
+  ): Promise<QueryDocumentSnapshot<DocumentData>[]> {
+    const docsById = new Map<string, QueryDocumentSnapshot<DocumentData>>();
+
+    for (const query of this.buildRequestQueries(db, lenderId, adIds, null, adId)) {
+      let nextCursor: string | null = null;
+      let hasMore = true;
+
+      while (hasMore) {
+        const snapshot = await applyDateCursor(query, nextCursor).limit(80).get();
+
+        snapshot.docs.forEach((doc) => {
+          docsById.set(doc.id, doc);
+        });
+
+        hasMore = snapshot.docs.length === 80;
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        nextCursor =
+          hasMore && lastDoc
+            ? Buffer.from(
+                JSON.stringify({
+                  timestamp:
+                    readDate(lastDoc.get('createdAt'))?.toISOString() ??
+                    new Date(0).toISOString(),
+                  id: lastDoc.id,
+                }),
+                'utf8',
+              ).toString('base64url')
+            : null;
+      }
+    }
+
+    return this.mergeRequestDocs(Array.from(docsById.values()));
+  }
+
+  private buildRequestQueries(
+    db: Firestore,
+    lenderId: string,
+    adIds: Set<string>,
+    cursor?: string | null,
+    adId?: string | null,
+  ) {
+    const queries = [
+      applyDateCursor(
+        orderByDateAndId(
+          db.collection('loanRequests').where('targetLenderId', '==', lenderId),
+          'createdAt',
+        ),
+        cursor,
+      ),
+      applyDateCursor(
+        orderByDateAndId(
+          db.collection('loanRequests').where('matchedLenderIds', 'array-contains', lenderId),
+          'createdAt',
+        ),
+        cursor,
+      ),
+    ];
+    const relevantAdIds = adId
+      ? adIds.has(adId)
+        ? [adId]
+        : []
+      : Array.from(adIds);
+
+    chunkValues(relevantAdIds, 10).forEach((adIdChunk) => {
+      if (adIdChunk.length === 0) {
+        return;
+      }
+
+      queries.push(
+        applyDateCursor(
+          orderByDateAndId(
+            db.collection('loanRequests').where('adId', 'in', adIdChunk),
+            'createdAt',
+          ),
+          cursor,
+        ),
+      );
+    });
+
+    return queries;
+  }
+
+  private mergeRequestDocs(
+    docs: QueryDocumentSnapshot<DocumentData>[],
+    limit?: number,
+  ): QueryDocumentSnapshot<DocumentData>[] {
+    const docsById = new Map<string, QueryDocumentSnapshot<DocumentData>>();
+
+    docs.forEach((doc) => {
+      docsById.set(doc.id, doc);
+    });
+
+    const merged = Array.from(docsById.values()).sort((left, right) => {
+      const leftTime = readDate(left.get('createdAt'))?.getTime() ?? 0;
+      const rightTime = readDate(right.get('createdAt'))?.getTime() ?? 0;
+
+      if (leftTime !== rightTime) {
+        return rightTime - leftTime;
+      }
+
+      return right.id.localeCompare(left.id);
+    });
+
+    return typeof limit === 'number' ? merged.slice(0, limit) : merged;
   }
 
   private mapLoanRequest(

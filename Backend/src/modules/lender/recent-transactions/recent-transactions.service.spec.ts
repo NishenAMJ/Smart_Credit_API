@@ -23,6 +23,7 @@ function createContext(loanIds: string[]) {
   }));
 
   return {
+    lenderId: 'lender_001',
     loans,
     loanIds: new Set(loanIds),
     loanIdsList: loanIds,
@@ -46,6 +47,7 @@ describe('RecentTransactionsService', () => {
 
   it('builds paginated payment activity from nested payment paths', async () => {
     const query = {
+      where: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnValue({
         get: jest.fn().mockResolvedValue({
           empty: false,
@@ -102,6 +104,7 @@ describe('RecentTransactionsService', () => {
 
   it('treats seed payment methods as loan repayments for the ledger', async () => {
     const query = {
+      where: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnValue({
         get: jest.fn().mockResolvedValue({
           empty: false,
@@ -148,6 +151,7 @@ describe('RecentTransactionsService', () => {
 
   it('supports server-side search by installment id', async () => {
     const query = {
+      where: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnValue({
         get: jest.fn().mockResolvedValue({
           empty: false,
@@ -216,6 +220,7 @@ describe('RecentTransactionsService', () => {
     };
     const db = {
       collectionGroup: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnValue({
           get: jest.fn().mockRejectedValue(new Error('missing index')),
@@ -223,6 +228,13 @@ describe('RecentTransactionsService', () => {
       }),
       collection: jest.fn().mockReturnValue({
         doc: jest.fn().mockReturnValue(loanDocRef),
+        where: jest.fn().mockReturnValue({
+          orderBy: jest.fn().mockReturnThis(),
+          get: jest.fn().mockResolvedValue({ docs: [] }),
+          limit: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({ docs: [] }),
+          }),
+        }),
       }),
     };
     const firebaseService = { getDb: () => db } as any;
@@ -273,6 +285,7 @@ describe('RecentTransactionsService', () => {
     };
     const db = {
       collectionGroup: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnValue({
           get: jest.fn().mockRejectedValue(new Error('missing index')),
@@ -280,6 +293,13 @@ describe('RecentTransactionsService', () => {
       }),
       collection: jest.fn().mockReturnValue({
         doc: jest.fn().mockReturnValue(loanDocRef),
+        where: jest.fn().mockReturnValue({
+          orderBy: jest.fn().mockReturnThis(),
+          get: jest.fn().mockResolvedValue({ docs: [] }),
+          limit: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({ docs: [] }),
+          }),
+        }),
       }),
     };
     const firebaseService = { getDb: () => db } as any;

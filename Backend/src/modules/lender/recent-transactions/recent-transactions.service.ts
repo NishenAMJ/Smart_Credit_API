@@ -77,6 +77,7 @@ type CachedValue<T> = {
 };
 
 type LenderLedgerContext = {
+  lenderId: string;
   loans: LoanRecord[];
   loanIds: Set<string>;
   loanIdsList: string[];
@@ -432,6 +433,7 @@ export class RecentTransactionsService {
     );
     const borrowerMap = await this.getBorrowerMap(uniqueBorrowerIds);
     const context = {
+      lenderId,
       loans,
       loanIds: new Set<string>(loanIdsList),
       loanIdsList,
@@ -458,7 +460,10 @@ export class RecentTransactionsService {
       return cached;
     }
 
-    const allScopedTransactions = await this.getAllRecentPayments(loanIds);
+    const allScopedTransactions = await this.getAllRecentPayments(
+      lenderId,
+      loanIds,
+    );
     const installmentSummaries =
       await this.getInstallmentSummaries(loanIdsList);
     const summary = {
@@ -495,6 +500,7 @@ export class RecentTransactionsService {
     }
 
     const allScopedTransactions = await this.getAllRecentPayments(
+      lenderId,
       context.loanIds,
     );
     const count = allScopedTransactions.filter((transaction) =>
@@ -522,7 +528,10 @@ export class RecentTransactionsService {
 
       while (items.length < pageSize + 1 && !exhausted) {
         const snapshot = await applyDateCursor(
-          orderByDateAndId(db.collectionGroup('payments'), 'paidAt'),
+          orderByDateAndId(
+            db.collectionGroup('payments').where('lenderId', '==', context.lenderId),
+            'paidAt',
+          ),
           currentCursor,
         )
           .limit(Math.max(pageSize * 2, 40))
@@ -569,6 +578,22 @@ export class RecentTransactionsService {
       }
     } catch {}
 
+    const topLevelTransactions = await this.getTopLevelRepaymentsByLoanIds(
+      context.loanIds,
+      pageSize,
+      cursor,
+    );
+
+    if (topLevelTransactions.length > 0) {
+      return {
+        items: topLevelTransactions
+          .filter((transaction) =>
+            this.matchesTransactionFilters(transaction, context, search ?? null),
+          )
+          .slice(0, pageSize + 1),
+      };
+    }
+
     return {
       items: await this.getTraversedPaymentsByLoanIds(
         context.loanIdsList,
@@ -581,6 +606,7 @@ export class RecentTransactionsService {
   }
 
   private async getAllRecentPayments(
+    lenderId: string,
     loanIds: Set<string>,
   ): Promise<TransactionRecord[]> {
     const db = this.firebaseService.getDb();
@@ -588,6 +614,7 @@ export class RecentTransactionsService {
     try {
       const snapshot = await db
         .collectionGroup('payments')
+        .where('lenderId', '==', lenderId)
         .orderBy('paidAt', 'desc')
         .get();
 
