@@ -1,7 +1,10 @@
-import React, { useState, useCallback } from 'react';
+/** @format */
+
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
+  type TextStyle,
   FlatList,
   TouchableOpacity,
   StyleSheet,
@@ -9,23 +12,23 @@ import {
   SafeAreaView,
   StatusBar,
   Modal,
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../../constants';
-import { BlockedUser, ChatStackParamList } from '../../types';
-import { userService } from '../../services';
-import Avatar from '../../components/common/Avatar';
+} from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from "../../constants";
+import { BlockedUser, ChatStackParamList } from "../../types";
+import { userService } from "../../services";
+import Avatar from "../../components/common/Avatar";
 
 type Props = {
-  navigation: NativeStackNavigationProp<ChatStackParamList, 'BlockedUsers'>;
+  navigation: NativeStackNavigationProp<ChatStackParamList, "BlockedUsers">;
 };
 
 function formatBlockedDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
@@ -50,7 +53,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       const data = await userService.getBlockedUsers();
       setBlockedUsers(data);
     } catch {
-      setError('Could not load blocked users.');
+      setError("Could not load blocked users.");
     } finally {
       setLoading(false);
     }
@@ -79,16 +82,21 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       <Avatar name={item.displayName} avatarUrl={item.avatarUrl} size={46} />
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.displayName}</Text>
-        <Text style={styles.userSub}>Blocked · {formatBlockedDate(item.blockedAt)}</Text>
+        <Text style={styles.userSub}>
+          Blocked · {formatBlockedDate(item.blockedAt)}
+        </Text>
       </View>
       <TouchableOpacity
-        style={[styles.unblockBtn, unblocking === item.id && styles.unblockBtnDisabled]}
+        style={[
+          styles.unblockBtn,
+          unblocking === item.id && styles.unblockBtnDisabled,
+        ]}
         onPress={() => setSelectedUser(item)}
         disabled={!!unblocking}
         activeOpacity={0.7}
       >
         {unblocking === item.id ? (
-          <ActivityIndicator size="small" color={COLORS.primary} />
+          <ActivityIndicator size='small' color={COLORS.primary} />
         ) : (
           <Text style={styles.unblockBtnText}>Unblock</Text>
         )}
@@ -110,11 +118,14 @@ export default function BlockedUsersScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
+      <StatusBar barStyle='dark-content' backgroundColor={COLORS.surface} />
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+        >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Blocked users</Text>
@@ -124,7 +135,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       {/* Content */}
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size='large' color={COLORS.primary} />
         </View>
       ) : error ? (
         <View style={styles.centered}>
@@ -137,7 +148,8 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         <>
           {blockedUsers.length > 0 && (
             <Text style={styles.countLabel}>
-              {blockedUsers.length} blocked {blockedUsers.length === 1 ? 'user' : 'users'}
+              {blockedUsers.length} blocked{" "}
+              {blockedUsers.length === 1 ? "user" : "users"}
             </Text>
           )}
           <FlatList
@@ -145,7 +157,9 @@ export default function BlockedUsersScreen({ navigation }: Props) {
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             ListEmptyComponent={renderEmpty}
-            contentContainerStyle={blockedUsers.length === 0 ? styles.flatListEmpty : undefined}
+            contentContainerStyle={
+              blockedUsers.length === 0 ? styles.flatListEmpty : undefined
+            }
             showsVerticalScrollIndicator={false}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
           />
@@ -156,7 +170,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       <Modal
         visible={!!selectedUser}
         transparent
-        animationType="slide"
+        animationType='slide'
         onRequestClose={() => setSelectedUser(null)}
       >
         <TouchableOpacity
@@ -170,7 +184,10 @@ export default function BlockedUsersScreen({ navigation }: Props) {
             <Text style={styles.sheetBody}>
               Unblocking will allow them to message you again.
             </Text>
-            <TouchableOpacity style={styles.sheetConfirm} onPress={handleConfirmUnblock}>
+            <TouchableOpacity
+              style={styles.sheetConfirm}
+              onPress={handleConfirmUnblock}
+            >
               <Text style={styles.sheetConfirmText}>Unblock</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -188,13 +205,18 @@ export default function BlockedUsersScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
@@ -206,11 +228,14 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: BORDER_RADIUS.full,
     backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   backIcon: { fontSize: 22, color: COLORS.primary, lineHeight: 26 },
-  headerTitle: { ...TYPOGRAPHY.subtitle, color: COLORS.textPrimary },
+  headerTitle: {
+    ...(TYPOGRAPHY.subtitle as TextStyle),
+    color: COLORS.textPrimary,
+  },
 
   // Count
   countLabel: {
@@ -218,14 +243,14 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
     paddingBottom: SPACING.sm,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: "500",
     color: COLORS.textSecondary,
   },
 
   // User row
   userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: SPACING.md,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
@@ -233,7 +258,10 @@ const styles = StyleSheet.create({
   },
   separator: { height: 0.5, backgroundColor: COLORS.border },
   userInfo: { flex: 1, minWidth: 0 },
-  userName: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary },
+  userName: {
+    ...(TYPOGRAPHY.bodyMedium as TextStyle),
+    color: COLORS.textPrimary,
+  },
   userSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 1 },
   unblockBtn: {
     paddingHorizontal: SPACING.md,
@@ -242,17 +270,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.primary,
     minWidth: 74,
-    alignItems: 'center',
+    alignItems: "center",
   },
   unblockBtnDisabled: { opacity: 0.5 },
-  unblockBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
+  unblockBtnText: { fontSize: 13, fontWeight: "600", color: COLORS.primary },
 
   // Empty state
   flatListEmpty: { flex: 1 },
   emptyState: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 40,
     gap: 10,
   },
@@ -261,21 +289,29 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: SPACING.sm,
   },
-  emptyTitle: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, textAlign: 'center' },
+  emptyTitle: {
+    ...(TYPOGRAPHY.bodyMedium as TextStyle),
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
   emptySub: {
     fontSize: 13,
     color: COLORS.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 19,
-    fontWeight: '400',
+    fontWeight: "400",
   },
 
   // Error
-  errorText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, textAlign: 'center' },
+  errorText: {
+    ...(TYPOGRAPHY.body as TextStyle),
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
   retryBtn: {
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
@@ -283,13 +319,13 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.primary,
   },
-  retryText: { ...TYPOGRAPHY.bodyMedium, color: COLORS.primary },
+  retryText: { ...(TYPOGRAPHY.bodyMedium as TextStyle), color: COLORS.primary },
 
   // Bottom sheet
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
   },
   sheet: {
     backgroundColor: COLORS.surface,
@@ -304,20 +340,20 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: COLORS.border,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: SPACING.lg,
   },
   sheetTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.textPrimary,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: SPACING.sm,
   },
   sheetBody: {
     fontSize: 13,
     color: COLORS.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 19,
     marginBottom: SPACING.xl,
   },
@@ -325,15 +361,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderRadius: BORDER_RADIUS.medium,
     paddingVertical: 13,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: SPACING.sm,
   },
-  sheetConfirmText: { fontSize: 15, fontWeight: '600', color: COLORS.surface },
+  sheetConfirmText: { fontSize: 15, fontWeight: "600", color: COLORS.surface },
   sheetCancel: {
     backgroundColor: COLORS.background,
     borderRadius: BORDER_RADIUS.medium,
     paddingVertical: 13,
-    alignItems: 'center',
+    alignItems: "center",
   },
-  sheetCancelText: { fontSize: 15, fontWeight: '600', color: COLORS.textPrimary },
+  sheetCancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
 });
