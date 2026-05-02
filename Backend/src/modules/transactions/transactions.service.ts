@@ -1,12 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { 
-  DocumentData, 
-  DocumentReference, 
-  QuerySnapshot, 
-  Timestamp 
+import {
+  DocumentData,
+  DocumentReference,
+  QuerySnapshot,
+  Timestamp,
 } from 'firebase-admin/firestore';
-import * as admin from 'firebase-admin';
+import { Observable } from 'rxjs';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
 
@@ -240,7 +239,7 @@ export class TransactionsService {
       'toDate' in value &&
       typeof value.toDate === 'function'
     ) {
-      return (value as any).toDate().toISOString();
+      return value.toDate().toISOString();
     }
 
     if (typeof value === 'string') {

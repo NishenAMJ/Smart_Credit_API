@@ -4,7 +4,7 @@ import { AdminService } from './admin.service';
 import { AdminAuditController } from './admin-audit.controller';
 import { AdminAuditService } from './admin-audit.service';
 import { FirebaseModule } from '../../firebase/firebase.module';
-import { AuthModule } from '../auth/auth.module';
+import { AuthModule } from './admin-auth/auth.module';
 
 @Module({
   imports: [FirebaseModule, AuthModule],

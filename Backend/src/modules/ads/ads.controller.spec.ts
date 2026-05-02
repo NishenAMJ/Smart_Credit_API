@@ -1,8 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdsController } from './ads.controller';
 import { AdsService } from './ads.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
 
 describe('AdsController', () => {
   let controller: AdsController;
@@ -20,9 +19,7 @@ describe('AdsController', () => {
         },
       ],
     })
-      .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
-      .overrideGuard(RolesGuard)
+      .overrideGuard(AdminJwtGuard)
       .useValue({ canActivate: () => true })
       .compile();
 
