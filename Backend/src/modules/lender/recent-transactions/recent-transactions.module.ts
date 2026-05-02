@@ -7,5 +7,6 @@ import { RecentTransactionsService } from './recent-transactions.service';
   imports: [FirebaseModule],
   controllers: [RecentTransactionsController],
   providers: [RecentTransactionsService],
+  exports: [RecentTransactionsService],
 })
 export class RecentTransactionsModule {}

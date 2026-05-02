@@ -148,7 +148,11 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationGenerationPreferences = {
   inAppDisputes: true,
 };
 
-const REQUEST_STATUS_UPDATES = new Set(['under_review', 'approved', 'pending_kyc']);
+const REQUEST_STATUS_UPDATES = new Set<string>([
+  'under_review',
+  'approved',
+  'pending_kyc',
+]);
 
 @Injectable()
 export class LenderNotificationsService {
@@ -349,9 +353,11 @@ export class LenderNotificationsService {
       loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
     );
     const ads = adsSnapshot.docs.map((doc) => this.mapAd(doc));
-    const adIds = new Set(ads.map((ad) => ad.id));
-    const loanMap = new Map(loans.map((loan) => [loan.id, loan]));
-    const loanIds = new Set(loans.map((loan) => loan.id));
+    const adIds = new Set<string>(ads.map((ad) => ad.id));
+    const loanMap = new Map<string, LoanRecord>(
+      loans.map((loan) => [loan.id, loan] as const),
+    );
+    const loanIds = new Set<string>(loans.map((loan) => loan.id));
 
     const [scopedRequests, transactions, disputes, overdueMap] =
       await Promise.all([
@@ -483,7 +489,7 @@ export class LenderNotificationsService {
       ),
     );
 
-    const topLevelTransactions = dedupeById(
+    const topLevelTransactions: TransactionRecord[] = dedupeById(
       snapshots
         .flatMap((snapshot) => snapshot.docs)
         .map((doc) => this.mapTransaction(doc))
@@ -555,13 +561,17 @@ export class LenderNotificationsService {
       db.collection('lenderNotifications').doc(draft.id),
     );
     const existingSnapshots = await db.getAll(...refs);
-    const existingMap = new Map(
-      existingSnapshots.map((snapshot) => [snapshot.id, snapshot.data() ?? {}]),
+    const existingMap = new Map<string, Record<string, unknown>>(
+      existingSnapshots.map((snapshot) => [
+        snapshot.id,
+        (snapshot.data() ?? {}) as Record<string, unknown>,
+      ]),
     );
 
     const batch = db.batch();
     drafts.forEach((draft) => {
-      const existing = existingMap.get(draft.id) ?? {};
+      const existing: Record<string, unknown> =
+        existingMap.get(draft.id) ?? {};
       this.setNotificationDocument(batch, draft, existing);
     });
 
@@ -1049,7 +1059,9 @@ export class LenderNotificationsService {
   private async getBorrowerMap(
     borrowerIds: string[],
   ): Promise<Map<string, BorrowerProfile>> {
-    const uniqueBorrowerIds = Array.from(new Set(borrowerIds));
+    const uniqueBorrowerIds: string[] = Array.from(
+      new Set<string>(borrowerIds),
+    );
 
     if (uniqueBorrowerIds.length === 0) {
       return new Map<string, BorrowerProfile>();

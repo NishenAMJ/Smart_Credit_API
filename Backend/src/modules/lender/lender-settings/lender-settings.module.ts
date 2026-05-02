@@ -7,5 +7,6 @@ import { LenderSettingsService } from './lender-settings.service';
   imports: [FirebaseModule],
   controllers: [LenderSettingsController],
   providers: [LenderSettingsService],
+  exports: [LenderSettingsService],
 })
 export class LenderSettingsModule {}

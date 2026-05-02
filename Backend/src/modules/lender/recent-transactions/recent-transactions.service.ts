@@ -139,8 +139,8 @@ export class RecentTransactionsService {
       normalizedSearch,
     );
     const visibleTransactions = pagedTransactions.items.slice(0, safePageSize);
-    const activeLoanIds = Array.from(
-      new Set(
+    const activeLoanIds: string[] = Array.from(
+      new Set<string>(
         visibleTransactions
           .map((transaction) => transaction.loanId)
           .filter((loanId): loanId is string => Boolean(loanId)),
@@ -423,8 +423,8 @@ export class RecentTransactionsService {
       loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
     );
     const loanIdsList = loans.map((loan) => loan.id);
-    const uniqueBorrowerIds = Array.from(
-      new Set(
+    const uniqueBorrowerIds: string[] = Array.from(
+      new Set<string>(
         loans
           .map((loan) => loan.borrowerId)
           .filter((borrowerId): borrowerId is string => Boolean(borrowerId)),
@@ -433,9 +433,11 @@ export class RecentTransactionsService {
     const borrowerMap = await this.getBorrowerMap(uniqueBorrowerIds);
     const context = {
       loans,
-      loanIds: new Set(loanIdsList),
+      loanIds: new Set<string>(loanIdsList),
       loanIdsList,
-      loanMap: new Map(loans.map((loan) => [loan.id, loan])),
+      loanMap: new Map<string, LoanRecord>(
+        loans.map((loan) => [loan.id, loan] as const),
+      ),
       borrowerMap,
     } satisfies LenderLedgerContext;
 
@@ -730,7 +732,7 @@ export class RecentTransactionsService {
       ),
     );
 
-    return new Map(
+    return new Map<string, BorrowerProfile>(
       snapshots.map((snapshot) => {
         const data = snapshot.data();
 

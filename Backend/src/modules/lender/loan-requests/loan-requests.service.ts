@@ -52,7 +52,7 @@ type BorrowerProfile = {
   kycStatus: string;
 };
 
-const PENDING_STATUSES = new Set([
+const PENDING_STATUSES = new Set<string>([
   'open',
   'under_review',
   'matched',
@@ -76,7 +76,7 @@ export class LoanRequestsService {
     const db = this.firebaseService.getDb();
 
     const adsSnapshot = await db.collection('ads').where('lenderId', '==', lenderId).get();
-    const adTitleMap = new Map(
+    const adTitleMap = new Map<string, string>(
       adsSnapshot.docs.map((doc) => {
         const data = doc.data();
         return [
@@ -87,7 +87,7 @@ export class LoanRequestsService {
         ] as const;
       }),
     );
-    const adIds = new Set(adTitleMap.keys());
+    const adIds = new Set<string>(adTitleMap.keys());
     const pagedRequests = await this.getRequestsPage(
       db,
       lenderId,
@@ -99,8 +99,8 @@ export class LoanRequestsService {
     );
     const prioritizedRequests = pagedRequests.items.slice(0, safePageSize);
 
-    const borrowerIds = Array.from(
-      new Set(
+    const borrowerIds: string[] = Array.from(
+      new Set<string>(
         prioritizedRequests
           .map((request) => request.borrowerId)
           .filter((borrowerId): borrowerId is string => Boolean(borrowerId)),
@@ -336,7 +336,7 @@ export class LoanRequestsService {
       ...borrowerIds.map((borrowerId) => db.collection('users').doc(borrowerId)),
     );
 
-    return new Map(
+    return new Map<string, BorrowerProfile>(
       snapshots.map((snapshot) => {
         const data = snapshot.data();
 

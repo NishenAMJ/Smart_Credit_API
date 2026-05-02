@@ -7,5 +7,6 @@ import { LoanRequestsService } from './loan-requests.service';
   imports: [FirebaseModule],
   controllers: [LoanRequestsController],
   providers: [LoanRequestsService],
+  exports: [LoanRequestsService],
 })
 export class LoanRequestsModule {}

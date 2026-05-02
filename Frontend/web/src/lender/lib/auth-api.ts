@@ -1,75 +1,76 @@
 const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
-  'http://localhost:3000/api'
+  (
+    import.meta.env.VITE_API_BASE_URL as string | undefined
+  )?.replace(/\/$/, "") ?? "http://localhost:3000/api";
 
 export type LoginPayload = {
-  identifier: string
-  password: string
-}
+  identifier: string;
+  password: string;
+};
 
 export type RegisterPayload = {
-  fullName: string
-  email: string
-  phone: string
-  password: string
-  role: 'lender'
-}
+  fullName: string;
+  email: string;
+  phone: string;
+  password: string;
+  role: "lender";
+};
 
 export type SubmitKycPayload = {
-  documentType: string
-  documentNumber: string
-  fullName: string
-  issuingCountry?: string
-  expiryDate?: string
-  documentFrontUrl?: string
-  documentBackUrl?: string
-  selfieUrl?: string
-  profilePictureUrl?: string
-}
+  documentType: string;
+  documentNumber: string;
+  fullName: string;
+  issuingCountry?: string;
+  expiryDate?: string;
+  documentFrontUrl?: string;
+  documentBackUrl?: string;
+  selfieUrl?: string;
+  profilePictureUrl?: string;
+};
 
 export type AuthResponse = {
-  accessToken: string
+  accessToken: string;
   user: {
-    uid: string
-    email: string
-    fullName: string
-    role: string
-    phone?: string
-    kycStatus?: string
-  }
-}
+    uid: string;
+    email: string;
+    fullName: string;
+    role: string;
+    phone?: string;
+    kycStatus?: string;
+  };
+};
 
 async function parseError(
   response: Response,
   fallbackMessage: string,
 ): Promise<never> {
-  const errorBody = await response.json().catch(() => ({}))
-  throw new Error(errorBody.message || fallbackMessage)
+  const errorBody = await response.json().catch(() => ({}));
+  throw new Error(errorBody.message || fallbackMessage);
 }
 
 export async function login(payload: LoginPayload): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  })
+  });
 
   if (!response.ok) {
-    return parseError(response, 'Login failed')
+    return parseError(response, "Login failed");
   }
 
-  return response.json()
+  return response.json();
 }
 
 export async function register(payload: RegisterPayload): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  })
+  });
 
   if (!response.ok) {
-    return parseError(response, 'Registration failed')
+    return parseError(response, "Registration failed");
   }
 }
 
@@ -78,15 +79,15 @@ export async function submitKyc(
   payload: SubmitKycPayload,
 ): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/kyc/submit`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
-  })
+  });
 
   if (!response.ok) {
-    return parseError(response, 'KYC submission failed')
+    return parseError(response, "KYC submission failed");
   }
 }

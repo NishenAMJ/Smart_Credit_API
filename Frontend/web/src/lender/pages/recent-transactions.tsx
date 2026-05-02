@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from "react";
 import {
   fetchBorrowerDetails,
   type BorrowerDetails,
-} from '../lib/dashboard-api'
-import type { LenderSession } from '../lib/lender-session'
+} from "../lib/dashboard-api";
+import type { LenderSession } from "../lib/lender-session";
 import {
   fetchLoanLedgerDetails,
   type LoanLedgerDetailsResponse,
@@ -11,292 +11,297 @@ import {
   recordInstallmentPayment,
   type RecentTransactionItem,
   type RecentTransactionsResponse,
-} from '../lib/recent-transactions-api'
+} from "../lib/recent-transactions-api";
 
 type RecentTransactionsPageProps = {
-  session: LenderSession
-}
+  session: LenderSession;
+};
 
-type DetailSection = 'loan' | 'borrower'
+type DetailSection = "loan" | "borrower";
 
 type PaymentFormState = {
-  installmentId: string | null
-  amount: string
-  paidAt: string
-  note: string
-  error: string | null
-  success: string | null
-  isSaving: boolean
-}
+  installmentId: string | null;
+  amount: string;
+  paidAt: string;
+  note: string;
+  error: string | null;
+  success: string | null;
+  isSaving: boolean;
+};
 
-const PAGE_SIZE = 15
+const PAGE_SIZE = 15;
 
-const currencyFormatter = new Intl.NumberFormat('en-LK', {
-  style: 'currency',
-  currency: 'LKR',
+const currencyFormatter = new Intl.NumberFormat("en-LK", {
+  style: "currency",
+  currency: "LKR",
   maximumFractionDigits: 0,
-})
+});
 
 function formatCurrency(value: number): string {
-  return currencyFormatter.format(value)
+  return currencyFormatter.format(value);
 }
 
 function formatLabel(value: string): string {
   return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function formatDate(value: string | null): string {
   if (!value) {
-    return 'Unknown'
+    return "Unknown";
   }
 
-  const parsed = new Date(value)
+  const parsed = new Date(value);
 
   if (Number.isNaN(parsed.getTime())) {
-    return 'Unknown'
+    return "Unknown";
   }
 
-  return new Intl.DateTimeFormat('en-LK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(parsed)
+  return new Intl.DateTimeFormat("en-LK", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(parsed);
 }
 
 function getStatusBadgeClass(value: string): string {
-  if (value === 'overdue' || value === 'defaulted' || value === 'failed') {
-    return 'badge-danger'
+  if (value === "overdue" || value === "defaulted" || value === "failed") {
+    return "badge-danger";
   }
 
-  if (value === 'paid' || value === 'completed' || value === 'repayment') {
-    return 'badge-success'
+  if (value === "paid" || value === "completed" || value === "repayment") {
+    return "badge-success";
   }
 
-  return 'badge-gray'
+  return "badge-gray";
 }
 
 export default function RecentTransactionsPage({
   session,
 }: RecentTransactionsPageProps) {
-  const [response, setResponse] = useState<RecentTransactionsResponse | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
+  const [response, setResponse] = useState<RecentTransactionsResponse | null>(
+    null,
+  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
   const [selectedTransaction, setSelectedTransaction] =
-    useState<RecentTransactionItem | null>(null)
-  const [detailSection, setDetailSection] = useState<DetailSection>('loan')
-  const [borrowerDetails, setBorrowerDetails] = useState<BorrowerDetails | null>(null)
-  const [loanDetails, setLoanDetails] = useState<LoanLedgerDetailsResponse | null>(null)
-  const [detailError, setDetailError] = useState<string | null>(null)
-  const [isDetailLoading, setIsDetailLoading] = useState(false)
+    useState<RecentTransactionItem | null>(null);
+  const [detailSection, setDetailSection] = useState<DetailSection>("loan");
+  const [borrowerDetails, setBorrowerDetails] =
+    useState<BorrowerDetails | null>(null);
+  const [loanDetails, setLoanDetails] =
+    useState<LoanLedgerDetailsResponse | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>({
     installmentId: null,
-    amount: '',
+    amount: "",
     paidAt: new Date().toISOString().slice(0, 10),
-    note: '',
+    note: "",
     error: null,
     success: null,
     isSaving: false,
-  })
+  });
 
-  const activeCursor = pageCursors[currentPage - 1] ?? null
+  const activeCursor = pageCursors[currentPage - 1] ?? null;
 
   async function loadTransactionsData(options?: {
-    cursor?: string | null
-    search?: string
+    cursor?: string | null;
+    search?: string;
   }) {
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true);
+    setError(null);
 
     try {
       const data = await fetchRecentTransactions(session.lenderId, {
         pageSize: PAGE_SIZE,
         cursor: options?.cursor ?? activeCursor,
         includeSummary: false,
-        includeSearchCount: false,
         search: options?.search ?? debouncedSearchQuery,
-      })
-      setResponse(data)
+      });
+      setResponse(data);
     } catch (loadError) {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : 'Failed to load recent transactions.',
-      )
+          : "Failed to load recent transactions.",
+      );
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
   useEffect(() => {
-    setCurrentPage(1)
-    setPageCursors([null])
-    setResponse(null)
-    setSearchQuery('')
-    setDebouncedSearchQuery('')
-  }, [session.lenderId])
+    setCurrentPage(1);
+    setPageCursors([null]);
+    setResponse(null);
+    setSearchQuery("");
+    setDebouncedSearchQuery("");
+  }, [session.lenderId]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery)
-    }, 250)
+      setDebouncedSearchQuery(searchQuery);
+    }, 250);
 
-    return () => window.clearTimeout(handle)
-  }, [searchQuery])
-
-  useEffect(() => {
-    setCurrentPage(1)
-    setPageCursors([null])
-  }, [debouncedSearchQuery])
+    return () => window.clearTimeout(handle);
+  }, [searchQuery]);
 
   useEffect(() => {
-    let isMounted = true
+    setCurrentPage(1);
+    setPageCursors([null]);
+  }, [debouncedSearchQuery]);
+
+  useEffect(() => {
+    let isMounted = true;
 
     const loadTransactions = async () => {
       try {
-        setIsLoading(true)
-        setError(null)
+        setIsLoading(true);
+        setError(null);
 
         const data = await fetchRecentTransactions(session.lenderId, {
           pageSize: PAGE_SIZE,
           cursor: activeCursor,
           includeSummary: false,
-          includeSearchCount: false,
           search: debouncedSearchQuery,
-        })
+        });
 
         if (isMounted) {
-          setResponse(data)
+          setResponse(data);
         }
       } catch (loadError) {
         if (isMounted) {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load recent transactions.',
-          )
+              : "Failed to load recent transactions.",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       }
-    }
+    };
 
-    void loadTransactions()
+    void loadTransactions();
 
     return () => {
-      isMounted = false
-    }
-  }, [activeCursor, currentPage, debouncedSearchQuery, session.lenderId])
+      isMounted = false;
+    };
+  }, [activeCursor, currentPage, debouncedSearchQuery, session.lenderId]);
 
   useEffect(() => {
     if (!selectedTransaction) {
-      return
+      return;
     }
 
-    let isMounted = true
+    let isMounted = true;
 
     const loadDetails = async () => {
       try {
-        setIsDetailLoading(true)
-        setDetailError(null)
+        setIsDetailLoading(true);
+        setDetailError(null);
 
         const [borrowerData, loanData] = await Promise.all([
-          fetchBorrowerDetails(session.lenderId, selectedTransaction.borrowerId),
+          fetchBorrowerDetails(
+            session.lenderId,
+            selectedTransaction.borrowerId,
+          ),
           fetchLoanLedgerDetails(session.lenderId, selectedTransaction.loanId),
-        ])
+        ]);
 
         if (isMounted) {
-          setBorrowerDetails(borrowerData)
-          setLoanDetails(loanData)
+          setBorrowerDetails(borrowerData);
+          setLoanDetails(loanData);
         }
       } catch (loadError) {
         if (isMounted) {
           setDetailError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load loan activity details.',
-          )
+              : "Failed to load loan activity details.",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsDetailLoading(false)
+          setIsDetailLoading(false);
         }
       }
-    }
+    };
 
-    void loadDetails()
+    void loadDetails();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setSelectedTransaction(null)
+      if (event.key === "Escape") {
+        setSelectedTransaction(null);
       }
-    }
+    };
 
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
-      isMounted = false
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [selectedTransaction, session.lenderId])
+      isMounted = false;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedTransaction, session.lenderId]);
 
   function openLoanSection(transaction: RecentTransactionItem) {
-    setSelectedTransaction(transaction)
-    setDetailSection('loan')
-    setBorrowerDetails(null)
-    setLoanDetails(null)
-    setDetailError(null)
+    setSelectedTransaction(transaction);
+    setDetailSection("loan");
+    setBorrowerDetails(null);
+    setLoanDetails(null);
+    setDetailError(null);
     setPaymentForm({
       installmentId: null,
-      amount: '',
+      amount: "",
       paidAt: new Date().toISOString().slice(0, 10),
-      note: '',
+      note: "",
       error: null,
       success: null,
       isSaving: false,
-    })
+    });
   }
 
   function openBorrowerSection(transaction: RecentTransactionItem) {
-    setSelectedTransaction(transaction)
-    setDetailSection('borrower')
-    setBorrowerDetails(null)
-    setLoanDetails(null)
-    setDetailError(null)
+    setSelectedTransaction(transaction);
+    setDetailSection("borrower");
+    setBorrowerDetails(null);
+    setLoanDetails(null);
+    setDetailError(null);
   }
 
   function openPaymentForm(installmentId: string) {
     setPaymentForm({
       installmentId,
-      amount: '',
+      amount: "",
       paidAt: new Date().toISOString().slice(0, 10),
-      note: '',
+      note: "",
       error: null,
       success: null,
       isSaving: false,
-    })
+    });
   }
 
   async function handleRecordPayment(installmentId: string) {
     if (!selectedTransaction) {
-      return
+      return;
     }
 
-    const amount = Number(paymentForm.amount)
+    const amount = Number(paymentForm.amount);
 
     if (!Number.isFinite(amount) || amount <= 0) {
       setPaymentForm((current) => ({
         ...current,
-        error: 'Enter a valid payment amount greater than zero.',
+        error: "Enter a valid payment amount greater than zero.",
         success: null,
-      }))
-      return
+      }));
+      return;
     }
 
     try {
@@ -305,7 +310,7 @@ export default function RecentTransactionsPage({
         isSaving: true,
         error: null,
         success: null,
-      }))
+      }));
 
       const updatedLoanDetails = await recordInstallmentPayment(
         session.lenderId,
@@ -316,24 +321,24 @@ export default function RecentTransactionsPage({
           paidAt: paymentForm.paidAt,
           note: paymentForm.note,
         },
-      )
+      );
 
-      setLoanDetails(updatedLoanDetails)
+      setLoanDetails(updatedLoanDetails);
       setPaymentForm({
         installmentId: null,
-        amount: '',
+        amount: "",
         paidAt: new Date().toISOString().slice(0, 10),
-        note: '',
+        note: "",
         error: null,
-        success: 'Payment recorded successfully.',
+        success: "Payment recorded successfully.",
         isSaving: false,
-      })
-      setCurrentPage(1)
-      setPageCursors([null])
+      });
+      setCurrentPage(1);
+      setPageCursors([null]);
       await loadTransactionsData({
         cursor: null,
         search: debouncedSearchQuery,
-      })
+      });
     } catch (saveError) {
       setPaymentForm((current) => ({
         ...current,
@@ -341,43 +346,46 @@ export default function RecentTransactionsPage({
         error:
           saveError instanceof Error
             ? saveError.message
-            : 'Failed to record payment.',
+            : "Failed to record payment.",
         success: null,
-      }))
+      }));
     }
   }
 
   const transactions = useMemo(
     () => response?.transactions ?? [],
     [response?.transactions],
-  )
+  );
 
   const visibleStart = response?.transactions.length
     ? (currentPage - 1) * PAGE_SIZE + 1
-    : 0
+    : 0;
   const visibleEnd = response?.transactions.length
     ? visibleStart + response.transactions.length - 1
-    : 0
+    : 0;
+  const isSearchActive = debouncedSearchQuery.trim().length > 0;
+  const matchedPaymentsCount =
+    response?.searchResultCount ?? (isSearchActive ? transactions.length : 0);
 
   function goToPreviousPage() {
-    setCurrentPage((page) => Math.max(1, page - 1))
+    setCurrentPage((page) => Math.max(1, page - 1));
   }
 
   function goToNextPage() {
-    const nextCursor = response?.pageInfo.nextCursor
+    const nextCursor = response?.pageInfo.nextCursor;
 
     if (!nextCursor) {
-      return
+      return;
     }
 
     setPageCursors((current) => {
       if (current[currentPage] === nextCursor) {
-        return current
+        return current;
       }
 
-      return [...current.slice(0, currentPage), nextCursor]
-    })
-    setCurrentPage((page) => page + 1)
+      return [...current.slice(0, currentPage), nextCursor];
+    });
+    setCurrentPage((page) => page + 1);
   }
 
   return (
@@ -386,13 +394,13 @@ export default function RecentTransactionsPage({
         <header className="page-header">
           <div>
             <p className="eyebrow">Lender cash flow</p>
-            <h1 className="page-title">Payments</h1>
+            <h1 className="page-title">Loans</h1>
             <p className="page-subtitle">
               Review your loan activity ledger with lender-owned payments,
               installment progress, and remaining balances in one place.
             </p>
             <p className="dashboard-context-pill">
-              Payment ledger: {session.displayName} - {session.lenderId}
+              Loan ledger: {session.displayName} - {session.lenderId}
             </p>
           </div>
         </header>
@@ -417,10 +425,11 @@ export default function RecentTransactionsPage({
                 <div>
                   <h2 className="section-title">Loan Activity Ledger</h2>
                   <p className="section-subtitle">
-                    Every row is a lender-linked payment record. The page loads the
-                    latest {PAGE_SIZE} first, then fetches the next {PAGE_SIZE} when
-                    you move forward. Search runs on the server, so loan and
-                    installment lookups can match beyond the current page.
+                    Every row is a lender-linked payment record. The page loads
+                    the latest {PAGE_SIZE} first, then fetches the next{" "}
+                    {PAGE_SIZE} when you move forward. Search runs on the
+                    server, so loan and installment lookups can match beyond the
+                    current page.
                   </p>
                 </div>
 
@@ -437,6 +446,32 @@ export default function RecentTransactionsPage({
                   />
                 </label>
               </div>
+
+              {isSearchActive ? (
+                <section
+                  className="summary-grid"
+                  aria-label="Loan search summary"
+                >
+                  <article className="card metric-card">
+                    <div
+                      className="metric-icon metric-icon--primary"
+                      aria-hidden="true"
+                    >
+                      PM
+                    </div>
+                    <div className="metric-copy">
+                      <p className="metric-label">Total Payments</p>
+                      <p className="metric-value">
+                        {isLoading ? "..." : String(matchedPaymentsCount)}
+                      </p>
+                      <p className="metric-caption">
+                        Total matched payment rows across all pages for this
+                        search
+                      </p>
+                    </div>
+                  </article>
+                </section>
+              ) : null}
 
               <div className="table-container">
                 <table className="dashboard-table">
@@ -460,16 +495,21 @@ export default function RecentTransactionsPage({
                         >
                           <td>
                             <div className="borrower-cell">
-                              <span className="borrower-avatar" aria-hidden="true">
-                                {transaction.borrowerName.slice(0, 2).toUpperCase()}
+                              <span
+                                className="borrower-avatar"
+                                aria-hidden="true"
+                              >
+                                {transaction.borrowerName
+                                  .slice(0, 2)
+                                  .toUpperCase()}
                               </span>
                               <div>
                                 <button
                                   type="button"
                                   className="borrower-name borrower-name--button"
                                   onClick={(event) => {
-                                    event.stopPropagation()
-                                    openBorrowerSection(transaction)
+                                    event.stopPropagation();
+                                    openBorrowerSection(transaction);
                                   }}
                                 >
                                   {transaction.borrowerName}
@@ -487,7 +527,7 @@ export default function RecentTransactionsPage({
                                 {formatLabel(transaction.loanStatus)}
                                 {transaction.installmentId
                                   ? ` · ${transaction.installmentId}`
-                                  : ''}
+                                  : ""}
                               </span>
                             </div>
                           </td>
@@ -495,10 +535,10 @@ export default function RecentTransactionsPage({
                             <div className="dashboard-table__stack">
                               <span>{formatCurrency(transaction.amount)}</span>
                               <span className="dashboard-table__subcopy">
-                                {formatDate(transaction.createdAt)} ·{' '}
-                                {transaction.source === 'payment'
-                                  ? 'Payment record'
-                                  : 'Transaction record'}
+                                {formatDate(transaction.createdAt)} ·{" "}
+                                {transaction.source === "payment"
+                                  ? "Payment record"
+                                  : "Transaction record"}
                               </span>
                             </div>
                           </td>
@@ -506,16 +546,26 @@ export default function RecentTransactionsPage({
                           <td>
                             <div className="dashboard-table__stack">
                               <span>
-                                {transaction.installmentSummary.paidInstallments}/
-                                {transaction.installmentSummary.totalInstallments} paid
+                                {
+                                  transaction.installmentSummary
+                                    .paidInstallments
+                                }
+                                /
+                                {
+                                  transaction.installmentSummary
+                                    .totalInstallments
+                                }{" "}
+                                paid
                               </span>
                               <span
                                 className={`badge ${getStatusBadgeClass(
-                                  transaction.installmentSummary.latestInstallmentStatus,
+                                  transaction.installmentSummary
+                                    .latestInstallmentStatus,
                                 )}`}
                               >
                                 {formatLabel(
-                                  transaction.installmentSummary.latestInstallmentStatus,
+                                  transaction.installmentSummary
+                                    .latestInstallmentStatus,
                                 )}
                               </span>
                             </div>
@@ -523,10 +573,15 @@ export default function RecentTransactionsPage({
                           <td>
                             <div className="dashboard-table__stack">
                               <span>
-                                {formatDate(transaction.installmentSummary.nextDueDate)}
+                                {formatDate(
+                                  transaction.installmentSummary.nextDueDate,
+                                )}
                               </span>
                               <span className="dashboard-table__subcopy">
-                                {transaction.installmentSummary.overdueInstallments}{' '}
+                                {
+                                  transaction.installmentSummary
+                                    .overdueInstallments
+                                }{" "}
                                 overdue
                               </span>
                             </div>
@@ -537,8 +592,8 @@ export default function RecentTransactionsPage({
                       <tr>
                         <td className="table-empty" colSpan={6}>
                           {searchQuery
-                            ? 'No loan ledger entries match the current search.'
-                            : 'No recent lender-linked payment activity is available yet.'}
+                            ? "No loan ledger entries match the current search."
+                            : "No recent lender-linked payment activity is available yet."}
                         </td>
                       </tr>
                     )}
@@ -548,7 +603,9 @@ export default function RecentTransactionsPage({
 
               <div className="table-footer">
                 <p>
-                  {`Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
+                  {isSearchActive
+                    ? `Showing ${visibleStart}-${visibleEnd} of ${matchedPaymentsCount} matched payment row(s) on page ${currentPage}.`
+                    : `Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
                 </p>
 
                 <div className="pagination">
@@ -561,9 +618,7 @@ export default function RecentTransactionsPage({
                     Previous
                   </button>
 
-                  <span className="pagination-status">
-                    Page {currentPage}
-                  </span>
+                  <span className="pagination-status">Page {currentPage}</span>
 
                   <button
                     type="button"
@@ -615,26 +670,34 @@ export default function RecentTransactionsPage({
             </div>
 
             <div className="borrower-modal__body">
-              <div className="analytics-range-tabs" role="tablist" aria-label="Loan detail sections">
+              <div
+                className="analytics-range-tabs"
+                role="tablist"
+                aria-label="Loan detail sections"
+              >
                 <button
                   type="button"
                   className={`analytics-range-tab${
-                    detailSection === 'loan' ? ' analytics-range-tab--active' : ''
+                    detailSection === "loan"
+                      ? " analytics-range-tab--active"
+                      : ""
                   }`}
                   role="tab"
-                  aria-selected={detailSection === 'loan'}
-                  onClick={() => setDetailSection('loan')}
+                  aria-selected={detailSection === "loan"}
+                  onClick={() => setDetailSection("loan")}
                 >
                   Loan, Installments, Payments
                 </button>
                 <button
                   type="button"
                   className={`analytics-range-tab${
-                    detailSection === 'borrower' ? ' analytics-range-tab--active' : ''
+                    detailSection === "borrower"
+                      ? " analytics-range-tab--active"
+                      : ""
                   }`}
                   role="tab"
-                  aria-selected={detailSection === 'borrower'}
-                  onClick={() => setDetailSection('borrower')}
+                  aria-selected={detailSection === "borrower"}
+                  onClick={() => setDetailSection("borrower")}
                 >
                   Borrower Details
                 </button>
@@ -642,46 +705,76 @@ export default function RecentTransactionsPage({
 
               <div className="borrower-modal__content">
                 {isDetailLoading ? (
-                  <div className="borrower-modal__state">Loading loan activity details...</div>
+                  <div className="borrower-modal__state">
+                    Loading loan activity details...
+                  </div>
                 ) : detailError ? (
                   <div className="borrower-modal__state borrower-modal__state--error">
                     {detailError}
                   </div>
-                ) : detailSection === 'loan' ? (
+                ) : detailSection === "loan" ? (
                   <div className="borrower-modal__content">
                     <div className="borrower-modal__grid">
                       {[
-                        { label: 'Ledger Entry ID', value: selectedTransaction.transactionId },
-                        { label: 'Loan ID', value: selectedTransaction.loanId },
                         {
-                          label: 'Installment ID',
-                          value: selectedTransaction.installmentId ?? 'Not linked',
+                          label: "Ledger Entry ID",
+                          value: selectedTransaction.transactionId,
                         },
-                        { label: 'Loan Status', value: formatLabel(selectedTransaction.loanStatus) },
+                        { label: "Loan ID", value: selectedTransaction.loanId },
                         {
-                          label: 'Loan Amount',
+                          label: "Installment ID",
+                          value:
+                            selectedTransaction.installmentId ?? "Not linked",
+                        },
+                        {
+                          label: "Loan Status",
+                          value: formatLabel(selectedTransaction.loanStatus),
+                        },
+                        {
+                          label: "Loan Amount",
                           value: formatCurrency(loanDetails?.loan.amount ?? 0),
                         },
                         {
-                          label: 'Remaining Amount',
-                          value: formatCurrency(loanDetails?.loan.remainingAmount ?? 0),
+                          label: "Remaining Amount",
+                          value: formatCurrency(
+                            loanDetails?.loan.remainingAmount ?? 0,
+                          ),
                         },
                         {
-                          label: 'Interest Rate',
+                          label: "Interest Rate",
                           value: `${loanDetails?.loan.interestRate ?? 0}%`,
                         },
                         {
-                          label: 'Tenure',
+                          label: "Tenure",
                           value: `${loanDetails?.loan.tenureMonths ?? 0} months`,
                         },
-                        { label: 'Entry Type', value: formatLabel(selectedTransaction.type) },
-                        { label: 'Entry Status', value: formatLabel(selectedTransaction.status) },
-                        { label: 'Amount', value: formatCurrency(selectedTransaction.amount) },
-                        { label: 'Recorded On', value: formatDate(selectedTransaction.createdAt) },
+                        {
+                          label: "Entry Type",
+                          value: formatLabel(selectedTransaction.type),
+                        },
+                        {
+                          label: "Entry Status",
+                          value: formatLabel(selectedTransaction.status),
+                        },
+                        {
+                          label: "Amount",
+                          value: formatCurrency(selectedTransaction.amount),
+                        },
+                        {
+                          label: "Recorded On",
+                          value: formatDate(selectedTransaction.createdAt),
+                        },
                       ].map((field) => (
-                        <article className="borrower-detail-card" key={field.label}>
-                          <p className="borrower-detail-card__label">{field.label}</p>
-                          <p className="borrower-detail-card__value">{field.value}</p>
+                        <article
+                          className="borrower-detail-card"
+                          key={field.label}
+                        >
+                          <p className="borrower-detail-card__label">
+                            {field.label}
+                          </p>
+                          <p className="borrower-detail-card__value">
+                            {field.value}
+                          </p>
                         </article>
                       ))}
                     </div>
@@ -689,7 +782,9 @@ export default function RecentTransactionsPage({
                     <section className="borrower-loans-section">
                       <div className="borrower-loans-section__header">
                         <div>
-                          <h3 className="section-title">Installments and payments</h3>
+                          <h3 className="section-title">
+                            Installments and payments
+                          </h3>
                           <p className="section-subtitle">
                             Full lender-owned installment record for this loan.
                           </p>
@@ -705,10 +800,15 @@ export default function RecentTransactionsPage({
                       <div className="borrower-loan-list">
                         {(loanDetails?.installments ?? []).length > 0 ? (
                           loanDetails?.installments.map((installment) => (
-                            <article className="borrower-loan-card" key={installment.id}>
+                            <article
+                              className="borrower-loan-card"
+                              key={installment.id}
+                            >
                               <div className="borrower-loan-card__header">
                                 <div>
-                                  <p className="borrower-loan-card__eyebrow">Installment</p>
+                                  <p className="borrower-loan-card__eyebrow">
+                                    Installment
+                                  </p>
                                   <h4 className="borrower-loan-card__title">
                                     {installment.id}
                                   </h4>
@@ -724,25 +824,33 @@ export default function RecentTransactionsPage({
 
                               <div className="borrower-loan-card__grid">
                                 <article className="borrower-detail-card">
-                                  <p className="borrower-detail-card__label">Due Date</p>
+                                  <p className="borrower-detail-card__label">
+                                    Due Date
+                                  </p>
                                   <p className="borrower-detail-card__value">
                                     {formatDate(installment.dueDate)}
                                   </p>
                                 </article>
                                 <article className="borrower-detail-card">
-                                  <p className="borrower-detail-card__label">Installment Amount</p>
+                                  <p className="borrower-detail-card__label">
+                                    Installment Amount
+                                  </p>
                                   <p className="borrower-detail-card__value">
                                     {formatCurrency(installment.amount)}
                                   </p>
                                 </article>
                                 <article className="borrower-detail-card">
-                                  <p className="borrower-detail-card__label">Paid Amount</p>
+                                  <p className="borrower-detail-card__label">
+                                    Paid Amount
+                                  </p>
                                   <p className="borrower-detail-card__value">
                                     {formatCurrency(installment.paidAmount)}
                                   </p>
                                 </article>
                                 <article className="borrower-detail-card">
-                                  <p className="borrower-detail-card__label">Payments Count</p>
+                                  <p className="borrower-detail-card__label">
+                                    Payments Count
+                                  </p>
                                   <p className="borrower-detail-card__value">
                                     {String(installment.payments.length)}
                                   </p>
@@ -758,7 +866,8 @@ export default function RecentTransactionsPage({
                                     {formatCurrency(
                                       Math.max(
                                         0,
-                                        installment.amount - installment.paidAmount,
+                                        installment.amount -
+                                          installment.paidAmount,
                                       ),
                                     )}
                                   </span>
@@ -766,12 +875,16 @@ export default function RecentTransactionsPage({
                                 <button
                                   type="button"
                                   className="button button-primary"
-                                  disabled={installment.paidAmount >= installment.amount}
-                                  onClick={() => openPaymentForm(installment.id)}
+                                  disabled={
+                                    installment.paidAmount >= installment.amount
+                                  }
+                                  onClick={() =>
+                                    openPaymentForm(installment.id)
+                                  }
                                 >
                                   {installment.paidAmount >= installment.amount
-                                    ? 'Fully paid'
-                                    : 'Record Payment'}
+                                    ? "Fully paid"
+                                    : "Record Payment"}
                                 </button>
                               </div>
 
@@ -819,7 +932,9 @@ export default function RecentTransactionsPage({
                                     </label>
 
                                     <label className="create-ad-field create-ad-field--full">
-                                      <span className="create-ad-field__label">Note</span>
+                                      <span className="create-ad-field__label">
+                                        Note
+                                      </span>
                                       <textarea
                                         className="create-ad-textarea"
                                         rows={3}
@@ -861,35 +976,46 @@ export default function RecentTransactionsPage({
                                       type="button"
                                       className="button button-primary"
                                       disabled={paymentForm.isSaving}
-                                      onClick={() => void handleRecordPayment(installment.id)}
+                                      onClick={() =>
+                                        void handleRecordPayment(installment.id)
+                                      }
                                     >
                                       {paymentForm.isSaving
-                                        ? 'Saving...'
-                                        : 'Save Payment'}
+                                        ? "Saving..."
+                                        : "Save Payment"}
                                     </button>
                                   </div>
                                 </div>
                               ) : null}
 
                               <div className="loan-ledger-payments">
-                                <p className="borrower-detail-card__label">Payments</p>
+                                <p className="borrower-detail-card__label">
+                                  Payments
+                                </p>
                                 {installment.payments.length > 0 ? (
                                   installment.payments.map((payment) => (
-                                    <div className="loan-ledger-payment-row" key={payment.id}>
+                                    <div
+                                      className="loan-ledger-payment-row"
+                                      key={payment.id}
+                                    >
                                       <div className="dashboard-table__stack">
                                         <span>{payment.id}</span>
                                         <span className="dashboard-table__subcopy">
-                                          {formatDate(payment.createdAt)} ·{' '}
-                                          {payment.source === 'payment'
-                                            ? 'Installment payment'
-                                            : 'Transaction fallback'}
+                                          {formatDate(payment.createdAt)} ·{" "}
+                                          {payment.source === "payment"
+                                            ? "Installment payment"
+                                            : "Transaction fallback"}
                                         </span>
                                       </div>
                                       <div className="dashboard-table__stack">
-                                        <span>{formatCurrency(payment.amount)}</span>
+                                        <span>
+                                          {formatCurrency(payment.amount)}
+                                        </span>
                                         <span className="dashboard-table__subcopy">
                                           {formatLabel(payment.type)}
-                                          {payment.note ? ` · ${payment.note}` : ''}
+                                          {payment.note
+                                            ? ` · ${payment.note}`
+                                            : ""}
                                         </span>
                                       </div>
                                       <span
@@ -903,7 +1029,8 @@ export default function RecentTransactionsPage({
                                   ))
                                 ) : (
                                   <p className="section-subtitle">
-                                    No payment records are linked to this installment yet.
+                                    No payment records are linked to this
+                                    installment yet.
                                   </p>
                                 )}
                               </div>
@@ -911,7 +1038,8 @@ export default function RecentTransactionsPage({
                           ))
                         ) : (
                           <div className="borrower-modal__state">
-                            No installment details are available for this loan yet.
+                            No installment details are available for this loan
+                            yet.
                           </div>
                         )}
                       </div>
@@ -921,46 +1049,64 @@ export default function RecentTransactionsPage({
                   <div className="borrower-modal__content">
                     <div className="borrower-modal__grid">
                       {[
-                        { label: 'Borrower ID', value: borrowerDetails.id },
-                        { label: 'Full Name', value: borrowerDetails.fullName },
-                        { label: 'Email', value: borrowerDetails.email },
-                        { label: 'Phone', value: borrowerDetails.phone ?? 'Not provided' },
-                        { label: 'Address', value: borrowerDetails.address ?? 'Not provided' },
-                        { label: 'NIC', value: borrowerDetails.nic ?? 'Not provided' },
+                        { label: "Borrower ID", value: borrowerDetails.id },
+                        { label: "Full Name", value: borrowerDetails.fullName },
+                        { label: "Email", value: borrowerDetails.email },
                         {
-                          label: 'KYC Status',
+                          label: "Phone",
+                          value: borrowerDetails.phone ?? "Not provided",
+                        },
+                        {
+                          label: "Address",
+                          value: borrowerDetails.address ?? "Not provided",
+                        },
+                        {
+                          label: "NIC",
+                          value: borrowerDetails.nic ?? "Not provided",
+                        },
+                        {
+                          label: "KYC Status",
                           value: formatLabel(borrowerDetails.kycStatus),
                         },
                         {
-                          label: 'Credit Score',
+                          label: "Credit Score",
                           value:
                             borrowerDetails.creditScore !== null
                               ? String(borrowerDetails.creditScore)
-                              : 'Unknown',
+                              : "Unknown",
                         },
                         {
-                          label: 'Rating',
+                          label: "Rating",
                           value:
                             borrowerDetails.rating !== null
                               ? String(borrowerDetails.rating)
-                              : 'Unknown',
+                              : "Unknown",
                         },
                         {
-                          label: 'Loan Count',
+                          label: "Loan Count",
                           value: String(borrowerDetails.loanCount),
                         },
                         {
-                          label: 'Active Loans',
+                          label: "Active Loans",
                           value: String(borrowerDetails.activeLoansCount),
                         },
                         {
-                          label: 'Outstanding Amount',
-                          value: formatCurrency(borrowerDetails.outstandingAmount),
+                          label: "Outstanding Amount",
+                          value: formatCurrency(
+                            borrowerDetails.outstandingAmount,
+                          ),
                         },
                       ].map((field) => (
-                        <article className="borrower-detail-card" key={field.label}>
-                          <p className="borrower-detail-card__label">{field.label}</p>
-                          <p className="borrower-detail-card__value">{field.value}</p>
+                        <article
+                          className="borrower-detail-card"
+                          key={field.label}
+                        >
+                          <p className="borrower-detail-card__label">
+                            {field.label}
+                          </p>
+                          <p className="borrower-detail-card__value">
+                            {field.value}
+                          </p>
                         </article>
                       ))}
                     </div>
@@ -968,9 +1114,12 @@ export default function RecentTransactionsPage({
                     <section className="borrower-loans-section">
                       <div className="borrower-loans-section__header">
                         <div>
-                          <h3 className="section-title">Borrower loan summary</h3>
+                          <h3 className="section-title">
+                            Borrower loan summary
+                          </h3>
                           <p className="section-subtitle">
-                            Loans this borrower has with you as the current lender.
+                            Loans this borrower has with you as the current
+                            lender.
                           </p>
                         </div>
                       </div>
@@ -980,35 +1129,49 @@ export default function RecentTransactionsPage({
                           <article className="borrower-loan-card" key={loan.id}>
                             <div className="borrower-loan-card__header">
                               <div>
-                                <p className="borrower-loan-card__eyebrow">Loan</p>
-                                <h4 className="borrower-loan-card__title">{loan.id}</h4>
+                                <p className="borrower-loan-card__eyebrow">
+                                  Loan
+                                </p>
+                                <h4 className="borrower-loan-card__title">
+                                  {loan.id}
+                                </h4>
                               </div>
-                              <span className={`badge ${getStatusBadgeClass(loan.status)}`}>
+                              <span
+                                className={`badge ${getStatusBadgeClass(loan.status)}`}
+                              >
                                 {formatLabel(loan.status)}
                               </span>
                             </div>
 
                             <div className="borrower-loan-card__grid">
                               <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">Amount</p>
+                                <p className="borrower-detail-card__label">
+                                  Amount
+                                </p>
                                 <p className="borrower-detail-card__value">
                                   {formatCurrency(loan.amount)}
                                 </p>
                               </article>
                               <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">Remaining</p>
+                                <p className="borrower-detail-card__label">
+                                  Remaining
+                                </p>
                                 <p className="borrower-detail-card__value">
                                   {formatCurrency(loan.remainingAmount)}
                                 </p>
                               </article>
                               <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">Interest Rate</p>
+                                <p className="borrower-detail-card__label">
+                                  Interest Rate
+                                </p>
                                 <p className="borrower-detail-card__value">
                                   {loan.interestRate}%
                                 </p>
                               </article>
                               <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">Tenure</p>
+                                <p className="borrower-detail-card__label">
+                                  Tenure
+                                </p>
                                 <p className="borrower-detail-card__value">
                                   {loan.tenureMonths} months
                                 </p>
@@ -1030,5 +1193,5 @@ export default function RecentTransactionsPage({
         </div>
       ) : null}
     </>
-  )
+  );
 }

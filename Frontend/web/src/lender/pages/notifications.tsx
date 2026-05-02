@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { LenderView } from '../components/common/LenderSidebar'
-import type { LenderSession } from '../lib/lender-session'
+import { useEffect, useMemo, useState } from "react";
+import type { LenderView } from "../components/common/LenderSidebar";
+import type { LenderSession } from "../lib/lender-session";
 import {
   fetchLenderNotificationSummary,
   fetchLenderNotifications,
@@ -10,183 +10,212 @@ import {
   type LenderNotificationsSummaryResponse,
   type NotificationCategory,
   type NotificationStateFilter,
-} from '../lib/lender-notifications-api'
+} from "../lib/lender-notifications-api";
 
 type NotificationsPageProps = {
-  session: LenderSession
-  onNavigate: (view: LenderView) => void
-}
+  session: LenderSession;
+  onNavigate: (view: LenderView) => void;
+};
 
 const CATEGORY_OPTIONS = [
-  { key: 'all', label: 'All' },
-  { key: 'loan_request', label: 'Requests' },
-  { key: 'transaction', label: 'Transactions' },
-  { key: 'repayment_risk', label: 'Risk' },
-  { key: 'dispute', label: 'Disputes' },
-  { key: 'ad', label: 'Ads' },
-  { key: 'system', label: 'System' },
-] as const
+  { key: "all", label: "All" },
+  { key: "loan_request", label: "Requests" },
+  { key: "transaction", label: "Transactions" },
+  { key: "repayment_risk", label: "Risk" },
+  { key: "dispute", label: "Disputes" },
+  { key: "ad", label: "Ads" },
+  { key: "system", label: "System" },
+] as const;
 
 const STATE_OPTIONS: Array<{ key: NotificationStateFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'unread', label: 'Unread' },
-  { key: 'read', label: 'Read' },
-]
+  { key: "all", label: "All" },
+  { key: "unread", label: "Unread" },
+  { key: "read", label: "Read" },
+];
 
 function formatRelativeTime(value: string): string {
-  const parsed = new Date(value)
+  const parsed = new Date(value);
 
   if (Number.isNaN(parsed.getTime())) {
-    return 'Unknown time'
+    return "Unknown time";
   }
 
-  const diff = parsed.getTime() - Date.now()
-  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-  const minutes = Math.round(diff / (1000 * 60))
+  const diff = parsed.getTime() - Date.now();
+  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const minutes = Math.round(diff / (1000 * 60));
 
   if (Math.abs(minutes) < 60) {
-    return formatter.format(minutes, 'minute')
+    return formatter.format(minutes, "minute");
   }
 
-  const hours = Math.round(diff / (1000 * 60 * 60))
+  const hours = Math.round(diff / (1000 * 60 * 60));
 
   if (Math.abs(hours) < 24) {
-    return formatter.format(hours, 'hour')
+    return formatter.format(hours, "hour");
   }
 
-  const days = Math.round(diff / (1000 * 60 * 60 * 24))
+  const days = Math.round(diff / (1000 * 60 * 60 * 24));
 
   if (Math.abs(days) < 30) {
-    return formatter.format(days, 'day')
+    return formatter.format(days, "day");
   }
 
-  return new Intl.DateTimeFormat('en-LK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(parsed)
+  return new Intl.DateTimeFormat("en-LK", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(parsed);
 }
 
 function formatCategoryLabel(value: NotificationCategory | null): string {
   if (!value) {
-    return 'No activity yet'
+    return "No activity yet";
   }
 
   return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function getSeverityBadgeClass(value: string): string {
-  if (value === 'critical') {
-    return 'badge-danger'
+  if (value === "critical") {
+    return "badge-danger";
   }
 
-  if (value === 'warning') {
-    return 'badge-gray'
+  if (value === "warning") {
+    return "badge-gray";
   }
 
-  if (value === 'success') {
-    return 'badge-success'
+  if (value === "success") {
+    return "badge-success";
   }
 
-  return 'badge-gray'
+  return "badge-gray";
 }
 
 function getCategoryTone(value: NotificationCategory): string {
   switch (value) {
-    case 'loan_request':
-      return 'primary'
-    case 'transaction':
-      return 'success'
-    case 'repayment_risk':
-      return 'warning'
-    case 'dispute':
-      return 'danger'
-    case 'ad':
-      return 'primary'
-    case 'system':
-      return 'neutral'
+    case "loan_request":
+      return "primary";
+    case "transaction":
+      return "success";
+    case "repayment_risk":
+      return "warning";
+    case "dispute":
+      return "danger";
+    case "ad":
+      return "primary";
+    case "system":
+      return "neutral";
   }
 }
 
 function NotificationCategoryIcon({
   category,
 }: {
-  category: NotificationCategory
+  category: NotificationCategory;
 }) {
-  if (category === 'loan_request') {
+  if (category === "loan_request") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <path d="M4.75 8.75h14.5v9a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2v-9Z" />
         <path d="M8 8.75V6.5a4 4 0 0 1 8 0v2.25" />
         <path d="M8.5 13h7" />
       </svg>
-    )
+    );
   }
 
-  if (category === 'transaction') {
+  if (category === "transaction") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <path d="M5 7h14" />
         <path d="M5 12h14" />
         <path d="M5 17h10" />
       </svg>
-    )
+    );
   }
 
-  if (category === 'repayment_risk') {
+  if (category === "repayment_risk") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <path d="M12 4 4.5 18.5h15L12 4Z" />
         <path d="M12 9.25v4.5" />
         <circle cx="12" cy="16.75" r="1" fill="currentColor" stroke="none" />
       </svg>
-    )
+    );
   }
 
-  if (category === 'dispute') {
+  if (category === "dispute") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <path d="M7 7h10" />
         <path d="M7 12h6" />
         <path d="M8 4.75h8a3 3 0 0 1 3 3v8.5a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-8.5a3 3 0 0 1 3-3Z" />
       </svg>
-    )
+    );
   }
 
-  if (category === 'ad') {
+  if (category === "ad") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <rect x="5" y="5.5" width="14" height="13" rx="2.2" />
         <path d="M8 9.25h8" />
         <path d="M8 13h5" />
       </svg>
-    )
+    );
   }
 
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
       <path d="M12 5a4.5 4.5 0 0 1 4.5 4.5v2.18c0 .76.25 1.5.72 2.1l1.03 1.32H5.75l1.03-1.32c.47-.6.72-1.34.72-2.1V9.5A4.5 4.5 0 0 1 12 5Z" />
       <path d="M10 18a2.25 2.25 0 0 0 4 0" />
     </svg>
-  )
+  );
 }
 
 export default function NotificationsPage({
   session,
   onNavigate,
 }: NotificationsPageProps) {
-  const [summary, setSummary] = useState<LenderNotificationsSummaryResponse | null>(
-    null,
-  )
-  const [notifications, setNotifications] = useState<LenderNotification[]>([])
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [summary, setSummary] =
+    useState<LenderNotificationsSummaryResponse | null>(null);
+  const [notifications, setNotifications] = useState<LenderNotification[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedState, setSelectedState] =
-    useState<NotificationStateFilter>('all')
-  const [isLoading, setIsLoading] = useState(true)
-  const [isMarkingAll, setIsMarkingAll] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+    useState<NotificationStateFilter>("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMarkingAll, setIsMarkingAll] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function loadNotifications() {
     const [summaryResponse, listResponse] = await Promise.all([
@@ -197,19 +226,19 @@ export default function NotificationsPage({
         selectedState,
         80,
       ),
-    ])
+    ]);
 
-    setSummary(summaryResponse)
-    setNotifications(listResponse.notifications)
+    setSummary(summaryResponse);
+    setNotifications(listResponse.notifications);
   }
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     const run = async () => {
       try {
-        setIsLoading(true)
-        setError(null)
+        setIsLoading(true);
+        setError(null);
         const [summaryResponse, listResponse] = await Promise.all([
           fetchLenderNotificationSummary(session.lenderId),
           fetchLenderNotifications(
@@ -218,43 +247,46 @@ export default function NotificationsPage({
             selectedState,
             80,
           ),
-        ])
+        ]);
 
         if (isMounted) {
-          setSummary(summaryResponse)
-          setNotifications(listResponse.notifications)
+          setSummary(summaryResponse);
+          setNotifications(listResponse.notifications);
         }
       } catch (loadError) {
         if (isMounted) {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load notifications.',
-          )
+              : "Failed to load notifications.",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       }
-    }
+    };
 
-    void run()
+    void run();
 
     return () => {
-      isMounted = false
-    }
-  }, [selectedCategory, selectedState, session.lenderId])
+      isMounted = false;
+    };
+  }, [selectedCategory, selectedState, session.lenderId]);
 
   async function handleNotificationAction(notification: LenderNotification) {
     try {
       if (!notification.isRead) {
-        const updated = await markNotificationAsRead(session.lenderId, notification.id)
+        const updated = await markNotificationAsRead(
+          session.lenderId,
+          notification.id,
+        );
         setNotifications((current) =>
-          selectedState === 'unread'
+          selectedState === "unread"
             ? current.filter((item) => item.id !== updated.id)
             : current.map((item) => (item.id === updated.id ? updated : item)),
-        )
+        );
         setSummary((current) =>
           current
             ? {
@@ -262,83 +294,83 @@ export default function NotificationsPage({
                 unreadCount: Math.max(0, current.unreadCount - 1),
               }
             : current,
-        )
+        );
       }
 
       if (notification.actionTarget) {
-        onNavigate(notification.actionTarget)
+        onNavigate(notification.actionTarget);
       }
     } catch (actionError) {
       setError(
         actionError instanceof Error
           ? actionError.message
-          : 'Failed to update notification.',
-      )
+          : "Failed to update notification.",
+      );
     }
   }
 
   async function handleMarkAllVisibleAsRead() {
     try {
-      setIsMarkingAll(true)
-      setError(null)
+      setIsMarkingAll(true);
+      setError(null);
       await markAllNotificationsAsRead(
         session.lenderId,
         selectedCategory,
         selectedState,
-      )
-      await loadNotifications()
+      );
+      await loadNotifications();
     } catch (markError) {
       setError(
         markError instanceof Error
           ? markError.message
-          : 'Failed to mark notifications as read.',
-      )
+          : "Failed to mark notifications as read.",
+      );
     } finally {
-      setIsMarkingAll(false)
+      setIsMarkingAll(false);
     }
   }
 
   const summaryCards = useMemo(() => {
     if (!summary) {
-      return []
+      return [];
     }
 
     return [
       {
-        label: 'Unread Total',
+        label: "Unread Total",
         value: String(summary.unreadCount),
-        caption: 'Notifications still waiting for lender action',
-        accent: 'UN',
-        tone: 'primary',
+        caption: "Notifications still waiting for lender action",
+        accent: "UN",
+        tone: "primary",
       },
       {
-        label: 'High Priority',
+        label: "High Priority",
         value: String(summary.highPriorityCount),
-        caption: 'Warning or critical items across the inbox',
-        accent: 'HP',
-        tone: 'danger',
+        caption: "Warning or critical items across the inbox",
+        accent: "HP",
+        tone: "danger",
       },
       {
         label: "Today's Activity",
         value: String(summary.todaysCount),
-        caption: 'Notifications created today',
-        accent: 'TD',
-        tone: 'warning',
+        caption: "Notifications created today",
+        accent: "TD",
+        tone: "warning",
       },
       {
-        label: 'Top Category',
+        label: "Top Category",
         value: formatCategoryLabel(summary.topCategory),
-        caption: 'Category with the most current activity',
-        accent: 'TC',
-        tone: 'success',
+        caption: "Category with the most current activity",
+        accent: "TC",
+        tone: "success",
       },
-    ]
-  }, [summary])
+    ];
+  }, [summary]);
 
   const visibleUnreadCount = useMemo(
     () => notifications.filter((notification) => !notification.isRead).length,
     [notifications],
-  )
+  );
 
   return (
     <section className="dashboard-panel">
@@ -347,14 +379,14 @@ export default function NotificationsPage({
           <p className="eyebrow">Lender inbox</p>
           <h1 className="page-title">Notifications</h1>
           <p className="page-subtitle">
-            Review operational alerts first, then quieter system notices that can
-            wait until later.
+            Review operational alerts first, then quieter system notices that
+            can wait until later.
           </p>
         </div>
 
         <div className="analytics-header-tools">
           <div className="analytics-lender-pill">
-            {summary ? `${summary.unreadCount} unread` : 'Inbox loading'}
+            {summary ? `${summary.unreadCount} unread` : "Inbox loading"}
           </div>
         </div>
       </header>
@@ -414,7 +446,9 @@ export default function NotificationsPage({
                   className="pending-requests-select__control"
                   value={selectedState}
                   onChange={(event) =>
-                    setSelectedState(event.target.value as NotificationStateFilter)
+                    setSelectedState(
+                      event.target.value as NotificationStateFilter,
+                    )
                   }
                 >
                   {STATE_OPTIONS.map((option) => (
@@ -430,7 +464,7 @@ export default function NotificationsPage({
                   onClick={handleMarkAllVisibleAsRead}
                   disabled={isMarkingAll || visibleUnreadCount === 0}
                 >
-                  {isMarkingAll ? 'Updating...' : 'Mark All Visible As Read'}
+                  {isMarkingAll ? "Updating..." : "Mark All Visible As Read"}
                 </button>
               </div>
             </div>
@@ -442,8 +476,8 @@ export default function NotificationsPage({
                   type="button"
                   className={`notifications-category-tab${
                     selectedCategory === option.key
-                      ? ' notifications-category-tab--active'
-                      : ''
+                      ? " notifications-category-tab--active"
+                      : ""
                   }`}
                   onClick={() => setSelectedCategory(option.key)}
                 >
@@ -457,7 +491,7 @@ export default function NotificationsPage({
                 notifications.map((notification) => (
                   <article
                     className={`notifications-item${
-                      notification.isRead ? '' : ' notifications-item--unread'
+                      notification.isRead ? "" : " notifications-item--unread"
                     }`}
                     key={notification.id}
                   >
@@ -472,7 +506,9 @@ export default function NotificationsPage({
                         )}`}
                         aria-hidden="true"
                       >
-                        <NotificationCategoryIcon category={notification.category} />
+                        <NotificationCategoryIcon
+                          category={notification.category}
+                        />
                       </span>
 
                       <div className="notifications-item__copy">
@@ -481,7 +517,10 @@ export default function NotificationsPage({
                             {notification.title}
                           </h3>
                           {!notification.isRead ? (
-                            <span className="notifications-item__dot" aria-hidden="true" />
+                            <span
+                              className="notifications-item__dot"
+                              aria-hidden="true"
+                            />
                           ) : null}
                         </div>
                         <p className="notifications-item__message">
@@ -527,5 +566,5 @@ export default function NotificationsPage({
         </>
       )}
     </section>
-  )
+  );
 }

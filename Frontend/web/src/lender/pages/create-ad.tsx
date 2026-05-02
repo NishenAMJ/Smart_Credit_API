@@ -1,225 +1,232 @@
-import { useEffect, useState } from 'react'
-import type { LenderSession } from '../lib/lender-session'
+import { useEffect, useState } from "react";
+import type { LenderSession } from "../lib/lender-session";
 import {
   createLenderAd,
   fetchLenderAds,
   type LenderAd,
-} from '../lib/lender-ads-api'
+} from "../lib/lender-ads-api";
 
 type CreateAdPageProps = {
-  session: LenderSession
-}
+  session: LenderSession;
+};
 
 type AdDraft = {
-  headline: string
-  minAmount: string
-  maxAmount: string
-  interestRate: string
-  tenureMonths: string
-  borrowerFocus: string
-  processingTime: string
-  repaymentStyle: string
-  requirements: string
-  supportNote: string
-}
+  headline: string;
+  minAmount: string;
+  maxAmount: string;
+  interestRate: string;
+  tenureMonths: string;
+  borrowerFocus: string;
+  processingTime: string;
+  repaymentStyle: string;
+  requirements: string;
+  supportNote: string;
+};
 
 const DEFAULT_DRAFT: AdDraft = {
-  headline: 'Fast working-capital support for reliable borrowers',
-  minAmount: '50000',
-  maxAmount: '250000',
-  interestRate: '14.5',
-  tenureMonths: '12',
-  borrowerFocus: 'Small business owners with stable monthly cash flow',
-  processingTime: 'Approval review within 24 hours',
-  repaymentStyle: 'Monthly installments',
+  headline: "Fast working-capital support for reliable borrowers",
+  minAmount: "50000",
+  maxAmount: "250000",
+  interestRate: "14.5",
+  tenureMonths: "12",
+  borrowerFocus: "Small business owners with stable monthly cash flow",
+  processingTime: "Approval review within 24 hours",
+  repaymentStyle: "Monthly installments",
   requirements:
-    'NIC, bank statements, business or salary proof, and a clear repayment plan.',
+    "NIC, bank statements, business or salary proof, and a clear repayment plan.",
   supportNote:
-    'Friendly review, transparent pricing, and updates at every step of approval.',
-}
+    "Friendly review, transparent pricing, and updates at every step of approval.",
+};
 
 function getStorageKey(lenderId: string): string {
-  return `smart-credit:create-ad-draft:${lenderId}`
+  return `smart-credit:create-ad-draft:${lenderId}`;
 }
 
 function parseStoredDraft(value: string | null): AdDraft | null {
   if (!value) {
-    return null
+    return null;
   }
 
   try {
-    const parsed = JSON.parse(value) as Partial<AdDraft>
+    const parsed = JSON.parse(value) as Partial<AdDraft>;
 
-    if (!parsed || typeof parsed !== 'object') {
-      return null
+    if (!parsed || typeof parsed !== "object") {
+      return null;
     }
 
     return {
       headline:
-        typeof parsed.headline === 'string'
+        typeof parsed.headline === "string"
           ? parsed.headline
           : DEFAULT_DRAFT.headline,
       minAmount:
-        typeof parsed.minAmount === 'string'
+        typeof parsed.minAmount === "string"
           ? parsed.minAmount
           : DEFAULT_DRAFT.minAmount,
       maxAmount:
-        typeof parsed.maxAmount === 'string'
+        typeof parsed.maxAmount === "string"
           ? parsed.maxAmount
           : DEFAULT_DRAFT.maxAmount,
       interestRate:
-        typeof parsed.interestRate === 'string'
+        typeof parsed.interestRate === "string"
           ? parsed.interestRate
           : DEFAULT_DRAFT.interestRate,
       tenureMonths:
-        typeof parsed.tenureMonths === 'string'
+        typeof parsed.tenureMonths === "string"
           ? parsed.tenureMonths
           : DEFAULT_DRAFT.tenureMonths,
       borrowerFocus:
-        typeof parsed.borrowerFocus === 'string'
+        typeof parsed.borrowerFocus === "string"
           ? parsed.borrowerFocus
           : DEFAULT_DRAFT.borrowerFocus,
       processingTime:
-        typeof parsed.processingTime === 'string'
+        typeof parsed.processingTime === "string"
           ? parsed.processingTime
           : DEFAULT_DRAFT.processingTime,
       repaymentStyle:
-        typeof parsed.repaymentStyle === 'string'
+        typeof parsed.repaymentStyle === "string"
           ? parsed.repaymentStyle
           : DEFAULT_DRAFT.repaymentStyle,
       requirements:
-        typeof parsed.requirements === 'string'
+        typeof parsed.requirements === "string"
           ? parsed.requirements
           : DEFAULT_DRAFT.requirements,
       supportNote:
-        typeof parsed.supportNote === 'string'
+        typeof parsed.supportNote === "string"
           ? parsed.supportNote
           : DEFAULT_DRAFT.supportNote,
-    }
+    };
   } catch {
-    return null
+    return null;
   }
 }
 
 function formatCurrency(value: string): string {
-  const amount = Number(value)
+  const amount = Number(value);
 
   if (!Number.isFinite(amount) || amount <= 0) {
-    return 'LKR 0'
+    return "LKR 0";
   }
 
-  return new Intl.NumberFormat('en-LK', {
-    style: 'currency',
-    currency: 'LKR',
+  return new Intl.NumberFormat("en-LK", {
+    style: "currency",
+    currency: "LKR",
     maximumFractionDigits: 0,
-  }).format(amount)
+  }).format(amount);
 }
 
 function formatShortDate(value: string | null): string {
   if (!value) {
-    return 'No date'
+    return "No date";
   }
 
-  const parsed = new Date(value)
+  const parsed = new Date(value);
 
   if (Number.isNaN(parsed.getTime())) {
-    return 'No date'
+    return "No date";
   }
 
-  return new Intl.DateTimeFormat('en-LK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(parsed)
+  return new Intl.DateTimeFormat("en-LK", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(parsed);
 }
 
 function buildOfferSummary(draft: AdDraft): string {
-  return `${draft.processingTime}. ${draft.repaymentStyle}. ${draft.supportNote}`
+  return `${draft.processingTime}. ${draft.repaymentStyle}. ${draft.supportNote}`;
 }
 
 export default function CreateAdPage({ session }: CreateAdPageProps) {
   const [draft, setDraft] = useState<AdDraft>(
     () =>
-      parseStoredDraft(window.localStorage.getItem(getStorageKey(session.lenderId))) ??
-      DEFAULT_DRAFT,
-  )
-  const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [publishMessage, setPublishMessage] = useState<string | null>(null)
-  const [publishError, setPublishError] = useState<string | null>(null)
-  const [isPublishing, setIsPublishing] = useState(false)
-  const [recentAds, setRecentAds] = useState<LenderAd[]>([])
-  const [isRecentAdsLoading, setIsRecentAdsLoading] = useState(true)
+      parseStoredDraft(
+        window.localStorage.getItem(getStorageKey(session.lenderId)),
+      ) ?? DEFAULT_DRAFT,
+  );
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [recentAds, setRecentAds] = useState<LenderAd[]>([]);
+  const [isRecentAdsLoading, setIsRecentAdsLoading] = useState(true);
 
   useEffect(() => {
     if (!saveMessage) {
-      return
+      return;
     }
 
-    const timeout = window.setTimeout(() => setSaveMessage(null), 2400)
-    return () => window.clearTimeout(timeout)
-  }, [saveMessage])
+    const timeout = window.setTimeout(() => setSaveMessage(null), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [saveMessage]);
 
   useEffect(() => {
     if (!publishMessage) {
-      return
+      return;
     }
 
-    const timeout = window.setTimeout(() => setPublishMessage(null), 3200)
-    return () => window.clearTimeout(timeout)
-  }, [publishMessage])
+    const timeout = window.setTimeout(() => setPublishMessage(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [publishMessage]);
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     const loadRecentAds = async () => {
       try {
-        setIsRecentAdsLoading(true)
-        const ads = await fetchLenderAds(session.lenderId, 4)
+        setIsRecentAdsLoading(true);
+        const ads = await fetchLenderAds(session.lenderId, 4);
 
         if (isMounted) {
-          setRecentAds(ads)
+          setRecentAds(ads);
         }
       } catch {
         if (isMounted) {
-          setRecentAds([])
+          setRecentAds([]);
         }
       } finally {
         if (isMounted) {
-          setIsRecentAdsLoading(false)
+          setIsRecentAdsLoading(false);
         }
       }
-    }
+    };
 
-    void loadRecentAds()
+    void loadRecentAds();
 
     return () => {
-      isMounted = false
-    }
-  }, [session.lenderId])
+      isMounted = false;
+    };
+  }, [session.lenderId]);
 
-  function updateDraft<Key extends keyof AdDraft>(key: Key, value: AdDraft[Key]) {
+  function updateDraft<Key extends keyof AdDraft>(
+    key: Key,
+    value: AdDraft[Key],
+  ) {
     setDraft((current) => ({
       ...current,
       [key]: value,
-    }))
+    }));
   }
 
   function handleSaveDraft() {
-    window.localStorage.setItem(getStorageKey(session.lenderId), JSON.stringify(draft))
-    setSaveMessage('Draft saved locally for this lender.')
+    window.localStorage.setItem(
+      getStorageKey(session.lenderId),
+      JSON.stringify(draft),
+    );
+    setSaveMessage("Draft saved locally for this lender.");
   }
 
   function handleResetDraft() {
-    setDraft(DEFAULT_DRAFT)
-    window.localStorage.removeItem(getStorageKey(session.lenderId))
-    setSaveMessage('Draft reset to the starter version.')
+    setDraft(DEFAULT_DRAFT);
+    window.localStorage.removeItem(getStorageKey(session.lenderId));
+    setSaveMessage("Draft reset to the starter version.");
   }
 
   async function handlePublishAd() {
     try {
-      setIsPublishing(true)
-      setPublishError(null)
-      setPublishMessage(null)
+      setIsPublishing(true);
+      setPublishError(null);
+      setPublishMessage(null);
 
       const createdAd = await createLenderAd({
         lenderId: session.lenderId,
@@ -234,36 +241,42 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
         repaymentStyle: draft.repaymentStyle.trim(),
         requirements: draft.requirements.trim(),
         supportNote: draft.supportNote.trim(),
-      })
+      });
 
-      window.localStorage.setItem(getStorageKey(session.lenderId), JSON.stringify(draft))
+      window.localStorage.setItem(
+        getStorageKey(session.lenderId),
+        JSON.stringify(draft),
+      );
       setRecentAds((current) =>
-        [createdAd, ...current.filter((ad) => ad.id !== createdAd.id)].slice(0, 4),
-      )
-      setPublishMessage(`Ad published successfully as ${createdAd.id}.`)
+        [createdAd, ...current.filter((ad) => ad.id !== createdAd.id)].slice(
+          0,
+          4,
+        ),
+      );
+      setPublishMessage(`Ad published successfully as ${createdAd.id}.`);
     } catch (error) {
       setPublishError(
-        error instanceof Error ? error.message : 'Failed to publish lender ad.',
-      )
+        error instanceof Error ? error.message : "Failed to publish lender ad.",
+      );
     } finally {
-      setIsPublishing(false)
+      setIsPublishing(false);
     }
   }
 
-  const amountRange = `${formatCurrency(draft.minAmount)} - ${formatCurrency(draft.maxAmount)}`
-  const previewStatus = recentAds[0]?.status ?? 'preview only'
+  const amountRange = `${formatCurrency(draft.minAmount)} - ${formatCurrency(draft.maxAmount)}`;
+  const previewStatus = recentAds[0]?.status ?? "preview only";
   const qualitySignals = [
     draft.headline.trim().length >= 18
-      ? 'Clear value headline'
-      : 'Strengthen your headline',
-    Number(draft.interestRate) > 0 ? 'Pricing is visible' : 'Add interest rate',
+      ? "Clear value headline"
+      : "Strengthen your headline",
+    Number(draft.interestRate) > 0 ? "Pricing is visible" : "Add interest rate",
     draft.requirements.trim().length >= 24
-      ? 'Borrower requirements are clear'
-      : 'Explain borrower requirements',
+      ? "Borrower requirements are clear"
+      : "Explain borrower requirements",
     draft.supportNote.trim().length >= 20
-      ? 'Human trust note included'
-      : 'Add a trust-building note',
-  ]
+      ? "Human trust note included"
+      : "Add a trust-building note",
+  ];
 
   return (
     <section className="dashboard-panel">
@@ -289,8 +302,8 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
           </h2>
           <p className="section-subtitle">
             Borrowers usually decide in seconds whether a lender looks safe and
-            professional. A clean offer with visible numbers and stable terms wins
-            more trust than a complicated ad.
+            professional. A clean offer with visible numbers and stable terms
+            wins more trust than a complicated ad.
           </p>
           <div className="create-ad-hero__chips">
             <span className="create-ad-chip">Transparent pricing</span>
@@ -305,7 +318,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
             {
               qualitySignals.filter(
                 (item) =>
-                  !item.startsWith('Strengthen') && !item.startsWith('Add'),
+                  !item.startsWith("Strengthen") && !item.startsWith("Add"),
               ).length
             }
             /4
@@ -333,7 +346,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
             </div>
           </div>
 
-          {saveMessage ? <p className="create-ad-banner">{saveMessage}</p> : null}
+          {saveMessage ? (
+            <p className="create-ad-banner">{saveMessage}</p>
+          ) : null}
           {publishMessage ? (
             <p className="create-ad-banner create-ad-banner--primary">
               {publishMessage}
@@ -352,7 +367,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 className="input"
                 type="text"
                 value={draft.headline}
-                onChange={(event) => updateDraft('headline', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("headline", event.target.value)
+                }
                 placeholder="Ex: Flexible personal loans for salary earners"
               />
             </label>
@@ -364,7 +381,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 type="number"
                 min="0"
                 value={draft.minAmount}
-                onChange={(event) => updateDraft('minAmount', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("minAmount", event.target.value)
+                }
                 placeholder="50000"
               />
             </label>
@@ -376,7 +395,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 type="number"
                 min="0"
                 value={draft.maxAmount}
-                onChange={(event) => updateDraft('maxAmount', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("maxAmount", event.target.value)
+                }
                 placeholder="250000"
               />
             </label>
@@ -389,7 +410,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 min="0"
                 step="0.1"
                 value={draft.interestRate}
-                onChange={(event) => updateDraft('interestRate', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("interestRate", event.target.value)
+                }
                 placeholder="14.5"
               />
             </label>
@@ -401,7 +424,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 type="number"
                 min="1"
                 value={draft.tenureMonths}
-                onChange={(event) => updateDraft('tenureMonths', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("tenureMonths", event.target.value)
+                }
                 placeholder="12"
               />
             </label>
@@ -412,7 +437,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 className="input"
                 type="text"
                 value={draft.borrowerFocus}
-                onChange={(event) => updateDraft('borrowerFocus', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("borrowerFocus", event.target.value)
+                }
                 placeholder="Who should apply for this offer?"
               />
             </label>
@@ -423,7 +450,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 className="input"
                 type="text"
                 value={draft.processingTime}
-                onChange={(event) => updateDraft('processingTime', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("processingTime", event.target.value)
+                }
                 placeholder="Approval within 24 hours"
               />
             </label>
@@ -434,7 +463,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 className="input"
                 type="text"
                 value={draft.repaymentStyle}
-                onChange={(event) => updateDraft('repaymentStyle', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("repaymentStyle", event.target.value)
+                }
                 placeholder="Monthly installments"
               />
             </label>
@@ -444,7 +475,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
               <textarea
                 className="create-ad-textarea"
                 value={draft.requirements}
-                onChange={(event) => updateDraft('requirements', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("requirements", event.target.value)
+                }
                 rows={4}
                 placeholder="List the documents or proof you expect from the borrower."
               />
@@ -455,7 +488,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
               <textarea
                 className="create-ad-textarea"
                 value={draft.supportNote}
-                onChange={(event) => updateDraft('supportNote', event.target.value)}
+                onChange={(event) =>
+                  updateDraft("supportNote", event.target.value)
+                }
                 rows={3}
                 placeholder="What makes your process feel safe, fair, and professional?"
               />
@@ -486,7 +521,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 onClick={handlePublishAd}
                 disabled={isPublishing}
               >
-                {isPublishing ? 'Publishing...' : 'Publish Ad'}
+                {isPublishing ? "Publishing..." : "Publish Ad"}
               </button>
             </div>
           </div>
@@ -508,13 +543,17 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                   {session.displayName.slice(0, 1).toUpperCase()}
                 </div>
                 <div>
-                  <p className="create-ad-preview__name">{session.displayName}</p>
-                  <p className="create-ad-preview__meta">Verified lender profile</p>
+                  <p className="create-ad-preview__name">
+                    {session.displayName}
+                  </p>
+                  <p className="create-ad-preview__meta">
+                    Verified lender profile
+                  </p>
                 </div>
               </div>
 
               <h3 className="create-ad-preview__title">
-                {draft.headline || 'Your lending headline will appear here'}
+                {draft.headline || "Your lending headline will appear here"}
               </h3>
 
               <div className="create-ad-preview__metrics">
@@ -524,11 +563,11 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 </article>
                 <article className="create-ad-preview__metric">
                   <span>Interest Rate</span>
-                  <strong>{draft.interestRate || '0'}%</strong>
+                  <strong>{draft.interestRate || "0"}%</strong>
                 </article>
                 <article className="create-ad-preview__metric">
                   <span>Tenure</span>
-                  <strong>{draft.tenureMonths || '0'} months</strong>
+                  <strong>{draft.tenureMonths || "0"} months</strong>
                 </article>
               </div>
 
@@ -536,12 +575,14 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 <p className="create-ad-preview__label">Best for</p>
                 <p>
                   {draft.borrowerFocus ||
-                    'Describe the borrower segment you want to attract.'}
+                    "Describe the borrower segment you want to attract."}
                 </p>
               </div>
 
               <div className="create-ad-preview__section">
-                <p className="create-ad-preview__label">Why borrowers feel safe</p>
+                <p className="create-ad-preview__label">
+                  Why borrowers feel safe
+                </p>
                 <p>{buildOfferSummary(draft)}</p>
               </div>
 
@@ -549,7 +590,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 <p className="create-ad-preview__label">Requirements</p>
                 <p>
                   {draft.requirements ||
-                    'Explain the documents and checks clearly.'}
+                    "Explain the documents and checks clearly."}
                 </p>
               </div>
             </div>
@@ -567,12 +608,12 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                   <article className="create-ad-tip" key={ad.id}>
                     <strong>{ad.title}</strong>
                     <p>
-                      {formatCurrency(String(ad.minAmount))} -{' '}
-                      {formatCurrency(String(ad.maxAmount))} |{' '}
+                      {formatCurrency(String(ad.minAmount))} -{" "}
+                      {formatCurrency(String(ad.maxAmount))} |{" "}
                       {ad.preferredInterestRate}%
                     </p>
                     <p>
-                      {ad.maxTenureMonths} months | {ad.status} |{' '}
+                      {ad.maxTenureMonths} months | {ad.status} |{" "}
                       {formatShortDate(ad.createdAt)}
                     </p>
                   </article>
@@ -581,8 +622,8 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 <article className="create-ad-tip">
                   <strong>No ads published yet</strong>
                   <p>
-                    Publish your first lender ad from this page and it will appear
-                    here after Firestore saves it.
+                    Publish your first lender ad from this page and it will
+                    appear here after Firestore saves it.
                   </p>
                 </article>
               )}
@@ -591,5 +632,5 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
         </aside>
       </section>
     </section>
-  )
+  );
 }

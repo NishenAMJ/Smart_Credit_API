@@ -3,9 +3,37 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 
-dotenv.config({
-  path: path.resolve(process.cwd(), '.env'),
-});
+function loadEnvFiles(): void {
+  const candidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), 'Backend', '.env'),
+    path.resolve(__dirname, '../../.env'),
+  ];
+
+  candidates.forEach((candidate) => {
+    if (fs.existsSync(candidate)) {
+      dotenv.config({ path: candidate, override: false });
+    }
+  });
+}
+
+loadEnvFiles();
+
+function parseEnvServiceAccount(): ServiceAccount | null {
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+  if (!projectId || !clientEmail || !privateKey) {
+    return null;
+  }
+
+  return {
+    projectId,
+    clientEmail,
+    privateKey,
+  };
+}
 
 function parseServiceAccountJson(): ServiceAccount | null {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -49,6 +77,12 @@ function resolveServiceAccountPath(): string {
 }
 
 function loadFirebaseConfig(): ServiceAccount {
+  const serviceAccountFromEnv = parseEnvServiceAccount();
+
+  if (serviceAccountFromEnv) {
+    return serviceAccountFromEnv;
+  }
+
   const serviceAccountFromJson = parseServiceAccountJson();
 
   if (serviceAccountFromJson) {

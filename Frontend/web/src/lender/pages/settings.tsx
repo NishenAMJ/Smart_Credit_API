@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import type { LenderSession } from '../lib/lender-session'
+import { useEffect, useState, type FormEvent } from "react";
+import type { LenderSession } from "../lib/lender-session";
 import {
   fetchLenderSettings,
   updateLenderSettings,
@@ -7,76 +7,77 @@ import {
   type DefaultLandingPage,
   type LenderSettings,
   type LenderSettingsNotifications,
-} from '../lib/lender-settings-api'
+} from "../lib/lender-settings-api";
 
 type SettingsPageProps = {
-  session: LenderSession
-  onLogout: () => void
-  onOpenProfile: () => void
-}
+  session: LenderSession;
+  onLogout: () => void;
+  onOpenProfile: () => void;
+};
 
 type SettingsFormState = {
-  notifications: LenderSettingsNotifications
+  notifications: LenderSettingsNotifications;
   lendingDefaults: {
-    defaultInterestRate: string
-    defaultMaxTenureMonths: string
-    defaultMinAmount: string
-    defaultMaxAmount: string
-    preferredPurposes: string
-    preferredRegions: string
-    defaultResponseTimeHours: string
-  }
+    defaultInterestRate: string;
+    defaultMaxTenureMonths: string;
+    defaultMinAmount: string;
+    defaultMaxAmount: string;
+    preferredPurposes: string;
+    preferredRegions: string;
+    defaultResponseTimeHours: string;
+  };
   workspace: {
-    defaultLandingPage: DefaultLandingPage
-    defaultAnalyticsRange: DefaultAnalyticsRange
-    pendingRequestsPageSize: string
-    borrowerTablePageSize: string
-  }
-}
+    defaultLandingPage: DefaultLandingPage;
+    defaultAnalyticsRange: DefaultAnalyticsRange;
+    pendingRequestsPageSize: string;
+    borrowerTablePageSize: string;
+  };
+};
 
 const notificationPreferences = [
   {
-    title: 'New loan requests',
-    description: 'Alert this lender when a borrower request enters the pipeline.',
-    inAppKey: 'inAppNewRequests',
-    emailKey: 'emailNewRequests',
+    title: "New loan requests",
+    description:
+      "Alert this lender when a borrower request enters the pipeline.",
+    inAppKey: "inAppNewRequests",
+    emailKey: "emailNewRequests",
   },
   {
-    title: 'Repayment transactions',
-    description: 'Notify when lender-owned loans receive repayment activity.',
-    inAppKey: 'inAppTransactions',
-    emailKey: 'emailTransactions',
+    title: "Repayment transactions",
+    description: "Notify when lender-owned loans receive repayment activity.",
+    inAppKey: "inAppTransactions",
+    emailKey: "emailTransactions",
   },
   {
-    title: 'Request status updates',
-    description: 'Notify when borrower requests move between review stages.',
-    inAppKey: 'inAppStatusUpdates',
-    emailKey: 'emailStatusUpdates',
+    title: "Request status updates",
+    description: "Notify when borrower requests move between review stages.",
+    inAppKey: "inAppStatusUpdates",
+    emailKey: "emailStatusUpdates",
   },
   {
-    title: 'Overdue payment alerts',
-    description: 'Highlight repayment stress in the active loan portfolio.',
-    inAppKey: 'inAppOverdues',
-    emailKey: 'emailOverdues',
+    title: "Overdue payment alerts",
+    description: "Highlight repayment stress in the active loan portfolio.",
+    inAppKey: "inAppOverdues",
+    emailKey: "emailOverdues",
   },
   {
-    title: 'Ad expiry reminders',
-    description: 'Remind the lender when published ads are close to expiring.',
-    inAppKey: 'inAppAdExpiry',
-    emailKey: 'emailAdExpiry',
+    title: "Ad expiry reminders",
+    description: "Remind the lender when published ads are close to expiring.",
+    inAppKey: "inAppAdExpiry",
+    emailKey: "emailAdExpiry",
   },
   {
-    title: 'Dispute alerts',
-    description: 'Flag open disputes so lender support can respond quickly.',
-    inAppKey: 'inAppDisputes',
-    emailKey: 'emailDisputes',
+    title: "Dispute alerts",
+    description: "Flag open disputes so lender support can respond quickly.",
+    inAppKey: "inAppDisputes",
+    emailKey: "emailDisputes",
   },
 ] as const satisfies Array<{
-  title: string
-  description: string
-  inAppKey: keyof LenderSettingsNotifications
-  emailKey: keyof LenderSettingsNotifications
-}>
+  title: string;
+  description: string;
+  inAppKey: keyof LenderSettingsNotifications;
+  emailKey: keyof LenderSettingsNotifications;
+}>;
 
 function toFormState(settings: LenderSettings): SettingsFormState {
   return {
@@ -88,8 +89,8 @@ function toFormState(settings: LenderSettings): SettingsFormState {
       ),
       defaultMinAmount: String(settings.lendingDefaults.defaultMinAmount),
       defaultMaxAmount: String(settings.lendingDefaults.defaultMaxAmount),
-      preferredPurposes: settings.lendingDefaults.preferredPurposes.join(', '),
-      preferredRegions: settings.lendingDefaults.preferredRegions.join(', '),
+      preferredPurposes: settings.lendingDefaults.preferredPurposes.join(", "),
+      preferredRegions: settings.lendingDefaults.preferredRegions.join(", "),
       defaultResponseTimeHours: String(
         settings.lendingDefaults.defaultResponseTimeHours,
       ),
@@ -97,37 +98,39 @@ function toFormState(settings: LenderSettings): SettingsFormState {
     workspace: {
       defaultLandingPage: settings.workspace.defaultLandingPage,
       defaultAnalyticsRange: settings.workspace.defaultAnalyticsRange,
-      pendingRequestsPageSize: String(settings.workspace.pendingRequestsPageSize),
+      pendingRequestsPageSize: String(
+        settings.workspace.pendingRequestsPageSize,
+      ),
       borrowerTablePageSize: String(settings.workspace.borrowerTablePageSize),
     },
-  }
+  };
 }
 
 function splitList(value: string): string[] {
   return value
-    .split(',')
+    .split(",")
     .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
+    .filter((entry) => entry.length > 0);
 }
 
 function formatDate(value: string | null): string {
   if (!value) {
-    return 'Not updated yet'
+    return "Not updated yet";
   }
 
-  const parsed = new Date(value)
+  const parsed = new Date(value);
 
   if (Number.isNaN(parsed.getTime())) {
-    return 'Not updated yet'
+    return "Not updated yet";
   }
 
-  return new Intl.DateTimeFormat('en-LK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(parsed)
+  return new Intl.DateTimeFormat("en-LK", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(parsed);
 }
 
 export default function SettingsPage({
@@ -135,57 +138,57 @@ export default function SettingsPage({
   onLogout,
   onOpenProfile,
 }: SettingsPageProps) {
-  const [settings, setSettings] = useState<LenderSettings | null>(null)
-  const [formState, setFormState] = useState<SettingsFormState | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [settings, setSettings] = useState<LenderSettings | null>(null);
+  const [formState, setFormState] = useState<SettingsFormState | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     const loadSettings = async () => {
       try {
-        setIsLoading(true)
-        setError(null)
-        setSuccessMessage(null)
-        const loadedSettings = await fetchLenderSettings(session.lenderId)
+        setIsLoading(true);
+        setError(null);
+        setSuccessMessage(null);
+        const loadedSettings = await fetchLenderSettings(session.lenderId);
 
         if (isMounted) {
-          setSettings(loadedSettings)
-          setFormState(toFormState(loadedSettings))
+          setSettings(loadedSettings);
+          setFormState(toFormState(loadedSettings));
         }
       } catch (loadError) {
         if (isMounted) {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load lender settings.',
-          )
+              : "Failed to load lender settings.",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       }
-    }
+    };
 
-    void loadSettings()
+    void loadSettings();
 
     return () => {
-      isMounted = false
-    }
-  }, [session.lenderId])
+      isMounted = false;
+    };
+  }, [session.lenderId]);
 
   useEffect(() => {
     if (!successMessage) {
-      return
+      return;
     }
 
-    const timeout = window.setTimeout(() => setSuccessMessage(null), 2800)
-    return () => window.clearTimeout(timeout)
-  }, [successMessage])
+    const timeout = window.setTimeout(() => setSuccessMessage(null), 2800);
+    return () => window.clearTimeout(timeout);
+  }, [successMessage]);
 
   function updateNotification(
     key: keyof LenderSettingsNotifications,
@@ -201,12 +204,12 @@ export default function SettingsPage({
             },
           }
         : current,
-    )
+    );
   }
 
   function updateLendingField<
-    Key extends keyof SettingsFormState['lendingDefaults'],
-  >(key: Key, value: SettingsFormState['lendingDefaults'][Key]) {
+    Key extends keyof SettingsFormState["lendingDefaults"],
+  >(key: Key, value: SettingsFormState["lendingDefaults"][Key]) {
     setFormState((current) =>
       current
         ? {
@@ -217,13 +220,12 @@ export default function SettingsPage({
             },
           }
         : current,
-    )
+    );
   }
 
-  function updateWorkspaceField<Key extends keyof SettingsFormState['workspace']>(
-    key: Key,
-    value: SettingsFormState['workspace'][Key],
-  ) {
+  function updateWorkspaceField<
+    Key extends keyof SettingsFormState["workspace"],
+  >(key: Key, value: SettingsFormState["workspace"][Key]) {
     setFormState((current) =>
       current
         ? {
@@ -234,30 +236,36 @@ export default function SettingsPage({
             },
           }
         : current,
-    )
+    );
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+    event.preventDefault();
 
     if (!formState) {
-      return
+      return;
     }
 
     try {
-      setIsSaving(true)
-      setError(null)
+      setIsSaving(true);
+      setError(null);
       const updatedSettings = await updateLenderSettings(session.lenderId, {
         notifications: formState.notifications,
         lendingDefaults: {
-          defaultInterestRate: Number(formState.lendingDefaults.defaultInterestRate),
+          defaultInterestRate: Number(
+            formState.lendingDefaults.defaultInterestRate,
+          ),
           defaultMaxTenureMonths: Number(
             formState.lendingDefaults.defaultMaxTenureMonths,
           ),
           defaultMinAmount: Number(formState.lendingDefaults.defaultMinAmount),
           defaultMaxAmount: Number(formState.lendingDefaults.defaultMaxAmount),
-          preferredPurposes: splitList(formState.lendingDefaults.preferredPurposes),
-          preferredRegions: splitList(formState.lendingDefaults.preferredRegions),
+          preferredPurposes: splitList(
+            formState.lendingDefaults.preferredPurposes,
+          ),
+          preferredRegions: splitList(
+            formState.lendingDefaults.preferredRegions,
+          ),
           defaultResponseTimeHours: Number(
             formState.lendingDefaults.defaultResponseTimeHours,
           ),
@@ -268,32 +276,34 @@ export default function SettingsPage({
           pendingRequestsPageSize: Number(
             formState.workspace.pendingRequestsPageSize,
           ),
-          borrowerTablePageSize: Number(formState.workspace.borrowerTablePageSize),
+          borrowerTablePageSize: Number(
+            formState.workspace.borrowerTablePageSize,
+          ),
         },
-      })
+      });
 
-      setSettings(updatedSettings)
-      setFormState(toFormState(updatedSettings))
-      setSuccessMessage('Settings saved successfully.')
+      setSettings(updatedSettings);
+      setFormState(toFormState(updatedSettings));
+      setSuccessMessage("Settings saved successfully.");
     } catch (saveError) {
       setError(
         saveError instanceof Error
           ? saveError.message
-          : 'Failed to save lender settings.',
-      )
+          : "Failed to save lender settings.",
+      );
     } finally {
-      setIsSaving(false)
+      setIsSaving(false);
     }
   }
 
   function handleReset() {
     if (!settings) {
-      return
+      return;
     }
 
-    setFormState(toFormState(settings))
-    setError(null)
-    setSuccessMessage('Changes reset to the last saved version.')
+    setFormState(toFormState(settings));
+    setError(null);
+    setSuccessMessage("Changes reset to the last saved version.");
   }
 
   return (
@@ -343,8 +353,8 @@ export default function SettingsPage({
                   <div>
                     <h2 className="section-title">Notification Preferences</h2>
                     <p className="section-subtitle">
-                      Choose how lender alerts should appear while email delivery
-                      stays preference-only for now.
+                      Choose how lender alerts should appear while email
+                      delivery stays preference-only for now.
                     </p>
                   </div>
                   <p className="settings-card__meta">
@@ -354,7 +364,10 @@ export default function SettingsPage({
 
                 <div className="settings-toggle-list">
                   {notificationPreferences.map((preference) => (
-                    <article className="settings-toggle-row" key={preference.title}>
+                    <article
+                      className="settings-toggle-row"
+                      key={preference.title}
+                    >
                       <div>
                         <h3 className="settings-toggle-row__title">
                           {preference.title}
@@ -369,7 +382,9 @@ export default function SettingsPage({
                           <input
                             className="settings-channel-toggle__control"
                             type="checkbox"
-                            checked={formState.notifications[preference.inAppKey]}
+                            checked={
+                              formState.notifications[preference.inAppKey]
+                            }
                             onChange={(event) =>
                               updateNotification(
                                 preference.inAppKey,
@@ -384,7 +399,9 @@ export default function SettingsPage({
                           <input
                             className="settings-channel-toggle__control"
                             type="checkbox"
-                            checked={formState.notifications[preference.emailKey]}
+                            checked={
+                              formState.notifications[preference.emailKey]
+                            }
                             onChange={(event) =>
                               updateNotification(
                                 preference.emailKey,
@@ -424,7 +441,7 @@ export default function SettingsPage({
                       value={formState.lendingDefaults.defaultInterestRate}
                       onChange={(event) =>
                         updateLendingField(
-                          'defaultInterestRate',
+                          "defaultInterestRate",
                           event.target.value,
                         )
                       }
@@ -442,7 +459,7 @@ export default function SettingsPage({
                       value={formState.lendingDefaults.defaultMaxTenureMonths}
                       onChange={(event) =>
                         updateLendingField(
-                          'defaultMaxTenureMonths',
+                          "defaultMaxTenureMonths",
                           event.target.value,
                         )
                       }
@@ -459,7 +476,10 @@ export default function SettingsPage({
                       min="0"
                       value={formState.lendingDefaults.defaultMinAmount}
                       onChange={(event) =>
-                        updateLendingField('defaultMinAmount', event.target.value)
+                        updateLendingField(
+                          "defaultMinAmount",
+                          event.target.value,
+                        )
                       }
                     />
                   </label>
@@ -474,20 +494,25 @@ export default function SettingsPage({
                       min="0"
                       value={formState.lendingDefaults.defaultMaxAmount}
                       onChange={(event) =>
-                        updateLendingField('defaultMaxAmount', event.target.value)
+                        updateLendingField(
+                          "defaultMaxAmount",
+                          event.target.value,
+                        )
                       }
                     />
                   </label>
 
                   <label className="create-ad-field create-ad-field--full">
-                    <span className="create-ad-field__label">Preferred purposes</span>
+                    <span className="create-ad-field__label">
+                      Preferred purposes
+                    </span>
                     <input
                       className="input"
                       type="text"
                       value={formState.lendingDefaults.preferredPurposes}
                       onChange={(event) =>
                         updateLendingField(
-                          'preferredPurposes',
+                          "preferredPurposes",
                           event.target.value,
                         )
                       }
@@ -496,13 +521,18 @@ export default function SettingsPage({
                   </label>
 
                   <label className="create-ad-field create-ad-field--full">
-                    <span className="create-ad-field__label">Preferred regions</span>
+                    <span className="create-ad-field__label">
+                      Preferred regions
+                    </span>
                     <input
                       className="input"
                       type="text"
                       value={formState.lendingDefaults.preferredRegions}
                       onChange={(event) =>
-                        updateLendingField('preferredRegions', event.target.value)
+                        updateLendingField(
+                          "preferredRegions",
+                          event.target.value,
+                        )
                       }
                       placeholder="Colombo, Kandy, Galle"
                     />
@@ -520,7 +550,7 @@ export default function SettingsPage({
                       value={formState.lendingDefaults.defaultResponseTimeHours}
                       onChange={(event) =>
                         updateLendingField(
-                          'defaultResponseTimeHours',
+                          "defaultResponseTimeHours",
                           event.target.value,
                         )
                       }
@@ -550,7 +580,7 @@ export default function SettingsPage({
                       value={formState.workspace.defaultLandingPage}
                       onChange={(event) =>
                         updateWorkspaceField(
-                          'defaultLandingPage',
+                          "defaultLandingPage",
                           event.target.value as DefaultLandingPage,
                         )
                       }
@@ -569,7 +599,7 @@ export default function SettingsPage({
                       value={formState.workspace.defaultAnalyticsRange}
                       onChange={(event) =>
                         updateWorkspaceField(
-                          'defaultAnalyticsRange',
+                          "defaultAnalyticsRange",
                           event.target.value as DefaultAnalyticsRange,
                         )
                       }
@@ -592,7 +622,7 @@ export default function SettingsPage({
                       value={formState.workspace.pendingRequestsPageSize}
                       onChange={(event) =>
                         updateWorkspaceField(
-                          'pendingRequestsPageSize',
+                          "pendingRequestsPageSize",
                           event.target.value,
                         )
                       }
@@ -611,7 +641,7 @@ export default function SettingsPage({
                       value={formState.workspace.borrowerTablePageSize}
                       onChange={(event) =>
                         updateWorkspaceField(
-                          'borrowerTablePageSize',
+                          "borrowerTablePageSize",
                           event.target.value,
                         )
                       }
@@ -627,24 +657,30 @@ export default function SettingsPage({
                   <div>
                     <h2 className="section-title">Session And Access</h2>
                     <p className="section-subtitle">
-                      Temporary auth is active now. Stronger security controls can
-                      plug in later without replacing these preferences.
+                      Temporary auth is active now. Stronger security controls
+                      can plug in later without replacing these preferences.
                     </p>
                   </div>
                 </div>
 
                 <div className="settings-session-list">
                   <div className="settings-session-item">
-                    <span className="settings-session-item__label">Lender ID</span>
+                    <span className="settings-session-item__label">
+                      Lender ID
+                    </span>
                     <strong>{session.lenderId}</strong>
                   </div>
                   <div className="settings-session-item">
-                    <span className="settings-session-item__label">Display name</span>
+                    <span className="settings-session-item__label">
+                      Display name
+                    </span>
                     <strong>{session.displayName}</strong>
                   </div>
                   <div className="settings-session-item">
                     <span className="settings-session-item__label">Email</span>
-                    <strong>{session.email || 'No email in temporary session'}</strong>
+                    <strong>
+                      {session.email || "No email in temporary session"}
+                    </strong>
                   </div>
                 </div>
 
@@ -684,14 +720,10 @@ export default function SettingsPage({
                 <div className="settings-danger-list">
                   <p>
                     Data export, lender deactivation, and destructive workspace
-                    actions will be added here after real auth and approval flows
-                    are in place.
+                    actions will be added here after real auth and approval
+                    flows are in place.
                   </p>
-                  <button
-                    type="button"
-                    className="create-ad-button"
-                    disabled
-                  >
+                  <button type="button" className="create-ad-button" disabled>
                     Export Data Soon
                   </button>
                   <button
@@ -720,11 +752,11 @@ export default function SettingsPage({
               className="create-ad-button create-ad-button--primary"
               disabled={isSaving}
             >
-              {isSaving ? 'Saving...' : 'Save Settings'}
+              {isSaving ? "Saving..." : "Save Settings"}
             </button>
           </div>
         </form>
       ) : null}
     </section>
-  )
+  );
 }

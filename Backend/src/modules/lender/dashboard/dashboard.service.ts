@@ -421,8 +421,8 @@ export class DashboardService {
           return cursor ? this.createBorrowerPage([], pageSize, false) : null;
         }
 
-        const borrowerIds = Array.from(
-          new Set(
+        const borrowerIds: string[] = Array.from(
+          new Set<string>(
             snapshot.docs
               .map((doc) => readString(doc.data().borrowerId))
               .filter((id): id is string => Boolean(id)),

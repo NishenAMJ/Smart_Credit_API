@@ -7,5 +7,6 @@ import { LenderProfileService } from './lender-profile.service';
   imports: [FirebaseModule],
   controllers: [LenderProfileController],
   providers: [LenderProfileService],
+  exports: [LenderProfileService],
 })
 export class LenderProfileModule {}
