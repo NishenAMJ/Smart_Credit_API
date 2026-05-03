@@ -5,7 +5,6 @@ import {
   TextInput, ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { LenderHeader } from '../../components/lender';
 import { LenderProfileService, UpdateProfilePayload } from '../../services/lender.service';
@@ -159,7 +158,6 @@ export default function LenderProfileScreen({ navigation }: any) {
 
   // ── Logout ────────────────────────────────────────────
   const { signOut } = useAuth();
-  const nav = useNavigation();
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
@@ -167,10 +165,7 @@ export default function LenderProfileScreen({ navigation }: any) {
         try {
           signOut();
           localDatabase.clearAll();
-          nav.reset({
-            index: 0,
-            routes: [{ name: 'MobileAuth' as never }],
-          });
+          // RootNavigator will automatically show AuthStackNavigator when session becomes null
         } catch (err) {
           console.error('[Logout] Error:', err);
           Alert.alert('Error', 'Could not logout properly. Please restart the app.');
