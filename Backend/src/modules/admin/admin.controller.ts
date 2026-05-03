@@ -14,10 +14,13 @@ import { AdminService } from './admin.service';
 import { SuspendUserDto } from './dto/suspend-user.dto';
 import { ActivateUserDto } from './dto/activate-user.dto';
 import { QueryUsersDto } from './dto/query-users.dto';
-import { AdminJwtGuard } from './admin-auth/guards/admin-jwt.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Controller('admin')
-@UseGuards(AdminJwtGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 

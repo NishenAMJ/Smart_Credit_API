@@ -21,6 +21,10 @@ export class CreateLoanDto {
   @IsString()
   lenderId: string;
 
+  @IsOptional()
+  @IsString()
+  adId?: string;
+
   @IsNumber()
   @Min(0)
   amount: number;

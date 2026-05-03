@@ -13,12 +13,20 @@ import { AdsService } from './ads.service';
 import { ApproveAdDto } from './dto/approve-ad.dto';
 import { RejectAdDto } from './dto/reject-ad.dto';
 import { UpdateAdStatusDto } from './dto/update-ad-status.dto';
-import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Controller('admin/ads')
-@UseGuards(AdminJwtGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
 export class AdsController {
   constructor(private readonly adsService: AdsService) {}
+
+  @Get('stats')
+  async getAdStats() {
+    return this.adsService.getAdStats();
+  }
 
   @Get()
   async getAllAds(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {

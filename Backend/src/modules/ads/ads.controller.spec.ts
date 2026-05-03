@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdsController } from './ads.controller';
 import { AdsService } from './ads.service';
-import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 describe('AdsController', () => {
   let controller: AdsController;
   const updateAdStatusMock = jest.fn();
+  const getAdStatsMock = jest.fn();
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -14,12 +16,15 @@ describe('AdsController', () => {
         {
           provide: AdsService,
           useValue: {
+            getAdStats: getAdStatsMock,
             updateAdStatus: updateAdStatusMock,
           },
         },
       ],
     })
-      .overrideGuard(AdminJwtGuard)
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
       .useValue({ canActivate: () => true })
       .compile();
 
@@ -29,6 +34,18 @@ describe('AdsController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('returns ad stats from the service', async () => {
+    getAdStatsMock.mockResolvedValue({
+      success: true,
+      stats: { all: 4, active: 1, approved: 1, pending: 1, rejected: 1, closed: 0 },
+    });
+
+    const result = await controller.getAdStats();
+
+    expect(getAdStatsMock).toHaveBeenCalled();
+    expect(result.stats.all).toBe(4);
   });
 
   it('passes ad status changes to the service', async () => {

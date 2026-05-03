@@ -12,7 +12,7 @@ import { QueryUsersDto } from './dto/query-users.dto';
 @Injectable()
 export class AdminService {
   private static readonly DEFAULT_PAGE_SIZE = 20;
-  private static readonly MAX_PAGE_SIZE = 50;
+  private static readonly MAX_PAGE_SIZE = 100;
 
   constructor(private readonly firebaseService: FirebaseService) {}
 

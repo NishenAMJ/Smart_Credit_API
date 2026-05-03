@@ -21,11 +21,74 @@ export class AdsService {
     doc:
       | FirebaseFirestore.QueryDocumentSnapshot
       | FirebaseFirestore.DocumentSnapshot,
+    activeAdIds: Set<string> = new Set(),
   ): Ad {
+    const data = doc.data() ?? {};
+
     return {
       id: doc.id,
-      ...doc.data(),
+      ...data,
+      status: this.deriveAdminAdStatus(doc.id, data, activeAdIds),
     } as Ad;
+  }
+
+  private isApprovedLikeStatus(status: unknown): boolean {
+    return status === 'approved' || status === 'active';
+  }
+
+  private deriveAdminAdStatus(
+    adId: string,
+    data: FirebaseFirestore.DocumentData,
+    activeAdIds: Set<string>,
+  ): Ad['status'] {
+    const rawStatus = data.status;
+
+    if (rawStatus === 'pending' || rawStatus === 'rejected' || rawStatus === 'closed') {
+      return rawStatus;
+    }
+
+    if (this.isApprovedLikeStatus(rawStatus)) {
+      return activeAdIds.has(adId) ? 'active' : 'approved';
+    }
+
+    return 'pending';
+  }
+
+  private async getLoanBackedAdIds(
+    adIds: string[],
+  ): Promise<Set<string>> {
+    if (adIds.length === 0) {
+      return new Set<string>();
+    }
+
+    const db = this.firebaseService.db;
+    const snapshots = await Promise.all(
+      Array.from({ length: Math.ceil(adIds.length / 10) }, (_, index) =>
+        db
+          .collection('loans')
+          .where('adId', 'in', adIds.slice(index * 10, index * 10 + 10))
+          .get(),
+      ),
+    );
+
+    return new Set(
+      snapshots.flatMap((snapshot) =>
+        snapshot.docs
+          .map((doc) => doc.data()?.adId)
+          .filter((adId): adId is string => typeof adId === 'string'),
+      ),
+    );
+  }
+
+  private async getApprovedLikeAds(): Promise<
+    FirebaseFirestore.QueryDocumentSnapshot[]
+  > {
+    const snapshot = await this.firebaseService.db
+      .collection('ads')
+      .where('status', 'in', ['approved', 'active'])
+      .get();
+
+    return snapshot.docs.filter((doc) => Boolean(doc.data()?.lenderId));
   }
 
   private async getLenderAdDoc(adId: string) {
@@ -46,6 +109,53 @@ export class AdsService {
     }
 
     return Math.min(Math.max(Math.trunc(parsed), 1), AdsService.MAX_PAGE_SIZE);
+  }
+
+  async getAdStats(): Promise<{
+    success: boolean;
+    stats: {
+      all: number;
+      active: number;
+      approved: number;
+      pending: number;
+      rejected: number;
+      closed: number;
+    };
+  }> {
+    try {
+      const adsCollection = this.firebaseService.db.collection('ads');
+      const approvedLikeAdsPromise = this.getApprovedLikeAds();
+
+      const [all, pending, rejected, closed, approvedLikeAds] =
+        await Promise.all([
+          adsCollection.count().get(),
+          adsCollection.where('status', '==', 'pending').count().get(),
+          adsCollection.where('status', '==', 'rejected').count().get(),
+          adsCollection.where('status', '==', 'closed').count().get(),
+          approvedLikeAdsPromise,
+        ]);
+      const activeAdIds = await this.getLoanBackedAdIds(
+        approvedLikeAds.map((doc) => doc.id),
+      );
+      const activeCount = approvedLikeAds.filter((doc) =>
+        activeAdIds.has(doc.id),
+      ).length;
+      const approvedCount = approvedLikeAds.length - activeCount;
+
+      return {
+        success: true,
+        stats: {
+          all: all.data().count,
+          active: activeCount,
+          approved: approvedCount,
+          pending: pending.data().count,
+          rejected: rejected.data().count,
+          closed: closed.data().count,
+        },
+      };
+    } catch (error) {
+      rethrowFirebaseError(error, 'Failed to fetch ad stats');
+    }
   }
 
   async getAllAds(limit?: string, cursor?: string): Promise<{
@@ -71,9 +181,12 @@ export class AdsService {
 
       const snapshot = await query.limit(pageSize + 1).get();
       const visibleDocs = snapshot.docs.filter((doc) => Boolean(doc.data()?.lenderId));
+      const activeAdIds = await this.getLoanBackedAdIds(
+        visibleDocs.map((doc) => doc.id),
+      );
       const hasMore = visibleDocs.length > pageSize || snapshot.size > pageSize;
       const pageDocs = visibleDocs.slice(0, pageSize);
-      const ads: Ad[] = pageDocs.map((doc) => this.mapAd(doc));
+      const ads: Ad[] = pageDocs.map((doc) => this.mapAd(doc, activeAdIds));
 
       return {
         success: true,
@@ -128,7 +241,8 @@ export class AdsService {
   async getAdById(adId: string): Promise<Ad> {
     try {
       const adDoc = await this.getLenderAdDoc(adId);
-      return this.mapAd(adDoc);
+      const activeAdIds = await this.getLoanBackedAdIds([adId]);
+      return this.mapAd(adDoc, activeAdIds);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

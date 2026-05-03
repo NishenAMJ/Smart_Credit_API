@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DisputesController } from './disputes.controller';
 import { DisputesService } from './disputes.service';
-import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 describe('DisputesController', () => {
   let controller: DisputesController;
@@ -18,7 +19,9 @@ describe('DisputesController', () => {
     });
 
     moduleBuilder
-      .overrideGuard(AdminJwtGuard)
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+      .overrideGuard(RolesGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) });
 
     const module: TestingModule = await moduleBuilder.compile();

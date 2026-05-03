@@ -1,11 +1,12 @@
 /**
  * WARNING: DELETE ALL EXISTING DATA BEFORE RUNNING
  * This script creates a full Smart Credit+ Firestore mock dataset.
- * Run with: node seed-mock-data.js
- * Optional: node seed-mock-data.js --key=./your-service-account-key.json
- * Optional backfill for old data: node seed-mock-data.js --backfill-missing
- * Deep nested backfill (more reads): node seed-mock-data.js --backfill-missing --deep-backfill
- * Backfill only mode: node seed-mock-data.js --backfill-only
+ * Run with: node seed-mock-data-with-lenderborrowers.js
+ * Optional: node seed-mock-data-with-lenderborrowers.js --key=./firebase-service-account.json
+ * Optional project override: node seed-mock-data-with-lenderborrowers.js --project=your-firebase-project-id
+ * Optional backfill for old data: node seed-mock-data-with-lenderborrowers.js --backfill-missing
+ * Deep nested backfill (more reads): node seed-mock-data-with-lenderborrowers.js --backfill-missing --deep-backfill
+ * Backfill only mode: node seed-mock-data-with-lenderborrowers.js --backfill-only
  */
 
 'use strict';
@@ -22,8 +23,11 @@ const LOANS_COLLECTION = 'loans';
 const LENDER_BORROWERS_COLLECTION = 'lenderBorrowers';
 const TRANSACTIONS_COLLECTION = 'transactions';
 const DISPUTES_COLLECTION = 'disputes';
-const DEFAULT_KEY_PATH = './your-service-account-key.json';
+const LENDER_SETTINGS_COLLECTION = 'lenderSettings';
+const LENDER_NOTIFICATIONS_COLLECTION = 'lenderNotifications';
+const DEFAULT_KEY_PATH = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json';
 const DEFAULT_USER_PASSWORD = 'SmartCredit@123';
+const DEFAULT_ADMIN_PASSWORD = 'Admin123';
 const MAX_BATCH_SIZE = 400;
 
 const PURPOSES = ['education', 'business', 'medical', 'personal', 'vehicle', 'home'];
@@ -52,6 +56,21 @@ const LAST_NAMES = [
   'Karunaratne', 'Seneviratne', 'De Silva', 'Wijesinghe', 'Gunasekara', 'Rajapaksa',
   'Madushanka', 'Lakmal', 'Nawaratne', 'Samarakoon', 'Udayanga'
 ];
+
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  inAppNewRequests: true,
+  emailNewRequests: false,
+  inAppTransactions: true,
+  emailTransactions: false,
+  inAppStatusUpdates: true,
+  emailStatusUpdates: false,
+  inAppOverdues: true,
+  emailOverdues: false,
+  inAppAdExpiry: true,
+  emailAdExpiry: false,
+  inAppDisputes: true,
+  emailDisputes: false
+};
 
 /**
  * @typedef {Object} UserDoc
@@ -171,6 +190,7 @@ const LAST_NAMES = [
 function parseArgs(argv) {
   const options = {
     key: DEFAULT_KEY_PATH,
+    projectId: process.env.FIREBASE_PROJECT_ID || '',
     backfillMissing: false,
     deepBackfill: false,
     backfillOnly: false
@@ -178,6 +198,8 @@ function parseArgs(argv) {
   argv.forEach((arg) => {
     if (arg.startsWith('--key=')) {
       options.key = arg.slice('--key='.length);
+    } else if (arg.startsWith('--project=')) {
+      options.projectId = arg.slice('--project='.length);
     } else if (arg === '--backfill-missing') {
       options.backfillMissing = true;
     } else if (arg === '--deep-backfill') {
@@ -354,11 +376,41 @@ async function commitWrites(db, writes, label) {
 
 async function createUsers(db, now, rng) {
   /** @type {Map<string, UserDoc>} */
+  const admins = new Map();
+  /** @type {Map<string, UserDoc>} */
   const lenders = new Map();
   /** @type {Map<string, UserDoc>} */
   const borrowers = new Map();
   const writes = [];
   const passwordHash = await bcrypt.hash(DEFAULT_USER_PASSWORD, 10);
+  const adminPasswordHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
+  const adminCreatedAt = addDays(now, -720);
+  /** @type {UserDoc} */
+  const adminUser = {
+    uid: 'x1oetaHIAsLmcShCvtax',
+    role: ['admin'],
+    fullName: 'System Admin',
+    photoURL: photoURL('x1oetaHIAsLmcShCvtax'),
+    phone: '+94770000000',
+    email: 'admin@gmail.com',
+    emailLower: 'admin@gmail.com',
+    phoneNormalized: '+94770000000',
+    passwordHash: adminPasswordHash,
+    creditScore: 850,
+    rating: 5,
+    totalLoansCompleted: 0,
+    totalAmountLent: 0,
+    totalAmountBorrowed: 0,
+    kycStatus: 'approved',
+    accountStatus: 'active',
+    status: 'active',
+    authProvider: 'local',
+    reviewedAt: ts(addDays(adminCreatedAt, 1)),
+    createdAt: ts(adminCreatedAt),
+    updatedAt: ts(addDays(adminCreatedAt, 30))
+  };
+  admins.set(adminUser.uid, adminUser);
+  writes.push({ ref: db.collection(USERS_COLLECTION).doc(adminUser.uid), data: adminUser });
 
   for (let i = 1; i <= 15; i += 1) {
     const uid = `lender_${pad(i, 3)}`;
@@ -425,7 +477,55 @@ async function createUsers(db, now, rng) {
     writes.push({ ref: db.collection(USERS_COLLECTION).doc(uid), data: borrower });
   }
 
-  return { lenders, borrowers, writes };
+  const pendingUsers = ['lender_002', 'borrower_043', 'borrower_044'];
+  pendingUsers.forEach((uid, index) => {
+    const user = lenders.get(uid) || borrowers.get(uid);
+    if (!user) {
+      return;
+    }
+
+    user.kycStatus = 'pending';
+    user.accountStatus = 'pending';
+    delete user.status;
+    user.updatedAt = ts(addDays(now, -(index + 1)));
+  });
+
+  const suspendedUsers = [
+    ['lender_014', 'Repeated document mismatches during compliance review'],
+    ['borrower_042', 'Account temporarily suspended after repeated payment disputes'],
+  ];
+  suspendedUsers.forEach(([uid, reason], index) => {
+    const user = lenders.get(uid) || borrowers.get(uid);
+    if (!user) {
+      return;
+    }
+
+    user.status = 'suspended';
+    user.accountStatus = 'suspended';
+    user.suspensionReason = reason;
+    user.suspendedAt = ts(addDays(now, -(4 + index)));
+    user.updatedAt = user.suspendedAt;
+  });
+
+  const rejectedUsers = [
+    ['lender_015', 'Uploaded business registration document was unreadable'],
+    ['borrower_045', 'National ID details could not be verified'],
+  ];
+  rejectedUsers.forEach(([uid, reason], index) => {
+    const user = lenders.get(uid) || borrowers.get(uid);
+    if (!user) {
+      return;
+    }
+
+    user.kycStatus = 'rejected';
+    user.status = 'inactive';
+    user.accountStatus = 'inactive';
+    user.rejectionReason = reason;
+    user.reviewedAt = ts(addDays(now, -(7 + index)));
+    user.updatedAt = user.reviewedAt;
+  });
+
+  return { admins, lenders, borrowers, writes };
 }
 
 function createLoanDistribution() {
@@ -520,6 +620,7 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
         location: pick(rng, LOCATIONS),
         status: 'active',
         createdAt: ts(adCreatedAt),
+        updatedAt: ts(addDays(adCreatedAt, randomInt(rng, 2, 12))),
         expiresAt: ts(addDays(adCreatedAt, 180)),
         lenderName: lender.fullName,
         lenderPhotoURL: lender.photoURL,
@@ -754,6 +855,7 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
           location: pick(rng, LOCATIONS),
           status: 'active',
           createdAt: ts(idleCreatedAt),
+          updatedAt: ts(addDays(idleCreatedAt, randomInt(rng, 2, 8))),
           expiresAt: ts(addDays(idleCreatedAt, 180)),
           lenderName: lender.fullName,
           lenderPhotoURL: lender.photoURL,
@@ -843,6 +945,80 @@ function createAdsAndLoans(db, now, rng, lenders, borrowers) {
     disputesCount += 1;
   });
 
+  const reviewQueueAds = [
+    {
+      lender: lenderList[0],
+      status: 'pending',
+      notes: 'Fresh lender advertisement waiting for admin review'
+    },
+    {
+      lender: lenderList[4],
+      status: 'pending',
+      notes: 'Recently submitted lender advertisement in compliance queue'
+    },
+    {
+      lender: lenderList[8],
+      status: 'approved',
+      notes: 'Admin approved this offer but it has not been borrowed yet'
+    },
+    {
+      lender: lenderList[12],
+      status: 'rejected',
+      rejectionReason: 'Interest rate wording did not match the uploaded agreement'
+    },
+    {
+      lender: lenderList[13],
+      status: 'rejected',
+      rejectionReason: 'Promotion copy contained unsupported repayment promises'
+    },
+    {
+      lender: lenderList[14],
+      status: 'closed',
+      notes: 'Offer closed after expiry window ended'
+    }
+  ];
+
+  reviewQueueAds.forEach((entry, index) => {
+    const adRef = db.collection(ADS_COLLECTION).doc();
+    const createdAt = addDays(now, -(5 + index));
+    const updatedAt = addDays(createdAt, 1);
+    const payload = {
+      adId: adRef.id,
+      lenderId: entry.lender.uid,
+      maxAmount: roundCurrency(randomInt(rng, 100000, 420000)),
+      preferredInterestRate: randomFloat(rng, 9, 22, 1),
+      minTenureMonths: 6,
+      maxTenureMonths: pick(rng, [12, 18, 24, 36]),
+      preferredPurposes: pickPurposes(rng),
+      location: pick(rng, LOCATIONS),
+      status: entry.status,
+      createdAt: ts(createdAt),
+      updatedAt: ts(updatedAt),
+      expiresAt: ts(addDays(createdAt, 180)),
+      lenderName: entry.lender.fullName,
+      lenderPhotoURL: entry.lender.photoURL,
+      lenderRating: entry.lender.rating
+    };
+
+    if (entry.notes) {
+      payload.notes = entry.notes;
+    }
+
+    if (entry.status === 'approved') {
+      payload.reviewedAt = ts(updatedAt);
+      payload.approvedAt = ts(updatedAt);
+    }
+
+    if (entry.status === 'rejected') {
+      payload.reviewedAt = ts(updatedAt);
+      payload.rejectedAt = ts(updatedAt);
+      payload.rejectionReason = entry.rejectionReason;
+    }
+
+    adWrites.push({ ref: adRef, data: payload });
+    adsCount += 1;
+  });
+
   return {
     adWrites,
     requestWrites,
@@ -876,6 +1052,155 @@ function updateUserAggregates(db, lenders, borrowers, now) {
     borrower.updatedAt = ts(now);
     writes.push({ ref: db.collection(USERS_COLLECTION).doc(borrower.uid), data: borrower });
   });
+  return writes;
+}
+
+function createLenderSettingsWrites(db, now, rng, lenders) {
+  return Array.from(lenders.values()).map((lender, index) => ({
+    ref: db.collection(LENDER_SETTINGS_COLLECTION).doc(lender.uid),
+    data: {
+      lenderId: lender.uid,
+      notifications: {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        emailTransactions: index % 3 === 0,
+        emailOverdues: index % 4 === 0,
+        emailDisputes: index % 5 === 0
+      },
+      lendingDefaults: {
+        defaultInterestRate: randomFloat(rng, 10, 18, 1),
+        defaultMaxTenureMonths: pick(rng, [12, 18, 24, 36]),
+        defaultMinAmount: roundCurrency(randomInt(rng, 30000, 90000)),
+        defaultMaxAmount: roundCurrency(randomInt(rng, 180000, 450000)),
+        preferredPurposes: pickPurposes(rng),
+        preferredRegions: shuffle(rng, LOCATIONS).slice(0, 3),
+        defaultResponseTimeHours: pick(rng, [12, 24, 48])
+      },
+      workspace: {
+        defaultLandingPage: index % 2 === 0 ? 'dashboard' : 'analytics',
+        defaultAnalyticsRange: pick(rng, ['30d', '90d', '365d']),
+        pendingRequestsPageSize: pick(rng, [20, 30, 40]),
+        borrowerTablePageSize: pick(rng, [8, 10, 12])
+      },
+      updatedAt: ts(addDays(now, -(index % 6)))
+    }
+  }));
+}
+
+function createLenderNotificationWrites(db, now, lenders, generated) {
+  const writes = [];
+  const adByLender = new Map();
+  const requestByLender = new Map();
+  const loanByLender = new Map();
+
+  generated.adWrites.forEach((write) => {
+    const lenderId = write.data.lenderId;
+    if (lenderId && !adByLender.has(lenderId)) {
+      adByLender.set(lenderId, write);
+    }
+  });
+
+  generated.loanWrites.forEach((write) => {
+    const lenderId = write.data.lenderId;
+    if (lenderId && !loanByLender.has(lenderId)) {
+      loanByLender.set(lenderId, write);
+    }
+  });
+
+  generated.requestWrites.forEach((write) => {
+    const adId = write.data.adId;
+    const relatedAd = generated.adWrites.find((adWrite) => adWrite.data.adId === adId);
+    const lenderId = relatedAd?.data?.lenderId;
+    if (lenderId && !requestByLender.has(lenderId)) {
+      requestByLender.set(lenderId, write);
+    }
+  });
+
+  Array.from(lenders.values()).slice(0, 10).forEach((lender, index) => {
+    const adWrite = adByLender.get(lender.uid);
+    const loanWrite = loanByLender.get(lender.uid);
+    const requestWrite = requestByLender.get(lender.uid);
+    const baseCreatedAt = addDays(now, -(index + 1));
+
+    writes.push({
+      ref: db.collection(LENDER_NOTIFICATIONS_COLLECTION).doc(`seed-ad-${lender.uid}`),
+      data: {
+        lenderId: lender.uid,
+        category: 'ad',
+        eventType: 'ad_review_status',
+        title: 'Ad review update',
+        message: adWrite?.data?.status === 'approved'
+          ? 'One of your offers has been approved by admin.'
+          : 'Your latest lender advertisement was reviewed by admin.',
+        severity: adWrite?.data?.status === 'rejected' ? 'warning' : 'info',
+        isRead: index % 2 === 0,
+        createdAt: ts(baseCreatedAt),
+        readAt: index % 2 === 0 ? ts(addDays(baseCreatedAt, 1)) : null,
+        relatedEntityType: 'ad',
+        relatedEntityId: adWrite?.ref?.id || null,
+        actionLabel: 'Open ad',
+        actionTarget: 'create-ad',
+        metadata: {
+          adId: adWrite?.ref?.id || '',
+          status: adWrite?.data?.status || 'active'
+        }
+      }
+    });
+
+    if (requestWrite) {
+      writes.push({
+        ref: db.collection(LENDER_NOTIFICATIONS_COLLECTION).doc(`seed-request-${lender.uid}`),
+        data: {
+          lenderId: lender.uid,
+          category: 'loan_request',
+          eventType: 'new_marketplace_request',
+          title: 'New loan request received',
+          message: `A borrower requested LKR ${requestWrite.data.amount} from one of your marketplace offers.`,
+          severity: 'info',
+          isRead: false,
+          createdAt: ts(addDays(baseCreatedAt, 1)),
+          readAt: null,
+          relatedEntityType: 'loanRequest',
+          relatedEntityId: requestWrite.ref.id,
+          actionLabel: 'Open request',
+          actionTarget: 'pending-requests',
+          metadata: {
+            adId: requestWrite.data.adId,
+            borrowerId: requestWrite.data.borrowerId,
+            amount: requestWrite.data.amount,
+            status: requestWrite.data.status
+          }
+        }
+      });
+    }
+
+    if (loanWrite) {
+      writes.push({
+        ref: db.collection(LENDER_NOTIFICATIONS_COLLECTION).doc(`seed-risk-${lender.uid}`),
+        data: {
+          lenderId: lender.uid,
+          category: 'repayment_risk',
+          eventType: 'loan_overdue',
+          title: 'Overdue payment detected',
+          message: `Loan ${loanWrite.ref.id} has an overdue installment that needs attention.`,
+          severity: 'warning',
+          isRead: index % 3 === 0,
+          createdAt: ts(addDays(baseCreatedAt, 2)),
+          readAt: index % 3 === 0 ? ts(addDays(baseCreatedAt, 3)) : null,
+          relatedEntityType: 'loan',
+          relatedEntityId: loanWrite.ref.id,
+          actionLabel: 'Open dashboard',
+          actionTarget: 'dashboard',
+          metadata: {
+            borrowerId: loanWrite.data.borrowerId,
+            loanId: loanWrite.ref.id,
+            amount: loanWrite.data.totalRepayable,
+            status: 'overdue'
+          }
+        }
+      });
+    }
+  });
+
   return writes;
 }
 
@@ -1023,7 +1348,8 @@ async function main() {
 
   const serviceAccount = require(keyPath);
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
+    projectId: options.projectId || serviceAccount.project_id
   });
 
   const db = admin.firestore();
@@ -1039,11 +1365,18 @@ async function main() {
   console.log('Starting Smart Credit+ Firestore mock seed...');
   console.log(`Using key file: ${keyPath}`);
 
-  const { lenders, borrowers, writes: userWrites } = await createUsers(db, now, rng);
-  console.log('Created 15 lenders and 45 borrowers in memory');
+  const { admins, lenders, borrowers, writes: userWrites } = await createUsers(db, now, rng);
+  console.log('Created admin, lender, and borrower records in memory');
 
   const generated = createAdsAndLoans(db, now, rng, lenders, borrowers);
   const aggregateWrites = updateUserAggregates(db, lenders, borrowers, now);
+  const lenderSettingsWrites = createLenderSettingsWrites(db, now, rng, lenders);
+  const lenderNotificationWrites = createLenderNotificationWrites(
+    db,
+    now,
+    lenders,
+    generated,
+  );
 
   console.log('Writing users...');
   await commitWrites(db, userWrites, 'users');
@@ -1072,6 +1405,12 @@ async function main() {
   console.log('Updating user aggregates...');
   await commitWrites(db, aggregateWrites, 'user aggregate updates');
 
+  console.log('Writing lender settings...');
+  await commitWrites(db, lenderSettingsWrites, 'lenderSettings');
+
+  console.log('Writing lender notifications...');
+  await commitWrites(db, lenderNotificationWrites, 'lenderNotifications');
+
   if (options.backfillMissing) {
     console.log('Running optional lender-scope backfill for existing collections...');
     await backfillLenderScope(db, generated.loanMeta, options.deepBackfill);
@@ -1079,7 +1418,9 @@ async function main() {
 
   console.log('');
   console.log('Seed complete.');
+  console.log(`admin login: admin@gmail.com / ${DEFAULT_ADMIN_PASSWORD}`);
   console.log(`shared seeded-user password: ${DEFAULT_USER_PASSWORD}`);
+  console.log(`admins: ${admins.size}`);
   console.log(`users: ${userWrites.length}`);
   console.log(`ads: ${generated.counts.ads}`);
   console.log(`loanRequests: ${generated.counts.loanRequests}`);
@@ -1088,6 +1429,8 @@ async function main() {
   console.log(`payments: ${generated.counts.payments}`);
   console.log(`disputes: ${generated.counts.disputes}`);
   console.log(`lenderBorrowers: ${generated.lenderBorrowerWrites.length}`);
+  console.log(`lenderSettings: ${lenderSettingsWrites.length}`);
+  console.log(`lenderNotifications: ${lenderNotificationWrites.length}`);
 }
 
 main().catch((error) => {

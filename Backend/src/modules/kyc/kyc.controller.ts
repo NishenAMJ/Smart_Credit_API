@@ -12,10 +12,13 @@ import {
 import { KycService } from './kyc.service';
 import { ApproveKycDto } from './dto/approve-kyc.dto';
 import { RejectKycDto } from './dto/reject-kyc.dto';
-import { AdminJwtGuard } from '../admin/admin-auth/guards/admin-jwt.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Controller('admin/kyc')
-@UseGuards(AdminJwtGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
 export class KycController {
   constructor(private readonly kycService: KycService) {}
 

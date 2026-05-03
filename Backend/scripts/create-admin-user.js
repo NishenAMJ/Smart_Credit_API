@@ -131,9 +131,9 @@ function initializeFirebase() {
   if (serviceAccountJson) {
     const serviceAccount = JSON.parse(serviceAccountJson);
     const projectId =
-      process.env.FIREBASE_PROJECT_ID ||
       serviceAccount.project_id ||
-      serviceAccount.projectId;
+      serviceAccount.projectId ||
+      process.env.FIREBASE_PROJECT_ID;
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       ...(projectId ? { projectId } : {}),
@@ -144,9 +144,9 @@ function initializeFirebase() {
   const serviceAccountPath = resolveServiceAccountPath();
   const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
   const projectId =
-    process.env.FIREBASE_PROJECT_ID ||
     serviceAccount.project_id ||
-    serviceAccount.projectId;
+    serviceAccount.projectId ||
+    process.env.FIREBASE_PROJECT_ID;
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
