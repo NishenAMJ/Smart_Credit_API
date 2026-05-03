@@ -41,6 +41,8 @@ function getDefaultApiBaseUrl() {
 }
 
 export function getApiBaseUrl() {
-  const baseUrl = (process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiBaseUrl()).trim();
+  const baseUrl = (
+    process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiBaseUrl()
+  ).trim();
   return baseUrl.endsWith("/api") ? baseUrl : `${baseUrl}/api`;
 }

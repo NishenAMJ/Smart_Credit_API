@@ -18,7 +18,10 @@ import { TYPOGRAPHY } from "../../constants/typography";
 import { BORDER_RADIUS } from "../../constants/borderRadius";
 import { SHADOWS } from "../../constants/shadows";
 import type { BorrowerNavigation } from "../../types/navigation";
-import { supportService, type SupportStatus } from "../../api/services/support.service";
+import {
+  supportService,
+  type SupportStatus,
+} from "../../api/services/support.service";
 import { getApiErrorMessage } from "../../api/api-error";
 import { getUserId } from "../../utils/auth.storage";
 import Loader from "../../components/common/Loader";
@@ -32,7 +35,9 @@ type SupportScreenProps = {
  */
 export default function SupportScreen({ navigation }: SupportScreenProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [supportStatusCards, setSupportStatusCards] = useState<SupportStatus[]>([]);
+  const [supportStatusCards, setSupportStatusCards] = useState<SupportStatus[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");

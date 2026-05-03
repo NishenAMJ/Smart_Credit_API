@@ -18,7 +18,9 @@ export class LenderRequestsService {
   ): Promise<{ requestId: string; status: string; updatedAt: string }> {
     this.logger.log(`Lender ${lenderId} approving request ${requestId}`);
 
-    const ref = this.firebaseService.db.collection('loanRequests').doc(requestId);
+    const ref = this.firebaseService.db
+      .collection('loanRequests')
+      .doc(requestId);
     const doc = await ref.get();
 
     if (!doc.exists) {
@@ -49,7 +51,9 @@ export class LenderRequestsService {
   ): Promise<{ requestId: string; status: string; updatedAt: string }> {
     this.logger.log(`Lender ${lenderId} rejecting request ${requestId}`);
 
-    const ref = this.firebaseService.db.collection('loanRequests').doc(requestId);
+    const ref = this.firebaseService.db
+      .collection('loanRequests')
+      .doc(requestId);
     const doc = await ref.get();
 
     if (!doc.exists) {

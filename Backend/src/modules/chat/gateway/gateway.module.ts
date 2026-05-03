@@ -9,7 +9,7 @@ import { BlocksModule } from '../users/blocks.module';
 
 @Module({
   imports: [
-    UsersModule,  // provides UsersService (online status, FCM token)
+    UsersModule, // provides UsersService (online status, FCM token)
     BlocksModule, // provides BlocksService (block checks)
   ],
   providers: [ChatGateway],

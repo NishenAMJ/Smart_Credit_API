@@ -25,7 +25,10 @@ export class KycController {
   constructor(private readonly kycService: KycService) {}
 
   @Get('pending')
-  async getPendingKyc(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+  async getPendingKyc(
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
     return this.kycService.getPendingKyc(limit, cursor);
   }
 

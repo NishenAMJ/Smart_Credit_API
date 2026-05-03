@@ -31,7 +31,10 @@ export class UsersService {
     return { id: snap.id, ...snap.data() } as UserDoc;
   }
 
-  async search(query: string, requesterId: string): Promise<Omit<UserDoc, 'fcmToken'>[]> {
+  async search(
+    query: string,
+    requesterId: string,
+  ): Promise<Omit<UserDoc, 'fcmToken'>[]> {
     const q = query.toLowerCase().trim();
     if (!q) return [];
 
@@ -48,8 +51,8 @@ export class UsersService {
       const data = d.data();
       this.logger.log(
         `[schema] id="${d.id}" fields=${JSON.stringify(Object.keys(data))} ` +
-        `displayName="${data.displayName}" name="${data.name}" ` +
-        `fullName="${data.fullName}" firstName="${data.firstName}"`,
+          `displayName="${data.displayName}" name="${data.name}" ` +
+          `fullName="${data.fullName}" firstName="${data.firstName}"`,
       );
     });
 
@@ -60,15 +63,17 @@ export class UsersService {
       .limit(200)
       .get();
 
-    this.logger.log(`[search] "borrowers" collection: ${borrowersSnap.size} docs`);
+    this.logger.log(
+      `[search] "borrowers" collection: ${borrowersSnap.size} docs`,
+    );
 
     if (borrowersSnap.size > 0) {
       borrowersSnap.docs.slice(0, 3).forEach((d) => {
         const data = d.data();
         this.logger.log(
           `[borrower schema] id="${d.id}" fields=${JSON.stringify(Object.keys(data))} ` +
-          `displayName="${data.displayName}" name="${data.name}" ` +
-          `fullName="${data.fullName}" firstName="${data.firstName}"`,
+            `displayName="${data.displayName}" name="${data.name}" ` +
+            `fullName="${data.fullName}" firstName="${data.firstName}"`,
         );
       });
     }
@@ -107,7 +112,10 @@ export class UsersService {
     // Normalize whatever field name is used into displayName + username
     const normalized = results.map((u: any) => ({
       ...u,
-      displayName: u.displayName ?? u.name ?? u.fullName ??
+      displayName:
+        u.displayName ??
+        u.name ??
+        u.fullName ??
         (u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.id),
       username: u.username ?? u.email ?? u.id,
     }));

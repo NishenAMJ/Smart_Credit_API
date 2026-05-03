@@ -1,7 +1,23 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Eye, Check, X, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
-import { approveAd, getAdStats, getAds, rejectAd, updateAdStatus, type AdminAd, type AdStatus } from "../../lib/api";
+import {
+  Search,
+  Eye,
+  Check,
+  X,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import {
+  approveAd,
+  getAdStats,
+  getAds,
+  rejectAd,
+  updateAdStatus,
+  type AdminAd,
+  type AdStatus,
+} from "../../lib/api";
 import { formatFirestoreDate } from "../../lib/admin-format";
 import { DEFAULT_AD_REJECTION_REASON } from "../../constants/admin-actions";
 
@@ -30,11 +46,16 @@ function mapAd(ad: AdminAd): LenderAdRow {
     location: ad.location || "N/A",
     description: `Preferred purposes: ${(ad.preferredPurposes || []).join(", ") || "N/A"}`,
     interestRate:
-      typeof ad.preferredInterestRate === "number" ? `${ad.preferredInterestRate}%` : "N/A",
+      typeof ad.preferredInterestRate === "number"
+        ? `${ad.preferredInterestRate}%`
+        : "N/A",
     maxAmount:
-      typeof ad.maxAmount === "number" ? `LKR ${ad.maxAmount.toLocaleString()}` : "N/A",
+      typeof ad.maxAmount === "number"
+        ? `LKR ${ad.maxAmount.toLocaleString()}`
+        : "N/A",
     tenureRange:
-      typeof ad.minTenureMonths === "number" && typeof ad.maxTenureMonths === "number"
+      typeof ad.minTenureMonths === "number" &&
+      typeof ad.maxTenureMonths === "number"
         ? `${ad.minTenureMonths}-${ad.maxTenureMonths} months`
         : "N/A",
     preferredPurposes: (ad.preferredPurposes || []).join(", ") || "N/A",
@@ -86,21 +107,24 @@ export default function LenderAds() {
     setStats(response.stats);
   }, []);
 
-  const loadAds = useCallback(async (cursor?: string) => {
-    setLoading(true);
-    try {
-      const response = await getAds({ limit: pageSize, cursor });
-      setAds(response.ads.map(mapAd));
-      setHasMore(response.hasMore ?? false);
-      setNextCursor(response.nextCursor);
-      setTotalLoaded(response.count);
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load ads.");
-    } finally {
-      setLoading(false);
-    }
-  }, [pageSize]);
+  const loadAds = useCallback(
+    async (cursor?: string) => {
+      setLoading(true);
+      try {
+        const response = await getAds({ limit: pageSize, cursor });
+        setAds(response.ads.map(mapAd));
+        setHasMore(response.hasMore ?? false);
+        setNextCursor(response.nextCursor);
+        setTotalLoaded(response.count);
+        setError("");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load ads.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pageSize],
+  );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -114,7 +138,8 @@ export default function LenderAds() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      const activeCursor = currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+      const activeCursor =
+        currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
       void loadAds(activeCursor);
       void loadAdStats();
     }, 10000);
@@ -130,7 +155,8 @@ export default function LenderAds() {
         ad.location.toLowerCase().includes(searchValue) ||
         ad.id.toLowerCase().includes(searchValue) ||
         ad.preferredPurposes.toLowerCase().includes(searchValue);
-      const matchesStatus = filterStatus === "all" || ad.status === filterStatus;
+      const matchesStatus =
+        filterStatus === "all" || ad.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
   }, [ads, filterStatus, search]);
@@ -146,7 +172,8 @@ export default function LenderAds() {
     if (currentPage <= 1) return;
     const newStack = [...cursorStack];
     newStack.pop();
-    const prevCursor = newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
+    const prevCursor =
+      newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
     setCursorStack(newStack);
     setCurrentPage((prev) => prev - 1);
     // For cursor-based: go back to the cursor before the current one
@@ -162,7 +189,9 @@ export default function LenderAds() {
   }
 
   function syncAdStatus(adId: string, status: AdStatus) {
-    setAds((prev) => prev.map((ad) => (ad.id === adId ? { ...ad, status } : ad)));
+    setAds((prev) =>
+      prev.map((ad) => (ad.id === adId ? { ...ad, status } : ad)),
+    );
     setSelectedAd((prev) => (prev?.id === adId ? { ...prev, status } : prev));
   }
 
@@ -191,48 +220,101 @@ export default function LenderAds() {
   // Reopens an approved or active ad when it needs another review.
   async function handleMoveToPending(adId: string) {
     try {
-      await updateAdStatus(adId, "pending", { notes: "Moved back to pending review by admin" });
+      await updateAdStatus(adId, "pending", {
+        notes: "Moved back to pending review by admin",
+      });
       syncAdStatus(adId, "pending");
       await loadAdStats();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to move ad to pending.");
+      setError(
+        err instanceof Error ? err.message : "Failed to move ad to pending.",
+      );
     }
   }
 
   // Rejects an approved or active ad after a later complaint or policy issue.
   async function handleMoveToRejected(adId: string) {
     try {
-      await updateAdStatus(adId, "rejected", { reason: DEFAULT_AD_REJECTION_REASON });
+      await updateAdStatus(adId, "rejected", {
+        reason: DEFAULT_AD_REJECTION_REASON,
+      });
       syncAdStatus(adId, "rejected");
       await loadAdStats();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to move ad to rejected.");
+      setError(
+        err instanceof Error ? err.message : "Failed to move ad to rejected.",
+      );
     }
   }
 
   function renderActions(ad: LenderAdRow) {
     return (
       <>
-        <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedAd(ad)} title="View" aria-label="View lender ad">
-          <Eye size={14} color="#6B7280" strokeWidth={2.2} style={S.iconGraphic} />
+        <button
+          style={S.iconButton("#6B7280", "#F3F4F6")}
+          onClick={() => setSelectedAd(ad)}
+          title="View"
+          aria-label="View lender ad"
+        >
+          <Eye
+            size={14}
+            color="#6B7280"
+            strokeWidth={2.2}
+            style={S.iconGraphic}
+          />
         </button>
         {ad.status === "pending" && (
           <>
-            <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleApprove(ad.id)} title="Approve" aria-label="Approve lender ad">
-              <Check size={14} color="#10B981" strokeWidth={2.2} style={S.iconGraphic} />
+            <button
+              style={S.iconButton("#10B981", "#ECFDF5")}
+              onClick={() => void handleApprove(ad.id)}
+              title="Approve"
+              aria-label="Approve lender ad"
+            >
+              <Check
+                size={14}
+                color="#10B981"
+                strokeWidth={2.2}
+                style={S.iconGraphic}
+              />
             </button>
-            <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleReject(ad.id)} title="Reject" aria-label="Reject lender ad">
-              <X size={14} color="#EF4444" strokeWidth={2.2} style={S.iconGraphic} />
+            <button
+              style={S.iconButton("#EF4444", "#FEF2F2")}
+              onClick={() => void handleReject(ad.id)}
+              title="Reject"
+              aria-label="Reject lender ad"
+            >
+              <X
+                size={14}
+                color="#EF4444"
+                strokeWidth={2.2}
+                style={S.iconGraphic}
+              />
             </button>
           </>
         )}
         {(ad.status === "approved" || ad.status === "active") && (
           <>
-            <button style={S.iconButton("#F59E0B", "#FFFBEB")} onClick={() => void handleMoveToPending(ad.id)} title="Move to pending" aria-label="Move lender ad to pending">
+            <button
+              style={S.iconButton("#F59E0B", "#FFFBEB")}
+              onClick={() => void handleMoveToPending(ad.id)}
+              title="Move to pending"
+              aria-label="Move lender ad to pending"
+            >
               <RotateCcw size={14} color="#F59E0B" />
             </button>
-            <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleMoveToRejected(ad.id)} title="Move to rejected" aria-label="Move lender ad to rejected">
-              <X size={14} color="#EF4444" strokeWidth={2.2} style={S.iconGraphic} />
+            <button
+              style={S.iconButton("#EF4444", "#FEF2F2")}
+              onClick={() => void handleMoveToRejected(ad.id)}
+              title="Move to rejected"
+              aria-label="Move lender ad to rejected"
+            >
+              <X
+                size={14}
+                color="#EF4444"
+                strokeWidth={2.2}
+                style={S.iconGraphic}
+              />
             </button>
           </>
         )}
@@ -245,11 +327,18 @@ export default function LenderAds() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Lender Ads</h1>
-          <p className="page-subtitle">Only lenders can publish ads. Borrowers choose a lender ad and request a loan from that lender.</p>
+          <p className="page-subtitle">
+            Only lenders can publish ads. Borrowers choose a lender ad and
+            request a loan from that lender.
+          </p>
         </div>
       </div>
 
-      {error && <div className="card" style={S.errorCard}>{error}</div>}
+      {error && (
+        <div className="card" style={S.errorCard}>
+          {error}
+        </div>
+      )}
 
       <div style={S.summaryGrid}>
         {[
@@ -262,7 +351,9 @@ export default function LenderAds() {
         ].map((item) => (
           <div key={item.label} className="card">
             <p style={S.cardLabel}>{item.label}</p>
-            <p style={{ ...S.cardValue, color: item.color }}>{loading ? "..." : item.count}</p>
+            <p style={{ ...S.cardValue, color: item.color }}>
+              {loading ? "..." : item.count}
+            </p>
           </div>
         ))}
       </div>
@@ -280,8 +371,21 @@ export default function LenderAds() {
         </div>
 
         <div className="tabs">
-          {(["all", "active", "approved", "pending", "rejected", "closed"] as const).map((status) => (
-            <button key={status} className={`tab ${filterStatus === status ? "active" : ""}`} onClick={() => setFilterStatus(status)}>
+          {(
+            [
+              "all",
+              "active",
+              "approved",
+              "pending",
+              "rejected",
+              "closed",
+            ] as const
+          ).map((status) => (
+            <button
+              key={status}
+              className={`tab ${filterStatus === status ? "active" : ""}`}
+              onClick={() => setFilterStatus(status)}
+            >
               {status}
             </button>
           ))}
@@ -313,29 +417,39 @@ export default function LenderAds() {
               filteredAds.map((ad) => (
                 <tr key={ad.id}>
                   <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <LenderAvatar name={ad.lender} photoURL={ad.lenderPhotoURL} size={34} />
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 10 }}
+                    >
+                      <LenderAvatar
+                        name={ad.lender}
+                        photoURL={ad.lenderPhotoURL}
+                        size={34}
+                      />
                       <div>
                         <p style={{ fontWeight: 600 }}>{ad.lender}</p>
-                        <p style={{ fontSize: 12, color: "#6B7280" }}>Lender ad</p>
+                        <p style={{ fontSize: 12, color: "#6B7280" }}>
+                          Lender ad
+                        </p>
                       </div>
                     </div>
                   </td>
                   <td>
                     <div style={{ maxWidth: 220 }}>
                       <p style={{ fontWeight: 600 }}>{ad.location}</p>
-                      <p style={{ fontSize: 12, color: "#6B7280" }}>{ad.preferredPurposes}</p>
+                      <p style={{ fontSize: 12, color: "#6B7280" }}>
+                        {ad.preferredPurposes}
+                      </p>
                     </div>
                   </td>
                   <td>{ad.interestRate}</td>
                   <td>{ad.maxAmount}</td>
                   <td>{ad.tenureRange}</td>
                   <td>{ad.postedDate}</td>
-                  <td><StatusBadge status={ad.status} /></td>
+                  <td>
+                    <StatusBadge status={ad.status} />
+                  </td>
                   <td style={S.actionCell}>
-                    <div style={S.actionRow}>
-                      {renderActions(ad)}
-                    </div>
+                    <div style={S.actionRow}>{renderActions(ad)}</div>
                   </td>
                 </tr>
               ))
@@ -347,8 +461,10 @@ export default function LenderAds() {
         <div style={S.paginationBar}>
           <div style={S.paginationInfo}>
             <span style={{ fontSize: 13, color: "#6B7280" }}>
-              Showing {filteredAds.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
-              –{(currentPage - 1) * pageSize + totalLoaded} {hasMore ? "" : "(last page)"}
+              Showing{" "}
+              {filteredAds.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}–
+              {(currentPage - 1) * pageSize + totalLoaded}{" "}
+              {hasMore ? "" : "(last page)"}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
@@ -358,7 +474,9 @@ export default function LenderAds() {
                 style={S.pageSizeSelect}
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size}</option>
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
                 ))}
               </select>
             </div>
@@ -392,17 +510,31 @@ export default function LenderAds() {
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
             <div style={S.modalHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <LenderAvatar name={selectedAd.lender} photoURL={selectedAd.lenderPhotoURL} size={48} />
+                <LenderAvatar
+                  name={selectedAd.lender}
+                  photoURL={selectedAd.lenderPhotoURL}
+                  size={48}
+                />
                 <div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700 }}>{selectedAd.lender}</h3>
-                  <p style={{ fontSize: 12, color: "#6B7280" }}>{selectedAd.id}</p>
+                  <h3 style={{ fontSize: 18, fontWeight: 700 }}>
+                    {selectedAd.lender}
+                  </h3>
+                  <p style={{ fontSize: 12, color: "#6B7280" }}>
+                    {selectedAd.id}
+                  </p>
                 </div>
               </div>
-              <button style={S.closeButton} onClick={() => setSelectedAd(null)}>×</button>
+              <button style={S.closeButton} onClick={() => setSelectedAd(null)}>
+                ×
+              </button>
             </div>
 
             <div style={S.profilePreview}>
-              <LenderAvatar name={selectedAd.lender} photoURL={selectedAd.lenderPhotoURL} size={96} />
+              <LenderAvatar
+                name={selectedAd.lender}
+                photoURL={selectedAd.lenderPhotoURL}
+                size={96}
+              />
               <div>
                 <p style={S.profileLabel}>Lender Profile Picture</p>
                 <p style={S.profileName}>{selectedAd.lender}</p>
@@ -415,14 +547,15 @@ export default function LenderAds() {
               <Detail label="Interest Rate" value={selectedAd.interestRate} />
               <Detail label="Amount" value={selectedAd.maxAmount} />
               <Detail label="Tenure Range" value={selectedAd.tenureRange} />
-              <Detail label="Preferred Purposes" value={selectedAd.preferredPurposes} />
+              <Detail
+                label="Preferred Purposes"
+                value={selectedAd.preferredPurposes}
+              />
               <Detail label="Posted Date" value={selectedAd.postedDate} />
               <Detail label="Status" value={selectedAd.status} />
               <Detail label="Description" value={selectedAd.description} />
             </div>
-            <div style={S.modalActions}>
-              {renderActions(selectedAd)}
-            </div>
+            <div style={S.modalActions}>{renderActions(selectedAd)}</div>
           </div>
         </div>
       )}
@@ -434,8 +567,12 @@ export default function LenderAds() {
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div style={S.detailCard}>
-      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{value}</div>
+      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>
+        {value}
+      </div>
     </div>
   );
 }

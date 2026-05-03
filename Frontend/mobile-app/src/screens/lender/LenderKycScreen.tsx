@@ -1,14 +1,21 @@
 /** @format */
 
 import React from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Card from "../../components/common/Card";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { useAuth } from "../../context/AuthContext";
 
 export default function LenderKycScreen() {
-  const { kycSubmission, refreshing, refreshWorkspace, sessionStatus } = useAuth();
+  const { kycSubmission, refreshing, refreshWorkspace, sessionStatus } =
+    useAuth();
 
   return (
     <ScrollView
@@ -25,24 +32,32 @@ export default function LenderKycScreen() {
       <Card style={styles.card}>
         <Text style={styles.title}>KYC verification</Text>
         <Text style={styles.subtitle}>
-          Mobile lenders complete KYC during sign up. This screen lets you review the live status.
+          Mobile lenders complete KYC during sign up. This screen lets you
+          review the live status.
         </Text>
 
         <View style={styles.statusPill}>
           <Text style={styles.statusText}>
-            {(kycSubmission?.status ?? sessionStatus?.kycStatus ?? "not_submitted")
+            {(
+              kycSubmission?.status ??
+              sessionStatus?.kycStatus ??
+              "not_submitted"
+            )
               .replace(/_/g, " ")
               .toUpperCase()}
           </Text>
         </View>
 
-        <DetailRow label='Document type' value={kycSubmission?.documentType ?? "Not available"} />
         <DetailRow
-          label='Document number'
+          label="Document type"
+          value={kycSubmission?.documentType ?? "Not available"}
+        />
+        <DetailRow
+          label="Document number"
           value={kycSubmission?.documentNumber ?? "Not available"}
         />
         <DetailRow
-          label='Submitted'
+          label="Submitted"
           value={
             kycSubmission?.submittedAt
               ? new Date(kycSubmission.submittedAt).toLocaleDateString()
@@ -50,7 +65,7 @@ export default function LenderKycScreen() {
           }
         />
         <DetailRow
-          label='Review notes'
+          label="Review notes"
           value={kycSubmission?.reviewNotes ?? "No notes yet"}
         />
       </Card>

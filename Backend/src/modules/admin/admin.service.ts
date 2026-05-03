@@ -135,7 +135,11 @@ export class AdminService {
   }
 
   // Returns all users after removing sensitive fields and applying optional filters.
-  async getAllUsers(query: QueryUsersDto = {}, limit?: string, cursor?: string) {
+  async getAllUsers(
+    query: QueryUsersDto = {},
+    limit?: string,
+    cursor?: string,
+  ) {
     try {
       const pageSize = this.parseLimit(limit);
       let usersQuery: FirebaseFirestore.Query = this.db
@@ -152,16 +156,14 @@ export class AdminService {
       const users: User[] = [];
       let nextCursor: string | undefined;
       let exhausted = false;
-      let queryCursorDoc:
-        | FirebaseFirestore.QueryDocumentSnapshot
-        | undefined;
+      let queryCursorDoc: FirebaseFirestore.QueryDocumentSnapshot | undefined;
 
       while (users.length < pageSize && !exhausted) {
         let pageQuery = usersQuery.limit(Math.max(pageSize * 2, pageSize + 1));
         if (queryCursorDoc) {
-          pageQuery = usersQuery.startAfter(queryCursorDoc).limit(
-            Math.max(pageSize * 2, pageSize + 1),
-          );
+          pageQuery = usersQuery
+            .startAfter(queryCursorDoc)
+            .limit(Math.max(pageSize * 2, pageSize + 1));
         }
 
         const usersSnapshot = await pageQuery.get();

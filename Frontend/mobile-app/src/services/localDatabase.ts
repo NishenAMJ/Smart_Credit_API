@@ -15,14 +15,16 @@
  *   blocked_users — cached list of blocked users for offline display
  */
 
-import type { Message, Conversation, BlockedUser } from '../types/chat.types';
+import type { Message, Conversation, BlockedUser } from "../types/chat.types";
 
 // Lazy load SQLite to allow app to run without expo-sqlite installed (dev fallback)
 let SQLite: any = null;
 try {
-  SQLite = require('expo-sqlite');
+  SQLite = require("expo-sqlite");
 } catch {
-  console.warn('[LocalDB] expo-sqlite not installed. Using in-memory fallback.');
+  console.warn(
+    "[LocalDB] expo-sqlite not installed. Using in-memory fallback.",
+  );
 }
 
 // In-memory fallback for development when SQLite is unavailable
@@ -31,7 +33,9 @@ let _memoryConversations: any[] = [];
 let _memoryBlockedUsers: any[] = [];
 
 // Open (or create) the database file on the device, or null for in-memory fallback
-const db = SQLite?.openDatabaseSync ? SQLite.openDatabaseSync('smart_credit_chat.db') : null;
+const db = SQLite?.openDatabaseSync
+  ? SQLite.openDatabaseSync("smart_credit_chat.db")
+  : null;
 const useMemory = !db;
 
 // Helper to wrap db calls with memory fallback
@@ -62,7 +66,9 @@ export const localDatabase = {
    */
   init: () => {
     if (useMemory) {
-      console.log('[LocalDB] Using in-memory storage (expo-sqlite not available)');
+      console.log(
+        "[LocalDB] Using in-memory storage (expo-sqlite not available)",
+      );
       return;
     }
     try {
@@ -97,9 +103,9 @@ export const localDatabase = {
           createdAt   TEXT NOT NULL
         );
       `);
-      console.log('[LocalDB] Initialized successfully.');
+      console.log("[LocalDB] Initialized successfully.");
     } catch (error) {
-      console.error('[LocalDB] Init failed:', error);
+      console.error("[LocalDB] Init failed:", error);
     }
   },
 
@@ -115,14 +121,25 @@ export const localDatabase = {
       runSync(
         `INSERT OR REPLACE INTO messages (id, conversationId, senderId, text, createdAt, status)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [message.id, message.conversationId, message.senderId, message.text ?? '', message.createdAt, message.status],
+        [
+          message.id,
+          message.conversationId,
+          message.senderId,
+          message.text ?? "",
+          message.createdAt,
+          message.status,
+        ],
       );
     } catch (error) {
-      console.error('[LocalDB] insertMessage failed:', error);
+      console.error("[LocalDB] insertMessage failed:", error);
     }
   },
 
-  getMessages: (conversationId: string, limit: number, offset: number): Message[] => {
+  getMessages: (
+    conversationId: string,
+    limit: number,
+    offset: number,
+  ): Message[] => {
     if (useMemory) {
       return _memoryMessages
         .filter((m) => m.conversationId === conversationId)
@@ -133,23 +150,34 @@ export const localDatabase = {
       const stmt = prepareSync(
         `SELECT * FROM messages WHERE conversationId = $conversationId ORDER BY createdAt DESC LIMIT $limit OFFSET $offset`,
       );
-      const rows = stmt.executeSync({ $conversationId: conversationId, $limit: limit, $offset: offset }).getAllSync();
+      const rows = stmt
+        .executeSync({
+          $conversationId: conversationId,
+          $limit: limit,
+          $offset: offset,
+        })
+        .getAllSync();
       return rows as Message[];
     } catch (error) {
-      console.error('[LocalDB] getMessages failed:', error);
+      console.error("[LocalDB] getMessages failed:", error);
       return [];
     }
   },
 
-  updateMessageStatus: (messageId: string, status: Message['status']) => {
+  updateMessageStatus: (messageId: string, status: Message["status"]) => {
     if (useMemory) {
-      _memoryMessages = _memoryMessages.map((m) => (m.id === messageId ? { ...m, status } : m));
+      _memoryMessages = _memoryMessages.map((m) =>
+        m.id === messageId ? { ...m, status } : m,
+      );
       return;
     }
     try {
-      runSync(`UPDATE messages SET status = ? WHERE id = ?`, [status, messageId]);
+      runSync(`UPDATE messages SET status = ? WHERE id = ?`, [
+        status,
+        messageId,
+      ]);
     } catch (error) {
-      console.error('[LocalDB] updateMessageStatus failed:', error);
+      console.error("[LocalDB] updateMessageStatus failed:", error);
     }
   },
 
@@ -157,7 +185,9 @@ export const localDatabase = {
 
   upsertConversation: (conv: Conversation) => {
     if (useMemory) {
-      _memoryConversations = _memoryConversations.filter((c) => c.id !== conv.id);
+      _memoryConversations = _memoryConversations.filter(
+        (c) => c.id !== conv.id,
+      );
       _memoryConversations.push(conv);
       return;
     }
@@ -182,7 +212,7 @@ export const localDatabase = {
         ],
       );
     } catch (error) {
-      console.error('[LocalDB] upsertConversation failed:', error);
+      console.error("[LocalDB] upsertConversation failed:", error);
     }
   },
 
@@ -206,14 +236,18 @@ export const localDatabase = {
           isOnline: r.isOnline === 1,
         },
         lastMessage: r.lastMessageText
-          ? { text: r.lastMessageText, createdAt: r.lastMessageAt, senderId: r.lastSenderId }
+          ? {
+              text: r.lastMessageText,
+              createdAt: r.lastMessageAt,
+              senderId: r.lastSenderId,
+            }
           : undefined,
         unreadCount: r.unreadCount,
         isMuted: r.isMuted === 1,
         createdAt: r.createdAt,
       }));
     } catch (error) {
-      console.error('[LocalDB] getConversations failed:', error);
+      console.error("[LocalDB] getConversations failed:", error);
       return [];
     }
   },
@@ -231,7 +265,9 @@ export const localDatabase = {
           ? {
               ...c,
               lastMessage: { text, createdAt, senderId },
-              unreadCount: incrementUnread ? (c.unreadCount ?? 0) + 1 : c.unreadCount,
+              unreadCount: incrementUnread
+                ? (c.unreadCount ?? 0) + 1
+                : c.unreadCount,
             }
           : c,
       );
@@ -243,7 +279,7 @@ export const localDatabase = {
         [text, createdAt, senderId, incrementUnread ? 1 : 0, conversationId],
       );
     } catch (error) {
-      console.error('[LocalDB] updateConversationLastMessage failed:', error);
+      console.error("[LocalDB] updateConversationLastMessage failed:", error);
     }
   },
 
@@ -255,9 +291,11 @@ export const localDatabase = {
       return;
     }
     try {
-      runSync(`UPDATE conversations SET unreadCount = 0 WHERE id = ?`, [conversationId]);
+      runSync(`UPDATE conversations SET unreadCount = 0 WHERE id = ?`, [
+        conversationId,
+      ]);
     } catch (error) {
-      console.error('[LocalDB] resetUnreadCount failed:', error);
+      console.error("[LocalDB] resetUnreadCount failed:", error);
     }
   },
 
@@ -272,10 +310,16 @@ export const localDatabase = {
     try {
       runSync(
         `INSERT OR REPLACE INTO blocked_users (id, username, displayName, avatarUrl, createdAt) VALUES (?, ?, ?, ?, ?)`,
-        [user.id, user.username, user.displayName, user.avatarUrl ?? null, user.blockedAt],
+        [
+          user.id,
+          user.username,
+          user.displayName,
+          user.avatarUrl ?? null,
+          user.blockedAt,
+        ],
       );
     } catch (error) {
-      console.error('[LocalDB] upsertBlockedUser failed:', error);
+      console.error("[LocalDB] upsertBlockedUser failed:", error);
     }
   },
 
@@ -284,7 +328,9 @@ export const localDatabase = {
       return _memoryBlockedUsers;
     }
     try {
-      const rows = prepareSync(`SELECT * FROM blocked_users ORDER BY createdAt DESC`)
+      const rows = prepareSync(
+        `SELECT * FROM blocked_users ORDER BY createdAt DESC`,
+      )
         .executeSync()
         .getAllSync() as any[];
       return rows.map((r) => ({
@@ -295,7 +341,7 @@ export const localDatabase = {
         blockedAt: r.createdAt,
       }));
     } catch (error) {
-      console.error('[LocalDB] getBlockedUsers failed:', error);
+      console.error("[LocalDB] getBlockedUsers failed:", error);
       return [];
     }
   },
@@ -308,7 +354,7 @@ export const localDatabase = {
     try {
       runSync(`DELETE FROM blocked_users WHERE id = ?`, [userId]);
     } catch (error) {
-      console.error('[LocalDB] removeBlockedUser failed:', error);
+      console.error("[LocalDB] removeBlockedUser failed:", error);
     }
   },
 
@@ -320,10 +366,12 @@ export const localDatabase = {
       return;
     }
     try {
-      execSync(`DELETE FROM messages; DELETE FROM conversations; DELETE FROM blocked_users;`);
-      console.log('[LocalDB] Cleared all data.');
+      execSync(
+        `DELETE FROM messages; DELETE FROM conversations; DELETE FROM blocked_users;`,
+      );
+      console.log("[LocalDB] Cleared all data.");
     } catch (error) {
-      console.error('[LocalDB] clearAll failed:', error);
+      console.error("[LocalDB] clearAll failed:", error);
     }
   },
 };

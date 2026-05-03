@@ -441,7 +441,9 @@ export class DashboardService {
             cursorId: doc.id,
           };
         })
-        .filter((borrower): borrower is DashboardBorrowerPageItem => Boolean(borrower))
+        .filter((borrower): borrower is DashboardBorrowerPageItem =>
+          Boolean(borrower),
+        )
         .filter(
           (borrower) =>
             !searchTerm || this.borrowerMatchesSearch(borrower, searchTerm),
@@ -769,7 +771,10 @@ export class DashboardService {
         )
       : 0;
     const safeStartIndex = startIndex < 0 ? borrowers.length : startIndex;
-    const pagedBorrowers = borrowers.slice(safeStartIndex, safeStartIndex + pageSize + 1);
+    const pagedBorrowers = borrowers.slice(
+      safeStartIndex,
+      safeStartIndex + pageSize + 1,
+    );
 
     return this.createBorrowerPage(
       pagedBorrowers.slice(0, pageSize),
@@ -807,7 +812,9 @@ export class DashboardService {
     borrower: DashboardBorrowerPageItem,
     cursor: { date: Date; id: string },
   ): boolean {
-    const borrowerTime = borrower.cursorDate ? borrower.cursorDate.getTime() : 0;
+    const borrowerTime = borrower.cursorDate
+      ? borrower.cursorDate.getTime()
+      : 0;
     const cursorTime = cursor.date.getTime();
 
     if (borrowerTime !== cursorTime) {

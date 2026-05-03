@@ -101,37 +101,35 @@ export default function MobileAuthScreen() {
   const [mode, setMode] = useState<AuthMode>("login");
   const [registerStep, setRegisterStep] = useState<RegisterStep>("account");
   const [loginForm, setLoginForm] = useState<LoginForm>(initialLoginForm);
-  const [registerForm, setRegisterForm] = useState<RegisterForm>(initialRegisterForm);
+  const [registerForm, setRegisterForm] =
+    useState<RegisterForm>(initialRegisterForm);
   const [fieldError, setFieldError] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState<Partial<Record<UploadFieldKey, string>>>(
-    {},
+  const [selectedFiles, setSelectedFiles] = useState<
+    Partial<Record<UploadFieldKey, string>>
+  >({});
+  const [uploadingField, setUploadingField] = useState<UploadFieldKey | null>(
+    null,
   );
-  const [uploadingField, setUploadingField] = useState<UploadFieldKey | null>(null);
 
   const isBorrowerAccount = accountRole === "borrower";
   const accountRoleLabel = isBorrowerAccount ? "borrower" : "lender";
   const accountRoleTitle = isBorrowerAccount ? "Borrower" : "Lender";
 
-  const heroContent = useMemo(
-    () => {
-      if (mode === "login") {
-        return {
-          eyebrow: "Smart Credit mobile",
-          title: "Secure sign in for your mobile workspace.",
-          copy:
-            "Use your email or phone together with your password. The backend confirms your role after authentication and opens the right mobile experience.",
-        };
-      }
-
+  const heroContent = useMemo(() => {
+    if (mode === "login") {
       return {
-        eyebrow: "Smart Credit platform",
-        title: "Join Smart Credit on mobile.",
-        copy:
-          "Set up your account details here, then complete KYC in the second step to access the platform.",
+        eyebrow: "Smart Credit mobile",
+        title: "Secure sign in for your mobile workspace.",
+        copy: "Use your email or phone together with your password. The backend confirms your role after authentication and opens the right mobile experience.",
       };
-    },
-    [accountRoleLabel, accountRoleTitle, mode],
-  );
+    }
+
+    return {
+      eyebrow: "Smart Credit platform",
+      title: "Join Smart Credit on mobile.",
+      copy: "Set up your account details here, then complete KYC in the second step to access the platform.",
+    };
+  }, [accountRoleLabel, accountRoleTitle, mode]);
 
   const modeSummary =
     mode === "login"
@@ -161,7 +159,9 @@ export default function MobileAuthScreen() {
 
   async function handleSignIn() {
     if (!loginForm.identifier.trim() || !loginForm.password.trim()) {
-      setFieldError("Please enter your email or phone together with your password.");
+      setFieldError(
+        "Please enter your email or phone together with your password.",
+      );
       return;
     }
 
@@ -182,7 +182,10 @@ export default function MobileAuthScreen() {
       return false;
     }
 
-    if (!registerForm.email.trim() || !/\S+@\S+\.\S+/.test(registerForm.email.trim())) {
+    if (
+      !registerForm.email.trim() ||
+      !/\S+@\S+\.\S+/.test(registerForm.email.trim())
+    ) {
       setFieldError("Enter a valid email address.");
       return false;
     }
@@ -206,15 +209,27 @@ export default function MobileAuthScreen() {
   }
 
   function validateKycStep() {
-    const currentDocumentLabel = getDocumentLabel(registerForm.kyc.documentType);
+    const currentDocumentLabel = getDocumentLabel(
+      registerForm.kyc.documentType,
+    );
 
-    if (!registerForm.kyc.documentNumber.trim() || !registerForm.kyc.fullName.trim()) {
-      setFieldError(`Full name on the ID and ${currentDocumentLabel} number are required.`);
+    if (
+      !registerForm.kyc.documentNumber.trim() ||
+      !registerForm.kyc.fullName.trim()
+    ) {
+      setFieldError(
+        `Full name on the ID and ${currentDocumentLabel} number are required.`,
+      );
       return false;
     }
 
-    if (!registerForm.kyc.documentFrontUrl?.trim() || !registerForm.kyc.selfieUrl?.trim()) {
-      setFieldError(`${currentDocumentLabel} front file and selfie file are required for KYC.`);
+    if (
+      !registerForm.kyc.documentFrontUrl?.trim() ||
+      !registerForm.kyc.selfieUrl?.trim()
+    ) {
+      setFieldError(
+        `${currentDocumentLabel} front file and selfie file are required for KYC.`,
+      );
       return false;
     }
 
@@ -336,8 +351,8 @@ export default function MobileAuthScreen() {
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps='handled'
-          keyboardDismissMode='interactive'
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.heroPanel}>
@@ -383,7 +398,10 @@ export default function MobileAuthScreen() {
             <View style={styles.modeRow}>
               <Pressable
                 onPress={() => resetLocalState("login")}
-                style={[styles.modeButton, mode === "login" && styles.modeButtonActive]}
+                style={[
+                  styles.modeButton,
+                  mode === "login" && styles.modeButtonActive,
+                ]}
               >
                 <Text
                   style={[
@@ -423,52 +441,68 @@ export default function MobileAuthScreen() {
               </View>
             ) : null}
 
-            {fieldError ? <Text style={styles.errorText}>{fieldError}</Text> : null}
+            {fieldError ? (
+              <Text style={styles.errorText}>{fieldError}</Text>
+            ) : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             {mode === "login" ? (
               <View style={styles.formBody}>
                 <View style={styles.formSectionCard}>
-                  <FieldLabel label='Email or phone' />
+                  <FieldLabel label="Email or phone" />
                   <Input
                     value={loginForm.identifier}
                     onChangeText={(value) =>
-                      setLoginForm((current) => ({ ...current, identifier: value }))
+                      setLoginForm((current) => ({
+                        ...current,
+                        identifier: value,
+                      }))
                     }
-                    placeholder='name@example.com or +94 77 123 4567'
-                    autoCapitalize='none'
+                    placeholder="name@example.com or +94 77 123 4567"
+                    autoCapitalize="none"
                   />
 
-                  <FieldLabel label='Password' />
+                  <FieldLabel label="Password" />
                   <Input
                     value={loginForm.password}
                     onChangeText={(value) =>
-                      setLoginForm((current) => ({ ...current, password: value }))
+                      setLoginForm((current) => ({
+                        ...current,
+                        password: value,
+                      }))
                     }
-                    placeholder='Enter your password'
+                    placeholder="Enter your password"
                     secureTextEntry
                   />
                 </View>
 
-                <Button onPress={() => void handleSignIn()} disabled={authLoading}>
+                <Button
+                  onPress={() => void handleSignIn()}
+                  disabled={authLoading}
+                >
                   {authLoading ? "Signing in..." : "Sign In"}
                 </Button>
 
                 <Text style={styles.footerHint}>
-                  Your account role is confirmed after sign-in and the app opens the matching mobile workspace automatically.
+                  Your account role is confirmed after sign-in and the app opens
+                  the matching mobile workspace automatically.
                 </Text>
               </View>
             ) : (
               <View style={styles.formBody}>
                 <View style={styles.progressRow}>
-                  <ProgressStep label='Account' active={registerStep === "account"} complete={registerStep === "kyc"} />
-                  <ProgressStep label='KYC' active={registerStep === "kyc"} />
+                  <ProgressStep
+                    label="Account"
+                    active={registerStep === "account"}
+                    complete={registerStep === "kyc"}
+                  />
+                  <ProgressStep label="KYC" active={registerStep === "kyc"} />
                 </View>
                 {registerStep === "account" ? (
                   <>
                     <Text style={styles.sectionTitle}>Account details</Text>
                     <View style={styles.sectionBlock}>
-                      <FieldLabel label='Create account for' />
+                      <FieldLabel label="Create account for" />
                       <View style={styles.accountRoleRow}>
                         <Pressable
                           onPress={() => setAccountRole("borrower")}
@@ -490,13 +524,15 @@ export default function MobileAuthScreen() {
                           onPress={() => setAccountRole("lender")}
                           style={[
                             styles.accountRoleButton,
-                            !isBorrowerAccount && styles.accountRoleButtonActive,
+                            !isBorrowerAccount &&
+                              styles.accountRoleButtonActive,
                           ]}
                         >
                           <Text
                             style={[
                               styles.accountRoleText,
-                              !isBorrowerAccount && styles.accountRoleTextActive,
+                              !isBorrowerAccount &&
+                                styles.accountRoleTextActive,
                             ]}
                           >
                             Lender
@@ -504,7 +540,7 @@ export default function MobileAuthScreen() {
                         </Pressable>
                       </View>
 
-                      <FieldLabel label='Full name' />
+                      <FieldLabel label="Full name" />
                       <Input
                         value={registerForm.fullName}
                         onChangeText={(value) =>
@@ -517,39 +553,48 @@ export default function MobileAuthScreen() {
                             },
                           }))
                         }
-                        placeholder='Kasun Perera'
+                        placeholder="Kasun Perera"
                       />
 
-                      <FieldLabel label='Email' />
+                      <FieldLabel label="Email" />
                       <Input
                         value={registerForm.email}
                         onChangeText={(value) =>
-                          setRegisterForm((current) => ({ ...current, email: value }))
+                          setRegisterForm((current) => ({
+                            ...current,
+                            email: value,
+                          }))
                         }
-                        placeholder='name@example.com'
-                        autoCapitalize='none'
+                        placeholder="name@example.com"
+                        autoCapitalize="none"
                       />
 
-                      <FieldLabel label='Phone' />
+                      <FieldLabel label="Phone" />
                       <Input
                         value={registerForm.phone}
                         onChangeText={(value) =>
-                          setRegisterForm((current) => ({ ...current, phone: value }))
+                          setRegisterForm((current) => ({
+                            ...current,
+                            phone: value,
+                          }))
                         }
-                        placeholder='+94 77 123 4567'
+                        placeholder="+94 77 123 4567"
                       />
 
-                      <FieldLabel label='Password' />
+                      <FieldLabel label="Password" />
                       <Input
                         value={registerForm.password}
                         onChangeText={(value) =>
-                          setRegisterForm((current) => ({ ...current, password: value }))
+                          setRegisterForm((current) => ({
+                            ...current,
+                            password: value,
+                          }))
                         }
-                        placeholder='At least 8 characters'
+                        placeholder="At least 8 characters"
                         secureTextEntry
                       />
 
-                      <FieldLabel label='Confirm password' />
+                      <FieldLabel label="Confirm password" />
                       <Input
                         value={registerForm.confirmPassword}
                         onChangeText={(value) =>
@@ -558,12 +603,15 @@ export default function MobileAuthScreen() {
                             confirmPassword: value,
                           }))
                         }
-                        placeholder='Confirm password'
+                        placeholder="Confirm password"
                         secureTextEntry
                       />
                     </View>
 
-                    <Button onPress={handleContinueToKyc} disabled={authLoading}>
+                    <Button
+                      onPress={handleContinueToKyc}
+                      disabled={authLoading}
+                    >
                       Continue to KYC
                     </Button>
                   </>
@@ -576,25 +624,35 @@ export default function MobileAuthScreen() {
 
                     <View style={styles.sectionBlock}>
                       <View style={styles.kycHighlightCard}>
-                      <Text style={styles.kycHighlightTitle}>Verification details</Text>
-                      <Text style={styles.kycHighlightText}>
-                          Match the name on your ID and upload your {documentLabel} files before finishing account creation.
-                      </Text>
-                    </View>
+                        <Text style={styles.kycHighlightTitle}>
+                          Verification details
+                        </Text>
+                        <Text style={styles.kycHighlightText}>
+                          Match the name on your ID and upload your{" "}
+                          {documentLabel} files before finishing account
+                          creation.
+                        </Text>
+                      </View>
 
-                      <FieldLabel label='Document type' />
+                      <FieldLabel label="Document type" />
                       <View style={styles.docTypeRow}>
                         {[
                           { label: "National ID", value: "national_id" },
                           { label: "Passport", value: "passport" },
-                          { label: "Driving License", value: "driving_license" },
+                          {
+                            label: "Driving License",
+                            value: "driving_license",
+                          },
                         ].map((option) => (
                           <Pressable
                             key={option.value}
                             onPress={() =>
                               setRegisterForm((current) => ({
                                 ...current,
-                                kyc: { ...current.kyc, documentType: option.value },
+                                kyc: {
+                                  ...current.kyc,
+                                  documentType: option.value,
+                                },
                               }))
                             }
                             style={[
@@ -606,8 +664,8 @@ export default function MobileAuthScreen() {
                             <Text
                               style={[
                                 styles.docTypeText,
-                                registerForm.kyc.documentType === option.value &&
-                                  styles.docTypeTextActive,
+                                registerForm.kyc.documentType ===
+                                  option.value && styles.docTypeTextActive,
                               ]}
                             >
                               {option.label}
@@ -625,10 +683,10 @@ export default function MobileAuthScreen() {
                             kyc: { ...current.kyc, documentNumber: value },
                           }))
                         }
-                        placeholder='Enter the number on your ID'
+                        placeholder="Enter the number on your ID"
                       />
 
-                    <FieldLabel label={fullNameOnDocumentLabel} />
+                      <FieldLabel label={fullNameOnDocumentLabel} />
                       <Input
                         value={registerForm.kyc.fullName}
                         onChangeText={(value) =>
@@ -640,7 +698,7 @@ export default function MobileAuthScreen() {
                         placeholder={`As shown on your ${documentLabel}`}
                       />
 
-                      <FieldLabel label='Issuing country' />
+                      <FieldLabel label="Issuing country" />
                       <Input
                         value={registerForm.kyc.issuingCountry}
                         onChangeText={(value) =>
@@ -649,10 +707,10 @@ export default function MobileAuthScreen() {
                             kyc: { ...current.kyc, issuingCountry: value },
                           }))
                         }
-                        placeholder='Sri Lanka'
+                        placeholder="Sri Lanka"
                       />
 
-                      <FieldLabel label='Expiry date' />
+                      <FieldLabel label="Expiry date" />
                       <Input
                         value={registerForm.kyc.expiryDate}
                         onChangeText={(value) =>
@@ -661,11 +719,12 @@ export default function MobileAuthScreen() {
                             kyc: { ...current.kyc, expiryDate: value },
                           }))
                         }
-                        placeholder='YYYY-MM-DD'
+                        placeholder="YYYY-MM-DD"
                       />
 
                       <Text style={styles.uploadHint}>
-                        Choose files directly from your device for the required KYC uploads.
+                        Choose files directly from your device for the required
+                        KYC uploads.
                       </Text>
 
                       <UploadPickerCard
@@ -700,16 +759,24 @@ export default function MobileAuthScreen() {
                         fileName={selectedFiles.selfieUrl}
                         isUploading={uploadingField === "selfieUrl"}
                         onPress={() =>
-                          void handlePickFile("selfieUrl", `Selfie with ${documentLabel}`, "image/*")
+                          void handlePickFile(
+                            "selfieUrl",
+                            `Selfie with ${documentLabel}`,
+                            "image/*",
+                          )
                         }
                       />
 
                       <UploadPickerCard
-                        label='Profile picture'
+                        label="Profile picture"
                         fileName={selectedFiles.profilePictureUrl}
                         isUploading={uploadingField === "profilePictureUrl"}
                         onPress={() =>
-                          void handlePickFile("profilePictureUrl", "Profile picture", "image/*")
+                          void handlePickFile(
+                            "profilePictureUrl",
+                            "Profile picture",
+                            "image/*",
+                          )
                         }
                       />
                     </View>
@@ -724,10 +791,15 @@ export default function MobileAuthScreen() {
                           }))
                         }
                         trackColor={{ false: "#dbe4ee", true: "#b6dbff" }}
-                        thumbColor={registerForm.acceptedTerms ? COLORS.primary : "#ffffff"}
+                        thumbColor={
+                          registerForm.acceptedTerms
+                            ? COLORS.primary
+                            : "#ffffff"
+                        }
                       />
                       <Text style={styles.termsText}>
-                        I agree to the platform terms and consent to identity verification.
+                        I agree to the platform terms and consent to identity
+                        verification.
                       </Text>
                     </View>
 
@@ -741,7 +813,9 @@ export default function MobileAuthScreen() {
                           authLoading && styles.secondaryActionButtonDisabled,
                         ]}
                       >
-                        <Text style={styles.secondaryActionButtonText}>Back</Text>
+                        <Text style={styles.secondaryActionButtonText}>
+                          Back
+                        </Text>
                       </Pressable>
                       <Button
                         onPress={() => void handleSignUp()}
@@ -787,12 +861,16 @@ function UploadPickerCard({
           {optional ? " (Optional)" : ""}
         </Text>
         <Text style={styles.uploadCardAction}>
-          {isUploading ? "Uploading..." : fileName ? "Change file" : "Choose file"}
+          {isUploading
+            ? "Uploading..."
+            : fileName
+              ? "Change file"
+              : "Choose file"}
         </Text>
       </View>
       {isUploading ? (
         <View style={styles.uploadCardStatus}>
-          <ActivityIndicator size='small' color={COLORS.primary} />
+          <ActivityIndicator size="small" color={COLORS.primary} />
           <Text style={styles.uploadCardFileName}>Preparing file...</Text>
         </View>
       ) : (

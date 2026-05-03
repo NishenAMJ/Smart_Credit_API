@@ -73,12 +73,18 @@ export class LoansService {
 
     if (createLoanDto.adId) {
       try {
-        await this.firebaseService.db.collection('ads').doc(createLoanDto.adId).update({
-          status: 'active',
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+        await this.firebaseService.db
+          .collection('ads')
+          .doc(createLoanDto.adId)
+          .update({
+            status: 'active',
+            updatedAt: FieldValue.serverTimestamp(),
+          });
       } catch (error) {
-        console.error(`Failed to update ad status to active for adId: ${createLoanDto.adId}`, error);
+        console.error(
+          `Failed to update ad status to active for adId: ${createLoanDto.adId}`,
+          error,
+        );
       }
     }
 

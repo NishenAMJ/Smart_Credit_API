@@ -1,5 +1,9 @@
 import { useCallback } from "react";
-import { getLegalAgreements, getApiBaseUrl, type AdminLegalDocument } from "../../lib/api";
+import {
+  getLegalAgreements,
+  getApiBaseUrl,
+  type AdminLegalDocument,
+} from "../../lib/api";
 import { getAdminToken } from "../../lib/auth";
 import AgreementsPage from "../../../legal/AgreementsPage";
 import type { AgreementsResponse } from "../../../legal/types";
@@ -12,22 +16,23 @@ export default function LegalAgreements() {
     return {
       success: true,
       documents: response.documents as any[],
-      count: response.documents?.length || 0
+      count: response.documents?.length || 0,
     };
   }, []);
 
   const handleDownload = (documentId: string, pdfDownloadPath?: string) => {
     const token = getAdminToken();
     if (!token) return;
-    
-    const path = pdfDownloadPath ?? `/api/legal/documents/${documentId}/download`;
-    const url = `${getApiBaseUrl().replace('/api', '')}${path}?token=${encodeURIComponent(token)}`;
-    
+
+    const path =
+      pdfDownloadPath ?? `/api/legal/documents/${documentId}/download`;
+    const url = `${getApiBaseUrl().replace("/api", "")}${path}?token=${encodeURIComponent(token)}`;
+
     window.open(url, "_blank");
   };
 
   return (
-    <AgreementsPage 
+    <AgreementsPage
       role="admin"
       fetcher={fetcher}
       onDownload={handleDownload}

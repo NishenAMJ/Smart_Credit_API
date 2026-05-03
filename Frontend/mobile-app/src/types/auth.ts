@@ -87,7 +87,12 @@ export type DashboardResponse = {
 export type KycSubmission = {
   id: string;
   userId: string;
-  status: "not_submitted" | "pending" | "under_review" | "approved" | "rejected";
+  status:
+    | "not_submitted"
+    | "pending"
+    | "under_review"
+    | "approved"
+    | "rejected";
   documentType: string;
   documentNumber: string;
   fullName: string;

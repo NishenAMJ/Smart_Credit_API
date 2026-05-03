@@ -36,7 +36,7 @@ export default function AgreementsListScreen({ navigation }: any) {
     useCallback(() => {
       setLoading(true);
       fetchDocuments().finally(() => setLoading(false));
-    }, [])
+    }, []),
   );
 
   const onRefresh = async () => {
@@ -52,11 +52,18 @@ export default function AgreementsListScreen({ navigation }: any) {
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate("LoanAgreement", { initialLoanId: item.loanId })}
+        onPress={() =>
+          navigation.navigate("LoanAgreement", { initialLoanId: item.loanId })
+        }
       >
         <View style={styles.cardHeader}>
           <Text style={styles.loanId}>Loan: {item.loanId}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
+          <View
+            style={[
+              styles.statusBadge,
+              { backgroundColor: `${statusColor}15` },
+            ]}
+          >
             <Text style={[styles.statusText, { color: statusColor }]}>
               {item.status.replace(/_/g, " ").toUpperCase()}
             </Text>
@@ -78,7 +85,11 @@ export default function AgreementsListScreen({ navigation }: any) {
           <Text style={styles.date}>
             Updated: {new Date(item.updatedAt).toLocaleDateString()}
           </Text>
-          <Feather name="chevron-right" size={20} color={COLORS.textSecondary} />
+          <Feather
+            name="chevron-right"
+            size={20}
+            color={COLORS.textSecondary}
+          />
         </View>
       </TouchableOpacity>
     );
@@ -101,7 +112,10 @@ export default function AgreementsListScreen({ navigation }: any) {
       {error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={() => fetchDocuments()} style={styles.retryBtn}>
+          <TouchableOpacity
+            onPress={() => fetchDocuments()}
+            style={styles.retryBtn}
+          >
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -112,11 +126,19 @@ export default function AgreementsListScreen({ navigation }: any) {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+            />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Feather name="file-text" size={48} color={COLORS.textSecondary} />
+              <Feather
+                name="file-text"
+                size={48}
+                color={COLORS.textSecondary}
+              />
               <Text style={styles.emptyText}>No agreements found</Text>
             </View>
           }

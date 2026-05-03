@@ -22,4 +22,3 @@ export class AuthResponseDto {
 export class MeResponseDto {
   user!: SafeUserDto;
 }
-

@@ -140,7 +140,12 @@ describe('LoanRequestsService', () => {
         };
       });
 
-    const result = await service.getPendingRequests('lender_1', 10, null, false);
+    const result = await service.getPendingRequests(
+      'lender_1',
+      10,
+      null,
+      false,
+    );
 
     expect(result.requests).toHaveLength(2);
     expect(result.requests[0]).toMatchObject({
@@ -370,7 +375,9 @@ describe('LoanRequestsService', () => {
         if (name === 'ads') {
           return {
             where: jest.fn().mockReturnValue({
-              get: jest.fn().mockResolvedValue({ docs: [createDoc('ad_1', {})] }),
+              get: jest
+                .fn()
+                .mockResolvedValue({ docs: [createDoc('ad_1', {})] }),
             }),
           };
         }
@@ -381,7 +388,11 @@ describe('LoanRequestsService', () => {
 
     const service = new LoanRequestsService({ getDb: () => db } as any);
 
-    const result = await service.approveRequest('lender_1', 'req_1', 'Looks good');
+    const result = await service.approveRequest(
+      'lender_1',
+      'req_1',
+      'Looks good',
+    );
 
     expect(result.requestId).toBe('req_1');
     expect(result.status).toBe('approved');
@@ -438,7 +449,11 @@ describe('LoanRequestsService', () => {
 
     const service = new LoanRequestsService({ getDb: () => db } as any);
 
-    const result = await service.rejectRequest('lender_1', 'req_1', 'Income proof mismatch');
+    const result = await service.rejectRequest(
+      'lender_1',
+      'req_1',
+      'Income proof mismatch',
+    );
 
     expect(result.status).toBe('rejected');
     expect(update).toHaveBeenCalledWith(

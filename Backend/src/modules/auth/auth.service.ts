@@ -7,13 +7,15 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import {
-  type CollectionReference,
-  Timestamp,
-} from 'firebase-admin/firestore';
+import { type CollectionReference, Timestamp } from 'firebase-admin/firestore';
 
 import { FirebaseService } from '../../firebase/firebase.service';
-import { AuthResponseDto, MeResponseDto, RegisterResponseDto, SafeUserDto } from './dto/auth-response.dto';
+import {
+  AuthResponseDto,
+  MeResponseDto,
+  RegisterResponseDto,
+  SafeUserDto,
+} from './dto/auth-response.dto';
 import {
   DashboardListItemDto,
   DashboardMetricDto,
@@ -51,7 +53,9 @@ export class AuthService {
     }
 
     if (phoneExists) {
-      throw new ConflictException('An account with that phone number already exists.');
+      throw new ConflictException(
+        'An account with that phone number already exists.',
+      );
     }
 
     const passwordHash = await bcrypt.hash(registerDto.password, 10);
@@ -147,7 +151,11 @@ export class AuthService {
     }
 
     const [loanDocs, relationDocs, adDocs] = await Promise.all([
-      this.getCollectionDocs('loans', role === 'borrower' ? 'borrowerId' : 'lenderId', userId),
+      this.getCollectionDocs(
+        'loans',
+        role === 'borrower' ? 'borrowerId' : 'lenderId',
+        userId,
+      ),
       this.getCollectionDocs(
         'lenderBorrowers',
         role === 'borrower' ? 'borrowerId' : 'lenderId',
@@ -158,7 +166,10 @@ export class AuthService {
         : Promise.resolve([]),
     ]);
 
-    const sortedLoanDocs = this.sortByTimestamp(loanDocs, 'createdAt').slice(0, 4);
+    const sortedLoanDocs = this.sortByTimestamp(loanDocs, 'createdAt').slice(
+      0,
+      4,
+    );
     const sortedRelationDocs = this.sortByTimestamp(
       relationDocs,
       'latestLoanCreatedAt',
@@ -200,7 +211,9 @@ export class AuthService {
     const snapshot = await this.usersCollection.get();
     const users = snapshot.docs.map((doc) => doc.data() as UserDocument);
     const pendingUsers = users.filter((candidate) =>
-      ['pending', 'under_review', 'not_submitted'].includes(candidate.kycStatus),
+      ['pending', 'under_review', 'not_submitted'].includes(
+        candidate.kycStatus,
+      ),
     );
     const recentUsers = this.sortByTimestamp(
       users.map((candidate) => ({
@@ -217,18 +230,25 @@ export class AuthService {
       summary:
         'Review account readiness, KYC status, and role distribution before enabling users for the lending workflow.',
       metrics: [
-        this.metric('Total users', String(users.length), 'All Firestore user records'),
+        this.metric(
+          'Total users',
+          String(users.length),
+          'All Firestore user records',
+        ),
         this.metric(
           'Borrowers',
           String(
-            users.filter((candidate) => this.hasRole(candidate.role, 'borrower')).length,
+            users.filter((candidate) =>
+              this.hasRole(candidate.role, 'borrower'),
+            ).length,
           ),
           'Registered borrower accounts',
         ),
         this.metric(
           'Lenders',
           String(
-            users.filter((candidate) => this.hasRole(candidate.role, 'lender')).length,
+            users.filter((candidate) => this.hasRole(candidate.role, 'lender'))
+              .length,
           ),
           'Registered lender accounts',
         ),
@@ -279,14 +299,19 @@ export class AuthService {
     return this.getRequiredUser(userId);
   }
 
-  async updateUserKycStatus(userId: string, kycStatus: KycStatus): Promise<void> {
+  async updateUserKycStatus(
+    userId: string,
+    kycStatus: KycStatus,
+  ): Promise<void> {
     await this.usersCollection.doc(userId).update({
       kycStatus,
       updatedAt: Timestamp.now(),
     });
   }
 
-  private async findUserByIdentifier(identifier: string): Promise<UserDocument | null> {
+  private async findUserByIdentifier(
+    identifier: string,
+  ): Promise<UserDocument | null> {
     const trimmedIdentifier = identifier.trim();
 
     if (!trimmedIdentifier) {
@@ -363,7 +388,9 @@ export class AuthService {
     const defaultRole = roles[0];
 
     if (!defaultRole) {
-      throw new UnauthorizedException('This account does not have an assigned role.');
+      throw new UnauthorizedException(
+        'This account does not have an assigned role.',
+      );
     }
 
     return defaultRole;
@@ -394,7 +421,9 @@ export class AuthService {
     const primaryRole = this.getRoles(role)[0];
 
     if (!primaryRole) {
-      throw new UnauthorizedException('This account does not have an assigned role.');
+      throw new UnauthorizedException(
+        'This account does not have an assigned role.',
+      );
     }
 
     return primaryRole;
@@ -485,14 +514,20 @@ export class AuthService {
     loanDocs: Array<Record<string, unknown>>,
     relationDocs: Array<Record<string, unknown>>,
   ): DashboardMetricDto[] {
-    const activeLoans = loanDocs.filter((doc) => doc.status === 'active').length;
+    const activeLoans = loanDocs.filter(
+      (doc) => doc.status === 'active',
+    ).length;
     const totalRepayable = loanDocs.reduce(
       (sum, doc) => sum + this.readNumber(doc.totalRepayable),
       0,
     );
 
     return [
-      this.metric('Credit score', String(user.creditScore ?? 0), 'Current borrower score'),
+      this.metric(
+        'Credit score',
+        String(user.creditScore ?? 0),
+        'Current borrower score',
+      ),
       this.metric(
         'Active loans',
         String(activeLoans),
@@ -517,7 +552,9 @@ export class AuthService {
     relationDocs: Array<Record<string, unknown>>,
     adDocs: Array<Record<string, unknown>>,
   ): DashboardMetricDto[] {
-    const activeLoans = loanDocs.filter((doc) => doc.status === 'active').length;
+    const activeLoans = loanDocs.filter(
+      (doc) => doc.status === 'active',
+    ).length;
     const activeAds = adDocs.filter((doc) => doc.status === 'active').length;
 
     return [
@@ -544,7 +581,9 @@ export class AuthService {
     ];
   }
 
-  private toBorrowerLoanItem(doc: Record<string, unknown>): DashboardListItemDto {
+  private toBorrowerLoanItem(
+    doc: Record<string, unknown>,
+  ): DashboardListItemDto {
     return {
       id: this.readString(doc.id, 'loan'),
       title: `Loan ${this.readString(doc.loanId ?? doc.id, 'loan').slice(0, 8)}`,
@@ -596,7 +635,11 @@ export class AuthService {
     };
   }
 
-  private metric(label: string, value: string, helper: string): DashboardMetricDto {
+  private metric(
+    label: string,
+    value: string,
+    helper: string,
+  ): DashboardMetricDto {
     return {
       label,
       value,
@@ -622,7 +665,9 @@ export class AuthService {
 
   private readTimestampLabel(value: unknown, prefix: string): string {
     const iso = this.toIsoString(value);
-    return iso ? `${prefix}: ${new Date(iso).toLocaleDateString('en-LK')}` : `${prefix}: not set`;
+    return iso
+      ? `${prefix}: ${new Date(iso).toLocaleDateString('en-LK')}`
+      : `${prefix}: not set`;
   }
 
   private toIsoString(value: unknown): string | null {

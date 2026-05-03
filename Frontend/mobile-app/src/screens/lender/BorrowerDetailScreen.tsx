@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   View,
   Text,
@@ -6,11 +6,11 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { LenderHeader } from '../../components/lender';
-import { DashboardService } from '../../services/lender.service';
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { commonStyles, COLORS } from "../../styles/lender.styles";
+import { LenderHeader } from "../../components/lender";
+import { DashboardService } from "../../services/lender.service";
 
 export default function BorrowerDetailScreen({ navigation, route }: any) {
   const borrower = route?.params?.borrower;
@@ -18,7 +18,10 @@ export default function BorrowerDetailScreen({ navigation, route }: any) {
   if (!borrower) {
     return (
       <SafeAreaView style={commonStyles.safe}>
-        <LenderHeader title="Borrower" onBackPress={() => navigation.goBack()} />
+        <LenderHeader
+          title="Borrower"
+          onBackPress={() => navigation.goBack()}
+        />
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No borrower data available</Text>
         </View>
@@ -57,11 +60,15 @@ export default function BorrowerDetailScreen({ navigation, route }: any) {
         <View style={commonStyles.card}>
           <View style={commonStyles.row}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{fullName?.[0]?.toUpperCase() ?? '?'}</Text>
+              <Text style={styles.avatarText}>
+                {fullName?.[0]?.toUpperCase() ?? "?"}
+              </Text>
             </View>
             <View>
-              <Text style={commonStyles.textPrimary}>{fullName ?? 'Unknown'}</Text>
-              <Text style={commonStyles.textSecondary}>{email ?? ''}</Text>
+              <Text style={commonStyles.textPrimary}>
+                {fullName ?? "Unknown"}
+              </Text>
+              <Text style={commonStyles.textSecondary}>{email ?? ""}</Text>
             </View>
           </View>
 
@@ -71,13 +78,13 @@ export default function BorrowerDetailScreen({ navigation, route }: any) {
             <View style={styles.gridItem}>
               <Text style={commonStyles.textSecondary}>Credit Score</Text>
               <Text style={[styles.scoreText, { color: getScoreColor() }]}>
-                {creditScore ?? '--'}
+                {creditScore ?? "--"}
               </Text>
             </View>
             <View style={styles.gridItem}>
               <Text style={commonStyles.textSecondary}>Rating</Text>
               <Text style={commonStyles.textPrimary}>
-                {rating != null ? `★${rating}` : '--'}
+                {rating != null ? `★${rating}` : "--"}
               </Text>
             </View>
           </View>
@@ -92,7 +99,9 @@ export default function BorrowerDetailScreen({ navigation, route }: any) {
           </View>
           <View style={styles.detailRow}>
             <Text style={commonStyles.textSecondary}>Active Loans</Text>
-            <Text style={commonStyles.textPrimary}>{activeLoansCount ?? 0}</Text>
+            <Text style={commonStyles.textPrimary}>
+              {activeLoansCount ?? 0}
+            </Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={commonStyles.textSecondary}>Total Borrowed</Text>
@@ -113,20 +122,32 @@ export default function BorrowerDetailScreen({ navigation, route }: any) {
           <Text style={commonStyles.sectionTitle}>Verification</Text>
           <View style={styles.detailRow}>
             <Text style={commonStyles.textSecondary}>KYC Status</Text>
-            <View style={[styles.badge, {
-              backgroundColor: kycStatus === 'approved' ? '#ECFDF5' : '#FEF2F2',
-            }]}>
-              <Text style={[styles.badgeText, {
-                color: kycStatus === 'approved' ? COLORS.success : COLORS.danger,
-              }]}>
-                {kycStatus ?? 'unknown'}
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor:
+                    kycStatus === "approved" ? "#ECFDF5" : "#FEF2F2",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.badgeText,
+                  {
+                    color:
+                      kycStatus === "approved" ? COLORS.success : COLORS.danger,
+                  },
+                ]}
+              >
+                {kycStatus ?? "unknown"}
               </Text>
             </View>
           </View>
           <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
             <Text style={commonStyles.textSecondary}>Status</Text>
             <Text style={commonStyles.textPrimary}>
-              {isActive ? 'Active' : 'Inactive'}
+              {isActive ? "Active" : "Inactive"}
             </Text>
           </View>
         </View>
@@ -135,7 +156,7 @@ export default function BorrowerDetailScreen({ navigation, route }: any) {
         <View style={styles.buttonGroup}>
           <TouchableOpacity
             style={commonStyles.primaryButton}
-            onPress={() => navigation.navigate('LoanDetails', { loanId: id })}
+            onPress={() => navigation.navigate("LoanDetails", { loanId: id })}
           >
             <Text style={commonStyles.buttonText}>View Loans</Text>
           </TouchableOpacity>
@@ -153,14 +174,14 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#EBF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#EBF4FF",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   avatarText: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.primary,
   },
   divider: {
@@ -169,15 +190,15 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   grid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
   },
   gridItem: { flex: 1 },
-  scoreText: { fontSize: 18, fontWeight: '700' },
+  scoreText: { fontSize: 18, fontWeight: "700" },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
@@ -187,11 +208,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
-  badgeText: { fontSize: 12, fontWeight: '600' },
+  badgeText: { fontSize: 12, fontWeight: "600" },
   buttonGroup: {
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
   emptyText: { color: COLORS.textSecondary },
 });

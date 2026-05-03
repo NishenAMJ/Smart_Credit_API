@@ -1,4 +1,11 @@
-import { IsEmail, IsIn, IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
 
 import { PUBLIC_USER_ROLES } from '../auth.types';
 
@@ -31,4 +38,3 @@ export class RegisterDto {
   })
   role!: (typeof PUBLIC_USER_ROLES)[number];
 }
-

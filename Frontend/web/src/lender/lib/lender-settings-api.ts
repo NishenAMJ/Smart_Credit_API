@@ -62,16 +62,13 @@ export async function fetchLenderSettings(): Promise<LenderSettings> {
 export async function updateLenderSettings(
   payload: UpdateLenderSettingsPayload,
 ): Promise<LenderSettings> {
-  const response = await fetchLenderApi(
-    "/lender-settings/me",
-    {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+  const response = await fetchLenderApi("/lender-settings/me", {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify(payload),
+  });
 
   if (!response.ok) {
     return parseApiError(response, "Failed to update lender settings.");

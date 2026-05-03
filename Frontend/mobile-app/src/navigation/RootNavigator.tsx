@@ -14,7 +14,7 @@ export default function RootNavigator() {
   if (authLoading && !session) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color={COLORS.primary} />
+        <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>
           Preparing your Smart Credit+ workspace...
         </Text>

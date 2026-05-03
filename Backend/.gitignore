@@ -53,6 +53,7 @@ seed-borrower-amal.js
 seed-master.js
 seed-mock-data-with-lenderborrowers.js
 seed-nimal-mahinsa.js
+seed-all-collections.js
 
 # Misc
 *.pid

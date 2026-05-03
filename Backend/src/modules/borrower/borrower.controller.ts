@@ -31,6 +31,10 @@ import { BorrowerDashboardService } from './borrower-dashboard.service';
 import { BorrowerSupportService } from './borrower-support.service';
 import { CreditScoreService } from './credit-score.service';
 
+/**
+ * Exposes all borrower-facing HTTP endpoints under the /borrower prefix.
+ * Delegates business logic to the injected service layer.
+ */
 @Controller('borrower')
 export class BorrowerController {
   constructor(
@@ -223,10 +227,8 @@ export class BorrowerController {
   ) {
     const id = this.resolveBorrowerId(borrowerId);
     // Status filter supports list views like drafts, pending, and approved.
-    const applications = await this.borrowerApplicationsService.getLoanApplications(
-      id,
-      status,
-    );
+    const applications =
+      await this.borrowerApplicationsService.getLoanApplications(id, status);
 
     return {
       success: true,
@@ -244,10 +246,11 @@ export class BorrowerController {
     @Query('borrowerId') borrowerId?: string,
   ) {
     const id = this.resolveBorrowerId(borrowerId);
-    const application = await this.borrowerApplicationsService.getLoanApplicationById(
-      requestId,
-      id,
-    );
+    const application =
+      await this.borrowerApplicationsService.getLoanApplicationById(
+        requestId,
+        id,
+      );
 
     return {
       success: true,
@@ -283,19 +286,20 @@ export class BorrowerController {
         : LoanPurpose.BUSINESS
     ) as LoanPurpose;
 
-    const application = await this.borrowerApplicationsService.createLoanApplication({
-      borrowerId: id,
-      adId: payload.adId,
-      amount: Number(payload.amount ?? BORROWER_DEFAULTS.APPLICATION_AMOUNT),
-      loanPurpose,
-      purposeDescription: payload.description,
-      tenureMonths: Number(
-        payload.tenureMonths ?? BORROWER_DEFAULTS.APPLICATION_TERM_MONTHS,
-      ),
-      preferredRepaymentMethod:
-        (payload.preferredRepaymentMethod as RepaymentMethod) ??
-        RepaymentMethod.QR_PAYMENT,
-    });
+    const application =
+      await this.borrowerApplicationsService.createLoanApplication({
+        borrowerId: id,
+        adId: payload.adId,
+        amount: Number(payload.amount ?? BORROWER_DEFAULTS.APPLICATION_AMOUNT),
+        loanPurpose,
+        purposeDescription: payload.description,
+        tenureMonths: Number(
+          payload.tenureMonths ?? BORROWER_DEFAULTS.APPLICATION_TERM_MONTHS,
+        ),
+        preferredRepaymentMethod:
+          (payload.preferredRepaymentMethod as RepaymentMethod) ??
+          RepaymentMethod.QR_PAYMENT,
+      });
 
     return {
       success: true,
@@ -315,15 +319,16 @@ export class BorrowerController {
   ) {
     const id = this.resolveBorrowerId(borrowerId);
     // Map mobile payload keys to backend update DTO fields.
-    const application = await this.borrowerApplicationsService.updateLoanApplication(
-      requestId,
-      id,
-      {
-        amount: payload.amount as number | undefined,
-        purposeDescription: payload.description as string | undefined,
-        tenureMonths: payload.tenureMonths as number | undefined,
-      },
-    );
+    const application =
+      await this.borrowerApplicationsService.updateLoanApplication(
+        requestId,
+        id,
+        {
+          amount: payload.amount as number | undefined,
+          purposeDescription: payload.description as string | undefined,
+          tenureMonths: payload.tenureMonths as number | undefined,
+        },
+      );
 
     return {
       success: true,
@@ -331,16 +336,21 @@ export class BorrowerController {
     };
   }
 
+  /**
+   * POST /borrower/applications/:requestId/submit
+   * Moves a saved draft into the lender review queue.
+   */
   @Post('applications/:requestId/submit')
   async submitApplication(
     @Param('requestId') requestId: string,
     @Query('borrowerId') borrowerId?: string,
   ) {
     const id = this.resolveBorrowerId(borrowerId);
-    const application = await this.borrowerApplicationsService.submitLoanApplication(
-      requestId,
-      id,
-    );
+    const application =
+      await this.borrowerApplicationsService.submitLoanApplication(
+        requestId,
+        id,
+      );
 
     return {
       success: true,

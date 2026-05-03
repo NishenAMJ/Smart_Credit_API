@@ -120,13 +120,15 @@ export default function LegalAgreementScreen({
         signedName: signedName.trim(),
       });
       setDocument(response.document);
-      
-      if (response.document.status === 'fully_accepted') {
-        setMessage("Loan is now ACTIVE! Both parties have accepted the agreement.");
+
+      if (response.document.status === "fully_accepted") {
+        setMessage(
+          "Loan is now ACTIVE! Both parties have accepted the agreement.",
+        );
       } else {
         setMessage(response.message ?? "Agreement acceptance recorded.");
       }
-      
+
       await refreshWorkspace();
     } catch (nextError) {
       setError(
@@ -152,7 +154,8 @@ export default function LegalAgreementScreen({
     }
 
     const downloadPath =
-      document.pdfDownloadPath ?? `/api/legal/documents/${document.id}/download`;
+      document.pdfDownloadPath ??
+      `/api/legal/documents/${document.id}/download`;
     const downloadUrl = `${API_BASE_URL}${downloadPath}?token=${encodeURIComponent(
       session.accessToken,
     )}`;
@@ -161,13 +164,19 @@ export default function LegalAgreementScreen({
       const supported = await Linking.canOpenURL(downloadUrl);
 
       if (!supported) {
-        Alert.alert("Download unavailable", "This device cannot open the PDF link.");
+        Alert.alert(
+          "Download unavailable",
+          "This device cannot open the PDF link.",
+        );
         return;
       }
 
       await Linking.openURL(downloadUrl);
     } catch {
-      Alert.alert("Download failed", "We could not open the PDF download link.");
+      Alert.alert(
+        "Download failed",
+        "We could not open the PDF download link.",
+      );
     }
   }
 
@@ -196,18 +205,26 @@ export default function LegalAgreementScreen({
           <Input
             value={loanId}
             onChangeText={setLoanId}
-            placeholder='Paste a loan document ID'
-            autoCapitalize='none'
+            placeholder="Paste a loan document ID"
+            autoCapitalize="none"
             editable={!initialLoanId}
           />
         </View>
 
         <View style={styles.actionRow}>
-          <Button onPress={() => void handleLoadLatest()} disabled={loading} style={styles.actionButton}>
+          <Button
+            onPress={() => void handleLoadLatest()}
+            disabled={loading}
+            style={styles.actionButton}
+          >
             {loading ? "Loading..." : "Load latest"}
           </Button>
           {role === "lender" ? (
-            <Button onPress={() => void handleGenerate()} disabled={loading} style={styles.actionButton}>
+            <Button
+              onPress={() => void handleGenerate()}
+              disabled={loading}
+              style={styles.actionButton}
+            >
               {loading ? "Generating..." : "Generate"}
             </Button>
           ) : null}
@@ -218,25 +235,31 @@ export default function LegalAgreementScreen({
 
         {document ? (
           <View style={styles.documentStack}>
-            <DetailRow label='Document status' value={document.status} />
+            <DetailRow label="Document status" value={document.status} />
             <DetailRow
-              label='Borrower accepted'
+              label="Borrower accepted"
               value={document.borrowerAccepted ? "Yes" : "No"}
             />
             <DetailRow
-              label='Lender accepted'
+              label="Lender accepted"
               value={document.lenderAccepted ? "Yes" : "No"}
             />
             <DetailRow
-              label='Borrower signed name'
-              value={document.borrowerSignatureAudit?.signedName ?? "Pending signer name"}
+              label="Borrower signed name"
+              value={
+                document.borrowerSignatureAudit?.signedName ??
+                "Pending signer name"
+              }
             />
             <DetailRow
-              label='Lender signed name'
-              value={document.lenderSignatureAudit?.signedName ?? "Pending signer name"}
+              label="Lender signed name"
+              value={
+                document.lenderSignatureAudit?.signedName ??
+                "Pending signer name"
+              }
             />
             <DetailRow
-              label='Loan amount'
+              label="Loan amount"
               value={new Intl.NumberFormat("en-LK", {
                 style: "currency",
                 currency: "LKR",
@@ -244,7 +267,7 @@ export default function LegalAgreementScreen({
               }).format(document.loanSnapshot.amount)}
             />
             <DetailRow
-              label='Interest and tenure'
+              label="Interest and tenure"
               value={`${document.loanSnapshot.interestRate}% for ${document.loanSnapshot.durationMonths} months`}
             />
 
@@ -258,7 +281,7 @@ export default function LegalAgreementScreen({
               <Input
                 value={signedName}
                 onChangeText={setSignedName}
-                placeholder='Enter your full legal name'
+                placeholder="Enter your full legal name"
               />
             </View>
 

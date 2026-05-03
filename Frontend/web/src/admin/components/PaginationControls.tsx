@@ -29,10 +29,18 @@ export default function PaginationControls({
         Page {page}
       </span>
       <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn-secondary btn-sm" onClick={onPrevious} disabled={!canGoBack || loading}>
+        <button
+          className="btn-secondary btn-sm"
+          onClick={onPrevious}
+          disabled={!canGoBack || loading}
+        >
           Previous
         </button>
-        <button className="btn-primary btn-sm" onClick={onNext} disabled={!canGoNext || loading}>
+        <button
+          className="btn-primary btn-sm"
+          onClick={onNext}
+          disabled={!canGoNext || loading}
+        >
           Next
         </button>
       </div>

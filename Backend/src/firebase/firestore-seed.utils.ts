@@ -17,11 +17,21 @@ export function getLoanAmount(data: DocumentData): number {
 }
 
 export function getLoanCreatedAt(data: DocumentData): Date | null {
-  return readDate(data.createdAt, data.startDate, data.signedAt, data.updatedAt);
+  return readDate(
+    data.createdAt,
+    data.startDate,
+    data.signedAt,
+    data.updatedAt,
+  );
 }
 
 export function getInstallmentAmount(data: DocumentData): number {
-  return readNumber(data.amount, data.amountDue, data.originalAmount, data.dueAmount);
+  return readNumber(
+    data.amount,
+    data.amountDue,
+    data.originalAmount,
+    data.dueAmount,
+  );
 }
 
 export function getPaymentAmount(data: DocumentData): number {
@@ -46,17 +56,29 @@ export function isActiveAd(data: DocumentData, now = new Date()): boolean {
   const status = getAdStatus(data);
   const expiresAt = readDate(data.expiresAt);
 
-  return ['active', 'approved'].includes(status) && (!expiresAt || expiresAt >= now);
+  return (
+    ['active', 'approved'].includes(status) && (!expiresAt || expiresAt >= now)
+  );
 }
 
 export function getNormalizedInstallment(data: DocumentData) {
-  const dueDate = readDate(data.dueDateAt, data.dueDate, data.createdAt, data.updatedAt);
+  const dueDate = readDate(
+    data.dueDateAt,
+    data.dueDate,
+    data.createdAt,
+    data.updatedAt,
+  );
   const amount = getInstallmentAmount(data);
   const paidAmount = readNumber(data.paidAmount, data.amountPaid);
 
   return {
     id: readString(data.installmentId),
-    status: normalizeInstallmentStatus(data.status, dueDate, paidAmount, amount),
+    status: normalizeInstallmentStatus(
+      data.status,
+      dueDate,
+      paidAmount,
+      amount,
+    ),
     dueDate,
     amount,
     paidAmount,
@@ -64,7 +86,9 @@ export function getNormalizedInstallment(data: DocumentData) {
   };
 }
 
-export function getPaymentAncestorData(doc: QueryDocumentSnapshot<DocumentData>) {
+export function getPaymentAncestorData(
+  doc: QueryDocumentSnapshot<DocumentData>,
+) {
   const data = doc.data();
   const ancestors = getPaymentAncestorIds(doc.ref.path);
 
@@ -89,7 +113,11 @@ export async function computeLoanRemainingAmount(
     return storedRemaining;
   }
 
-  const totalRepayable = readNumber(data.totalRepayable, data.amount, data.principalAmount);
+  const totalRepayable = readNumber(
+    data.totalRepayable,
+    data.amount,
+    data.principalAmount,
+  );
 
   return totalRepayable > 0 ? totalRepayable : 0;
 }
@@ -99,10 +127,15 @@ export function readMatchedLenderIds(data: DocumentData): string[] {
 }
 
 function normalizeSearchValue(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, ' ');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9@._-]+/g, ' ');
 }
 
-export function buildSearchKeywords(...values: Array<string | null | undefined>): string[] {
+export function buildSearchKeywords(
+  ...values: Array<string | null | undefined>
+): string[] {
   const keywords = new Set<string>();
 
   values.forEach((value) => {

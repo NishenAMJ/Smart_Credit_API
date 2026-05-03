@@ -148,7 +148,9 @@ export class LegalController {
     try {
       return await this.jwtService.verifyAsync<AuthenticatedUser>(accessToken);
     } catch {
-      throw new UnauthorizedException('Invalid or expired authentication token.');
+      throw new UnauthorizedException(
+        'Invalid or expired authentication token.',
+      );
     }
   }
 }

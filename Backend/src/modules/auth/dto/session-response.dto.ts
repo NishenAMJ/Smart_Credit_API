@@ -9,4 +9,3 @@ export class SessionResponseDto {
   kycStatus!: string;
   user!: SafeUserDto;
 }
-

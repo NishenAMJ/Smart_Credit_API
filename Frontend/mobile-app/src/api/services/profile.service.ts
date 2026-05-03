@@ -42,7 +42,8 @@ export const profileService = {
     if (!userId) throw new Error("User session expired. Please log in again.");
 
     const response = await apiClient.get(ENDPOINTS.profile.get(userId));
-    const profilePayload = response.data?.data?.data ?? response.data?.data ?? response.data ?? {};
+    const profilePayload =
+      response.data?.data?.data ?? response.data?.data ?? response.data ?? {};
     return normalizeProfile(profilePayload);
   },
 
@@ -75,7 +76,10 @@ export const profileService = {
           phone = `+94${digits}`;
         } else {
           // Cannot normalise — skip instead of sending invalid value
-          console.warn("[ProfileService] Phone skipped (invalid format):", trimmed);
+          console.warn(
+            "[ProfileService] Phone skipped (invalid format):",
+            trimmed,
+          );
           phone = undefined;
         }
       }
@@ -87,23 +91,24 @@ export const profileService = {
     const city = current.address?.city || "Colombo";
     const district = current.address?.district || "Colombo";
     const province = current.address?.province || "Western";
-    const address = line1
-      ? { line1, city, district, province }
-      : undefined;
+    const address = line1 ? { line1, city, district, province } : undefined;
 
     const payload: Record<string, unknown> = {};
-    if (data.fullName)           payload.fullName = data.fullName;
-    if (data.email)              payload.email = data.email.trim();
-    if (data.password)           payload.password = data.password;
-    if (phone)                   payload.phone = phone;
-    if (address)                 payload.address = address;
+    if (data.fullName) payload.fullName = data.fullName;
+    if (data.email) payload.email = data.email.trim();
+    if (data.password) payload.password = data.password;
+    if (phone) payload.phone = phone;
+    if (address) payload.address = address;
     if (data.monthlyIncome) {
       const income = Number(data.monthlyIncome.replace(/[^0-9.]/g, ""));
-      if (!isNaN(income))        payload.monthlyIncome = income;
+      if (!isNaN(income)) payload.monthlyIncome = income;
     }
-    if (data.occupation)         payload.occupation = data.occupation;
+    if (data.occupation) payload.occupation = data.occupation;
 
-    console.log("[ProfileService] Sending update payload:", JSON.stringify(payload, null, 2));
+    console.log(
+      "[ProfileService] Sending update payload:",
+      JSON.stringify(payload, null, 2),
+    );
 
     try {
       const response = await apiClient.put(

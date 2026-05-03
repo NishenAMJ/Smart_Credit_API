@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Download, FileText, CheckCircle2, Clock3 } from "lucide-react";
-import type { AgreementsPageProps, SharedLegalDocument, AgreementStatus } from "./types";
+import type {
+  AgreementsPageProps,
+  SharedLegalDocument,
+  AgreementStatus,
+} from "./types";
 import "./AgreementsPage.css";
 
 export default function AgreementsPage({
@@ -12,7 +16,9 @@ export default function AgreementsPage({
 }: AgreementsPageProps) {
   const [records, setRecords] = useState<SharedLegalDocument[]>([]);
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<AgreementStatus | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<AgreementStatus | "all">(
+    "all",
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -23,7 +29,9 @@ export default function AgreementsPage({
         const response = await fetcher();
         setRecords(response.documents || []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load agreements.");
+        setError(
+          err instanceof Error ? err.message : "Failed to load agreements.",
+        );
       } finally {
         setLoading(false);
       }
@@ -41,7 +49,8 @@ export default function AgreementsPage({
         record.borrower.fullName.toLowerCase().includes(searchValue) ||
         record.lender.fullName.toLowerCase().includes(searchValue);
 
-      const matchesStatus = filterStatus === "all" || record.status === filterStatus;
+      const matchesStatus =
+        filterStatus === "all" || record.status === filterStatus;
 
       return matchesSearch && matchesStatus;
     });
@@ -50,7 +59,8 @@ export default function AgreementsPage({
   const stats = useMemo(() => {
     const counts = {
       all: records.length,
-      fullyAccepted: records.filter((r) => r.status === "fully_accepted").length,
+      fullyAccepted: records.filter((r) => r.status === "fully_accepted")
+        .length,
       pending: records.filter((r) => r.status !== "fully_accepted").length,
     };
     return counts;
@@ -59,8 +69,19 @@ export default function AgreementsPage({
   if (error) {
     return (
       <div className="agreements-container">
-        <div className="card" style={{ border: "1px solid #feb2b2", background: "#fff5f5", color: "#c53030", padding: 20, borderRadius: 12 }}>
-          <h2 style={{ fontSize: 18, marginBottom: 8 }}>Unable to load agreements</h2>
+        <div
+          className="card"
+          style={{
+            border: "1px solid #feb2b2",
+            background: "#fff5f5",
+            color: "#c53030",
+            padding: 20,
+            borderRadius: 12,
+          }}
+        >
+          <h2 style={{ fontSize: 18, marginBottom: 8 }}>
+            Unable to load agreements
+          </h2>
           <p>{error}</p>
         </div>
       </div>
@@ -75,7 +96,10 @@ export default function AgreementsPage({
           <p className="page-subtitle">{subtitle}</p>
         </div>
         {role === "admin" && (
-          <div className="badge badge-fully_accepted" style={{ padding: "8px 16px" }}>
+          <div
+            className="badge badge-fully_accepted"
+            style={{ padding: "8px 16px" }}
+          >
             <CheckCircle2 size={14} style={{ marginRight: 6 }} />
             {stats.fullyAccepted} Active Agreements
           </div>
@@ -86,22 +110,53 @@ export default function AgreementsPage({
         <div className="summary-card">
           <p className="summary-label">Total Documents</p>
           <p className="summary-value">{loading ? "..." : stats.all}</p>
-          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6, color: "#64748b", fontSize: 12 }}>
-             <FileText size={14} /> Global repository
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              color: "#64748b",
+              fontSize: 12,
+            }}
+          >
+            <FileText size={14} /> Global repository
           </div>
         </div>
         <div className="summary-card">
           <p className="summary-label">Fully Signed</p>
-          <p className="summary-value" style={{ color: "#10b981" }}>{loading ? "..." : stats.fullyAccepted}</p>
-          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6, color: "#10b981", fontSize: 12 }}>
-             <CheckCircle2 size={14} /> Ready for disbursement
+          <p className="summary-value" style={{ color: "#10b981" }}>
+            {loading ? "..." : stats.fullyAccepted}
+          </p>
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              color: "#10b981",
+              fontSize: 12,
+            }}
+          >
+            <CheckCircle2 size={14} /> Ready for disbursement
           </div>
         </div>
         <div className="summary-card">
           <p className="summary-label">Awaiting Signatures</p>
-          <p className="summary-value" style={{ color: "#f59e0b" }}>{loading ? "..." : stats.pending}</p>
-          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6, color: "#f59e0b", fontSize: 12 }}>
-             <Clock3 size={14} /> Action required
+          <p className="summary-value" style={{ color: "#f59e0b" }}>
+            {loading ? "..." : stats.pending}
+          </p>
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              color: "#f59e0b",
+              fontSize: 12,
+            }}
+          >
+            <Clock3 size={14} /> Action required
           </div>
         </div>
       </section>
@@ -118,7 +173,14 @@ export default function AgreementsPage({
         </div>
 
         <div className="tabs-container">
-          {(["all", "fully_accepted", "partially_accepted", "generated"] as const).map((status) => (
+          {(
+            [
+              "all",
+              "fully_accepted",
+              "partially_accepted",
+              "generated",
+            ] as const
+          ).map((status) => (
             <button
               key={status}
               className={`tab-btn ${filterStatus === status ? "active" : ""}`}
@@ -152,7 +214,9 @@ export default function AgreementsPage({
             ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={role === "admin" ? 6 : 5}>
-                  <div className="empty-state">No agreements matching your criteria.</div>
+                  <div className="empty-state">
+                    No agreements matching your criteria.
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -161,15 +225,23 @@ export default function AgreementsPage({
                   <td className="mono">{record.loanId}</td>
                   <td>
                     <div className="user-info">
-                      <span className="user-name">{record.borrower.fullName}</span>
-                      <span className="user-email">{record.borrower.email}</span>
+                      <span className="user-name">
+                        {record.borrower.fullName}
+                      </span>
+                      <span className="user-email">
+                        {record.borrower.email}
+                      </span>
                     </div>
                   </td>
                   {role === "admin" && (
                     <td>
                       <div className="user-info">
-                        <span className="user-name">{record.lender.fullName}</span>
-                        <span className="user-email">{record.lender.email}</span>
+                        <span className="user-name">
+                          {record.lender.fullName}
+                        </span>
+                        <span className="user-email">
+                          {record.lender.email}
+                        </span>
                       </div>
                     </td>
                   )}
@@ -189,7 +261,9 @@ export default function AgreementsPage({
                     <div style={{ display: "flex", justifyContent: "center" }}>
                       <button
                         className="download-btn"
-                        onClick={() => onDownload(record.id, record.pdfDownloadPath)}
+                        onClick={() =>
+                          onDownload(record.id, record.pdfDownloadPath)
+                        }
                         title="Download Agreement PDF"
                       >
                         <Download size={16} />

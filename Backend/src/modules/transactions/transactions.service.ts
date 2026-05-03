@@ -119,7 +119,8 @@ export class TransactionsService {
 
     docs.forEach((doc) => {
       const transaction = doc.data();
-      if (typeof transaction.lenderId === 'string') ids.add(transaction.lenderId);
+      if (typeof transaction.lenderId === 'string')
+        ids.add(transaction.lenderId);
       if (typeof transaction.borrowerId === 'string')
         ids.add(transaction.borrowerId);
     });

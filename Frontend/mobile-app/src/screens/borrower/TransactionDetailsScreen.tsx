@@ -25,10 +25,13 @@ type TransactionDetailsScreenProps = {
   navigation: BorrowerNavigation;
 };
 
-const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: string }> = {
+const STATUS_CONFIG: Record<
+  string,
+  { color: string; bg: string; icon: string }
+> = {
   completed: { color: "#059669", bg: "#D1FAE5", icon: "check-circle" },
-  pending:   { color: "#D97706", bg: "#FEF3C7", icon: "clock" },
-  failed:    { color: "#DC2626", bg: "#FEE2E2", icon: "x-circle" },
+  pending: { color: "#D97706", bg: "#FEF3C7", icon: "clock" },
+  failed: { color: "#DC2626", bg: "#FEE2E2", icon: "x-circle" },
 };
 
 function formatDate(dateStr?: string) {
@@ -53,7 +56,9 @@ export default function TransactionDetailsScreen({
     transaction?.paidAt ?? transaction?.timestamp ?? transaction?.createdAt,
   );
   const txType = transaction?.type
-    ? transaction.type.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    ? transaction.type
+        .replace("_", " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase())
     : "Repayment";
 
   return (
@@ -63,7 +68,7 @@ export default function TransactionDetailsScreen({
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Feather name='arrow-left' size={22} color='#FFFFFF' />
+          <Feather name="arrow-left" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Transaction Details</Text>
         <View style={{ width: 40 }} />
@@ -146,7 +151,7 @@ export default function TransactionDetailsScreen({
         {/* Status banners */}
         {rawStatus === "pending" && (
           <View style={styles.infoBanner}>
-            <Feather name='info' size={16} color='#D97706' />
+            <Feather name="info" size={16} color="#D97706" />
             <Text style={styles.infoBannerText}>
               This transaction is pending verification. It may take up to 24
               hours to complete.
@@ -155,7 +160,7 @@ export default function TransactionDetailsScreen({
         )}
         {rawStatus === "failed" && (
           <View style={[styles.infoBanner, { backgroundColor: "#FEE2E2" }]}>
-            <Feather name='alert-triangle' size={16} color='#DC2626' />
+            <Feather name="alert-triangle" size={16} color="#DC2626" />
             <Text style={[styles.infoBannerText, { color: "#DC2626" }]}>
               This transaction failed. Please contact support if the issue
               persists.

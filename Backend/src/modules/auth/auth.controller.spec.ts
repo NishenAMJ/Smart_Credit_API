@@ -80,9 +80,20 @@ describe('AuthController', () => {
     await controller.lenderDashboard(req);
 
     expect(authService.getMe).toHaveBeenCalledWith('user-1');
-    expect(authService.getSessionStatus).toHaveBeenCalledWith('user-1', 'lender');
-    expect(authService.getDashboard).toHaveBeenNthCalledWith(1, 'user-1', 'lender');
-    expect(authService.getDashboard).toHaveBeenNthCalledWith(2, 'user-1', 'lender');
+    expect(authService.getSessionStatus).toHaveBeenCalledWith(
+      'user-1',
+      'lender',
+    );
+    expect(authService.getDashboard).toHaveBeenNthCalledWith(
+      1,
+      'user-1',
+      'lender',
+    );
+    expect(authService.getDashboard).toHaveBeenNthCalledWith(
+      2,
+      'user-1',
+      'lender',
+    );
   });
 
   it('forces borrower and admin role-specific endpoints to call the matching service methods', async () => {
@@ -104,7 +115,10 @@ describe('AuthController', () => {
     await controller.borrowerDashboard(borrowerReq);
     await controller.adminDashboard(adminReq);
 
-    expect(authService.getDashboard).toHaveBeenCalledWith('borrower-1', 'borrower');
+    expect(authService.getDashboard).toHaveBeenCalledWith(
+      'borrower-1',
+      'borrower',
+    );
     expect(authService.getAdminDashboard).toHaveBeenCalledWith('admin-1');
   });
 });

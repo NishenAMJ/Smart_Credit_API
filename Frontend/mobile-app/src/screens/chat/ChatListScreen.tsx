@@ -7,9 +7,11 @@
  *   - First renders from local SQLite (instant, works offline)
  *   - Then syncs from backend in background
  *   - Socket 'receiveMessage' event updates the list in real-time
+ *
+ * @format
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -21,18 +23,22 @@ import {
   SafeAreaView,
   StatusBar,
   RefreshControl,
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
-import { Conversation, ChatStackParamList, Message } from '../../types/chat.types';
-import { conversationService } from '../../services/conversationService';
-import { localDatabase } from '../../services/localDatabase';
-import { chatSocket } from '../../services/socketService';
-import Avatar from '../../components/common/Avatar';
+} from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from "../../constants";
+import {
+  Conversation,
+  ChatStackParamList,
+  Message,
+} from "../../types/chat.types";
+import { conversationService } from "../../services/conversationService";
+import { localDatabase } from "../../services/localDatabase";
+import { chatSocket } from "../../services/socketService";
+import Avatar from "../../components/common/Avatar";
 
 type Props = {
-  navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'>;
+  navigation: NativeStackNavigationProp<ChatStackParamList, "ChatList">;
 };
 
 function formatTime(iso: string): string {
@@ -41,10 +47,10 @@ function formatTime(iso: string): string {
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / 86400000);
   if (diffDays === 0)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'short' });
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return date.toLocaleDateString([], { weekday: "short" });
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 export default function ChatListScreen({ navigation }: Props) {
@@ -52,7 +58,7 @@ export default function ChatListScreen({ navigation }: Props) {
   const [filtered, setFiltered] = useState<Conversation[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   // ── Load conversations ────────────────────────────────────────────────────
@@ -80,7 +86,7 @@ export default function ChatListScreen({ navigation }: Props) {
     } catch {
       // Backend unreachable — local data is already shown above
       if (localData.length === 0) {
-        setError('Could not load conversations.');
+        setError("Could not load conversations.");
       }
     } finally {
       setLoading(false);
@@ -115,8 +121,8 @@ export default function ChatListScreen({ navigation }: Props) {
       );
     };
 
-    chatSocket.on('receiveMessage', onMessage);
-    return () => chatSocket.off('receiveMessage', onMessage);
+    chatSocket.on("receiveMessage", onMessage);
+    return () => chatSocket.off("receiveMessage", onMessage);
   }, []);
 
   // ── Search ────────────────────────────────────────────────────────────────
@@ -143,7 +149,7 @@ export default function ChatListScreen({ navigation }: Props) {
     <TouchableOpacity
       style={styles.convRow}
       onPress={() =>
-        navigation.navigate('Chat', {
+        navigation.navigate("Chat", {
           conversationId: item.id,
           participant: item.participant,
           isMuted: item.isMuted,
@@ -164,7 +170,7 @@ export default function ChatListScreen({ navigation }: Props) {
             {item.participant.displayName}
           </Text>
           <Text style={styles.convTime}>
-            {item.lastMessage ? formatTime(item.lastMessage.createdAt) : ''}
+            {item.lastMessage ? formatTime(item.lastMessage.createdAt) : ""}
           </Text>
         </View>
         <View style={styles.convBottomRow}>
@@ -175,12 +181,12 @@ export default function ChatListScreen({ navigation }: Props) {
             ]}
             numberOfLines={1}
           >
-            {item.lastMessage?.text ?? 'No messages yet'}
+            {item.lastMessage?.text ?? "No messages yet"}
           </Text>
           {item.unreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>
-                {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                {item.unreadCount > 99 ? "99+" : item.unreadCount}
               </Text>
             </View>
           )}
@@ -193,12 +199,12 @@ export default function ChatListScreen({ navigation }: Props) {
   const renderEmpty = () => (
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>
-        {searchQuery ? 'No results found' : 'No conversations yet'}
+        {searchQuery ? "No results found" : "No conversations yet"}
       </Text>
       <Text style={styles.emptySub}>
         {searchQuery
-          ? 'Try a different name or username'
-          : 'Tap + to start a new conversation'}
+          ? "Try a different name or username"
+          : "Tap + to start a new conversation"}
       </Text>
     </View>
   );
@@ -212,7 +218,7 @@ export default function ChatListScreen({ navigation }: Props) {
         <Text style={styles.headerTitle}>Messages</Text>
         <TouchableOpacity
           style={styles.newChatBtn}
-          onPress={() => navigation.navigate('NewChat')}
+          onPress={() => navigation.navigate("NewChat")}
           activeOpacity={0.7}
         >
           <Text style={styles.newChatIcon}>＋</Text>
@@ -222,7 +228,13 @@ export default function ChatListScreen({ navigation }: Props) {
       {/* Search */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Text style={{ fontSize: 14, color: COLORS.textSecondary, marginRight: SPACING.sm }}>
+          <Text
+            style={{
+              fontSize: 14,
+              color: COLORS.textSecondary,
+              marginRight: SPACING.sm,
+            }}
+          >
             🔍
           </Text>
           <TextInput
@@ -273,11 +285,16 @@ export default function ChatListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
@@ -290,10 +307,15 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: BORDER_RADIUS.full,
     backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  newChatIcon: { color: COLORS.surface, fontSize: 20, lineHeight: 22, fontWeight: '300' },
+  newChatIcon: {
+    color: COLORS.surface,
+    fontSize: 20,
+    lineHeight: 22,
+    fontWeight: "300",
+  },
   searchContainer: {
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
@@ -302,8 +324,8 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: COLORS.background,
     borderRadius: BORDER_RADIUS.medium,
     paddingHorizontal: SPACING.md,
@@ -311,10 +333,15 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: COLORS.border,
   },
-  searchInput: { flex: 1, ...TYPOGRAPHY.body, color: COLORS.textPrimary, padding: 0 },
+  searchInput: {
+    flex: 1,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    padding: 0,
+  },
   convRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: SPACING.md,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
@@ -324,9 +351,9 @@ const styles = StyleSheet.create({
   },
   convMeta: { flex: 1, minWidth: 0 },
   convTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 3,
   },
   convName: {
@@ -336,37 +363,54 @@ const styles = StyleSheet.create({
     marginRight: SPACING.sm,
   },
   convTime: { ...TYPOGRAPHY.small, color: COLORS.textSecondary },
-  convBottomRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  convPreview: { ...TYPOGRAPHY.small, color: COLORS.textSecondary, flex: 1, fontWeight: '400' },
-  convPreviewUnread: { color: COLORS.textPrimary, fontWeight: '500' },
+  convBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  convPreview: {
+    ...TYPOGRAPHY.small,
+    color: COLORS.textSecondary,
+    flex: 1,
+    fontWeight: "400",
+  },
+  convPreviewUnread: { color: COLORS.textPrimary, fontWeight: "500" },
   badge: {
     backgroundColor: COLORS.primary,
     borderRadius: BORDER_RADIUS.full,
     minWidth: 20,
     height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 5,
   },
-  badgeText: { color: COLORS.surface, fontSize: 11, fontWeight: '600' },
+  badgeText: { color: COLORS.surface, fontSize: 11, fontWeight: "600" },
   mutedText: { fontSize: 12, opacity: 0.5 },
   flatListEmpty: { flex: 1 },
   emptyState: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 40,
     gap: 8,
   },
-  emptyTitle: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, textAlign: 'center' },
+  emptyTitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
   emptySub: {
     ...TYPOGRAPHY.small,
     color: COLORS.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 18,
-    fontWeight: '400',
+    fontWeight: "400",
   },
-  errorText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, textAlign: 'center' },
+  errorText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
   retryBtn: {
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,

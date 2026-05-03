@@ -6,6 +6,11 @@ export interface AdminAuthResponse {
     fullName: string;
     phone: string;
     role: "admin" | "borrower" | "lender";
-    kycStatus: "not_submitted" | "pending" | "under_review" | "approved" | "rejected";
+    kycStatus:
+      | "not_submitted"
+      | "pending"
+      | "under_review"
+      | "approved"
+      | "rejected";
   };
 }

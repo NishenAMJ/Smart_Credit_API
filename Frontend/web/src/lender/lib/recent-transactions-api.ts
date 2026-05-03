@@ -120,7 +120,10 @@ export async function fetchRecentTransactions(
     params.set("search", options.search.trim());
   }
 
-  const response = await fetchLenderApiWithQuery("/recent-transactions", params);
+  const response = await fetchLenderApiWithQuery(
+    "/recent-transactions",
+    params,
+  );
 
   if (!response.ok) {
     return parseApiError(response, "Failed to load recent transactions.");

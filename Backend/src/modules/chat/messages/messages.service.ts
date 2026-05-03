@@ -90,7 +90,7 @@ export class MessagesService {
       .offset(pageNum * limitNum)
       .get();
 
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MessageDoc));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MessageDoc);
   }
 
   /**

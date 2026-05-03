@@ -112,7 +112,9 @@ describe('AuthService', () => {
       }),
       where: jest.fn(() => ({
         limit: jest.fn(() => ({
-          get: jest.fn(async () => queryResults.shift() ?? { empty: true, docs: [] }),
+          get: jest.fn(
+            async () => queryResults.shift() ?? { empty: true, docs: [] },
+          ),
         })),
       })),
       get: jest.fn(),

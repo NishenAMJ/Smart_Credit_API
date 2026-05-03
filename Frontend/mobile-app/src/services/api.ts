@@ -4,7 +4,7 @@ import axios from "axios";
 import { getApiBaseUrl } from "../api/base-url";
 import { toApiError } from "../api/api-error";
 
-// Cast AxiosInstance to have unwrapped types since interceptor returns response.data
+// Using _api internally so we can cast it below with unwrapped response types
 const _api = axios.create({
   baseURL: getApiBaseUrl(),
   timeout: 15000,
@@ -13,7 +13,7 @@ const _api = axios.create({
   },
 });
 
-// Attach user ID to every request dynamically
+// Inject the current user's ID into every outgoing request
 _api.interceptors.request.use((config) => {
   if (typeof _currentUserId !== "undefined") {
     config.headers["x-user-id"] = _currentUserId;
@@ -21,7 +21,7 @@ _api.interceptors.request.use((config) => {
   return config;
 });
 
-// Transform AxiosResponse -> data via interceptor
+// Unwrap response.data so callers don't have to reach into `.data` every time
 _api.interceptors.response.use(
   (response) => response.data,
   (error) => Promise.reject(toApiError(error)),
@@ -52,6 +52,7 @@ export function getCurrentUserId(): string {
 }
 
 export function setCurrentUserId(userId: string | null | undefined) {
+  // Fall back to a default lender ID if nothing valid is passed in
   _currentUserId =
     typeof userId === "string" && userId.trim().length > 0
       ? userId.trim()

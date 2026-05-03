@@ -21,10 +21,10 @@ import { GatewayModule } from './gateway/gateway.module';
 @Module({
   imports: [
     ConversationsModule, // REST: list/create/delete conversations
-    MessagesModule,      // REST: initial message fetch for first install / re-install
-    UsersModule,         // REST: user search, FCM token update, presence
-    BlocksModule,        // REST: block/unblock users
-    GatewayModule,       // WebSocket: real-time message routing
+    MessagesModule, // REST: initial message fetch for first install / re-install
+    UsersModule, // REST: user search, FCM token update, presence
+    BlocksModule, // REST: block/unblock users
+    GatewayModule, // WebSocket: real-time message routing
   ],
   exports: [
     ConversationsModule,

@@ -27,7 +27,7 @@ export default function LenderHeader({
       <View style={styles.headerContent}>
         {onBackPress && (
           <TouchableOpacity onPress={onBackPress} style={styles.backBtn}>
-            <Feather name='arrow-left' size={24} color='#fff' />
+            <Feather name="arrow-left" size={24} color="#fff" />
           </TouchableOpacity>
         )}
 
@@ -42,7 +42,7 @@ export default function LenderHeader({
 
         {rightIcon ? (
           <TouchableOpacity onPress={onRightPress} style={styles.rightBtn}>
-            <Feather name={rightIcon as any} size={24} color='#fff' />
+            <Feather name={rightIcon as any} size={24} color="#fff" />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 24 }} />

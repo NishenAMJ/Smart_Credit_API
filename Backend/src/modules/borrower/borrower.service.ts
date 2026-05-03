@@ -48,9 +48,13 @@ type QrTokenPayload = {
   issuedAt: number;
 };
 
+/**
+ * Core borrower service — covers profiles, loans, applications, repayments, QR tokens,
+ * and dashboard aggregation.
+ */
 @Injectable()
 export class BorrowerService {
-  // Firestore collection names used by borrower workflows.
+  // Firestore collection names used across this service.
   private readonly USERS_COL = 'users';
   private readonly BORROWERS_COL = 'borrowers';
   private readonly LOAN_APPS_COL = 'loanRequests';
@@ -71,8 +75,12 @@ export class BorrowerService {
     return this.firebaseService.db;
   }
 
-  // ==================== DASHBOARD ====================
+  // DASHBOARD
 
+  /**
+   * Returns aggregated dashboard metrics for the borrower home screen.
+   * Falls back to the users collection if no borrower profile document exists yet.
+   */
   async getDashboard(borrowerId: string) {
     if (!borrowerId) {
       throw new BadRequestException('Borrower ID is required');
@@ -140,9 +148,8 @@ export class BorrowerService {
         }
       });
 
-      const pendingApplications = await this.getPendingApplicationsCount(
-        borrowerId,
-      );
+      const pendingApplications =
+        await this.getPendingApplicationsCount(borrowerId);
 
       const dashboard = {
         profile: profileData,
@@ -167,16 +174,24 @@ export class BorrowerService {
     }
   }
 
+  /**
+   * Counts pending and draft applications without pulling full documents.
+   * Falls back to a regular query if the Firestore count() API is unavailable.
+   */
   private async getPendingApplicationsCount(
     borrowerId: string,
   ): Promise<number> {
     const query = this.db
-        .collection('loanRequests')
-        .where('borrowerId', '==', borrowerId)
-        .where('status', 'in', ['pending', 'PENDING', 'draft', 'DRAFT']);
+      .collection('loanRequests')
+      .where('borrowerId', '==', borrowerId)
+      .where('status', 'in', ['pending', 'PENDING', 'draft', 'DRAFT']);
     return this.getCountForQuery(query);
   }
 
+  /**
+   * Returns the borrower's loans, optionally filtered by loan status.
+   * Sorted newest-first by creation date.
+   */
   async getMyLoans(borrowerId: string, status?: string) {
     if (!borrowerId) {
       throw new BadRequestException('Borrower ID is required');
@@ -208,8 +223,11 @@ export class BorrowerService {
     }
   }
 
+  /**
+   * Strips undefined values from an object before it goes to Firestore,
+   * which rejects undefined fields and throws at write time.
+   */
   private removeUndefinedDeep<T>(value: T): T {
-    // Firestore rejects undefined values, so recursively strip them from payloads.
     if (Array.isArray(value)) {
       return value
         .map((item) => this.removeUndefinedDeep(item))
@@ -230,6 +248,7 @@ export class BorrowerService {
     return value;
   }
 
+  /** Converts any Firestore-compatible timestamp to milliseconds, or 0 if null. */
   private timestampToMillis(value: TimestampLike): number {
     if (!value) {
       return 0;
@@ -250,12 +269,14 @@ export class BorrowerService {
     return 0;
   }
 
+  /** Safely casts a value to a finite number, returning a fallback when it isn't. */
   private toNumber(value: unknown, fallback = 0): number {
     return typeof value === 'number' && Number.isFinite(value)
       ? value
       : fallback;
   }
 
+  /** Normalizes a raw date-like value into a Firestore Timestamp, or undefined if unresolvable. */
   private toTimestamp(value: unknown): FirebaseFirestore.Timestamp | undefined {
     if (!value) {
       return undefined;
@@ -277,6 +298,7 @@ export class BorrowerService {
     return undefined;
   }
 
+  /** Maps any raw status string to a known LoanStatus enum value, defaulting to ACTIVE. */
   private normalizeLoanStatus(value: unknown): LoanStatus {
     const status = String(value ?? '').toLowerCase();
 
@@ -287,6 +309,10 @@ export class BorrowerService {
     return LoanStatus.ACTIVE;
   }
 
+  /**
+   * Converts a raw Firestore loan document into a typed Loan object,
+   * filling in sensible numeric defaults for any missing fields.
+   */
   private normalizeLoanDocument(
     data: FirebaseFirestore.DocumentData,
     documentId?: string,
@@ -339,6 +365,10 @@ export class BorrowerService {
     };
   }
 
+  /**
+   * Converts a raw lender ad document into the loan-shaped structure
+   * the borrower UI expects for discovery cards.
+   */
   private normalizeAdDocument(
     data: FirebaseFirestore.DocumentData,
     documentId?: string,
@@ -368,6 +398,10 @@ export class BorrowerService {
     };
   }
 
+  /**
+   * Picks the first non-empty display name from a Firestore document,
+   * trying fullName, displayName, and name in order.
+   */
   private readDisplayName(
     data?: FirebaseFirestore.DocumentData,
   ): string | null {
@@ -501,6 +535,10 @@ export class BorrowerService {
     return { ...created.data() } as BorrowerProfile;
   }
 
+  /**
+   * Returns a borrower profile, merging photo URL fields from both
+   * the borrowers and users collections so the UI always has an image to display.
+   */
   async getProfile(userId: string): Promise<BorrowerProfile> {
     const [doc, userDoc] = await Promise.all([
       this.db.collection(this.BORROWERS_COL).doc(userId).get(),
@@ -553,6 +591,10 @@ export class BorrowerService {
     } as BorrowerProfile;
   }
 
+  /**
+   * Updates editable profile fields and syncs name and email to the users collection.
+   * Hashes and salts a new password if one was provided.
+   */
   async updateProfile(
     userId: string,
     dto: UpdateBorrowerProfileDto,
@@ -1270,6 +1312,10 @@ export class BorrowerService {
     };
   }
 
+  /**
+   * Uses Firestore count() to avoid loading full documents.
+   * Falls back to a full snapshot.size if the count API throws.
+   */
   private async getCountForQuery(
     query: FirebaseFirestore.Query,
   ): Promise<number> {
