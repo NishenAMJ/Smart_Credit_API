@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as admin from 'firebase-admin';
 
 import { FirebaseService } from '../../firebase/firebase.service';
@@ -62,51 +67,91 @@ export class KycService {
     return Math.min(Math.max(Math.trunc(parsed), 1), KycService.MAX_PAGE_SIZE);
   }
 
-  private async uploadBase64ToStorage(userId: string, fieldName: string, dataUrl: string): Promise<string> {
-    if (!dataUrl.startsWith('data:')) {
-      return dataUrl;
-    }
-
-    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
-      return dataUrl;
-    }
-
-    const mimeType = matches[1];
-    const base64Data = matches[2];
-    const buffer = Buffer.from(base64Data, 'base64');
-    
-    let extension = 'bin';
-    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) extension = 'jpg';
-    else if (mimeType.includes('png')) extension = 'png';
-    else if (mimeType.includes('pdf')) extension = 'pdf';
-
-    const timestamp = Date.now();
-    const filePath = `kyc-documents/${userId}/${fieldName}_${timestamp}.${extension}`;
-    const file = this.firebaseService.bucket.file(filePath);
-
-    await file.save(buffer, {
-      metadata: { contentType: mimeType },
-    });
-    
-    const bucketName = this.firebaseService.bucket.name;
-    const encodedPath = encodeURIComponent(filePath);
-    return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media`;
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
   }
 
-  private async processKycUrls(
-    userId: string, 
-    fields: Record<string, string | undefined>
-  ): Promise<Record<string, string | undefined>> {
-    const result: Record<string, string | undefined> = {};
-    for (const [key, value] of Object.entries(fields)) {
-      if (value && value.startsWith('data:')) {
-        result[key] = await this.uploadBase64ToStorage(userId, key, value);
+  private normalizePhone(phone: string): string {
+    const raw = phone.trim();
+    const digitsAndPlus = raw.replace(/[^\d+]/g, '');
+    let normalized = digitsAndPlus;
+
+    if (normalized.startsWith('+')) {
+      normalized = `+${normalized.slice(1).replace(/\D/g, '')}`;
+    } else {
+      normalized = normalized.replace(/\D/g, '');
+
+      if (normalized.startsWith('0')) {
+        normalized = `+94${normalized.slice(1)}`;
+      } else if (normalized.startsWith('94')) {
+        normalized = `+${normalized}`;
+      } else if (normalized.length === 9) {
+        normalized = `+94${normalized}`;
       } else {
-        result[key] = value;
+        normalized = `+${normalized}`;
       }
     }
-    return result;
+
+    if (!/^\+\d{9,15}$/.test(normalized)) {
+      throw new BadRequestException('Please provide a valid phone number.');
+    }
+
+    return normalized;
+  }
+
+  private buildUploadFields(dto: SubmitKycDto): KycUploadField[] {
+    return [
+      {
+        documentType: 'nic_front',
+        label: 'nic-front',
+        dataUrl: dto.nicFrontUrl,
+      },
+      {
+        documentType: 'nic_back',
+        label: 'nic-back',
+        dataUrl: dto.nicBackUrl,
+      },
+      {
+        documentType: 'address_proof',
+        label: 'address-proof',
+        dataUrl: dto.addressProofUrl,
+      },
+      {
+        documentType: 'bank_document',
+        label: 'bank-document',
+        dataUrl: dto.bankDocumentUrl,
+      },
+    ];
+  }
+
+  private assertDocumentAccess(
+    document: DocumentRecord,
+    requesterId: string,
+    requesterRole: UserRole,
+  ) {
+    if (requesterRole === 'admin') {
+      return;
+    }
+
+    if (document.userId === requesterId) {
+      return;
+    }
+
+    throw new ForbiddenException('You do not have access to this KYC document.');
+  }
+
+  private async getRequiredKycDocument(documentId: string) {
+    const document = await this.documentsService.getById(documentId);
+
+    if (!document || document.category !== 'kyc') {
+      throw new NotFoundException('KYC document not found');
+    }
+
+    if (document.status === 'deleted') {
+      throw new NotFoundException('KYC document not found');
+    }
+
+    return document;
   }
 
   async submitMobileKyc(dto: SubmitKycDto) {
@@ -199,13 +244,11 @@ export class KycService {
           rejectionReason: '',
           kycFiles: {
             addressProofNumber: dto.addressProofNumber,
-            addressProofUrl: processedUrls.addressProofUrl || dto.addressProofUrl,
             bankAccountNumber: dto.bankAccountNumber,
             bankName: dto.bankName,
             branchCode: dto.branchCode,
             accountType: dto.accountType,
-            bankDocumentUrl: processedUrls.bankDocumentUrl || dto.bankDocumentUrl,
-            profilePhotoUrl: processedUrls.profilePhotoUrl || dto.profilePhotoUrl,
+            documentRefs,
             submittedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -234,32 +277,14 @@ export class KycService {
   async getPendingKyc(limit?: string, cursor?: string) {
     try {
       const pageSize = this.parseLimit(limit);
-      let query: FirebaseFirestore.Query = this.db
-        .collection('users')
-        .where('kycStatus', '==', 'pending')
-        .orderBy('createdAt', 'desc');
-
-      if (cursor) {
-        const cursorDoc = await this.db.collection('users').doc(cursor).get();
-        if (cursorDoc.exists) {
-          query = query.startAfter(cursorDoc);
-        }
-      }
-
-      const kycSnapshot = await query.limit(pageSize + 1).get();
-      const pageDocs = kycSnapshot.docs.slice(0, pageSize);
-
-      const documents = pageDocs.map((doc) =>
-        this.mapUserToKycDocument(doc),
-      );
+      const result = await this.documentsService.getPendingReview(pageSize, cursor);
 
       return {
         success: true,
-        count: documents.length,
-        documents,
-        hasMore: kycSnapshot.size > pageSize,
-        nextCursor:
-          kycSnapshot.size > pageSize ? pageDocs[pageDocs.length - 1]?.id : undefined,
+        count: result.documents.length,
+        documents: result.documents.map((doc) => this.mapDocumentToKycDocument(doc)),
+        hasMore: result.hasMore,
+        nextCursor: result.nextCursor,
       };
     } catch (error) {
       console.error('Error fetching pending KYC documents:', error);
