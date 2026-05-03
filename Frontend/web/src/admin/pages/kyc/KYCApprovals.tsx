@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Eye, Check, X } from "lucide-react";
 import { approveKyc, getPendingKyc, rejectKyc, type KycDocument } from "../../lib/api";
 import { formatFirestoreDate } from "../../lib/admin-format";
@@ -68,21 +68,30 @@ export default function KYCApprovals() {
   const [error, setError] = useState("");
   const [selectedRecord, setSelectedRecord] = useState<KycRow | null>(null);
 
+  const loadKyc = useCallback(async () => {
+    try {
+      const response = await getPendingKyc();
+      setRecords(response.documents.map(mapDocument));
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load KYC records.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     // Loads the latest review queue before the admin starts taking actions.
-    async function loadKyc() {
-      try {
-        const response = await getPendingKyc();
-        setRecords(response.documents.map(mapDocument));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load KYC records.");
-      } finally {
-        setLoading(false);
-      }
-    }
-
     void loadKyc();
-  }, []);
+  }, [loadKyc]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadKyc();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [loadKyc]);
 
   const filtered = useMemo(() => {
     return records.filter((record) => {

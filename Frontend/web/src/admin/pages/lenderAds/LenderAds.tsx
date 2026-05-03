@@ -1,11 +1,11 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Eye, Check, X, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
-import { approveAd, getAds, rejectAd, updateAdStatus, type AdminAd, type AdStatus } from "../../lib/api";
+import { approveAd, getAdStats, getAds, rejectAd, updateAdStatus, type AdminAd, type AdStatus } from "../../lib/api";
 import { formatFirestoreDate } from "../../lib/admin-format";
 import { DEFAULT_AD_REJECTION_REASON } from "../../constants/admin-actions";
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
 type LenderAdRow = {
   id: string;
@@ -59,6 +59,14 @@ function StatusBadge({ status }: { status: AdStatus }) {
 // Keeps ad moderation state and actions together on one screen.
 export default function LenderAds() {
   const [ads, setAds] = useState<LenderAdRow[]>([]);
+  const [stats, setStats] = useState({
+    all: 0,
+    active: 0,
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+    closed: 0,
+  });
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<AdStatus | "all">("all");
   const [selectedAd, setSelectedAd] = useState<LenderAdRow | null>(null);
@@ -73,6 +81,11 @@ export default function LenderAds() {
   const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [totalLoaded, setTotalLoaded] = useState(0);
 
+  const loadAdStats = useCallback(async () => {
+    const response = await getAdStats();
+    setStats(response.stats);
+  }, []);
+
   const loadAds = useCallback(async (cursor?: string) => {
     setLoading(true);
     try {
@@ -81,6 +94,7 @@ export default function LenderAds() {
       setHasMore(response.hasMore ?? false);
       setNextCursor(response.nextCursor);
       setTotalLoaded(response.count);
+      setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load ads.");
     } finally {
@@ -94,6 +108,20 @@ export default function LenderAds() {
     void loadAds();
   }, [loadAds]);
 
+  useEffect(() => {
+    void loadAdStats();
+  }, [loadAdStats]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const activeCursor = currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+      void loadAds(activeCursor);
+      void loadAdStats();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [currentPage, cursorStack, loadAds, loadAdStats]);
+
   const filteredAds = useMemo(() => {
     return ads.filter((ad) => {
       const searchValue = search.toLowerCase();
@@ -106,15 +134,6 @@ export default function LenderAds() {
       return matchesSearch && matchesStatus;
     });
   }, [ads, filterStatus, search]);
-
-  const counts = {
-    all: ads.length,
-    active: ads.filter((ad) => ad.status === "active").length,
-    approved: ads.filter((ad) => ad.status === "approved").length,
-    pending: ads.filter((ad) => ad.status === "pending").length,
-    rejected: ads.filter((ad) => ad.status === "rejected").length,
-    closed: ads.filter((ad) => ad.status === "closed").length,
-  };
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;
@@ -152,6 +171,7 @@ export default function LenderAds() {
     try {
       await approveAd(adId);
       syncAdStatus(adId, "approved");
+      await loadAdStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to approve ad.");
     }
@@ -162,6 +182,7 @@ export default function LenderAds() {
     try {
       await rejectAd(adId);
       syncAdStatus(adId, "rejected");
+      await loadAdStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject ad.");
     }
@@ -172,6 +193,7 @@ export default function LenderAds() {
     try {
       await updateAdStatus(adId, "pending", { notes: "Moved back to pending review by admin" });
       syncAdStatus(adId, "pending");
+      await loadAdStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to move ad to pending.");
     }
@@ -182,6 +204,7 @@ export default function LenderAds() {
     try {
       await updateAdStatus(adId, "rejected", { reason: DEFAULT_AD_REJECTION_REASON });
       syncAdStatus(adId, "rejected");
+      await loadAdStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to move ad to rejected.");
     }
@@ -190,26 +213,26 @@ export default function LenderAds() {
   function renderActions(ad: LenderAdRow) {
     return (
       <>
-        <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedAd(ad)} title="View">
-          <Eye size={14} />
+        <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedAd(ad)} title="View" aria-label="View lender ad">
+          <Eye size={14} color="#6B7280" strokeWidth={2.2} style={S.iconGraphic} />
         </button>
         {ad.status === "pending" && (
           <>
-            <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleApprove(ad.id)} title="Approve">
-              <Check size={14} />
+            <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleApprove(ad.id)} title="Approve" aria-label="Approve lender ad">
+              <Check size={14} color="#10B981" strokeWidth={2.2} style={S.iconGraphic} />
             </button>
-            <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleReject(ad.id)} title="Reject">
-              <X size={14} />
+            <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleReject(ad.id)} title="Reject" aria-label="Reject lender ad">
+              <X size={14} color="#EF4444" strokeWidth={2.2} style={S.iconGraphic} />
             </button>
           </>
         )}
         {(ad.status === "approved" || ad.status === "active") && (
           <>
-            <button style={S.iconButton("#F59E0B", "#FFFBEB")} onClick={() => void handleMoveToPending(ad.id)} title="Move to pending">
-              <RotateCcw size={14} />
+            <button style={S.iconButton("#F59E0B", "#FFFBEB")} onClick={() => void handleMoveToPending(ad.id)} title="Move to pending" aria-label="Move lender ad to pending">
+              <RotateCcw size={14} color="#F59E0B" />
             </button>
-            <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleMoveToRejected(ad.id)} title="Move to rejected">
-              <X size={14} />
+            <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleMoveToRejected(ad.id)} title="Move to rejected" aria-label="Move lender ad to rejected">
+              <X size={14} color="#EF4444" strokeWidth={2.2} style={S.iconGraphic} />
             </button>
           </>
         )}
@@ -230,12 +253,12 @@ export default function LenderAds() {
 
       <div style={S.summaryGrid}>
         {[
-          { label: "All Lender Ads", count: counts.all, color: "#007AFF" },
-          { label: "Active", count: counts.active, color: "#10B981" },
-          { label: "Approved", count: counts.approved, color: "#10B981" },
-          { label: "Pending", count: counts.pending, color: "#F59E0B" },
-          { label: "Rejected", count: counts.rejected, color: "#EF4444" },
-          { label: "Closed", count: counts.closed, color: "#6B7280" },
+          { label: "All Lender Ads", count: stats.all, color: "#007AFF" },
+          { label: "Active", count: stats.active, color: "#10B981" },
+          { label: "Approved", count: stats.approved, color: "#10B981" },
+          { label: "Pending", count: stats.pending, color: "#F59E0B" },
+          { label: "Rejected", count: stats.rejected, color: "#EF4444" },
+          { label: "Closed", count: stats.closed, color: "#6B7280" },
         ].map((item) => (
           <div key={item.label} className="card">
             <p style={S.cardLabel}>{item.label}</p>
@@ -276,7 +299,7 @@ export default function LenderAds() {
               <th>Tenure</th>
               <th>Posted</th>
               <th>Status</th>
-              <th style={{ textAlign: "center" }}>Action</th>
+              <th style={S.actionHeader}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -309,7 +332,7 @@ export default function LenderAds() {
                   <td>{ad.tenureRange}</td>
                   <td>{ad.postedDate}</td>
                   <td><StatusBadge status={ad.status} /></td>
-                  <td>
+                  <td style={S.actionCell}>
                     <div style={S.actionRow}>
                       {renderActions(ad)}
                     </div>
@@ -503,6 +526,22 @@ const S = {
     display: "flex",
     gap: 6,
     justifyContent: "center",
+    minWidth: 108,
+  },
+  actionHeader: {
+    textAlign: "center",
+    position: "sticky",
+    right: 0,
+    zIndex: 2,
+    background: "#F5F6FA",
+    boxShadow: "-1px 0 0 #F3F4F6",
+  },
+  actionCell: {
+    position: "sticky",
+    right: 0,
+    background: "#FFFFFF",
+    boxShadow: "-1px 0 0 #F3F4F6",
+    zIndex: 1,
   },
   modalActions: {
     display: "flex",
@@ -513,6 +552,7 @@ const S = {
   iconButton: (color: string, bg: string) => ({
     width: 30,
     height: 30,
+    padding: 0,
     borderRadius: 6,
     border: "none",
     background: bg,
@@ -521,7 +561,14 @@ const S = {
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
+    lineHeight: 0,
+    flexShrink: 0,
+    overflow: "visible",
   }),
+  iconGraphic: {
+    display: "block",
+    flexShrink: 0,
+  },
   modalOverlay: {
     position: "fixed",
     inset: 0,

@@ -11,7 +11,7 @@ import {
 } from "../../lib/api";
 import { formatFirestoreDate } from "../../lib/admin-format";
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
 type DisputeRow = {
   id: string;
@@ -115,6 +115,15 @@ export default function Disputes() {
     setCursorStack([]);
     void loadDisputes();
   }, [loadDisputes]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const activeCursor = currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+      void loadDisputes(activeCursor);
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [currentPage, cursorStack, loadDisputes]);
 
   const filteredDisputes = useMemo(() => {
     return disputes.filter((dispute) => {
@@ -260,7 +269,7 @@ export default function Disputes() {
               <th>Priority</th>
               <th>Created</th>
               <th>Status</th>
-              <th style={{ textAlign: "center" }}>Action</th>
+              <th style={S.actionHeader}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -285,18 +294,18 @@ export default function Disputes() {
                   <td><PriorityBadge priority={dispute.priority} /></td>
                   <td>{dispute.createdAt}</td>
                   <td><StatusBadge status={dispute.status} /></td>
-                  <td>
+                  <td style={S.actionCell}>
                     <div style={S.actionRow}>
-                      <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedDispute(dispute)} title="View">
-                        <Eye size={14} />
+                      <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedDispute(dispute)} title="View" aria-label="View dispute">
+                        <Eye size={14} color="#6B7280" strokeWidth={2.2} style={S.iconGraphic} />
                       </button>
                       {canAct(dispute) && (
                         <>
-                          <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleResolve(dispute)} title="Resolve">
-                            <CheckCircle2 size={14} />
+                          <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleResolve(dispute)} title="Resolve" aria-label="Resolve dispute">
+                            <CheckCircle2 size={14} color="#10B981" strokeWidth={2.2} style={S.iconGraphic} />
                           </button>
-                          <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleEscalate(dispute)} title="Escalate">
-                            <ShieldAlert size={14} />
+                          <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleEscalate(dispute)} title="Escalate" aria-label="Escalate dispute">
+                            <ShieldAlert size={14} color="#EF4444" strokeWidth={2.2} style={S.iconGraphic} />
                           </button>
                         </>
                       )}
@@ -371,23 +380,24 @@ export default function Disputes() {
             <div style={S.detailsGrid}>
               <Detail label="Status" value={selectedDispute.status} />
               <Detail label="Priority" value={selectedDispute.priority} />
-              <Detail label="Case Code" value={selectedDispute.disputeCode} />
-              <Detail label="Firestore ID" value={selectedDispute.id} />
-              <Detail label="Loan ID" value={selectedDispute.loanId} />
-              <Detail label="Transaction ID" value={selectedDispute.transactionId} />
               <Detail label="Raised By" value={selectedDispute.raisedBy} />
               <Detail label="Against User" value={selectedDispute.againstUser} />
-              <Detail label="Disputed Amount" value={selectedDispute.disputedAmount} />
               <Detail label="Created" value={selectedDispute.createdAt} />
-              <Detail label="Resolution" value={selectedDispute.resolution} />
-              <Detail label="Escalation Reason" value={selectedDispute.escalationReason} />
-              <Detail label="Notes" value={selectedDispute.notes} />
+              <Detail label="Disputed Amount" value={selectedDispute.disputedAmount} />
+              <Detail label="Category" value={selectedDispute.category} />
+              <Detail label="Case Code" value={selectedDispute.disputeCode} />
+              <Detail label="Description" value={selectedDispute.description} wide />
               <Detail
                 label="Evidence"
                 value={selectedDispute.evidenceUrls.length ? selectedDispute.evidenceUrls.join(", ") : "N/A"}
                 wide
               />
-              <Detail label="Description" value={selectedDispute.description} wide />
+              {selectedDispute.status === "resolved" && selectedDispute.resolution !== "N/A" && (
+                <Detail label="Resolution" value={selectedDispute.resolution} wide />
+              )}
+              {selectedDispute.status === "escalated" && selectedDispute.escalationReason !== "N/A" && (
+                <Detail label="Escalation Reason" value={selectedDispute.escalationReason} wide />
+              )}
             </div>
 
             <div style={S.modalActions}>
@@ -468,10 +478,29 @@ const S = {
     display: "flex",
     gap: 6,
     justifyContent: "center",
+    minWidth: 108,
+  },
+  actionHeader: {
+    textAlign: "center",
+    minWidth: 132,
+    position: "sticky",
+    right: 0,
+    zIndex: 2,
+    background: "#F5F6FA",
+    boxShadow: "-1px 0 0 #F3F4F6",
+  },
+  actionCell: {
+    minWidth: 132,
+    position: "sticky",
+    right: 0,
+    background: "#FFFFFF",
+    boxShadow: "-1px 0 0 #F3F4F6",
+    zIndex: 1,
   },
   iconButton: (color: string, bg: string) => ({
     width: 30,
     height: 30,
+    padding: 0,
     borderRadius: 6,
     border: "none",
     background: bg,
@@ -480,7 +509,14 @@ const S = {
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
+    lineHeight: 0,
+    flexShrink: 0,
+    overflow: "visible",
   }),
+  iconGraphic: {
+    display: "block",
+    flexShrink: 0,
+  },
   priorityLow: {
     color: "#047857",
     background: "#ECFDF5",

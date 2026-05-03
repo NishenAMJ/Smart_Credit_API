@@ -8,8 +8,7 @@ import {
 import type { AdminAuthResponse } from "../types/admin-auth";
 
 const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
-  "/api";
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api";
 export const LENDER_APP_URL = import.meta.env.VITE_LENDER_APP_URL ?? "/lender";
 
 export type FirestoreTimestamp = { _seconds?: number };
@@ -304,6 +303,18 @@ export interface AdsResponse {
   ads: AdminAd[];
 }
 
+export interface AdStatsResponse {
+  success: boolean;
+  stats: {
+    all: number;
+    active: number;
+    approved: number;
+    pending: number;
+    rejected: number;
+    closed: number;
+  };
+}
+
 export interface AuditLogEntry {
   id: string;
   actionType:
@@ -587,6 +598,12 @@ export function getAds(params?: CursorQueryParams) {
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   const query = searchParams.toString();
   return apiRequest<AdsResponse & PaginationMeta>(`/admin/ads${query ? `?${query}` : ""}`, {
+    auth: true,
+  });
+}
+
+export function getAdStats() {
+  return apiRequest<AdStatsResponse>("/admin/ads/stats", {
     auth: true,
   });
 }

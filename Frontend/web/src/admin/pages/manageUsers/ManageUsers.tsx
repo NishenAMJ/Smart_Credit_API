@@ -13,7 +13,7 @@ import {
 import { DEFAULT_USER_SUSPENSION_REASON } from "../../constants/admin-actions";
 import { formatFirestoreDate } from "../../lib/admin-format";
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
 type UserRow = {
   id: string;
@@ -90,6 +90,7 @@ function iconButton(color: string, bg: string): CSSProperties {
   return {
     width: 30,
     height: 30,
+    padding: 0,
     borderRadius: 6,
     border: "none",
     background: bg,
@@ -98,6 +99,9 @@ function iconButton(color: string, bg: string): CSSProperties {
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
+    lineHeight: 0,
+    flexShrink: 0,
+    overflow: "visible",
   };
 }
 
@@ -162,6 +166,15 @@ export default function ManageUsers() {
     setCursorStack([]);
     void loadUsers();
   }, [loadUsers]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const activeCursor = currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+      void loadUsers(activeCursor);
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [currentPage, cursorStack, loadUsers]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
@@ -292,16 +305,15 @@ export default function ManageUsers() {
               <th>ID</th>
               <th>Role</th>
               <th>KYC</th>
-              <th>Credit</th>
               <th>Join Date</th>
               <th>Status</th>
-              <th style={{ textAlign: "center" }}>Action</th>
+              <th style={S.actionHeader}>Action</th>
             </tr>
           </thead>
           <tbody>
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={9} style={S.emptyCell}>
+                <td colSpan={8} style={S.emptyCell}>
                   {loading ? "Loading users..." : "No users found."}
                 </td>
               </tr>
@@ -318,21 +330,20 @@ export default function ManageUsers() {
                   <td style={S.monoCell}>{user.id}</td>
                   <td><RoleBadge role={user.role} /></td>
                   <td>{user.kycStatus}</td>
-                  <td>{user.creditScore}</td>
                   <td>{user.joinDate}</td>
                   <td><StatusBadge status={user.status} /></td>
-                  <td>
+                  <td style={S.actionCell}>
                     <div style={S.actionRow}>
-                      <button style={iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedUser(user)} title="View">
-                        <Eye size={14} />
+                      <button style={iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedUser(user)} title="View" aria-label="View user">
+                        <Eye size={14} color="#6B7280" strokeWidth={2.2} style={S.iconGraphic} />
                       </button>
                       {user.status === "suspended" ? (
-                        <button style={iconButton("#10B981", "#ECFDF5")} onClick={() => void handleActivate(user.id)} title="Activate">
-                          <CheckCircle size={14} />
+                        <button style={iconButton("#10B981", "#ECFDF5")} onClick={() => void handleActivate(user.id)} title="Activate" aria-label="Activate user">
+                          <CheckCircle size={14} color="#10B981" strokeWidth={2.2} style={S.iconGraphic} />
                         </button>
                       ) : (
-                        <button style={iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleSuspend(user.id)} title="Suspend">
-                          <Ban size={14} />
+                        <button style={iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleSuspend(user.id)} title="Suspend" aria-label="Suspend user">
+                          <Ban size={14} color="#EF4444" strokeWidth={2.2} style={S.iconGraphic} />
                         </button>
                       )}
                     </div>
@@ -401,7 +412,6 @@ export default function ManageUsers() {
               <Detail label="Role" value={selectedUser.role} />
               <Detail label="Status" value={selectedUser.status} />
               <Detail label="KYC Status" value={selectedUser.kycStatus} />
-              <Detail label="Credit Score" value={String(selectedUser.creditScore)} />
               <Detail label="Rating" value={String(selectedUser.rating)} />
               <Detail label="Join Date" value={selectedUser.joinDate} />
               <Detail label="Updated At" value={selectedUser.updatedAt} />
@@ -499,6 +509,28 @@ const S: Record<string, any> = {
     display: "flex",
     gap: 6,
     justifyContent: "center",
+    minWidth: 72,
+  },
+  actionHeader: {
+    textAlign: "center",
+    minWidth: 96,
+    position: "sticky",
+    right: 0,
+    zIndex: 2,
+    background: "#F5F6FA",
+    boxShadow: "-1px 0 0 #F3F4F6",
+  },
+  actionCell: {
+    minWidth: 96,
+    position: "sticky",
+    right: 0,
+    background: "#FFFFFF",
+    boxShadow: "-1px 0 0 #F3F4F6",
+    zIndex: 1,
+  },
+  iconGraphic: {
+    display: "block",
+    flexShrink: 0,
   },
   modalOverlay: {
     position: "fixed",

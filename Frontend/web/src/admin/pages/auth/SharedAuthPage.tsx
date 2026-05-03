@@ -150,9 +150,13 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   function redirectToLender(nextSession: SharedSession) {
     clearAdminSession();
     setLenderSession(nextSession.accessToken, nextSession.user);
-    window.location.assign(
-      new URL(LENDER_APP_URL, window.location.origin).toString(),
-    );
+
+    const handoffUrl = new URL(LENDER_APP_URL, window.location.origin);
+    handoffUrl.searchParams.set("accessToken", nextSession.accessToken);
+    handoffUrl.searchParams.set("lenderId", nextSession.user.uid);
+    handoffUrl.searchParams.set("displayName", nextSession.user.fullName);
+    handoffUrl.searchParams.set("email", nextSession.user.email);
+    window.location.assign(handoffUrl.toString());
   }
 
   function handleSuccessfulSession(nextSession: SharedSession, successCopy: string) {

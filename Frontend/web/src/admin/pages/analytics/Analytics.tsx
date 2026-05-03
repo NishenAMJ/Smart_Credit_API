@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AreaChart,
@@ -31,27 +31,36 @@ export default function Analytics() {
   const [revenueReport, setRevenueReport] = useState<RevenueReportResponse["data"] | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    async function loadReports() {
-      try {
-        const [users, loans, transactions, revenue] = await Promise.all([
-          getUsersReport(),
-          getLoansReport(),
-          getTransactionsReport(),
-          getRevenueReport(),
-        ]);
+  const loadReports = useCallback(async () => {
+    try {
+      const [users, loans, transactions, revenue] = await Promise.all([
+        getUsersReport(),
+        getLoansReport(),
+        getTransactionsReport(),
+        getRevenueReport(),
+      ]);
 
-        setUsersReport(users.data);
-        setLoansReport(loans.data);
-        setTransactionsReport(transactions.data);
-        setRevenueReport(revenue.data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load analytics.");
-      }
+      setUsersReport(users.data);
+      setLoansReport(loans.data);
+      setTransactionsReport(transactions.data);
+      setRevenueReport(revenue.data);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load analytics.");
     }
-
-    void loadReports();
   }, []);
+
+  useEffect(() => {
+    void loadReports();
+  }, [loadReports]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadReports();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [loadReports]);
 
   const summaryCards = [
     {
@@ -85,7 +94,7 @@ export default function Analytics() {
       icon: Activity,
       color: "#F59E0B",
       bg: "#FFFBEB",
-      to: "/admin/transactions",
+      to: "/transactions",
     },
   ];
 

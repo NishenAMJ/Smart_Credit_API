@@ -1,9 +1,9 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Download, AlertTriangle, FileText, Shield, UserCheck, UserX, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Download, AlertTriangle, FileText, Shield, UserCheck, Eye, UserX, ChevronLeft, ChevronRight } from "lucide-react";
 import { getAuditLogs, type AuditLogEntry, type AuditSeverity } from "../../lib/api";
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
 const ACTION_META: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
   kyc_approved: { label: "KYC Approved", icon: UserCheck, color: "#10B981", bg: "#ECFDF5" },
@@ -69,6 +69,15 @@ export default function AuditLogs() {
     setCursorStack([]);
     void loadLogs();
   }, [loadLogs]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const activeCursor = currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+      void loadLogs(activeCursor);
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [currentPage, cursorStack, loadLogs]);
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
@@ -192,7 +201,7 @@ export default function AuditLogs() {
               <th>Target</th>
               <th style={S.dateHeader}>Date</th>
               <th>Severity</th>
-              <th style={{ textAlign: "center" }}>Details</th>
+              <th style={S.actionHeader}>Details</th>
             </tr>
           </thead>
           <tbody>
@@ -236,8 +245,17 @@ export default function AuditLogs() {
                         {log.severity}
                       </span>
                     </td>
-                    <td style={{ textAlign: "center" }}>
-                      <button style={S.viewButton} onClick={() => setSelectedLog(log)}>View</button>
+                    <td style={S.actionCell}>
+                      <div style={S.actionRow}>
+                        <button
+                          style={S.iconButton("#6B7280", "#F3F4F6")}
+                          onClick={() => setSelectedLog(log)}
+                          title="View"
+                          aria-label="View audit log"
+                        >
+                          <Eye size={14} color="#6B7280" strokeWidth={2.2} style={S.iconGraphic} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -356,6 +374,29 @@ const S: Record<string, any> = {
     padding: 40,
     color: "#6B7280",
   },
+  actionRow: {
+    display: "flex",
+    gap: 6,
+    justifyContent: "center",
+    minWidth: 48,
+  },
+  actionHeader: {
+    textAlign: "center",
+    minWidth: 96,
+    position: "sticky",
+    right: 0,
+    zIndex: 2,
+    background: "#F5F6FA",
+    boxShadow: "-1px 0 0 #F3F4F6",
+  },
+  actionCell: {
+    minWidth: 96,
+    position: "sticky",
+    right: 0,
+    background: "#FFFFFF",
+    boxShadow: "-1px 0 0 #F3F4F6",
+    zIndex: 1,
+  },
   dateHeader: {
     minWidth: 118,
   },
@@ -376,14 +417,25 @@ const S: Record<string, any> = {
     fontVariantNumeric: "tabular-nums",
     marginTop: 3,
   },
-  viewButton: {
-    border: "1px solid #E5E7EB",
-    background: "#FFFFFF",
-    borderRadius: 8,
-    padding: "6px 12px",
+  iconButton: (color: string, bg: string) => ({
+    width: 30,
+    height: 30,
+    padding: 0,
+    borderRadius: 6,
+    border: "none",
+    background: bg,
+    color,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 600,
+    lineHeight: 0,
+    flexShrink: 0,
+    overflow: "visible",
+  }),
+  iconGraphic: {
+    display: "block",
+    flexShrink: 0,
   },
   modalOverlay: {
     position: "fixed",
