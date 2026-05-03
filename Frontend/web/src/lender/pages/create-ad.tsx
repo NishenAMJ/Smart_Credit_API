@@ -150,6 +150,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [recentAds, setRecentAds] = useState<LenderAd[]>([]);
   const [isRecentAdsLoading, setIsRecentAdsLoading] = useState(true);
+  const [adsError, setAdsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!saveMessage) {
@@ -175,14 +176,20 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
     const loadRecentAds = async () => {
       try {
         setIsRecentAdsLoading(true);
-        const ads = await fetchLenderAds(4);
+        setAdsError(null);
+        const ads = await fetchLenderAds(8);
 
         if (isMounted) {
           setRecentAds(ads);
         }
-      } catch {
+      } catch (error) {
         if (isMounted) {
           setRecentAds([]);
+          setAdsError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load existing ads.",
+          );
         }
       } finally {
         if (isMounted) {
@@ -248,9 +255,22 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
       setRecentAds((current) =>
         [createdAd, ...current.filter((ad) => ad.id !== createdAd.id)].slice(
           0,
-          4,
+          8,
         ),
       );
+      try {
+        setIsRecentAdsLoading(true);
+        const ads = await fetchLenderAds(8);
+        setRecentAds(ads);
+      } catch (refreshError) {
+        setAdsError(
+          refreshError instanceof Error
+            ? refreshError.message
+            : "Failed to refresh existing ads.",
+        );
+      } finally {
+        setIsRecentAdsLoading(false);
+      }
       setPublishMessage(`Ad published successfully as ${createdAd.id}.`);
     } catch (error) {
       setPublishError(
@@ -594,40 +614,63 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
             </div>
           </article>
 
-          <article className="card create-ad-tips-card">
-            <h2 className="section-title">Recent Published Ads</h2>
-            <div className="create-ad-tips-card__list">
-              {isRecentAdsLoading ? (
-                <article className="create-ad-tip">
-                  <p>Loading lender ads...</p>
-                </article>
-              ) : recentAds.length > 0 ? (
-                recentAds.map((ad) => (
-                  <article className="create-ad-tip" key={ad.id}>
-                    <strong>{ad.title}</strong>
-                    <p>
-                      {formatCurrency(String(ad.minAmount))} -{" "}
-                      {formatCurrency(String(ad.maxAmount))} |{" "}
-                      {ad.preferredInterestRate}%
-                    </p>
-                    <p>
-                      {ad.maxTenureMonths} months | {ad.status} |{" "}
-                      {formatShortDate(ad.createdAt)}
-                    </p>
-                  </article>
-                ))
-              ) : (
-                <article className="create-ad-tip">
-                  <strong>No ads published yet</strong>
-                  <p>
-                    Publish your first lender ad from this page and it will
-                    appear here after Firestore saves it.
-                  </p>
-                </article>
-              )}
-            </div>
-          </article>
         </aside>
+      </section>
+
+      <section className="card create-ad-tips-card create-ad-tips-card--fullwidth">
+        <div className="create-ad-form-card__header">
+          <div>
+            <h2 className="section-title">Existing Ads</h2>
+            <p className="section-subtitle">
+              Your published offers live here so you can compare active terms,
+              spot gaps, and see what borrowers already see.
+            </p>
+          </div>
+          <span className="dashboard-context-pill">{recentAds.length} loaded</span>
+        </div>
+        {adsError ? (
+          <p className="create-ad-banner create-ad-banner--error">{adsError}</p>
+        ) : null}
+        <div className="create-ad-tips-card__list create-ad-tips-card__list--detailed">
+          {isRecentAdsLoading ? (
+            <article className="create-ad-tip">
+              <p>Loading existing ads...</p>
+            </article>
+          ) : recentAds.length > 0 ? (
+            recentAds.map((ad) => (
+              <article className="create-ad-tip create-ad-tip--detailed" key={ad.id}>
+                <div className="create-ad-tip__header">
+                  <strong>{ad.title}</strong>
+                  <span className="badge badge-gray">{ad.status}</span>
+                </div>
+                <p>{ad.description}</p>
+                <div className="create-ad-tip__grid">
+                  <span>Amount: {formatCurrency(String(ad.minAmount))} - {formatCurrency(String(ad.maxAmount))}</span>
+                  <span>Interest: {ad.preferredInterestRate}%</span>
+                  <span>Tenure: {ad.maxTenureMonths} months</span>
+                  <span>Capital: {formatCurrency(String(ad.availableCapital))}</span>
+                  <span>Applications: {ad.applicationCount}</span>
+                  <span>Funded: {ad.fundedLoansCount}</span>
+                  <span>Response: {ad.responseTimeHours} hrs</span>
+                  <span>Expires: {formatShortDate(ad.expiresAt)}</span>
+                </div>
+                <p className="create-ad-tip__meta">
+                  Created {formatShortDate(ad.createdAt)} | Updated{" "}
+                  {formatShortDate(ad.updatedAt)} |{" "}
+                  {ad.preferredPurposes.join(", ") || "No preferred purposes"}
+                </p>
+              </article>
+            ))
+          ) : (
+            <article className="create-ad-tip">
+              <strong>No ads published yet</strong>
+              <p>
+                Publish your first lender ad from this page and it will appear
+                here after Firestore saves it.
+              </p>
+            </article>
+          )}
+        </div>
       </section>
     </section>
   );

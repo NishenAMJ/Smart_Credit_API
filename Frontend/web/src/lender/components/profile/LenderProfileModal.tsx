@@ -155,23 +155,25 @@ export default function LenderProfileModal({
       return
     }
 
+    const nextProfile = {
+      fullName: formState.fullName.trim(),
+      email: formState.email.trim(),
+      phone: formState.phone.trim(),
+      address: formState.address.trim(),
+      city: formState.city.trim(),
+      district: formState.district.trim(),
+      businessName: formState.businessName.trim(),
+      responseTimeHours: Number(formState.responseTimeHours),
+      preferredRegions: formState.preferredRegions
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    }
+
     try {
       setIsSaving(true)
       setError(null)
-      const updatedProfile = await updateLenderProfile({
-        fullName: formState.fullName,
-        email: formState.email,
-        phone: formState.phone,
-        address: formState.address,
-        city: formState.city,
-        district: formState.district,
-        businessName: formState.businessName,
-        responseTimeHours: Number(formState.responseTimeHours),
-        preferredRegions: formState.preferredRegions
-          .split(',')
-          .map((value) => value.trim())
-          .filter((value) => value.length > 0),
-      })
+      const updatedProfile = await updateLenderProfile(nextProfile)
 
       setProfile(updatedProfile)
       setFormState(toFormState(updatedProfile))
@@ -274,6 +276,7 @@ export default function LenderProfileModal({
                       className="input"
                       type="text"
                       value={formState.fullName}
+                      required
                       onChange={(event) => updateField('fullName', event.target.value)}
                     />
                   </label>
@@ -284,6 +287,7 @@ export default function LenderProfileModal({
                       className="input"
                       type="text"
                       value={formState.businessName}
+                      required
                       onChange={(event) => updateField('businessName', event.target.value)}
                     />
                   </label>
@@ -294,6 +298,7 @@ export default function LenderProfileModal({
                       className="input"
                       type="email"
                       value={formState.email}
+                      required
                       onChange={(event) => updateField('email', event.target.value)}
                     />
                   </label>
@@ -324,6 +329,7 @@ export default function LenderProfileModal({
                       className="input"
                       type="text"
                       value={formState.city}
+                      required
                       onChange={(event) => updateField('city', event.target.value)}
                     />
                   </label>
@@ -334,6 +340,7 @@ export default function LenderProfileModal({
                       className="input"
                       type="text"
                       value={formState.district}
+                      required
                       onChange={(event) => updateField('district', event.target.value)}
                     />
                   </label>
@@ -346,6 +353,7 @@ export default function LenderProfileModal({
                       min="1"
                       max="72"
                       value={formState.responseTimeHours}
+                      required
                       onChange={(event) =>
                         updateField('responseTimeHours', event.target.value)
                       }

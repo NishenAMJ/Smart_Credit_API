@@ -580,14 +580,10 @@ export class RecentTransactionsService {
     }
 
     const topLevelTransactions = this.paginateTransactions(
-      (await this.getTopLevelRepaymentsByLoanIds(context.loanIds))
-        .filter((transaction) =>
-          this.matchesTransactionFilters(
-            transaction,
-            context,
-            search ?? null,
-          ),
-        ),
+      (await this.getTopLevelRepaymentsByLoanIds(context.loanIds)).filter(
+        (transaction) =>
+          this.matchesTransactionFilters(transaction, context, search ?? null),
+      ),
       pageSize,
       cursor,
     );
@@ -1284,11 +1280,7 @@ export class RecentTransactionsService {
     return transactions.slice(safeStartIndex, safeStartIndex + pageSize + 1);
   }
 
-  private logFallback(
-    label: string,
-    message: string,
-    error: unknown,
-  ): void {
+  private logFallback(label: string, message: string, error: unknown): void {
     const detail =
       error instanceof Error ? error.message : 'Unknown Firestore query error';
     this.logger.warn(`${message} [${label}] ${detail}`);
