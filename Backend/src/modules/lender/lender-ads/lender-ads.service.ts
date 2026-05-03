@@ -64,7 +64,7 @@ export class LenderAdsService {
       maxTenureMonths: input.tenureMonths,
       location,
       preferredPurposes,
-      status: 'active',
+      status: 'pending',
       isBoosted: false,
       availableCapital: input.maxAmount,
       applicationCount: 0,

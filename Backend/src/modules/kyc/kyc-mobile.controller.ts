@@ -2,7 +2,7 @@ import { Body, Controller, Post } from '@nestjs/common';
 import { KycService } from './kyc.service';
 import { SubmitKycDto } from './dto/submit-kyc.dto';
 
-@Controller('mobile/kyc')
+@Controller('kyc')
 export class KycMobileController {
   constructor(private readonly kycService: KycService) {}
 

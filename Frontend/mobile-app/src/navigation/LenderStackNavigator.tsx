@@ -18,7 +18,8 @@ import AdAnalyticsScreen          from '../screens/lender/AdAnalyticsScreen';
 import BoostAdScreen              from '../screens/lender/BoostAdScreen';
 import AdSummaryAnalyticsScreen   from '../screens/lender/AdSummaryAnalyticsScreen';
 import BorrowerDetailScreen from '../screens/lender/BorrowerDetailScreen';
-
+import AgreementsListScreen from '../screens/shared/AgreementsListScreen';
+import LegalAgreementScreen from '../screens/shared/LegalAgreementScreen';
 
 // Use require to bypass module resolution issues
 const CollectionHistoryScreen = require('../screens/lender/CollectionHistoryScreen').default as ComponentType;
@@ -62,6 +63,10 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="AdAnalytics"         component={AdAnalyticsScreen}       />
       <Stack.Screen name="BoostAd"             component={BoostAdScreen}           />
       <Stack.Screen name="AdSummaryAnalytics"  component={AdSummaryAnalyticsScreen}/>
+      <Stack.Screen name="AgreementsList" component={AgreementsListScreen} />
+      <Stack.Screen name="LoanAgreement">
+        {(props) => <LegalAgreementScreen {...props} role="lender" />}
+      </Stack.Screen>
       
     </Stack.Navigator>
   );

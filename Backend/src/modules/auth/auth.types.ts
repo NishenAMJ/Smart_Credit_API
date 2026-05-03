@@ -10,7 +10,7 @@ export type AccountStatus = 'active' | 'suspended' | 'blocked';
 
 export type UserDocument = {
   uid: string;
-  role: UserRole[];
+  role: UserRole | UserRole[];
   fullName: string;
   photoURL: string;
   phone: string;
@@ -30,4 +30,3 @@ export type UserDocument = {
   updatedAt: Timestamp;
   lastLoginAt?: Timestamp;
 };
-

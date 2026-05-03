@@ -8,8 +8,7 @@ import {
 import type { AdminAuthResponse } from "../types/admin-auth";
 
 const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
-  "/api";
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api";
 export const LENDER_APP_URL = import.meta.env.VITE_LENDER_APP_URL ?? "/lender";
 
 export type FirestoreTimestamp = { _seconds?: number };
@@ -304,6 +303,18 @@ export interface AdsResponse {
   ads: AdminAd[];
 }
 
+export interface AdStatsResponse {
+  success: boolean;
+  stats: {
+    all: number;
+    active: number;
+    approved: number;
+    pending: number;
+    rejected: number;
+    closed: number;
+  };
+}
+
 export interface AuditLogEntry {
   id: string;
   actionType:
@@ -591,6 +602,12 @@ export function getAds(params?: CursorQueryParams) {
   });
 }
 
+export function getAdStats() {
+  return apiRequest<AdStatsResponse>("/admin/ads/stats", {
+    auth: true,
+  });
+}
+
 // Uses a shared approval note so moderation actions are predictable.
 export function approveAd(adId: string, notes = DEFAULT_AD_APPROVAL_NOTE) {
   return apiRequest(`/admin/ads/${adId}/approve`, {
@@ -664,5 +681,13 @@ export function escalateDispute(
     method: "POST",
     auth: true,
     body: JSON.stringify({ reason, notes }),
+  });
+}
+
+import { SharedLegalDocument, AgreementsResponse } from "../../legal/types";
+
+export function getLegalAgreements() {
+  return apiRequest<AgreementsResponse>("/legal/documents", {
+    auth: true,
   });
 }

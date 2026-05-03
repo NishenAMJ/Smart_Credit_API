@@ -95,21 +95,14 @@ export class BorrowerDashboardService {
         }
       });
 
-      const appsSnapshot = await this.db
-        .collection(this.LOAN_APPS_COL)
-        .where('borrowerId', '==', borrowerId)
-        .where('status', 'in', [
-          LoanApplicationStatus.PENDING,
-          'PENDING',
-          LoanApplicationStatus.DRAFT,
-          'DRAFT',
-        ])
-        .get();
+      const pendingApplications = await this.getPendingApplicationsCount(
+        borrowerId,
+      );
 
       const dashboard = {
         profile: profileData,
         activeLoans: activeLoansCount,
-        pendingApplications: appsSnapshot.size,
+        pendingApplications,
         totalOutstanding,
         nextDueDate,
         nextPaymentAmount,
@@ -126,6 +119,28 @@ export class BorrowerDashboardService {
     } catch (error) {
       console.error('Error fetching dashboard:', error);
       throw new InternalServerErrorException('Failed to fetch dashboard data');
+    }
+  }
+
+  private async getPendingApplicationsCount(
+    borrowerId: string,
+  ): Promise<number> {
+    const query = this.db
+        .collection(this.LOAN_APPS_COL)
+        .where('borrowerId', '==', borrowerId)
+        .where('status', 'in', [
+          LoanApplicationStatus.PENDING,
+          'PENDING',
+          LoanApplicationStatus.DRAFT,
+          'DRAFT',
+        ]);
+
+    try {
+      const snapshot = await query.count().get();
+      return snapshot.data().count;
+    } catch {
+      const snapshot = await query.get();
+      return snapshot.size;
     }
   }
 

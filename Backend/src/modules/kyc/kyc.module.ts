@@ -1,14 +1,13 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
-import { FirebaseModule } from '../../firebase/firebase.module';
 import { KycController } from './kyc.controller';
 import { KycMobileController } from './kyc-mobile.controller';
 import { KycService } from './kyc.service';
+import { FirebaseModule } from '../../firebase/firebase.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [AuthModule, FirebaseModule],
+  imports: [FirebaseModule, AuthModule],
   controllers: [KycController, KycMobileController],
   providers: [KycService],
-  exports: [KycService],
 })
 export class KycModule {}

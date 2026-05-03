@@ -13,30 +13,33 @@ describe('AnalyticsService', () => {
   it('computes summary from seed-shaped loans and ads', async () => {
     const db = {
       collection: jest.fn((name: string) => ({
-        where: jest.fn().mockReturnValue({
-          get: jest.fn().mockResolvedValue({
-            docs:
-              name === 'loans'
-                ? [
-                    createDoc('loan_1', {
-                      lenderId: 'lender_1',
-                      borrowerId: 'borrower_1',
-                      principalAmount: 50000,
-                      interestRate: 15,
-                      tenureMonths: 12,
-                      status: 'active',
-                      requestId: 'req_1',
-                      createdAt: '2026-04-10T00:00:00.000Z',
-                    }),
-                  ]
-                : [
-                    createDoc('ad_1', {
-                      lenderId: 'lender_1',
-                      status: 'approved',
-                      expiresAt: '2099-01-01T00:00:00.000Z',
-                    }),
-                  ],
-          }),
+        where: jest.fn(function where() {
+          return {
+            where,
+            get: jest.fn().mockResolvedValue({
+              docs:
+                name === 'loans'
+                  ? [
+                      createDoc('loan_1', {
+                        lenderId: 'lender_1',
+                        borrowerId: 'borrower_1',
+                        principalAmount: 50000,
+                        interestRate: 15,
+                        tenureMonths: 12,
+                        status: 'active',
+                        requestId: 'req_1',
+                        createdAt: '2026-04-10T00:00:00.000Z',
+                      }),
+                    ]
+                  : [
+                      createDoc('ad_1', {
+                        lenderId: 'lender_1',
+                        status: 'approved',
+                        expiresAt: '2099-01-01T00:00:00.000Z',
+                      }),
+                    ],
+            }),
+          };
         }),
       })),
     };
@@ -45,13 +48,23 @@ describe('AnalyticsService', () => {
     jest
       .spyOn(seedUtils, 'computeLoanRemainingAmount')
       .mockResolvedValue(12000);
-    jest.spyOn(service as any, 'getRequestsForLender').mockResolvedValue([]);
     jest
-      .spyOn(service as any, 'getTransactionsForLender')
+      .spyOn(service as any, 'getCountWithFallback')
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+    jest
+      .spyOn(service as any, 'sumRepaymentTransactionsInRange')
+      .mockResolvedValue(0);
+    jest.spyOn(service as any, 'getActiveAdsCount').mockResolvedValue(1);
+    jest
+      .spyOn(service as any, 'getRequestsForLenderByDateRange')
       .mockResolvedValue([]);
-    jest.spyOn(service as any, 'getDisputesForLender').mockResolvedValue([]);
     jest.spyOn(service as any, 'countOverdueLoans').mockResolvedValue(0);
-    jest.spyOn(service as any, 'getBorrowerCreditScores').mockResolvedValue([]);
+    jest
+      .spyOn(service as any, 'getAverageBorrowerCreditScore')
+      .mockResolvedValue(null);
 
     const result = await service.getSummary('lender_1', '30d');
 

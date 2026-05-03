@@ -19,6 +19,7 @@ export default function AdminLayout() {
           flex: 1,
           padding: "28px 32px",
           overflowY: "auto",
+          overflowX: "auto",
           minWidth: 0,
         }}
       >

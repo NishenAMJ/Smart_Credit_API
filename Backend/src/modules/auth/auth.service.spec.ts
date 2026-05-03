@@ -242,6 +242,29 @@ describe('AuthService', () => {
     );
   });
 
+  it('accepts a legacy string role and returns admin correctly', async () => {
+    const user = buildUser({
+      uid: 'admin-1',
+      role: 'admin' as UserRole,
+      passwordHash: 'stored-hash',
+      accountStatus: 'active',
+    });
+    queueQueryResult(user);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+    const response = await service.login({
+      identifier: 'nimal@example.com',
+      password: 'SmartPass123',
+    });
+
+    expect(jwtService.sign).toHaveBeenCalledWith({
+      sub: user.uid,
+      email: user.email,
+      role: 'admin',
+    });
+    expect(response.user.role).toBe('admin');
+  });
+
   it('logs in by phone using the normalized phone lookup', async () => {
     const user = buildUser({
       uid: 'borrower-2',

@@ -55,6 +55,7 @@ export class LegalDocumentDto {
   pdfDownloadPath?: string;
   signedPdfStoragePath?: string;
   signedPdfGeneratedAt?: string;
+  pdfSha256Hash?: string;
 }
 
 export class AcceptLegalDocumentDto {
@@ -73,4 +74,8 @@ export class GetLegalDocumentResponseDto {
 export class AcceptLegalDocumentResponseDto {
   message!: string;
   document!: LegalDocumentDto;
+}
+
+export class ListLegalDocumentsResponseDto {
+  documents!: LegalDocumentDto[];
 }

@@ -1,10 +1,10 @@
 import { Controller, Get, Post, Param, Body, Query, UseGuards } from '@nestjs/common';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
 import { DisputesService } from './disputes.service';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 import { EscalateDisputeDto } from './dto/escalate-dispute.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Controller('admin/disputes')
 @UseGuards(JwtAuthGuard, RolesGuard)

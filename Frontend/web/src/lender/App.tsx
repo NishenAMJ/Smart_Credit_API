@@ -11,6 +11,7 @@ import PendingRequestsPage from './pages/pending-requests'
 import NotificationsPage from './pages/notifications'
 import RecentTransactionsPage from './pages/recent-transactions'
 import SettingsPage from './pages/settings'
+import AgreementsPage from './pages/agreements'
 import LenderProfileModal from './components/profile/LenderProfileModal'
 import {
   clearStoredSession,
@@ -97,6 +98,8 @@ function App() {
           />
         ) : activeView === 'notifications' ? (
           <NotificationsPage session={session} onNavigate={setActiveView} />
+        ) : activeView === 'agreements' ? (
+          <AgreementsPage session={session} />
         ) : (
           <section className="dashboard-panel">
             <header className="page-header">

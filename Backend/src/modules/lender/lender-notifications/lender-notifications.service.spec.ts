@@ -30,10 +30,22 @@ describe('LenderNotificationsService', () => {
   it('returns paginated notifications while preserving summary counts', async () => {
     const service = new LenderNotificationsService({ getDb: () => ({}) } as any);
     jest.spyOn(service as any, 'syncNotifications').mockResolvedValue(undefined);
-    jest.spyOn(service as any, 'loadNotifications').mockResolvedValue([
-      { id: 'n1', category: 'loan_request', severity: 'info', isRead: false, createdAt: '2026-04-21T00:00:00.000Z' },
-      { id: 'n2', category: 'ad', severity: 'warning', isRead: true, createdAt: '2026-04-20T00:00:00.000Z' },
-    ]);
+    jest.spyOn(service as any, 'getDirectNotificationSummary').mockResolvedValue({
+      lenderId: 'lender_1',
+      unreadCount: 1,
+      totalCount: 2,
+      highPriorityCount: 1,
+      todaysCount: 1,
+      topCategory: 'loan_request',
+      countsByCategory: {
+        loan_request: 1,
+        transaction: 0,
+        repayment_risk: 0,
+        dispute: 0,
+        ad: 1,
+        system: 0,
+      },
+    });
     jest.spyOn(service as any, 'buildNotificationsQuery').mockReturnValue({
       get: jest.fn().mockResolvedValue({
         docs: Array.from({ length: 11 }, (_, index) =>
@@ -57,10 +69,22 @@ describe('LenderNotificationsService', () => {
   it('keeps summary behavior intact', async () => {
     const service = new LenderNotificationsService({ getDb: () => ({}) } as any);
     jest.spyOn(service as any, 'syncNotifications').mockResolvedValue(undefined);
-    jest.spyOn(service as any, 'loadNotifications').mockResolvedValue([
-      { id: 'n1', category: 'loan_request', severity: 'critical', isRead: false, createdAt: new Date().toISOString() },
-      { id: 'n2', category: 'ad', severity: 'info', isRead: true, createdAt: '2026-04-20T00:00:00.000Z' },
-    ]);
+    jest.spyOn(service as any, 'getDirectNotificationSummary').mockResolvedValue({
+      lenderId: 'lender_1',
+      unreadCount: 1,
+      totalCount: 2,
+      highPriorityCount: 1,
+      todaysCount: 1,
+      topCategory: 'loan_request',
+      countsByCategory: {
+        loan_request: 1,
+        transaction: 0,
+        repayment_risk: 0,
+        dispute: 0,
+        ad: 1,
+        system: 0,
+      },
+    });
 
     const result = await service.getSummary('lender_1');
 

@@ -232,6 +232,11 @@ describe('DashboardService', () => {
         })),
       })),
       collection: jest.fn(() => ({
+        where: jest.fn(() => ({
+          get: jest.fn().mockResolvedValue({
+            docs: [{ id: 'loan_1' }],
+          }),
+        })),
         doc: jest.fn(() => ({
           collection: jest.fn(() => ({
             get: jest.fn().mockResolvedValue({
@@ -247,7 +252,6 @@ describe('DashboardService', () => {
     const result = await (service as any).getOverduePaymentsCount(
       db,
       'lender_1',
-      [{ id: 'loan_1' }],
     );
 
     expect(result).toBe(1);

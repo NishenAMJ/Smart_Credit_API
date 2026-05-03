@@ -63,18 +63,11 @@ export class DashboardService {
 
   async getSummary(lenderId: string): Promise<DashboardSummaryResponse> {
     const db = this.firebaseService.getDb();
-    const loansSnapshot = await db
-      .collection('loans')
-      .where('lenderId', '==', lenderId)
-      .get();
-    const lenderLoans = await Promise.all(
-      loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
-    );
     const [totalBorrowers, todaysCollection, overduePayments, activeAds] =
       await Promise.all([
         this.getTotalBorrowersFromRelations(db, lenderId),
         this.getTodaysPaymentsCollection(db, lenderId),
-        this.getOverduePaymentsCount(db, lenderId, lenderLoans),
+        this.getOverduePaymentsCount(db, lenderId),
         this.getActiveAdsCount(db, lenderId),
       ]);
 
@@ -256,7 +249,6 @@ export class DashboardService {
   private async getOverduePaymentsCount(
     db: Firestore,
     lenderId: string,
-    loans: DashboardLoanRecord[],
   ): Promise<number> {
     try {
       const snapshot = await db
@@ -274,8 +266,12 @@ export class DashboardService {
         error,
       );
 
+      const loansSnapshot = await db
+        .collection('loans')
+        .where('lenderId', '==', lenderId)
+        .get();
       const counts = await Promise.all(
-        loans.map(async (loan) => {
+        loansSnapshot.docs.map(async (loan) => {
           const snapshot = await db
             .collection('loans')
             .doc(loan.id)

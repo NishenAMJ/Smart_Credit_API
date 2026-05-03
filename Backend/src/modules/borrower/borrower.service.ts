@@ -140,16 +140,14 @@ export class BorrowerService {
         }
       });
 
-      const appsSnapshot = await this.db
-        .collection('loanRequests')
-        .where('borrowerId', '==', borrowerId)
-        .where('status', 'in', ['pending', 'PENDING', 'draft', 'DRAFT'])
-        .get();
+      const pendingApplications = await this.getPendingApplicationsCount(
+        borrowerId,
+      );
 
       const dashboard = {
         profile: profileData,
         activeLoans: activeLoansCount,
-        pendingApplications: appsSnapshot.size,
+        pendingApplications,
         totalOutstanding,
         nextDueDate,
         nextPaymentAmount,
@@ -167,6 +165,16 @@ export class BorrowerService {
       console.error('Error fetching dashboard:', error);
       throw new InternalServerErrorException('Failed to fetch dashboard data');
     }
+  }
+
+  private async getPendingApplicationsCount(
+    borrowerId: string,
+  ): Promise<number> {
+    const query = this.db
+        .collection('loanRequests')
+        .where('borrowerId', '==', borrowerId)
+        .where('status', 'in', ['pending', 'PENDING', 'draft', 'DRAFT']);
+    return this.getCountForQuery(query);
   }
 
   async getMyLoans(borrowerId: string, status?: string) {
@@ -1192,14 +1200,14 @@ export class BorrowerService {
       .get();
 
     // Fetch pending applications
-    const pendingAppsSnapshot = await this.db
+    const pendingAppsQuery = this.db
       .collection(this.LOAN_APPS_COL)
       .where('borrowerId', '==', userId)
       .where('status', 'in', [
         LoanApplicationStatus.PENDING,
         LoanApplicationStatus.UNDER_REVIEW,
-      ])
-      .get();
+      ]);
+    const pendingApplications = await this.getCountForQuery(pendingAppsQuery);
 
     const activeLoans = activeLoansSnapshot.docs.map((d) => d.data() as Loan);
 
@@ -1251,7 +1259,7 @@ export class BorrowerService {
         profileComplete: profile.profileComplete,
       },
       activeLoans: activeLoans.length,
-      pendingApplications: pendingAppsSnapshot.size,
+      pendingApplications,
       totalOutstanding: Math.round(totalOutstanding * 100) / 100,
       nextDueDate: nextLoan?.nextDueDate,
       nextPaymentAmount: nextLoan?.monthlyInstallment,
@@ -1260,6 +1268,18 @@ export class BorrowerService {
       totalRepaid: profile.totalRepaid,
       recentActivity,
     };
+  }
+
+  private async getCountForQuery(
+    query: FirebaseFirestore.Query,
+  ): Promise<number> {
+    try {
+      const snapshot = await query.count().get();
+      return snapshot.data().count;
+    } catch {
+      const snapshot = await query.get();
+      return snapshot.size;
+    }
   }
 
   /**

@@ -11,6 +11,7 @@ import AuditLogs from "./pages/auditLogs/AuditLogs";
 import SettingsPage from "./pages/settings/Settings";
 import Disputes from "./pages/disputes/Disputes";
 import Transactions from "./pages/transactions/Transactions";
+import LegalAgreements from "./pages/agreements/LegalAgreements";
 import SignIn from "./pages/auth/SignIn";
 import SignUp from "./pages/auth/SignUp";
 
@@ -37,6 +38,7 @@ export default function AdminRoutes() {
         <Route path="disputes" element={<Disputes />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="transactions" element={<Transactions />} />
+        <Route path="agreements" element={<LegalAgreements />} />
         <Route path="audit-logs" element={<AuditLogs />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

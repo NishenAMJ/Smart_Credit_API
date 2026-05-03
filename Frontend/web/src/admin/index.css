@@ -193,15 +193,15 @@ thead th {
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
-  padding: 12px 16px;
+  padding: 12px 10px;
   background: var(--color-background);
   border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
 }
 
 tbody td {
-  padding: 13px 16px;
-  font-size: 14px;
+  padding: 12px 10px;
+  font-size: 13px;
   color: var(--color-text-primary);
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;

@@ -118,9 +118,7 @@ export class AnalyticsService {
     rangeKey = '90d',
   ): Promise<AnalyticsSummaryResponse> {
     const range = this.resolveRange(rangeKey);
-    const context = await this.loadSummaryContext(lenderId);
-
-    return this.buildSummaryResponse(lenderId, range, context);
+    return this.buildSummaryResponse(lenderId, range);
   }
 
   async getOverview(
@@ -128,12 +126,10 @@ export class AnalyticsService {
     rangeKey = '90d',
   ): Promise<AnalyticsOverviewResponse> {
     const range = this.resolveRange(rangeKey);
-    const context = await this.loadSummaryContext(lenderId);
-    const summaryResponse = await this.buildSummaryResponse(
-      lenderId,
-      range,
-      context,
-    );
+    const [summaryResponse, context] = await Promise.all([
+      this.buildSummaryResponse(lenderId, range),
+      this.loadSummaryContext(lenderId),
+    ]);
     const rangeLoans = context.loans.filter((loan) =>
       this.isWithinRange(loan.createdAt, range),
     );
@@ -230,29 +226,51 @@ export class AnalyticsService {
   private async buildSummaryResponse(
     lenderId: string,
     range: RangeConfig & { start: Date; end: Date },
-    context: AnalyticsSummaryContext,
   ): Promise<AnalyticsSummaryResponse> {
-    const rangeLoans = context.loans.filter((loan) =>
-      this.isWithinRange(loan.createdAt, range),
-    );
-    const rangeTransactions = context.transactions.filter((transaction) =>
-      this.isWithinRange(transaction.createdAt, range),
-    );
-    const rangeRequests = context.requests.filter((request) =>
-      this.isWithinRange(request.createdAt, range),
-    );
-    const activeLoans = context.loans.filter(
-      (loan) => loan.status === 'active',
-    ).length;
-    const completedLoans = context.loans.filter(
-      (loan) => loan.status === 'completed',
-    ).length;
-    const defaultedLoans = context.loans.filter(
-      (loan) => loan.status === 'defaulted',
-    ).length;
+    const db = this.firebaseService.getDb();
+    const [allLoanSnapshot, rangeLoanSnapshot, adSnapshot, totalCollected, activeLoans, completedLoans, defaultedLoans, activeAds, openDisputes] =
+      await Promise.all([
+        db.collection('loans').where('lenderId', '==', lenderId).get(),
+        db
+          .collection('loans')
+          .where('lenderId', '==', lenderId)
+          .where('createdAt', '>=', range.start)
+          .where('createdAt', '<=', range.end)
+          .get(),
+        db.collection('ads').where('lenderId', '==', lenderId).get(),
+        this.sumRepaymentTransactionsInRange(db, lenderId, range),
+        this.getCountWithFallback(
+          db.collection('loans').where('lenderId', '==', lenderId).where('status', '==', 'active'),
+        ),
+        this.getCountWithFallback(
+          db.collection('loans').where('lenderId', '==', lenderId).where('status', '==', 'completed'),
+        ),
+        this.getCountWithFallback(
+          db.collection('loans').where('lenderId', '==', lenderId).where('status', '==', 'defaulted'),
+        ),
+        this.getActiveAdsCount(db, lenderId, range.end),
+        this.getOpenDisputesCount(db, lenderId),
+      ]);
+
+    const [allLoans, rangeLoans] = await Promise.all([
+      Promise.all(allLoanSnapshot.docs.map((doc) => this.mapLoan(db, doc))),
+      Promise.all(rangeLoanSnapshot.docs.map((doc) => this.mapLoan(db, doc))),
+    ]);
+
+    const adIds = new Set(adSnapshot.docs.map((doc) => doc.id));
+    const [rangeRequests, overdueLoans, averageBorrowerCreditScore] =
+      await Promise.all([
+        this.getRequestsForLenderByDateRange(db, lenderId, adIds, range),
+        allLoans.length > 0
+          ? this.countOverdueLoans(db, lenderId, allLoans)
+          : Promise.resolve(0),
+        this.getAverageBorrowerCreditScore(db, allLoans),
+      ]);
+
+    const totalLent = this.sum(rangeLoans.map((loan) => loan.amount));
     const closedLoanOutcomes = completedLoans + defaultedLoans;
     const convertedRequestIds = new Set(
-      context.loans
+      allLoans
         .map((loan) => loan.requestId)
         .filter((requestId): requestId is string => Boolean(requestId)),
     );
@@ -262,29 +280,6 @@ export class AnalyticsService {
     const convertedRequests = rangeRequests.filter((request) =>
       convertedRequestIds.has(request.id),
     ).length;
-    const openDisputes = context.disputes.filter((dispute) =>
-      ['open', 'under_review'].includes(dispute.status),
-    ).length;
-    const overdueLoans =
-      context.loans.length > 0
-        ? await this.countOverdueLoans(
-            this.firebaseService.getDb(),
-            lenderId,
-            context.loans,
-          )
-        : 0;
-
-    const summary = {
-      totalLent: this.sum(rangeLoans.map((loan) => loan.amount)),
-      totalCollected: this.sum(
-        rangeTransactions
-          .filter((transaction) => transaction.type === 'repayment')
-          .map((transaction) => transaction.amount),
-      ),
-      activeLoans,
-      repaymentSuccessRate:
-        closedLoanOutcomes > 0 ? completedLoans / closedLoanOutcomes : 0,
-    };
 
     return {
       lenderId,
@@ -294,10 +289,15 @@ export class AnalyticsService {
         startDate: range.start.toISOString(),
         endDate: range.end.toISOString(),
       },
-      summary,
+      summary: {
+        totalLent,
+        totalCollected,
+        activeLoans,
+        repaymentSuccessRate:
+          closedLoanOutcomes > 0 ? completedLoans / closedLoanOutcomes : 0,
+      },
       performance: {
-        activeAds: context.ads.filter((ad) => this.isActiveAd(ad, range.end))
-          .length,
+        activeAds,
         requestsReceived: rangeRequests.length,
         acceptedRequests,
         requestToLoanConversionRate:
@@ -307,31 +307,26 @@ export class AnalyticsService {
       },
       portfolio: {
         outstandingAmount: this.sum(
-          context.loans.map((loan) => loan.remainingAmount),
+          allLoans.map((loan) => loan.remainingAmount),
         ),
         averageLoanSize:
-          context.loans.length > 0
-            ? summary.totalLent / Math.max(rangeLoans.length, 1)
-            : 0,
+          allLoans.length > 0 ? totalLent / Math.max(rangeLoans.length, 1) : 0,
         averageInterestRate:
-          context.loans.length > 0
-            ? this.sum(context.loans.map((loan) => loan.interestRate)) /
-              context.loans.length
+          allLoans.length > 0
+            ? this.sum(allLoans.map((loan) => loan.interestRate)) /
+              allLoans.length
             : 0,
         averageTenureMonths:
-          context.loans.length > 0
-            ? this.sum(context.loans.map((loan) => loan.tenureMonths)) /
-              context.loans.length
+          allLoans.length > 0
+            ? this.sum(allLoans.map((loan) => loan.tenureMonths)) /
+              allLoans.length
             : 0,
       },
       risk: {
         overdueLoans,
         defaultedLoans,
         openDisputes,
-        averageBorrowerCreditScore:
-          context.borrowerScores.length > 0
-            ? this.sum(context.borrowerScores) / context.borrowerScores.length
-            : null,
+        averageBorrowerCreditScore,
       },
     };
   }
@@ -696,6 +691,132 @@ export class AnalyticsService {
         .flatMap((snapshot) => snapshot.docs)
         .map((doc) => this.mapRequest(doc)),
     );
+  }
+
+  private async getRequestsForLenderByDateRange(
+    db: Firestore,
+    lenderId: string,
+    adIds: Set<string>,
+    range: { start: Date; end: Date },
+  ): Promise<RequestRecord[]> {
+    const scopedSnapshots = await Promise.all([
+      db
+        .collection('loanRequests')
+        .where('targetLenderId', '==', lenderId)
+        .where('createdAt', '>=', range.start)
+        .where('createdAt', '<=', range.end)
+        .get(),
+      db
+        .collection('loanRequests')
+        .where('matchedLenderIds', 'array-contains', lenderId)
+        .where('createdAt', '>=', range.start)
+        .where('createdAt', '<=', range.end)
+        .get(),
+      ...chunkValues(Array.from(adIds), 10).map((adIdChunk) =>
+        db
+          .collection('loanRequests')
+          .where('adId', 'in', adIdChunk)
+          .where('createdAt', '>=', range.start)
+          .where('createdAt', '<=', range.end)
+          .get(),
+      ),
+    ]);
+
+    return dedupeById(
+      scopedSnapshots
+        .flatMap((snapshot) => snapshot.docs)
+        .map((doc) => this.mapRequest(doc)),
+    );
+  }
+
+  private async sumRepaymentTransactionsInRange(
+    db: Firestore,
+    lenderId: string,
+    range: { start: Date; end: Date },
+  ): Promise<number> {
+    const snapshot = await db
+      .collection('transactions')
+      .where('lenderId', '==', lenderId)
+      .where('type', '==', 'repayment')
+      .where('createdAt', '>=', range.start)
+      .where('createdAt', '<=', range.end)
+      .get();
+
+    return snapshot.docs.reduce(
+      (sum, doc) => sum + this.toNumber(doc.data().amount),
+      0,
+    );
+  }
+
+  private async getActiveAdsCount(
+    db: Firestore,
+    lenderId: string,
+    now: Date,
+  ): Promise<number> {
+    const query = db
+      .collection('ads')
+      .where('lenderId', '==', lenderId)
+      .where('status', 'in', ['active', 'approved'])
+      .where('expiresAt', '>=', now);
+
+    try {
+      const snapshot = await query.count().get();
+      return snapshot.data().count;
+    } catch {
+      const snapshot = await db
+        .collection('ads')
+        .where('lenderId', '==', lenderId)
+        .get();
+      return snapshot.docs.filter((doc) =>
+        this.isActiveAd(this.mapAd(doc), now),
+      ).length;
+    }
+  }
+
+  private async getOpenDisputesCount(
+    db: Firestore,
+    lenderId: string,
+  ): Promise<number> {
+    const query = db
+      .collection('disputes')
+      .where('lenderId', '==', lenderId)
+      .where('status', 'in', ['open', 'under_review']);
+
+    return this.getCountWithFallback(query);
+  }
+
+  private async getAverageBorrowerCreditScore(
+    db: Firestore,
+    loans: LoanRecord[],
+  ): Promise<number | null> {
+    const borrowerIds = Array.from(
+      new Set(
+        loans
+          .filter((loan) => loan.status === 'active' && loan.borrowerId)
+          .map((loan) => loan.borrowerId as string),
+      ),
+    );
+
+    if (borrowerIds.length === 0) {
+      return null;
+    }
+
+    const borrowerScores = await this.getBorrowerCreditScores(db, borrowerIds);
+    return borrowerScores.length > 0
+      ? this.sum(borrowerScores) / borrowerScores.length
+      : null;
+  }
+
+  private async getCountWithFallback(
+    query: FirebaseFirestore.Query,
+  ): Promise<number> {
+    try {
+      const snapshot = await query.count().get();
+      return snapshot.data().count;
+    } catch {
+      const snapshot = await query.get();
+      return snapshot.size;
+    }
   }
 
   private async countOverdueLoans(

@@ -196,11 +196,11 @@ export default function LenderDashboardScreen({ navigation }: any) {
             onPress={() => navigation.navigate('CreateAd')}
           />
           <QuickAction
-            icon="bar-chart-2"
+            icon="file-text"
             backgroundColor="#ECFDF5"
             iconColor={COLORS.success}
-            label="Ad Stats"
-            onPress={() => navigation.navigate('AdSummaryAnalytics')}
+            label="Agreements"
+            onPress={() => navigation.navigate('AgreementsList')}
           />
           <QuickAction
             icon="maximize"
@@ -254,6 +254,12 @@ export default function LenderDashboardScreen({ navigation }: any) {
             iconColor="#8B5CF6"
             label="My Advertisements"
             onPress={() => navigation.navigate('MyAds')}
+          />
+          <LenderActionItem
+            icon="file-text"
+            iconColor={COLORS.primary}
+            label="Agreements"
+            onPress={() => navigation.navigate('AgreementsList')}
           />
           <LenderActionItem
             icon="bar-chart-2"

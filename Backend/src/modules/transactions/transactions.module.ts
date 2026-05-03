@@ -8,6 +8,5 @@ import { AuthModule } from '../auth/auth.module';
   imports: [FirebaseModule, AuthModule],
   controllers: [TransactionsController],
   providers: [TransactionsService],
-  exports: [TransactionsService],
 })
 export class TransactionsModule {}

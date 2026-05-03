@@ -15,12 +15,11 @@ const STATUS_FILTERS: Array<{ label: string; value: StatusFilter }> = [
   { label: "Failed", value: "failed" },
 ];
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isLive, setIsLive] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -56,9 +55,7 @@ export default function Transactions() {
   }, [loadTransactions]);
 
   useEffect(() => {
-    // Only subscribe to live updates on the first page
     if (currentPage !== 1) {
-      setIsLive(false);
       return;
     }
 
@@ -66,13 +63,14 @@ export default function Transactions() {
       (data) => {
         if (data.success && data.transactions) {
           setTransactions(data.transactions);
+          setHasMore(("hasMore" in data && typeof data.hasMore === "boolean") ? data.hasMore : false);
+          setNextCursor(("nextCursor" in data && typeof data.nextCursor === "string") ? data.nextCursor : undefined);
           setTotalLoaded(data.count);
-          setIsLive(true);
+          setError(data.error ?? "");
         }
       },
       () => {
-        console.error("SSE Error");
-        setIsLive(false);
+        // Keep the lumith UI unchanged; fall back to normal manual refresh on stream errors.
       },
       pageSize,
     );
@@ -133,7 +131,7 @@ export default function Transactions() {
   }
 
   const stats = useMemo(() => {
-    const successful = transactions.filter((transaction) =>
+    const completed = transactions.filter((transaction) =>
       ["completed", "success", "successful"].includes(transaction.status.toLowerCase()),
     ).length;
     const pending = transactions.filter(
@@ -142,6 +140,10 @@ export default function Transactions() {
     const failed = transactions.filter(
       (transaction) => transaction.status.toLowerCase() === "failed",
     ).length;
+    const volume = transactions.reduce(
+      (total, transaction) => total + transaction.amount,
+      0,
+    );
 
     return [
       {
@@ -153,8 +155,8 @@ export default function Transactions() {
         bg: "#EFF6FF",
       },
       {
-        label: "Successful",
-        value: successful.toLocaleString(),
+        label: "Completed",
+        value: completed.toLocaleString(),
         helper: "Verified or settled",
         icon: CheckCircle2,
         color: "#10B981",
@@ -169,9 +171,9 @@ export default function Transactions() {
         bg: "#FFFBEB",
       },
       {
-        label: "Failed",
-        value: failed.toLocaleString(),
-        helper: "Need attention",
+        label: "Volume",
+        value: formatCurrency(volume),
+        helper: `${failed} failed`,
         icon: XCircle,
         color: "#EF4444",
         bg: "#FEF2F2",
@@ -185,10 +187,6 @@ export default function Transactions() {
         <div>
           <h1 className="page-title">Transactions</h1>
           <p className="page-subtitle">Payments, repayments, lenders, and borrowers</p>
-        </div>
-        <div style={S.streamPill}>
-          <div style={{ ...S.streamDot, background: isLive ? "#10B981" : "#D1D5DB" }} />
-          <span>{isLive ? "Live" : "Polled"}</span>
         </div>
       </div>
 
@@ -258,9 +256,7 @@ export default function Transactions() {
               <th>Transaction</th>
               <th>Lender</th>
               <th>Borrower</th>
-              <th>Loan</th>
               <th>Amount</th>
-              <th>Type</th>
               <th>Status</th>
               <th>Paid</th>
             </tr>
@@ -271,6 +267,7 @@ export default function Transactions() {
                 <td>
                   <div style={S.primaryText}>{transaction.transactionId}</div>
                   <div style={S.secondaryText}>{formatDate(transaction.createdAt)}</div>
+                  <div style={S.secondaryText}>Loan: {transaction.loanId ?? "N/A"}</div>
                 </td>
                 <td>
                   <PersonCell
@@ -286,13 +283,16 @@ export default function Transactions() {
                     email={transaction.borrowerEmail}
                   />
                 </td>
-                <td>{transaction.loanId ?? "N/A"}</td>
-                <td style={S.amount}>{formatCurrency(transaction.amount)}</td>
-                <td>{formatLabel(transaction.paymentType)}</td>
                 <td>
-                  <span className={`badge ${getStatusBadge(transaction.status)}`}>
-                    {formatLabel(transaction.status)}
-                  </span>
+                  <div style={S.amount}>{formatCurrency(transaction.amount)}</div>
+                  <div style={S.secondaryText}>{formatLabel(transaction.paymentType)}</div>
+                </td>
+                <td>
+                  <div style={S.statusCell}>
+                    <span className={`badge ${getStatusBadge(transaction.status)}`}>
+                      {formatLabel(transaction.status)}
+                    </span>
+                  </div>
                 </td>
                 <td>{formatDate(transaction.paidAt ?? transaction.createdAt)}</td>
               </tr>
@@ -300,7 +300,7 @@ export default function Transactions() {
 
             {!filteredTransactions.length && (
               <tr>
-                <td colSpan={8} style={S.emptyCell}>
+                <td colSpan={6} style={S.emptyCell}>
                   {loading ? "Loading transactions..." : "No transactions found."}
                 </td>
               </tr>
@@ -506,17 +506,22 @@ const S: Record<string, any> = {
   primaryText: {
     fontWeight: 600,
     color: "#111827",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    wordBreak: "break-word",
   },
   secondaryText: {
     marginTop: 2,
     fontSize: 12,
     color: "#6B7280",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    wordBreak: "break-word",
   },
   amount: {
     fontWeight: 700,
     whiteSpace: "nowrap",
+  },
+  statusCell: {
+    minWidth: 96,
   },
   emptyCell: {
     textAlign: "center",

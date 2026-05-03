@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -25,24 +25,33 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    async function loadDashboard() {
-      try {
-        const [dashboardResponse, usersResponse] = await Promise.all([
-          getDashboardAnalytics(),
-          getUsersReport(),
-        ]);
-        setDashboard(dashboardResponse.data);
-        setUsersReport(usersResponse.data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load dashboard.");
-      } finally {
-        setLoading(false);
-      }
+  const loadDashboard = useCallback(async () => {
+    try {
+      const [dashboardResponse, usersResponse] = await Promise.all([
+        getDashboardAnalytics(),
+        getUsersReport(),
+      ]);
+      setDashboard(dashboardResponse.data);
+      setUsersReport(usersResponse.data);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load dashboard.");
+    } finally {
+      setLoading(false);
     }
-
-    void loadDashboard();
   }, []);
+
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadDashboard();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [loadDashboard]);
 
   const statCards = [
     {

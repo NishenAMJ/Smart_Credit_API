@@ -1,9 +1,9 @@
 import { Controller, Get, Query, Sse, UseGuards } from '@nestjs/common';
 import { Observable } from 'rxjs';
+import { TransactionsService } from './transactions.service';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { TransactionsService } from './transactions.service';
 
 @Controller('admin/transactions')
 @UseGuards(JwtAuthGuard, RolesGuard)

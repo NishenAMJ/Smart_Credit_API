@@ -167,23 +167,25 @@ export class LenderNotificationsService {
   ): Promise<LenderNotificationsListResponse> {
     await this.syncNotifications(lenderId);
 
-    const notifications = await this.loadNotifications(lenderId);
-    const countsByCategory = this.buildCountsByCategory(notifications);
-    const unreadCount = notifications.filter((notification) => !notification.isRead).length;
     const safePageSize = this.clamp(pageSize, 10, 100);
-    const snapshot = await this.buildNotificationsQuery(
-      lenderId,
-      category,
-      state,
-      safePageSize,
-      cursor,
-    ).get();
-    const filtered = snapshot.docs.slice(0, safePageSize).map((doc) => this.mapNotification(doc));
+    const [summary, snapshot] = await Promise.all([
+      this.getDirectNotificationSummary(lenderId),
+      this.buildNotificationsQuery(
+        lenderId,
+        category,
+        state,
+        safePageSize,
+        cursor,
+      ).get(),
+    ]);
+    const filtered = snapshot.docs
+      .slice(0, safePageSize)
+      .map((doc) => this.mapNotification(doc));
 
     return {
       lenderId,
-      unreadCount,
-      countsByCategory,
+      unreadCount: summary.unreadCount,
+      countsByCategory: summary.countsByCategory,
       notifications: filtered,
       pageInfo: buildPageInfo(
         filtered.map((notification) => ({
@@ -202,26 +204,7 @@ export class LenderNotificationsService {
   ): Promise<LenderNotificationsSummaryResponse> {
     await this.syncNotifications(lenderId);
 
-    const notifications = await this.loadNotifications(lenderId);
-    const countsByCategory = this.buildCountsByCategory(notifications);
-    const unreadCount = notifications.filter((notification) => !notification.isRead).length;
-    const highPriorityCount = notifications.filter((notification) =>
-      ['warning', 'critical'].includes(notification.severity),
-    ).length;
-    const todaysCount = notifications.filter((notification) =>
-      this.isToday(notification.createdAt),
-    ).length;
-    const topCategory = this.getTopCategory(countsByCategory);
-
-    return {
-      lenderId,
-      unreadCount,
-      totalCount: notifications.length,
-      highPriorityCount,
-      todaysCount,
-      topCategory,
-      countsByCategory,
-    };
+    return this.getDirectNotificationSummary(lenderId);
   }
 
   async markAsRead(
@@ -262,26 +245,20 @@ export class LenderNotificationsService {
   ): Promise<MarkAllNotificationsReadResponse> {
     await this.syncNotifications(lenderId);
 
-    const collection = await this.firebaseService
-      .getDb()
-      .collection('lenderNotifications')
-      .where('lenderId', '==', lenderId)
-      .get();
+    if (state === 'read') {
+      return { lenderId, updatedCount: 0 };
+    }
 
-    const targets = collection.docs
-      .map((doc) => this.mapNotification(doc))
-      .filter((notification) => this.matchesCategory(notification, category))
-      .filter((notification) => this.matchesState(notification, state))
-      .filter((notification) => !notification.isRead);
+    const targets = await this.buildMarkAllAsReadQuery(lenderId, category).get();
 
-    if (targets.length === 0) {
+    if (targets.empty) {
       return { lenderId, updatedCount: 0 };
     }
 
     const timestamp = Timestamp.now();
     const batch = this.firebaseService.getDb().batch();
 
-    targets.forEach((notification) => {
+    targets.docs.forEach((notification) => {
       batch.update(
         this.firebaseService
           .getDb()
@@ -298,7 +275,7 @@ export class LenderNotificationsService {
 
     return {
       lenderId,
-      updatedCount: targets.length,
+      updatedCount: targets.size,
     };
   }
 
@@ -1214,6 +1191,118 @@ export class LenderNotificationsService {
     }
 
     return applyDateCursor(query, cursor).limit(pageSize + 1);
+  }
+
+  private buildNotificationBaseQuery(lenderId: string) {
+    return this.firebaseService
+      .getDb()
+      .collection('lenderNotifications')
+      .where('lenderId', '==', lenderId);
+  }
+
+  private buildNotificationAggregateQuery(
+    lenderId: string,
+    category?: string,
+    state: NotificationStateFilter = 'all',
+  ) {
+    let query: FirebaseFirestore.Query = this.buildNotificationBaseQuery(
+      lenderId,
+    );
+
+    if (category && category !== 'all') {
+      query = query.where('category', '==', category);
+    }
+
+    if (state === 'read') {
+      query = query.where('isRead', '==', true);
+    } else if (state === 'unread') {
+      query = query.where('isRead', '==', false);
+    }
+
+    return query;
+  }
+
+  private buildMarkAllAsReadQuery(lenderId: string, category?: string) {
+    return this.buildNotificationAggregateQuery(lenderId, category, 'unread');
+  }
+
+  private async countNotificationQuery(
+    query: FirebaseFirestore.Query,
+  ): Promise<number> {
+    try {
+      const snapshot = await query.count().get();
+      return snapshot.data().count;
+    } catch {
+      const snapshot = await query.get();
+      return snapshot.size;
+    }
+  }
+
+  private getTodayRange(): { start: Date; end: Date } {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    return { start, end };
+  }
+
+  private async getCountsByCategory(
+    lenderId: string,
+  ): Promise<Record<NotificationCategory, number>> {
+    const counts = await Promise.all(
+      CATEGORY_ORDER.map((category) =>
+        this.countNotificationQuery(
+          this.buildNotificationAggregateQuery(lenderId, category),
+        ),
+      ),
+    );
+
+    return CATEGORY_ORDER.reduce(
+      (result, category, index) => {
+        result[category] = counts[index];
+        return result;
+      },
+      this.createEmptyCounts(),
+    );
+  }
+
+  private async getDirectNotificationSummary(
+    lenderId: string,
+  ): Promise<LenderNotificationsSummaryResponse> {
+    const { start, end } = this.getTodayRange();
+    const [totalCount, unreadCount, countsByCategory, highPriorityCount, todaysCount] =
+      await Promise.all([
+        this.countNotificationQuery(
+          this.buildNotificationAggregateQuery(lenderId),
+        ),
+        this.countNotificationQuery(
+          this.buildNotificationAggregateQuery(lenderId, undefined, 'unread'),
+        ),
+        this.getCountsByCategory(lenderId),
+        this.countNotificationQuery(
+          this.buildNotificationBaseQuery(lenderId).where('severity', 'in', [
+            'warning',
+            'critical',
+          ]),
+        ),
+        this.countNotificationQuery(
+          this.buildNotificationBaseQuery(lenderId)
+            .where('createdAt', '>=', start)
+            .where('createdAt', '<', end),
+        ),
+      ]);
+
+    return {
+      lenderId,
+      unreadCount,
+      totalCount,
+      highPriorityCount,
+      todaysCount,
+      topCategory: this.getTopCategory(countsByCategory),
+      countsByCategory,
+    };
   }
 
   private compareNotifications(

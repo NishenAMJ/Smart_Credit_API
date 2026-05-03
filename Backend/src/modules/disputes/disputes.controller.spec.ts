@@ -20,9 +20,7 @@ describe('DisputesController', () => {
 
     moduleBuilder
       .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: jest.fn().mockReturnValue(true) });
-
-    moduleBuilder
+      .useValue({ canActivate: jest.fn().mockReturnValue(true) })
       .overrideGuard(RolesGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) });
 

@@ -1,196 +1,279 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { type CollectionReference, Timestamp } from 'firebase-admin/firestore';
-
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import * as admin from 'firebase-admin';
 import { FirebaseService } from '../../firebase/firebase.service';
-import { AuthService } from '../auth/auth.service';
-import type { KycStatus, UserDocument } from '../auth/auth.types';
-import { SubmitKycDto, UpdateKycStatusDto, KycSubmissionDto } from './dto/kyc.dto';
-import { SubmitKycDto as MobileSubmitKycDto } from './dto/submit-kyc.dto';
-
-export interface KycDocument {
-  id: string;
-  userId: string;
-  status: KycStatus;
-  documentType: string;
-  documentNumber: string;
-  fullName: string;
-  issuingCountry?: string;
-  expiryDate?: string;
-  documentFrontUrl?: string;
-  documentBackUrl?: string;
-  selfieUrl?: string;
-  profilePictureUrl?: string;
-  reviewNotes?: string;
-  submittedAt: Timestamp;
-  reviewedAt?: Timestamp;
-  reviewedBy?: string;
-}
+import { KycDocument } from './interfaces/kyc-document.interface';
+import { rethrowFirebaseError } from '../../common/firebase-error';
+import { SubmitKycDto } from './dto/submit-kyc.dto';
 
 @Injectable()
 export class KycService {
-  private readonly kycCollection: CollectionReference<KycDocument>;
+  private static readonly DEFAULT_PAGE_SIZE = 20;
+  private static readonly MAX_PAGE_SIZE = 50;
 
-  constructor(
-    private readonly firebaseService: FirebaseService,
-    private readonly authService: AuthService,
-  ) {
-    this.kycCollection = this.firebaseService.db.collection(
-      'kyc_submissions',
-    ) as CollectionReference<KycDocument>;
+  constructor(private readonly firebaseService: FirebaseService) {}
+
+  private get db() {
+    return this.firebaseService.db;
   }
 
-  async submitKyc(userId: string, submitKycDto: SubmitKycDto): Promise<KycSubmissionDto> {
-    // Check if user exists
-    await this.authService.getUserById(userId);
+  private mapUserToKycDocument(
+    doc:
+      | FirebaseFirestore.QueryDocumentSnapshot
+      | FirebaseFirestore.DocumentSnapshot,
+  ): KycDocument {
+    const data = doc.data() ?? {};
 
-    // Check if user already has a pending/under_review submission
-    const existingSubmission = await this.getUserKycSubmission(userId);
-    if (existingSubmission && ['pending', 'under_review'].includes(existingSubmission.status)) {
-      throw new Error('You already have a KYC submission under review. Please wait for approval.');
-    }
-
-    const kycRef = this.kycCollection.doc();
-    const now = Timestamp.now();
-
-    const kycDoc: KycDocument = {
-      id: kycRef.id,
-      userId,
-      status: 'pending',
-      documentType: submitKycDto.documentType,
-      documentNumber: submitKycDto.documentNumber,
-      fullName: submitKycDto.fullName,
-      issuingCountry: submitKycDto.issuingCountry,
-      expiryDate: submitKycDto.expiryDate,
-      documentFrontUrl: submitKycDto.documentFrontUrl,
-      documentBackUrl: submitKycDto.documentBackUrl,
-      selfieUrl: submitKycDto.selfieUrl,
-      profilePictureUrl: submitKycDto.profilePictureUrl,
-      submittedAt: now,
-    };
-
-    await kycRef.set(kycDoc);
-
-    // Update user's KYC status
-    await this.authService.updateUserKycStatus(userId, 'pending');
-
-    return this.toDto(kycDoc);
-  }
-
-  async submitMobileKyc(
-    submitKycDto: MobileSubmitKycDto,
-  ): Promise<KycSubmissionDto> {
-    if (!submitKycDto.userId?.trim()) {
-      throw new BadRequestException('userId is required for mobile KYC submission.');
-    }
-
-    return this.submitKyc(submitKycDto.userId.trim(), {
-      documentType: 'national_id',
-      documentNumber: submitKycDto.nic,
-      fullName: submitKycDto.fullName,
-      issuingCountry: 'Sri Lanka',
-      expiryDate: undefined,
-      documentFrontUrl: submitKycDto.nicFrontUrl,
-      documentBackUrl: submitKycDto.nicBackUrl,
-      selfieUrl: undefined,
-      profilePictureUrl: submitKycDto.profilePhotoUrl,
-    });
-  }
-
-  async getUserKycSubmission(userId: string): Promise<KycSubmissionDto | null> {
-    const snapshot = await this.kycCollection
-      .where('userId', '==', userId)
-      .get();
-
-    if (snapshot.empty) {
-      return null;
-    }
-
-    const latestDoc = snapshot.docs
-      .map((doc) => doc.data() as KycDocument)
-      .sort(
-        (left, right) =>
-          right.submittedAt.toMillis() - left.submittedAt.toMillis(),
-      )[0];
-
-    if (!latestDoc) {
-      return null;
-    }
-
-    const doc = latestDoc;
-    return this.toDto(doc);
-  }
-
-  async getAllKycSubmissions(): Promise<KycSubmissionDto[]> {
-    const snapshot = await this.kycCollection
-      .orderBy('submittedAt', 'desc')
-      .get();
-
-    return snapshot.docs.map(doc => this.toDto(doc.data() as KycDocument));
-  }
-
-  async getKycSubmissionsByStatus(status: KycStatus): Promise<KycSubmissionDto[]> {
-    const snapshot = await this.kycCollection
-      .where('status', '==', status)
-      .get();
-
-    return snapshot.docs
-      .map((doc) => doc.data() as KycDocument)
-      .sort(
-        (left, right) =>
-          right.submittedAt.toMillis() - left.submittedAt.toMillis(),
-      )
-      .map((doc) => this.toDto(doc));
-  }
-
-  async updateKycStatus(
-    submissionId: string,
-    updateDto: UpdateKycStatusDto,
-    reviewedBy: string,
-  ): Promise<KycSubmissionDto> {
-    const submissionRef = this.kycCollection.doc(submissionId);
-    const submissionDoc = await submissionRef.get();
-
-    if (!submissionDoc.exists) {
-      throw new NotFoundException('KYC submission not found');
-    }
-
-    const submission = submissionDoc.data() as KycDocument;
-    const now = Timestamp.now();
-
-    const updateData: Partial<KycDocument> = {
-      status: updateDto.status,
-      reviewNotes: updateDto.reviewNotes,
-      reviewedAt: now,
-      reviewedBy,
-    };
-
-    await submissionRef.update(updateData);
-
-    // Update user's KYC status
-    await this.authService.updateUserKycStatus(submission.userId, updateDto.status);
-
-    const updatedDoc = await submissionRef.get();
-    return this.toDto(updatedDoc.data() as KycDocument);
-  }
-
-  private toDto(doc: KycDocument): KycSubmissionDto {
     return {
       id: doc.id,
-      userId: doc.userId,
-      status: doc.status,
-      documentType: doc.documentType,
-      documentNumber: doc.documentNumber,
-      fullName: doc.fullName,
-      issuingCountry: doc.issuingCountry,
-      expiryDate: doc.expiryDate,
-      documentFrontUrl: doc.documentFrontUrl,
-      documentBackUrl: doc.documentBackUrl,
-      selfieUrl: doc.selfieUrl,
-      profilePictureUrl: doc.profilePictureUrl,
-      reviewNotes: doc.reviewNotes,
-      submittedAt: doc.submittedAt.toDate(),
-      reviewedAt: doc.reviewedAt?.toDate(),
-      reviewedBy: doc.reviewedBy,
+      userId: doc.id,
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone,
+      documentType: 'profile_kyc',
+      documentUrl: data.photoURL,
+      status: data.kycStatus ?? 'pending',
+      submittedAt: data.createdAt ?? data.updatedAt,
+      reviewedAt: data.updatedAt,
+      notes: data.notes,
+      rejectionReason: data.rejectionReason,
     };
+  }
+
+  private parseLimit(limit?: string) {
+    const parsed = Number(limit ?? KycService.DEFAULT_PAGE_SIZE);
+    if (!Number.isFinite(parsed)) {
+      return KycService.DEFAULT_PAGE_SIZE;
+    }
+
+    return Math.min(Math.max(Math.trunc(parsed), 1), KycService.MAX_PAGE_SIZE);
+  }
+
+  private async uploadBase64ToStorage(userId: string, fieldName: string, dataUrl: string): Promise<string> {
+    if (!dataUrl.startsWith('data:')) {
+      return dataUrl;
+    }
+
+    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return dataUrl;
+    }
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    let extension = 'bin';
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) extension = 'jpg';
+    else if (mimeType.includes('png')) extension = 'png';
+    else if (mimeType.includes('pdf')) extension = 'pdf';
+
+    const timestamp = Date.now();
+    const filePath = `kyc-documents/${userId}/${fieldName}_${timestamp}.${extension}`;
+    const file = this.firebaseService.bucket.file(filePath);
+
+    await file.save(buffer, {
+      metadata: { contentType: mimeType },
+    });
+    
+    const bucketName = this.firebaseService.bucket.name;
+    const encodedPath = encodeURIComponent(filePath);
+    return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media`;
+  }
+
+  private async processKycUrls(
+    userId: string, 
+    fields: Record<string, string | undefined>
+  ): Promise<Record<string, string | undefined>> {
+    const result: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value && value.startsWith('data:')) {
+        result[key] = await this.uploadBase64ToStorage(userId, key, value);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  async submitMobileKyc(dto: SubmitKycDto) {
+    try {
+      const docId = dto.userId || `${dto.role}_${Date.now()}`;
+
+      // Process any base64 URLs to Firebase Storage
+      const processedUrls = await this.processKycUrls(docId, {
+        nicFrontUrl: dto.nicFrontUrl,
+        nicBackUrl: dto.nicBackUrl,
+        addressProofUrl: dto.addressProofUrl,
+        bankDocumentUrl: dto.bankDocumentUrl,
+        profilePhotoUrl: dto.profilePhotoUrl,
+      });
+
+      const docRef = this.db.collection('users').doc(docId);
+
+      await docRef.set(
+        {
+          uid: docId,
+          role: [dto.role],
+          fullName: dto.fullName.trim(),
+          email: dto.email.trim().toLowerCase(),
+          phone: dto.phoneNumber.trim(),
+          nic: dto.nic.trim(),
+          dateOfBirth: dto.birthDate.trim(),
+          photoURL: processedUrls.profilePhotoUrl || dto.profilePhotoUrl,
+          passwordHash: dto.passwordHash,
+          creditScore: 0,
+          rating: 0,
+          totalLoansCompleted: 0,
+          totalAmountLent: 0,
+          totalAmountBorrowed: 0,
+          kycStatus: 'pending',
+          notes: '',
+          rejectionReason: '',
+          kycFiles: {
+            nicFrontUrl: processedUrls.nicFrontUrl || dto.nicFrontUrl,
+            nicBackUrl: processedUrls.nicBackUrl || dto.nicBackUrl,
+            addressProofNumber: dto.addressProofNumber,
+            addressProofUrl: processedUrls.addressProofUrl || dto.addressProofUrl,
+            bankAccountNumber: dto.bankAccountNumber,
+            bankName: dto.bankName,
+            branchCode: dto.branchCode,
+            accountType: dto.accountType,
+            bankDocumentUrl: processedUrls.bankDocumentUrl || dto.bankDocumentUrl,
+            profilePhotoUrl: processedUrls.profilePhotoUrl || dto.profilePhotoUrl,
+            submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return {
+        success: true,
+        userId: docId,
+        kycStatus: 'pending',
+        message: 'KYC submitted successfully',
+      };
+    } catch (error) {
+      console.error('Error submitting mobile KYC:', error);
+      rethrowFirebaseError(error, 'Failed to submit KYC');
+    }
+  }
+
+  async getPendingKyc(limit?: string, cursor?: string) {
+    try {
+      const pageSize = this.parseLimit(limit);
+      let query: FirebaseFirestore.Query = this.db
+        .collection('users')
+        .where('kycStatus', '==', 'pending')
+        .orderBy('createdAt', 'desc');
+
+      if (cursor) {
+        const cursorDoc = await this.db.collection('users').doc(cursor).get();
+        if (cursorDoc.exists) {
+          query = query.startAfter(cursorDoc);
+        }
+      }
+
+      const kycSnapshot = await query.limit(pageSize + 1).get();
+      const pageDocs = kycSnapshot.docs.slice(0, pageSize);
+
+      const documents = pageDocs.map((doc) =>
+        this.mapUserToKycDocument(doc),
+      );
+
+      return {
+        success: true,
+        count: documents.length,
+        documents,
+        hasMore: kycSnapshot.size > pageSize,
+        nextCursor:
+          kycSnapshot.size > pageSize ? pageDocs[pageDocs.length - 1]?.id : undefined,
+      };
+    } catch (error) {
+      console.error('Error fetching pending KYC documents:', error);
+      rethrowFirebaseError(error, 'Failed to fetch pending KYC documents');
+    }
+  }
+
+  async getUserDocuments(userId: string) {
+    try {
+      const userSnapshot = await this.db.collection('users').doc(userId).get();
+
+      if (!userSnapshot.exists) {
+        return {
+          success: true,
+          count: 0,
+          documents: [],
+        };
+      }
+
+      const documents = [this.mapUserToKycDocument(userSnapshot)];
+
+      return {
+        success: true,
+        count: documents.length,
+        documents,
+      };
+    } catch (error) {
+      console.error('Error fetching user KYC documents:', error);
+      rethrowFirebaseError(error, 'Failed to fetch user KYC documents');
+    }
+  }
+
+  async approveDocument(documentId: string, notes?: string) {
+    try {
+      const docRef = this.db.collection('users').doc(documentId);
+      const docSnapshot = await docRef.get();
+
+      if (!docSnapshot.exists) {
+        throw new NotFoundException('KYC document not found');
+      }
+
+      await docRef.update({
+        kycStatus: 'approved',
+        reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+        notes: notes || '',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {
+        success: true,
+        message: 'KYC document approved successfully',
+        documentId,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      console.error('Error approving KYC document:', error);
+      rethrowFirebaseError(error, 'Failed to approve KYC document');
+    }
+  }
+
+  async rejectDocument(documentId: string, reason: string) {
+    try {
+      const docRef = this.db.collection('users').doc(documentId);
+      const docSnapshot = await docRef.get();
+
+      if (!docSnapshot.exists) {
+        throw new NotFoundException('KYC document not found');
+      }
+
+      await docRef.update({
+        kycStatus: 'rejected',
+        rejectionReason: reason,
+        reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {
+        success: true,
+        message: 'KYC document rejected successfully',
+        documentId,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      console.error('Error rejecting KYC document:', error);
+      rethrowFirebaseError(error, 'Failed to reject KYC document');
+    }
   }
 }

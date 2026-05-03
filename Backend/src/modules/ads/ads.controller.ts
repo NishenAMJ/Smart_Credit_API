@@ -9,19 +9,24 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdsService } from './ads.service';
 import { ApproveAdDto } from './dto/approve-ad.dto';
 import { RejectAdDto } from './dto/reject-ad.dto';
 import { UpdateAdStatusDto } from './dto/update-ad-status.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Controller('admin/ads')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class AdsController {
   constructor(private readonly adsService: AdsService) {}
+
+  @Get('stats')
+  async getAdStats() {
+    return this.adsService.getAdStats();
+  }
 
   @Get()
   async getAllAds(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {

@@ -22,7 +22,7 @@ import {
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SessionResponseDto } from './dto/session-response.dto';
-import { UserDocument, UserRole, KycStatus } from './auth.types';
+import { UserDocument, UserRole, KycStatus, USER_ROLES } from './auth.types';
 
 @Injectable()
 export class AuthService {
@@ -139,7 +139,8 @@ export class AuthService {
     activeRole: UserRole,
   ): Promise<DashboardResponseDto> {
     const user = await this.getRequiredUser(userId);
-    const role = user.role.includes(activeRole) ? activeRole : user.role[0];
+    const roles = this.getRoles(user.role);
+    const role = roles.includes(activeRole) ? activeRole : roles[0];
 
     if (role === 'admin') {
       return this.getAdminDashboard(userId);
@@ -219,12 +220,16 @@ export class AuthService {
         this.metric('Total users', String(users.length), 'All Firestore user records'),
         this.metric(
           'Borrowers',
-          String(users.filter((candidate) => candidate.role.includes('borrower')).length),
+          String(
+            users.filter((candidate) => this.hasRole(candidate.role, 'borrower')).length,
+          ),
           'Registered borrower accounts',
         ),
         this.metric(
           'Lenders',
-          String(users.filter((candidate) => candidate.role.includes('lender')).length),
+          String(
+            users.filter((candidate) => this.hasRole(candidate.role, 'lender')).length,
+          ),
           'Registered lender accounts',
         ),
         this.metric(
@@ -237,7 +242,7 @@ export class AuthService {
       primaryList: pendingUsers.slice(0, 5).map((candidate) => ({
         id: candidate.uid,
         title: candidate.fullName,
-        subtitle: `${candidate.email} - ${candidate.role.join(', ')}`,
+        subtitle: `${candidate.email} - ${this.getRoles(candidate.role).join(', ')}`,
         meta: `KYC: ${candidate.kycStatus}`,
         status: candidate.accountStatus,
       })),
@@ -257,12 +262,13 @@ export class AuthService {
     activeRole: UserRole,
   ): Promise<SessionResponseDto> {
     const user = await this.getRequiredUser(userId);
-    const resolvedRole = user.role.includes(activeRole) ? activeRole : user.role[0];
+    const roles = this.getRoles(user.role);
+    const resolvedRole = roles.includes(activeRole) ? activeRole : roles[0];
 
     return {
       message: 'Authenticated session is valid.',
       activeRole: resolvedRole,
-      availableRoles: user.role,
+      availableRoles: roles,
       accountStatus: user.accountStatus,
       kycStatus: user.kycStatus,
       user: this.toSafeUser(user, resolvedRole),
@@ -328,12 +334,14 @@ export class AuthService {
   }
 
   private toSafeUser(user: UserDocument, roleOverride?: UserRole): SafeUserDto {
+    const primaryRole = this.getPrimaryRole(user.role);
+
     return {
       uid: user.uid,
       fullName: user.fullName,
       email: user.email,
       phone: user.phone,
-      role: roleOverride ?? user.role[0],
+      role: roleOverride ?? primaryRole,
       kycStatus: user.kycStatus,
     };
   }
@@ -342,15 +350,17 @@ export class AuthService {
     user: UserDocument,
     requestedRole?: UserRole,
   ): UserRole {
+    const roles = this.getRoles(user.role);
+
     if (requestedRole) {
-      if (!user.role.includes(requestedRole)) {
+      if (!roles.includes(requestedRole)) {
         throw new UnauthorizedException('Invalid credentials.');
       }
 
       return requestedRole;
     }
 
-    const defaultRole = user.role[0];
+    const defaultRole = roles[0];
 
     if (!defaultRole) {
       throw new UnauthorizedException('This account does not have an assigned role.');
@@ -361,6 +371,33 @@ export class AuthService {
 
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
+  }
+
+  private getRoles(role: UserDocument['role']): UserRole[] {
+    if (Array.isArray(role)) {
+      return role.filter(
+        (entry): entry is UserRole =>
+          typeof entry === 'string' && USER_ROLES.includes(entry as UserRole),
+      );
+    }
+
+    return typeof role === 'string' && USER_ROLES.includes(role as UserRole)
+      ? [role as UserRole]
+      : [];
+  }
+
+  private hasRole(role: UserDocument['role'], expectedRole: UserRole): boolean {
+    return this.getRoles(role).includes(expectedRole);
+  }
+
+  private getPrimaryRole(role: UserDocument['role']): UserRole {
+    const primaryRole = this.getRoles(role)[0];
+
+    if (!primaryRole) {
+      throw new UnauthorizedException('This account does not have an assigned role.');
+    }
+
+    return primaryRole;
   }
 
   private normalizePhone(phone: string): string {
