@@ -77,7 +77,9 @@ describe('LegalController', () => {
 
     await controller.getDocumentById('doc-1', req);
     await controller.getLatestLoanDocument('loan-1', req);
-    await controller.acceptDocument('doc-1', req, { signedName: 'Lender User' });
+    await controller.acceptDocument('doc-1', req, {
+      signedName: 'Lender User',
+    });
 
     expect(legalService.getDocumentById).toHaveBeenCalledWith(
       'doc-1',

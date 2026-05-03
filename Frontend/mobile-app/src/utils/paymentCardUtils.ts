@@ -160,7 +160,7 @@ export const shouldShowPayButton = (
 ): boolean => {
   const isPaid = isPaidPayment(paymentStatus, paymentType);
   const s = String(paymentStatus || "").toLowerCase();
-  
+
   // Hide Pay button if the payment is a pending bank transfer waiting for admin verification
   if (s === "pending" && paymentMethod === "bank_transfer") {
     return false;

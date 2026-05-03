@@ -613,7 +613,6 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
               </div>
             </div>
           </article>
-
         </aside>
       </section>
 
@@ -626,7 +625,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
               spot gaps, and see what borrowers already see.
             </p>
           </div>
-          <span className="dashboard-context-pill">{recentAds.length} loaded</span>
+          <span className="dashboard-context-pill">
+            {recentAds.length} loaded
+          </span>
         </div>
         {adsError ? (
           <p className="create-ad-banner create-ad-banner--error">{adsError}</p>
@@ -638,17 +639,25 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
             </article>
           ) : recentAds.length > 0 ? (
             recentAds.map((ad) => (
-              <article className="create-ad-tip create-ad-tip--detailed" key={ad.id}>
+              <article
+                className="create-ad-tip create-ad-tip--detailed"
+                key={ad.id}
+              >
                 <div className="create-ad-tip__header">
                   <strong>{ad.title}</strong>
                   <span className="badge badge-gray">{ad.status}</span>
                 </div>
                 <p>{ad.description}</p>
                 <div className="create-ad-tip__grid">
-                  <span>Amount: {formatCurrency(String(ad.minAmount))} - {formatCurrency(String(ad.maxAmount))}</span>
+                  <span>
+                    Amount: {formatCurrency(String(ad.minAmount))} -{" "}
+                    {formatCurrency(String(ad.maxAmount))}
+                  </span>
                   <span>Interest: {ad.preferredInterestRate}%</span>
                   <span>Tenure: {ad.maxTenureMonths} months</span>
-                  <span>Capital: {formatCurrency(String(ad.availableCapital))}</span>
+                  <span>
+                    Capital: {formatCurrency(String(ad.availableCapital))}
+                  </span>
                   <span>Applications: {ad.applicationCount}</span>
                   <span>Funded: {ad.fundedLoansCount}</span>
                   <span>Response: {ad.responseTimeHours} hrs</span>

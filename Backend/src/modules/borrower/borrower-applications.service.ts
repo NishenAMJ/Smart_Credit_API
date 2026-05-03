@@ -12,7 +12,10 @@ import {
   LoanApplicationStatus,
   UpdateLoanApplicationDto,
 } from './dto/loan-application.dto';
-import { BorrowerProfile, LoanApplication } from './interfaces/borrower.interface';
+import {
+  BorrowerProfile,
+  LoanApplication,
+} from './interfaces/borrower.interface';
 import { CreditScoreService } from './credit-score.service';
 
 type TimestampLike =
@@ -22,6 +25,10 @@ type TimestampLike =
   | null
   | undefined;
 
+/**
+ * Handles the full lifecycle of borrower loan applications —
+ * from draft creation through submission and deletion.
+ */
 @Injectable()
 export class BorrowerApplicationsService {
   private readonly BORROWERS_COL = 'borrowers';
@@ -77,6 +84,10 @@ export class BorrowerApplicationsService {
     return 0;
   }
 
+  /**
+   * Creates a new draft loan application after confirming KYC status.
+   * Snapshots the borrower's current credit score into the document.
+   */
   async createLoanApplication(
     dto: CreateLoanApplicationDto,
   ): Promise<LoanApplication> {
@@ -131,6 +142,9 @@ export class BorrowerApplicationsService {
     return { ...created.data() } as LoanApplication;
   }
 
+  /**
+   * Lists all applications for a borrower, optionally filtered by status.
+   */
   async getLoanApplications(
     borrowerId: string,
     status?: LoanApplicationStatus,
@@ -155,6 +169,9 @@ export class BorrowerApplicationsService {
     );
   }
 
+  /**
+   * Returns one application after confirming it belongs to the requesting borrower.
+   */
   async getLoanApplicationById(
     applicationId: string,
     borrowerId: string,
@@ -179,6 +196,9 @@ export class BorrowerApplicationsService {
     return application;
   }
 
+  /**
+   * Updates an editable draft application — throws if it has already been submitted.
+   */
   async updateLoanApplication(
     applicationId: string,
     borrowerId: string,
@@ -210,6 +230,9 @@ export class BorrowerApplicationsService {
     return this.getLoanApplicationById(applicationId, borrowerId);
   }
 
+  /**
+   * Permanently deletes a draft application. Submitted ones cannot be deleted.
+   */
   async deleteLoanApplication(
     applicationId: string,
     borrowerId: string,
@@ -230,6 +253,9 @@ export class BorrowerApplicationsService {
     };
   }
 
+  /**
+   * Moves a draft into the lender review queue and refreshes the credit score snapshot.
+   */
   async submitLoanApplication(
     applicationId: string,
     borrowerId: string,

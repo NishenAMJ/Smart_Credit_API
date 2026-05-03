@@ -58,8 +58,12 @@ describe('LenderAdsService', () => {
     const notificationsService = { createNotification: jest.fn() } as any;
     const service = new LenderAdsService(firebaseService, notificationsService);
 
-    jest.spyOn(firestoreQueryUtils, 'orderByDateAndId').mockReturnValue(query as never);
-    jest.spyOn(firestoreQueryUtils, 'applyDateCursor').mockReturnValue(query as never);
+    jest
+      .spyOn(firestoreQueryUtils, 'orderByDateAndId')
+      .mockReturnValue(query as never);
+    jest
+      .spyOn(firestoreQueryUtils, 'applyDateCursor')
+      .mockReturnValue(query as never);
 
     const result = await service.getAdsForLender('lender_1', 2);
 

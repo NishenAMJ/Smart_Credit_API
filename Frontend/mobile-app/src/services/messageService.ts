@@ -8,12 +8,12 @@
  * Seeding:  on first install, fetch from backend Firestore to populate SQLite
  */
 
-import { api } from './api';
-import { localDatabase } from './localDatabase';
-import { chatSocket } from './socketService';
-import { getCurrentUserId } from './api';
-import type { Message } from '../types/chat.types';
-import { v4 as uuidv4 } from 'uuid';
+import { api } from "./api";
+import { localDatabase } from "./localDatabase";
+import { chatSocket } from "./socketService";
+import { getCurrentUserId } from "./api";
+import type { Message } from "../types/chat.types";
+import { v4 as uuidv4 } from "uuid";
 
 export const messageService = {
   /**
@@ -69,7 +69,7 @@ export const messageService = {
       senderId,
       text,
       createdAt: new Date().toISOString(),
-      status: 'sending',
+      status: "sending",
     };
 
     // Step 1: Save locally immediately (instant UI feedback)
@@ -100,10 +100,13 @@ export const messageService = {
       // Step 4: WebSocket unavailable — HTTP fallback
       try {
         await api.post(`/conversations/${conversationId}/messages`, { text });
-        localDatabase.updateMessageStatus(message.id, 'sent');
+        localDatabase.updateMessageStatus(message.id, "sent");
       } catch {
         // Keep as 'sending' so the UI shows a retry option
-        console.warn('[messageService] HTTP fallback also failed for', message.id);
+        console.warn(
+          "[messageService] HTTP fallback also failed for",
+          message.id,
+        );
       }
     }
 

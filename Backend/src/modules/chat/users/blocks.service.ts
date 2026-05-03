@@ -3,7 +3,11 @@
  * Handles blocking/unblocking users.
  * The gateway uses isBlocked() before routing messages.
  */
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { COLLECTIONS, BlockDoc } from '../common/types';
 
@@ -50,7 +54,7 @@ export class BlocksService {
       .orderBy('createdAt', 'desc')
       .get();
 
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as BlockDoc));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BlockDoc);
   }
 
   /**

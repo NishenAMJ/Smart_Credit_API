@@ -109,15 +109,18 @@ export async function approvePendingRequest(
   requestId: string,
   notes?: string,
 ): Promise<PendingRequestDecisionResponse> {
-  const response = await fetchLenderApi(`/loan-requests/${encodeURIComponent(requestId)}/approve`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetchLenderApi(
+    `/loan-requests/${encodeURIComponent(requestId)}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        notes: notes?.trim() || undefined,
+      }),
     },
-    body: JSON.stringify({
-      notes: notes?.trim() || undefined,
-    }),
-  });
+  );
 
   if (!response.ok) {
     return parseApiError(response, "Failed to approve the pending request.");
@@ -130,15 +133,18 @@ export async function rejectPendingRequest(
   requestId: string,
   reason: string,
 ): Promise<PendingRequestDecisionResponse> {
-  const response = await fetchLenderApi(`/loan-requests/${encodeURIComponent(requestId)}/reject`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetchLenderApi(
+    `/loan-requests/${encodeURIComponent(requestId)}/reject`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        reason: reason.trim(),
+      }),
     },
-    body: JSON.stringify({
-      reason: reason.trim(),
-    }),
-  });
+  );
 
   if (!response.ok) {
     return parseApiError(response, "Failed to reject the pending request.");
@@ -151,15 +157,18 @@ export async function markPendingRequestUnderReview(
   requestId: string,
   notes?: string,
 ): Promise<PendingRequestDecisionResponse> {
-  const response = await fetchLenderApi(`/loan-requests/${encodeURIComponent(requestId)}/review`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetchLenderApi(
+    `/loan-requests/${encodeURIComponent(requestId)}/review`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        notes: notes?.trim() || undefined,
+      }),
     },
-    body: JSON.stringify({
-      notes: notes?.trim() || undefined,
-    }),
-  });
+  );
 
   if (!response.ok) {
     return parseApiError(response, "Failed to move the request into review.");

@@ -46,16 +46,14 @@ export class ConversationsService {
       return { id: d.id, ...d.data() } as ConversationDoc;
     }
 
-    const ref = await this.firebase
-      .collection(COLLECTIONS.CONVERSATIONS)
-      .add({
-        participantIds,
-        key,
-        lastMessage: null,
-        unreadCounts: { [userA]: 0, [userB]: 0 },
-        mutedBy: [],
-        createdAt: this.firebase.serverTimestamp(),
-      });
+    const ref = await this.firebase.collection(COLLECTIONS.CONVERSATIONS).add({
+      participantIds,
+      key,
+      lastMessage: null,
+      unreadCounts: { [userA]: 0, [userB]: 0 },
+      mutedBy: [],
+      createdAt: this.firebase.serverTimestamp(),
+    });
 
     const snap = await ref.get();
     return { id: snap.id, ...snap.data() } as ConversationDoc;
@@ -84,7 +82,10 @@ export class ConversationsService {
    * Fetches one conversation and verifies the caller is a participant.
    * Used as an access-control gate in controllers.
    */
-  async findOne(conversationId: string, userId: string): Promise<ConversationDoc> {
+  async findOne(
+    conversationId: string,
+    userId: string,
+  ): Promise<ConversationDoc> {
     const snap = await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
       .doc(conversationId)
@@ -105,7 +106,11 @@ export class ConversationsService {
    * Adds/removes userId from mutedBy array.
    * When muted, the gateway skips push notifications for that user.
    */
-  async setMuted(conversationId: string, userId: string, muted: boolean): Promise<void> {
+  async setMuted(
+    conversationId: string,
+    userId: string,
+    muted: boolean,
+  ): Promise<void> {
     const conv = await this.findOne(conversationId, userId);
     const mutedBy = new Set(conv.mutedBy);
     muted ? mutedBy.add(userId) : mutedBy.delete(userId);
@@ -161,7 +166,8 @@ export class ConversationsService {
           senderId,
           createdAt: this.firebase.serverTimestamp(),
         },
-        [`unreadCounts.${recipientId}`]: admin.firestore.FieldValue.increment(1),
+        [`unreadCounts.${recipientId}`]:
+          admin.firestore.FieldValue.increment(1),
       });
   }
 }

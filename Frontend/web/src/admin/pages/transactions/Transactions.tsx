@@ -1,5 +1,20 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Activity, CheckCircle2, Clock3, RefreshCw, Search, XCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
+import {
+  Activity,
+  CheckCircle2,
+  Clock3,
+  RefreshCw,
+  Search,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import {
   getTransactions,
   subscribeToTransactions,
@@ -32,21 +47,26 @@ export default function Transactions() {
   const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [totalLoaded, setTotalLoaded] = useState(0);
 
-  const loadTransactions = useCallback(async (cursor?: string) => {
-    setLoading(true);
-    try {
-      const response = await getTransactions(pageSize, cursor);
-      setTransactions(response.transactions);
-      setHasMore(response.hasMore ?? false);
-      setNextCursor(response.nextCursor);
-      setTotalLoaded(response.count);
-      setError(response.error ?? "");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load transactions.");
-    } finally {
-      setLoading(false);
-    }
-  }, [pageSize]);
+  const loadTransactions = useCallback(
+    async (cursor?: string) => {
+      setLoading(true);
+      try {
+        const response = await getTransactions(pageSize, cursor);
+        setTransactions(response.transactions);
+        setHasMore(response.hasMore ?? false);
+        setNextCursor(response.nextCursor);
+        setTotalLoaded(response.count);
+        setError(response.error ?? "");
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to load transactions.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pageSize],
+  );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -63,8 +83,16 @@ export default function Transactions() {
       (data) => {
         if (data.success && data.transactions) {
           setTransactions(data.transactions);
-          setHasMore(("hasMore" in data && typeof data.hasMore === "boolean") ? data.hasMore : false);
-          setNextCursor(("nextCursor" in data && typeof data.nextCursor === "string") ? data.nextCursor : undefined);
+          setHasMore(
+            "hasMore" in data && typeof data.hasMore === "boolean"
+              ? data.hasMore
+              : false,
+          );
+          setNextCursor(
+            "nextCursor" in data && typeof data.nextCursor === "string"
+              ? data.nextCursor
+              : undefined,
+          );
           setTotalLoaded(data.count);
           setError(data.error ?? "");
         }
@@ -117,7 +145,8 @@ export default function Transactions() {
     if (currentPage <= 1) return;
     const newStack = [...cursorStack];
     newStack.pop();
-    const prevCursor = newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
+    const prevCursor =
+      newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
     setCursorStack(newStack);
     setCurrentPage((prev) => prev - 1);
     const goToCursor = currentPage <= 2 ? undefined : prevCursor;
@@ -132,7 +161,9 @@ export default function Transactions() {
 
   const stats = useMemo(() => {
     const completed = transactions.filter((transaction) =>
-      ["completed", "success", "successful"].includes(transaction.status.toLowerCase()),
+      ["completed", "success", "successful"].includes(
+        transaction.status.toLowerCase(),
+      ),
     ).length;
     const pending = transactions.filter(
       (transaction) => transaction.status.toLowerCase() === "pending",
@@ -186,11 +217,17 @@ export default function Transactions() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Transactions</h1>
-          <p className="page-subtitle">Payments, repayments, lenders, and borrowers</p>
+          <p className="page-subtitle">
+            Payments, repayments, lenders, and borrowers
+          </p>
         </div>
       </div>
 
-      {error && <div className="card" style={S.errorCard}>{error}</div>}
+      {error && (
+        <div className="card" style={S.errorCard}>
+          {error}
+        </div>
+      )}
 
       <div style={S.statsGrid}>
         {stats.map((card) => {
@@ -266,8 +303,12 @@ export default function Transactions() {
               <tr key={transaction.id}>
                 <td>
                   <div style={S.primaryText}>{transaction.transactionId}</div>
-                  <div style={S.secondaryText}>{formatDate(transaction.createdAt)}</div>
-                  <div style={S.secondaryText}>Loan: {transaction.loanId ?? "N/A"}</div>
+                  <div style={S.secondaryText}>
+                    {formatDate(transaction.createdAt)}
+                  </div>
+                  <div style={S.secondaryText}>
+                    Loan: {transaction.loanId ?? "N/A"}
+                  </div>
                 </td>
                 <td>
                   <PersonCell
@@ -284,24 +325,34 @@ export default function Transactions() {
                   />
                 </td>
                 <td>
-                  <div style={S.amount}>{formatCurrency(transaction.amount)}</div>
-                  <div style={S.secondaryText}>{formatLabel(transaction.paymentType)}</div>
+                  <div style={S.amount}>
+                    {formatCurrency(transaction.amount)}
+                  </div>
+                  <div style={S.secondaryText}>
+                    {formatLabel(transaction.paymentType)}
+                  </div>
                 </td>
                 <td>
                   <div style={S.statusCell}>
-                    <span className={`badge ${getStatusBadge(transaction.status)}`}>
+                    <span
+                      className={`badge ${getStatusBadge(transaction.status)}`}
+                    >
                       {formatLabel(transaction.status)}
                     </span>
                   </div>
                 </td>
-                <td>{formatDate(transaction.paidAt ?? transaction.createdAt)}</td>
+                <td>
+                  {formatDate(transaction.paidAt ?? transaction.createdAt)}
+                </td>
               </tr>
             ))}
 
             {!filteredTransactions.length && (
               <tr>
                 <td colSpan={6} style={S.emptyCell}>
-                  {loading ? "Loading transactions..." : "No transactions found."}
+                  {loading
+                    ? "Loading transactions..."
+                    : "No transactions found."}
                 </td>
               </tr>
             )}
@@ -312,8 +363,12 @@ export default function Transactions() {
         <div style={S.paginationBar}>
           <div style={S.paginationInfo}>
             <span style={{ fontSize: 13, color: "#6B7280" }}>
-              Showing {filteredTransactions.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
-              –{(currentPage - 1) * pageSize + totalLoaded} {hasMore ? "" : "(last page)"}
+              Showing{" "}
+              {filteredTransactions.length > 0
+                ? (currentPage - 1) * pageSize + 1
+                : 0}
+              –{(currentPage - 1) * pageSize + totalLoaded}{" "}
+              {hasMore ? "" : "(last page)"}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
@@ -323,7 +378,9 @@ export default function Transactions() {
                 style={S.pageSizeSelect}
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size}</option>
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
                 ))}
               </select>
             </div>

@@ -268,10 +268,7 @@ export default function LoanApplicationScreen({
         "Failed to submit application. Please review your details and try again.",
       );
       console.error("Error submitting application:", message);
-      Alert.alert(
-        "Application failed",
-        message,
-      );
+      Alert.alert("Application failed", message);
     } finally {
       setLoading(false);
     }
@@ -284,14 +281,14 @@ export default function LoanApplicationScreen({
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Feather name='arrow-left' size={24} color='#FFFFFF' />
+          <Feather name="arrow-left" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Loan Application</Text>
         <TouchableOpacity
           style={styles.notificationButton}
           onPress={() => navigation.navigate("Notifications")}
         >
-          <Feather name='bell' size={20} color='#FFFFFF' />
+          <Feather name="bell" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -330,15 +327,15 @@ export default function LoanApplicationScreen({
               <Text style={styles.scoreLabel}>High</Text>
               <Text style={styles.scoreValue}>Smart Score</Text>
               <Feather
-                name='check-circle'
+                name="check-circle"
                 size={16}
-                color='#007AFF'
+                color="#007AFF"
                 style={styles.scoreIcon}
               />
             </View>
             <View style={styles.scoreRight}>
-              <Feather name='star' size={16} color='#F59E0B' />
-              <Feather name='star' size={16} color='#F59E0B' />
+              <Feather name="star" size={16} color="#F59E0B" />
+              <Feather name="star" size={16} color="#F59E0B" />
               <Text style={styles.scoreRating}>2.0</Text>
             </View>
           </View>
@@ -349,7 +346,7 @@ export default function LoanApplicationScreen({
 
           {!checkingEligibility && !kycVerified ? (
             <View style={styles.warningBanner}>
-              <Feather name='alert-circle' size={16} color='#B45309' />
+              <Feather name="alert-circle" size={16} color="#B45309" />
               <Text style={styles.warningText}>
                 KYC verification is required before this application can be
                 submitted.
@@ -365,9 +362,9 @@ export default function LoanApplicationScreen({
                 style={styles.input}
                 value={loanAmount}
                 onChangeText={setLoanAmount}
-                keyboardType='decimal-pad'
-                placeholder='Enter loan amount'
-                placeholderTextColor='#9CA3AF'
+                keyboardType="decimal-pad"
+                placeholder="Enter loan amount"
+                placeholderTextColor="#9CA3AF"
               />
             </View>
           </View>
@@ -379,8 +376,8 @@ export default function LoanApplicationScreen({
                 style={styles.input}
                 value={employmentStatus}
                 onChangeText={setEmploymentStatus}
-                placeholder='e.g. Full-Time Employee'
-                placeholderTextColor='#9CA3AF'
+                placeholder="e.g. Full-Time Employee"
+                placeholderTextColor="#9CA3AF"
               />
             </View>
           </View>
@@ -392,8 +389,8 @@ export default function LoanApplicationScreen({
                 style={styles.input}
                 value={loanPurpose}
                 onChangeText={setLoanPurpose}
-                placeholder='Enter loan purpose'
-                placeholderTextColor='#9CA3AF'
+                placeholder="Enter loan purpose"
+                placeholderTextColor="#9CA3AF"
               />
             </View>
           </View>
@@ -406,9 +403,9 @@ export default function LoanApplicationScreen({
                 style={styles.input}
                 value={monthlyIncome}
                 onChangeText={setMonthlyIncome}
-                keyboardType='decimal-pad'
-                placeholder='Enter monthly income'
-                placeholderTextColor='#9CA3AF'
+                keyboardType="decimal-pad"
+                placeholder="Enter monthly income"
+                placeholderTextColor="#9CA3AF"
               />
             </View>
           </View>
@@ -420,9 +417,9 @@ export default function LoanApplicationScreen({
                 style={styles.input}
                 value={repaymentDuration}
                 onChangeText={setRepaymentDuration}
-                keyboardType='number-pad'
-                placeholder='e.g. 12'
-                placeholderTextColor='#9CA3AF'
+                keyboardType="number-pad"
+                placeholder="e.g. 12"
+                placeholderTextColor="#9CA3AF"
               />
             </View>
           </View>
@@ -434,9 +431,9 @@ export default function LoanApplicationScreen({
                 style={styles.input}
                 value={preferredInterestRate}
                 onChangeText={setPreferredInterestRate}
-                keyboardType='decimal-pad'
-                placeholder='e.g. 11.5'
-                placeholderTextColor='#9CA3AF'
+                keyboardType="decimal-pad"
+                placeholder="e.g. 11.5"
+                placeholderTextColor="#9CA3AF"
               />
             </View>
           </View>

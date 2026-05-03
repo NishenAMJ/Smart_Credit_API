@@ -17,9 +17,9 @@ export interface Message {
   conversationId: string;
   senderId: string;
   text: string;
-  createdAt: string;              // ISO string
+  createdAt: string; // ISO string
   readAt?: string;
-  status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+  status: "sending" | "sent" | "delivered" | "read" | "failed";
 }
 
 export interface Conversation {
@@ -54,7 +54,7 @@ export type ChatStackParamList = {
   Chat: {
     conversationId: string;
     participant: User;
-    isMuted?: boolean;      // passed so ChatScreen knows initial mute state
+    isMuted?: boolean; // passed so ChatScreen knows initial mute state
   };
   NewChat: undefined;
   ChatInfo: {

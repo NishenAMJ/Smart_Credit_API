@@ -1,52 +1,52 @@
-import './App.css'
-import LenderLayout from './components/layout/LenderLayout'
-import type { LenderView } from './components/common/LenderSidebar'
-import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import AnalyticsPage from './pages/analytics'
-import ActiveAdsRequestsPage from './pages/active-ads-requests'
-import CreateAdPage from './pages/create-ad'
-import DashboardPage from './pages/dashboard'
-import PendingRequestsPage from './pages/pending-requests'
-import NotificationsPage from './pages/notifications'
-import RecentTransactionsPage from './pages/recent-transactions'
-import SettingsPage from './pages/settings'
-import AgreementsPage from './pages/agreements'
-import LenderProfileModal from './components/profile/LenderProfileModal'
+import "./App.css";
+import LenderLayout from "./components/layout/LenderLayout";
+import type { LenderView } from "./components/common/LenderSidebar";
+import { useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
+import AnalyticsPage from "./pages/analytics";
+import ActiveAdsRequestsPage from "./pages/active-ads-requests";
+import CreateAdPage from "./pages/create-ad";
+import DashboardPage from "./pages/dashboard";
+import PendingRequestsPage from "./pages/pending-requests";
+import NotificationsPage from "./pages/notifications";
+import RecentTransactionsPage from "./pages/recent-transactions";
+import SettingsPage from "./pages/settings";
+import AgreementsPage from "./pages/agreements";
+import LenderProfileModal from "./components/profile/LenderProfileModal";
 import {
   clearStoredSession,
   getSessionFromSearchParams,
   getStoredSession,
   updateStoredSession,
   type LenderSession,
-} from './lib/lender-session'
-import type { LenderProfile } from './lib/lender-profile-api'
+} from "./lib/lender-session";
+import type { LenderProfile } from "./lib/lender-profile-api";
 
 function App() {
-  const [activeView, setActiveView] = useState<LenderView>('dashboard')
-  const navigate = useNavigate()
+  const [activeView, setActiveView] = useState<LenderView>("dashboard");
+  const navigate = useNavigate();
   const [session, setSession] = useState<LenderSession | null>(() => {
-    const storedSession = getStoredSession()
-    const handoffSession = getSessionFromSearchParams()
+    const storedSession = getStoredSession();
+    const handoffSession = getSessionFromSearchParams();
 
     if (handoffSession) {
-      updateStoredSession(handoffSession)
-      return handoffSession
+      updateStoredSession(handoffSession);
+      return handoffSession;
     }
 
     if (storedSession) {
-      return storedSession
+      return storedSession;
     }
 
-    return null
-  })
-  const [isProfileOpen, setIsProfileOpen] = useState(false)
+    return null;
+  });
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   function handleLogout() {
-    clearStoredSession()
-    setSession(null)
-    setActiveView('dashboard')
-    navigate('/', { replace: true })
+    clearStoredSession();
+    setSession(null);
+    setActiveView("dashboard");
+    navigate("/", { replace: true });
   }
 
   function handleProfileSaved(profile: LenderProfile) {
@@ -55,18 +55,18 @@ function App() {
       displayName: profile.businessName || profile.fullName,
       email: profile.email,
       accessToken: session!.accessToken,
-    }
+    };
 
-    updateStoredSession(nextSession)
-    setSession(nextSession)
+    updateStoredSession(nextSession);
+    setSession(nextSession);
   }
 
   const fallbackViewLabel = String(activeView)
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (character: string) => character.toUpperCase())
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (character: string) => character.toUpperCase());
 
   if (!session) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/" replace />;
   }
 
   return (
@@ -78,40 +78,38 @@ function App() {
         onOpenProfile={() => setIsProfileOpen(true)}
         onLogout={handleLogout}
       >
-        {activeView === 'dashboard' ? (
+        {activeView === "dashboard" ? (
           <DashboardPage session={session} onNavigate={setActiveView} />
-        ) : activeView === 'recent-transactions' ? (
+        ) : activeView === "recent-transactions" ? (
           <RecentTransactionsPage session={session} />
-        ) : activeView === 'analytics' ? (
+        ) : activeView === "analytics" ? (
           <AnalyticsPage session={session} />
-        ) : activeView === 'active-ads-requests' ? (
+        ) : activeView === "active-ads-requests" ? (
           <ActiveAdsRequestsPage session={session} onNavigate={setActiveView} />
-        ) : activeView === 'create-ad' ? (
+        ) : activeView === "create-ad" ? (
           <CreateAdPage session={session} />
-        ) : activeView === 'pending-requests' ? (
+        ) : activeView === "pending-requests" ? (
           <PendingRequestsPage session={session} />
-        ) : activeView === 'settings' ? (
+        ) : activeView === "settings" ? (
           <SettingsPage
             session={session}
             onLogout={handleLogout}
             onOpenProfile={() => setIsProfileOpen(true)}
           />
-        ) : activeView === 'notifications' ? (
+        ) : activeView === "notifications" ? (
           <NotificationsPage session={session} onNavigate={setActiveView} />
-        ) : activeView === 'agreements' ? (
+        ) : activeView === "agreements" ? (
           <AgreementsPage session={session} />
         ) : (
           <section className="dashboard-panel">
             <header className="page-header">
               <div>
                 <p className="eyebrow">Lender module</p>
-                <h1 className="page-title">
-                  {fallbackViewLabel}
-                </h1>
+                <h1 className="page-title">{fallbackViewLabel}</h1>
                 <p className="page-subtitle">
-                  This lender page is reserved in the new app shell. We can build
-                  this module next using the same sidebar layout and style-audit
-                  tokens.
+                  This lender page is reserved in the new app shell. We can
+                  build this module next using the same sidebar layout and
+                  style-audit tokens.
                 </p>
                 <p className="dashboard-context-pill">
                   Signed in as {session.displayName} - {session.lenderId}
@@ -138,7 +136,7 @@ function App() {
         onProfileSaved={handleProfileSaved}
       />
     </>
-  )
+  );
 }
 
-export default App
+export default App;

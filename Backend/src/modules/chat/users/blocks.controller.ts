@@ -18,19 +18,13 @@ export class BlocksController {
 
   /** POST /users/block/:targetId — block a user */
   @Post('block/:targetId')
-  block(
-    @CurrentUser() userId: string,
-    @Param('targetId') targetId: string,
-  ) {
+  block(@CurrentUser() userId: string, @Param('targetId') targetId: string) {
     return this.blocks.blockUser(userId, targetId);
   }
 
   /** DELETE /users/block/:targetId — unblock a user */
   @Delete('block/:targetId')
-  unblock(
-    @CurrentUser() userId: string,
-    @Param('targetId') targetId: string,
-  ) {
+  unblock(@CurrentUser() userId: string, @Param('targetId') targetId: string) {
     return this.blocks.unblockUser(userId, targetId);
   }
 }

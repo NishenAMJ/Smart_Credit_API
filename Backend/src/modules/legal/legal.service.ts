@@ -6,10 +6,7 @@ import {
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import puppeteer from 'puppeteer';
-import {
-  type CollectionReference,
-  Timestamp,
-} from 'firebase-admin/firestore';
+import { type CollectionReference, Timestamp } from 'firebase-admin/firestore';
 
 import { FirebaseService } from '../../firebase/firebase.service';
 import type { UserRole, UserDocument } from '../auth/auth.types';
@@ -74,9 +71,7 @@ export class LegalService {
       title: `Smart Credit+ Loan Agreement - ${loanId}`,
       summary: this.buildSummary(borrower, lender, loan),
       documentType: 'loan_agreement',
-      status: existing
-        ? this.resolveExistingStatus(existing)
-        : 'generated',
+      status: existing ? this.resolveExistingStatus(existing) : 'generated',
       generatedByUserId: userId,
       generatedByRole: userRole,
       generatedAt: existing?.generatedAt ?? now,
@@ -153,7 +148,7 @@ export class LegalService {
     // admin gets all documents
 
     const snapshot = await query.orderBy('updatedAt', 'desc').get();
-    return snapshot.docs.map(doc => this.toDto(doc.data() as LegalDocument));
+    return snapshot.docs.map((doc) => this.toDto(doc.data() as LegalDocument));
   }
 
   async acceptDocument(
@@ -199,8 +194,10 @@ export class LegalService {
       updateData.borrowerAcceptedAt = now;
       updateData.borrowerSignatureAudit = {
         signedName,
-        ipAddress: this.readString(signatureAudit.ipAddress).trim() || undefined,
-        userAgent: this.readString(signatureAudit.userAgent).trim() || undefined,
+        ipAddress:
+          this.readString(signatureAudit.ipAddress).trim() || undefined,
+        userAgent:
+          this.readString(signatureAudit.userAgent).trim() || undefined,
       };
     }
 
@@ -214,8 +211,10 @@ export class LegalService {
       updateData.lenderAcceptedAt = now;
       updateData.lenderSignatureAudit = {
         signedName,
-        ipAddress: this.readString(signatureAudit.ipAddress).trim() || undefined,
-        userAgent: this.readString(signatureAudit.userAgent).trim() || undefined,
+        ipAddress:
+          this.readString(signatureAudit.ipAddress).trim() || undefined,
+        userAgent:
+          this.readString(signatureAudit.userAgent).trim() || undefined,
       };
     }
 
@@ -231,14 +230,17 @@ export class LegalService {
       merged.signedPdfStoragePath = storagePath;
       merged.signedPdfGeneratedAt = now;
       merged.pdfSha256Hash = hash;
-      
+
       // Update the loan document to ACTIVE
-      await this.firebaseService.db.collection('loans').doc(document.loanId).update({
-        status: 'ACTIVE',
-        activatedAt: now,
-        signedPdfHash: hash,
-        signedPdfAt: now,
-      });
+      await this.firebaseService.db
+        .collection('loans')
+        .doc(document.loanId)
+        .update({
+          status: 'ACTIVE',
+          activatedAt: now,
+          signedPdfHash: hash,
+          signedPdfAt: now,
+        });
     }
 
     await docRef.update({
@@ -261,10 +263,15 @@ export class LegalService {
   }
 
   private async getLoanById(loanId: string): Promise<LoanRecord> {
-    const doc = await this.firebaseService.db.collection('loans').doc(loanId).get();
+    const doc = await this.firebaseService.db
+      .collection('loans')
+      .doc(loanId)
+      .get();
 
     if (!doc.exists) {
-      throw new NotFoundException('Loan not found. Create or seed a loan first.');
+      throw new NotFoundException(
+        'Loan not found. Create or seed a loan first.',
+      );
     }
 
     const data = doc.data() as Record<string, unknown>;
@@ -380,7 +387,9 @@ export class LegalService {
     this.assertDocumentAccess(document, userId, userRole);
 
     if (document.signedPdfStoragePath) {
-      const file = this.firebaseService.bucket.file(document.signedPdfStoragePath);
+      const file = this.firebaseService.bucket.file(
+        document.signedPdfStoragePath,
+      );
       const [exists] = await file.exists();
 
       if (exists) {
@@ -602,16 +611,12 @@ export class LegalService {
         durationMonths: document.loanSnapshot.durationMonths,
         repaymentSchedule: document.loanSnapshot.repaymentSchedule,
         status: document.loanSnapshot.status,
-        nextDueDate: document.loanSnapshot.nextDueDate
-          ?.toDate()
-          .toISOString(),
+        nextDueDate: document.loanSnapshot.nextDueDate?.toDate().toISOString(),
       },
       htmlContent: document.htmlContent,
       borrowerAccepted: document.borrowerAccepted,
       lenderAccepted: document.lenderAccepted,
-      borrowerAcceptedAt: document.borrowerAcceptedAt
-        ?.toDate()
-        .toISOString(),
+      borrowerAcceptedAt: document.borrowerAcceptedAt?.toDate().toISOString(),
       lenderAcceptedAt: document.lenderAcceptedAt?.toDate().toISOString(),
       borrowerSignatureAudit: document.borrowerSignatureAudit,
       lenderSignatureAudit: document.lenderSignatureAudit,
@@ -626,11 +631,15 @@ export class LegalService {
     };
   }
 
-  private resolveExistingStatus(document: LegalDocument): LegalDocument['status'] {
+  private resolveExistingStatus(
+    document: LegalDocument,
+  ): LegalDocument['status'] {
     return this.resolveDocumentStatus(document);
   }
 
-  private resolveDocumentStatus(document: Pick<LegalDocument, 'borrowerAccepted' | 'lenderAccepted'>): LegalDocument['status'] {
+  private resolveDocumentStatus(
+    document: Pick<LegalDocument, 'borrowerAccepted' | 'lenderAccepted'>,
+  ): LegalDocument['status'] {
     if (document.borrowerAccepted && document.lenderAccepted) {
       return 'fully_accepted';
     }
@@ -674,7 +683,9 @@ export class LegalService {
     return `smart-credit-loan-agreement-${document.loanId}.pdf`;
   }
 
-  private async persistSignedPdf(document: LegalDocument): Promise<{ storagePath: string, hash: string }> {
+  private async persistSignedPdf(
+    document: LegalDocument,
+  ): Promise<{ storagePath: string; hash: string }> {
     const fileName = this.buildPdfFileName(document);
     const storagePath = `legal-documents/${document.loanId}/${fileName}`;
     const buffer = await this.buildAgreementPdf(document);
@@ -687,7 +698,7 @@ export class LegalService {
         contentType: 'application/pdf',
       },
     });
-    
+
     const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
     return { storagePath, hash };

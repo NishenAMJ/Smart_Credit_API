@@ -14,30 +14,39 @@
  * When real auth is ready, call chatSocket.connect(realUserId) after login.
  */
 
-import { localDatabase } from './localDatabase';
-import { getCurrentUserId } from './api';
-import type { Message } from '../types/chat.types';
+import { localDatabase } from "./localDatabase";
+import { getCurrentUserId } from "./api";
+import type { Message } from "../types/chat.types";
 
 let io: any;
 try {
-  const socketIO = require('socket.io-client');
+  const socketIO = require("socket.io-client");
   io = socketIO.io;
 } catch {
-  console.warn('[ChatSocket] socket.io-client not installed. Chat disabled.');
+  console.warn("[ChatSocket] socket.io-client not installed. Chat disabled.");
 }
 
 // ── Event type map ────────────────────────────────────────────────────────────
 
 export type SocketEventMap = {
-  receiveMessage:   Message;
-  messageDelivered: { messageId: string; conversationId: string; status: Message['status'] };
-  userTyping:       { conversationId: string; userId: string; isTyping: boolean };
-  messageRead:      { conversationId: string; messageId: string; readBy: string; readAt: string };
-  userOnline:       { userId: string; isOnline: boolean };
-  messageFailed:    { messageId: string; reason: string };
-  socketConnected:  { status: string };
+  receiveMessage: Message;
+  messageDelivered: {
+    messageId: string;
+    conversationId: string;
+    status: Message["status"];
+  };
+  userTyping: { conversationId: string; userId: string; isTyping: boolean };
+  messageRead: {
+    conversationId: string;
+    messageId: string;
+    readBy: string;
+    readAt: string;
+  };
+  userOnline: { userId: string; isOnline: boolean };
+  messageFailed: { messageId: string; reason: string };
+  socketConnected: { status: string };
   socketDisconnected: { reason: string };
-  socketError:      { error: string };
+  socketError: { error: string };
 };
 
 // ── ChatSocket class ──────────────────────────────────────────────────────────
@@ -63,25 +72,25 @@ class ChatSocket {
    */
   connect(userId?: string) {
     if (this.socket?.connected) {
-      console.log('[ChatSocket] Already connected.');
+      console.log("[ChatSocket] Already connected.");
       return;
     }
 
     if (!io) {
-      console.warn('[ChatSocket] socket.io-client not available.');
+      console.warn("[ChatSocket] socket.io-client not available.");
       return;
     }
 
     const resolvedUserId = userId ?? getCurrentUserId();
 
     // Backend WebSocket URL — same host as REST API, no /api prefix
-    const WS_URL = 'http://192.168.120.219:3000';
+    const WS_URL = "http://192.168.120.219:3000";
 
     this.socket = io(WS_URL, {
       auth: {
         userId: resolvedUserId, // read by ChatGateway handleConnection
       },
-      transports: ['websocket'],
+      transports: ["websocket"],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -90,25 +99,25 @@ class ChatSocket {
 
     // ── Core socket lifecycle events ────────────────────────────────────────
 
-    this.socket.on('connect', () => {
-      console.log('[ChatSocket] Connected. Socket ID:', this.socket.id);
-      this._emit('socketConnected', { status: 'connected' });
+    this.socket.on("connect", () => {
+      console.log("[ChatSocket] Connected. Socket ID:", this.socket.id);
+      this._emit("socketConnected", { status: "connected" });
     });
 
-    this.socket.on('disconnect', (reason: string) => {
-      console.log('[ChatSocket] Disconnected:', reason);
-      this._emit('socketDisconnected', { reason });
+    this.socket.on("disconnect", (reason: string) => {
+      console.log("[ChatSocket] Disconnected:", reason);
+      this._emit("socketDisconnected", { reason });
     });
 
-    this.socket.on('connect_error', (err: any) => {
-      console.error('[ChatSocket] Connection error:', err?.message);
-      this._emit('socketError', { error: err?.message ?? 'Unknown error' });
+    this.socket.on("connect_error", (err: any) => {
+      console.error("[ChatSocket] Connection error:", err?.message);
+      this._emit("socketError", { error: err?.message ?? "Unknown error" });
     });
 
     // ── Incoming message — save to SQLite immediately ───────────────────────
-    this.socket.on('receiveMessage', (message: Message) => {
+    this.socket.on("receiveMessage", (message: Message) => {
       // 1. Persist to local SQLite (source of truth)
-      localDatabase.insertMessage({ ...message, status: 'delivered' });
+      localDatabase.insertMessage({ ...message, status: "delivered" });
 
       // 2. Update conversation preview in local DB
       localDatabase.updateConversationLastMessage(
@@ -120,10 +129,10 @@ class ChatSocket {
       );
 
       // 3. Notify UI subscribers (ChatScreen, ChatListScreen)
-      this._emit('receiveMessage', { ...message, status: 'delivered' });
+      this._emit("receiveMessage", { ...message, status: "delivered" });
 
       // 4. Send delivery ack back to backend so sender sees 'delivered' tick
-      this.socket?.emit('messageDelivered', {
+      this.socket?.emit("messageDelivered", {
         messageId: message.id,
         conversationId: message.conversationId,
         senderId: message.senderId,
@@ -132,37 +141,41 @@ class ChatSocket {
 
     // ── Delivery acknowledgement — update local message status ──────────────
     this.socket.on(
-      'messageDelivered',
-      (data: { messageId: string; conversationId: string; status: Message['status'] }) => {
+      "messageDelivered",
+      (data: {
+        messageId: string;
+        conversationId: string;
+        status: Message["status"];
+      }) => {
         // Update SQLite so the tick icon reflects 'sent' or 'delivered'
         localDatabase.updateMessageStatus(data.messageId, data.status);
-        this._emit('messageDelivered', data);
+        this._emit("messageDelivered", data);
       },
     );
 
     // ── Typing indicator ────────────────────────────────────────────────────
-    this.socket.on('userTyping', (data: SocketEventMap['userTyping']) => {
-      this._emit('userTyping', data);
+    this.socket.on("userTyping", (data: SocketEventMap["userTyping"]) => {
+      this._emit("userTyping", data);
     });
 
     // ── Read receipt — update local status to 'read' ────────────────────────
-    this.socket.on('messageRead', (data: SocketEventMap['messageRead']) => {
-      localDatabase.updateMessageStatus(data.messageId, 'read');
-      this._emit('messageRead', data);
+    this.socket.on("messageRead", (data: SocketEventMap["messageRead"]) => {
+      localDatabase.updateMessageStatus(data.messageId, "read");
+      this._emit("messageRead", data);
     });
 
     // ── Presence ────────────────────────────────────────────────────────────
-    this.socket.on('userOnline', (data: SocketEventMap['userOnline']) => {
-      this._emit('userOnline', data);
+    this.socket.on("userOnline", (data: SocketEventMap["userOnline"]) => {
+      this._emit("userOnline", data);
     });
 
     // ── Failed message ──────────────────────────────────────────────────────
-    this.socket.on('messageFailed', (data: SocketEventMap['messageFailed']) => {
-      localDatabase.updateMessageStatus(data.messageId, 'sending'); // keep as pending
-      this._emit('messageFailed', data);
+    this.socket.on("messageFailed", (data: SocketEventMap["messageFailed"]) => {
+      localDatabase.updateMessageStatus(data.messageId, "sending"); // keep as pending
+      this._emit("messageFailed", data);
     });
 
-    console.log('[ChatSocket] Connecting as', resolvedUserId, 'to', WS_URL);
+    console.log("[ChatSocket] Connecting as", resolvedUserId, "to", WS_URL);
   }
 
   /** disconnect — call on logout */
@@ -171,7 +184,7 @@ class ChatSocket {
       this.socket.disconnect();
       this.socket = null;
       this.handlerMap.clear();
-      console.log('[ChatSocket] Disconnected and cleaned up.');
+      console.log("[ChatSocket] Disconnected and cleaned up.");
     }
   }
 
@@ -179,12 +192,12 @@ class ChatSocket {
 
   /** joinConversation — tells the backend you're actively viewing this chat */
   joinConversation(conversationId: string) {
-    this.socket?.emit('joinConversation', { conversationId });
+    this.socket?.emit("joinConversation", { conversationId });
   }
 
   /** leaveConversation — tells the backend you've left the chat screen */
   leaveConversation(conversationId: string) {
-    this.socket?.emit('leaveConversation', { conversationId });
+    this.socket?.emit("leaveConversation", { conversationId });
   }
 
   // ── Message sending ───────────────────────────────────────────────────────
@@ -205,27 +218,23 @@ class ChatSocket {
     };
   }) {
     if (!this.socket?.connected) {
-      console.warn('[ChatSocket] Cannot send — not connected.');
+      console.warn("[ChatSocket] Cannot send — not connected.");
       return false;
     }
-    this.socket.emit('sendMessage', payload);
+    this.socket.emit("sendMessage", payload);
     return true;
   }
 
   // ── Typing indicator ──────────────────────────────────────────────────────
 
   sendTyping(conversationId: string, recipientId: string, isTyping: boolean) {
-    this.socket?.emit('typing', { conversationId, recipientId, isTyping });
+    this.socket?.emit("typing", { conversationId, recipientId, isTyping });
   }
 
   // ── Read receipt ──────────────────────────────────────────────────────────
 
-  markMessageRead(
-    conversationId: string,
-    messageId: string,
-    senderId: string,
-  ) {
-    this.socket?.emit('markRead', { conversationId, messageId, senderId });
+  markMessageRead(conversationId: string, messageId: string, senderId: string) {
+    this.socket?.emit("markRead", { conversationId, messageId, senderId });
   }
 
   // ── Event subscription ────────────────────────────────────────────────────
@@ -279,7 +288,7 @@ class ChatSocket {
   getStatus() {
     return {
       connected: this.isConnected,
-      id: this.socket?.id ?? 'N/A',
+      id: this.socket?.id ?? "N/A",
     };
   }
 }

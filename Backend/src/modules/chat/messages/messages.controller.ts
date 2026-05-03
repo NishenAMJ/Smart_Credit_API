@@ -45,7 +45,12 @@ export class MessagesController {
     @Query('page') page: string = '0',
     @Query('limit') limit: string = '30',
   ) {
-    return this.messagesService.getMessages(conversationId, userId, page, limit);
+    return this.messagesService.getMessages(
+      conversationId,
+      userId,
+      page,
+      limit,
+    );
   }
 
   /**

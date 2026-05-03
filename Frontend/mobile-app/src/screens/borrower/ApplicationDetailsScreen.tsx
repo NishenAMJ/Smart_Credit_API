@@ -86,7 +86,7 @@ export default function ApplicationDetailsScreen({
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Feather name='arrow-left' size={22} color='#FFFFFF' />
+          <Feather name="arrow-left" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Application Details</Text>
         <View style={{ width: 40 }} />
@@ -170,7 +170,7 @@ export default function ApplicationDetailsScreen({
 
           {isRejected ? (
             <View style={styles.rejectedBanner}>
-              <Feather name='x-circle' size={20} color='#EF4444' />
+              <Feather name="x-circle" size={20} color="#EF4444" />
               <Text style={styles.rejectedText}>
                 This application was {getStatusLabel(status).toLowerCase()}.
               </Text>
@@ -227,7 +227,6 @@ export default function ApplicationDetailsScreen({
             })
           )}
         </View>
-
       </ScrollView>
     </View>
   );

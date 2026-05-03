@@ -21,7 +21,10 @@ export class DisputesService {
     );
   }
 
-  async getAllDisputes(limit?: string, cursor?: string): Promise<{
+  async getAllDisputes(
+    limit?: string,
+    cursor?: string,
+  ): Promise<{
     success: boolean;
     count: number;
     disputes: Dispute[];
@@ -59,7 +62,9 @@ export class DisputesService {
         disputes,
         hasMore: snapshot.size > pageSize,
         nextCursor:
-          snapshot.size > pageSize ? pageDocs[pageDocs.length - 1]?.id : undefined,
+          snapshot.size > pageSize
+            ? pageDocs[pageDocs.length - 1]?.id
+            : undefined,
       };
     } catch (error) {
       throw new Error(`Failed to fetch disputes: ${error.message}`);

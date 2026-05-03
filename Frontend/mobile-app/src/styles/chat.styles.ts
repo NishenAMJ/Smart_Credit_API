@@ -1,24 +1,24 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet } from "react-native";
 
 // Design tokens
 export const COLORS = {
-  primary: '#007AFF',
-  background: '#F5F6FA',
-  surface: '#FFFFFF',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#6B7280',
-  border: '#F3F4F6',
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
+  primary: "#007AFF",
+  background: "#F5F6FA",
+  surface: "#FFFFFF",
+  textPrimary: "#1A1A1A",
+  textSecondary: "#6B7280",
+  border: "#F3F4F6",
+  success: "#10B981",
+  warning: "#F59E0B",
+  danger: "#EF4444",
 };
 
 export const TYPOGRAPHY = {
-  heading: { fontSize: 18, fontWeight: '600', lineHeight: 24 },
-  subtitle: { fontSize: 16, fontWeight: '600', lineHeight: 22 },
-  bodyMedium: { fontSize: 15, fontWeight: '500', lineHeight: 21 },
-  body: { fontSize: 15, fontWeight: '400', lineHeight: 21 },
-  small: { fontSize: 13, fontWeight: '400', lineHeight: 18 },
+  heading: { fontSize: 18, fontWeight: "600", lineHeight: 24 },
+  subtitle: { fontSize: 16, fontWeight: "600", lineHeight: 22 },
+  bodyMedium: { fontSize: 15, fontWeight: "500", lineHeight: 21 },
+  body: { fontSize: 15, fontWeight: "400", lineHeight: 21 },
+  small: { fontSize: 13, fontWeight: "400", lineHeight: 18 },
 };
 
 export const SPACING = {
@@ -38,14 +38,14 @@ export const BORDER_RADIUS = {
 
 export const SHADOWS = {
   small: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
   },
   medium: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -64,15 +64,15 @@ export const commonChatStyles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     gap: 12,
   },
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
@@ -80,9 +80,9 @@ export const commonChatStyles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
@@ -98,8 +98,8 @@ export const commonChatStyles = StyleSheet.create({
     height: 32,
     borderRadius: BORDER_RADIUS.full,
     backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   backIcon: {
     fontSize: 22,
@@ -110,8 +110,8 @@ export const commonChatStyles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: BORDER_RADIUS.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   iconText: {
     fontSize: 20,
@@ -127,8 +127,8 @@ export const commonChatStyles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: COLORS.background,
     borderRadius: BORDER_RADIUS.medium,
     paddingHorizontal: SPACING.md,
@@ -152,14 +152,14 @@ export const commonChatStyles = StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: SPACING.md,
   },
   rowSpaceBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 
   // Text
@@ -178,13 +178,13 @@ export const commonChatStyles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.full,
     minWidth: 20,
     height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: SPACING.sm,
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.surface,
   },
 
@@ -193,23 +193,23 @@ export const commonChatStyles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderRadius: BORDER_RADIUS.medium,
     paddingVertical: 13,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: SPACING.sm,
   },
   primaryBtnText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.surface,
   },
   secondaryBtn: {
     backgroundColor: COLORS.background,
     borderRadius: BORDER_RADIUS.medium,
     paddingVertical: 13,
-    alignItems: 'center',
+    alignItems: "center",
   },
   secondaryBtnText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.textPrimary,
   },
   borderBtn: {
@@ -219,19 +219,19 @@ export const commonChatStyles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     minWidth: 74,
-    alignItems: 'center',
+    alignItems: "center",
   },
   borderBtnText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.primary,
   },
 
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
   },
   sheet: {
     backgroundColor: COLORS.surface,
@@ -246,20 +246,20 @@ export const commonChatStyles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: COLORS.border,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: SPACING.lg,
   },
   sheetTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.textPrimary,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: SPACING.sm,
   },
   sheetBody: {
     fontSize: 13,
     color: COLORS.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 19,
     marginBottom: SPACING.xl,
   },
@@ -267,8 +267,8 @@ export const commonChatStyles = StyleSheet.create({
   // Empty / Error
   emptyState: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 40,
     gap: 10,
   },
@@ -277,26 +277,26 @@ export const commonChatStyles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: SPACING.sm,
   },
   emptyTitle: {
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.textPrimary,
-    textAlign: 'center',
+    textAlign: "center",
   },
   emptySub: {
     fontSize: 13,
     color: COLORS.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 19,
-    fontWeight: '400',
+    fontWeight: "400",
   },
   errorText: {
     ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
   },
   retryBtn: {
     paddingHorizontal: SPACING.xl,

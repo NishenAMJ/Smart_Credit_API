@@ -90,48 +90,46 @@ describe('DashboardService', () => {
 
   it('falls back to loan-derived borrowers when relation data is unavailable', async () => {
     const db = {
-      collection: jest
-        .fn()
-        .mockImplementation((collectionName: string) => {
-          if (collectionName === 'lenderBorrowers') {
-            return {
-              where: jest.fn(() => ({
-                get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
-              })),
-            };
-          }
+      collection: jest.fn().mockImplementation((collectionName: string) => {
+        if (collectionName === 'lenderBorrowers') {
+          return {
+            where: jest.fn(() => ({
+              get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+            })),
+          };
+        }
 
-          if (collectionName === 'users') {
-            return {
-              doc: jest.fn((borrowerId: string) => ({ id: borrowerId })),
-            };
-          }
+        if (collectionName === 'users') {
+          return {
+            doc: jest.fn((borrowerId: string) => ({ id: borrowerId })),
+          };
+        }
 
-          if (collectionName === 'loans') {
-            return {
-              where: jest.fn(() => ({
-                get: jest.fn().mockResolvedValue({
-                  docs: [
-                    {
-                      id: 'loan_1',
-                      data: () => ({
-                        borrowerId: 'borrower_1',
-                        amount: 100000,
-                        remainingAmount: 40000,
-                        interestRate: 12,
-                        tenureMonths: 12,
-                        status: 'active',
-                        createdAt: '2026-04-01T00:00:00.000Z',
-                      }),
-                    },
-                  ],
-                }),
-              })),
-            };
-          }
+        if (collectionName === 'loans') {
+          return {
+            where: jest.fn(() => ({
+              get: jest.fn().mockResolvedValue({
+                docs: [
+                  {
+                    id: 'loan_1',
+                    data: () => ({
+                      borrowerId: 'borrower_1',
+                      amount: 100000,
+                      remainingAmount: 40000,
+                      interestRate: 12,
+                      tenureMonths: 12,
+                      status: 'active',
+                      createdAt: '2026-04-01T00:00:00.000Z',
+                    }),
+                  },
+                ],
+              }),
+            })),
+          };
+        }
 
-          return {};
-        }),
+        return {};
+      }),
       getAll: jest.fn().mockResolvedValue([
         {
           id: 'borrower_1',
@@ -150,7 +148,9 @@ describe('DashboardService', () => {
 
     const service = new DashboardService({ getDb: () => db } as any);
 
-    jest.spyOn(service as any, 'getBorrowersFromRelations').mockResolvedValue(null);
+    jest
+      .spyOn(service as any, 'getBorrowersFromRelations')
+      .mockResolvedValue(null);
     jest.spyOn(service as any, 'mapLoan').mockResolvedValue({
       id: 'loan_1',
       borrowerId: 'borrower_1',
@@ -184,7 +184,9 @@ describe('DashboardService', () => {
     };
     const service = new DashboardService({ getDb: () => db } as any);
 
-    jest.spyOn(service as any, 'getBorrowersFromRelations').mockResolvedValue(null);
+    jest
+      .spyOn(service as any, 'getBorrowersFromRelations')
+      .mockResolvedValue(null);
     jest.spyOn(service as any, 'mapLoan').mockResolvedValue({
       id: 'loan_1',
       borrowerId: 'borrower_1',
@@ -281,9 +283,17 @@ describe('DashboardService', () => {
     };
     const service = new DashboardService({ getDb: () => db } as any);
 
-    const getRecentBorrowersSpy = jest.spyOn(service as any, 'getRecentBorrowers');
+    const getRecentBorrowersSpy = jest.spyOn(
+      service as any,
+      'getRecentBorrowers',
+    );
 
-    const result = await service.getBorrowers('lender_1', 8, null, 'missing borrower');
+    const result = await service.getBorrowers(
+      'lender_1',
+      8,
+      null,
+      'missing borrower',
+    );
 
     expect(result.borrowers).toEqual([]);
     expect(result.pageInfo).toEqual({

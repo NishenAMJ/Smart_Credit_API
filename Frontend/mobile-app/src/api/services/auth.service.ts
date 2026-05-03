@@ -16,7 +16,10 @@ import type {
 } from "../../types/auth";
 
 export async function login(payload: LoginPayload) {
-  const response = await apiClient.post<AuthResponse>(ENDPOINTS.auth.login, payload);
+  const response = await apiClient.post<AuthResponse>(
+    ENDPOINTS.auth.login,
+    payload,
+  );
   return response.data;
 }
 

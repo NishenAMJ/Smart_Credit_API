@@ -14,7 +14,7 @@
  *   3. On 'messageDelivered' ack → status updates to 'sent'/'delivered'
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -28,30 +28,30 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
-} from 'react-native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RouteProp } from '@react-navigation/native';
-import { COLORS, SPACING } from '../../constants';
-import { commonChatStyles } from '../../styles/chat.styles';
-import { Message, ChatStackParamList } from '../../types/chat.types';
-import { conversationService } from '../../services/conversationService';
-import { messageService } from '../../services/messageService';
-import { chatSocket } from '../../services/socketService';
-import { localDatabase } from '../../services/localDatabase';
-import { getCurrentUserId } from '../../services/api';
-import Avatar from '../../components/common/Avatar';
+} from "react-native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RouteProp } from "@react-navigation/native";
+import { COLORS, SPACING } from "../../constants";
+import { commonChatStyles } from "../../styles/chat.styles";
+import { Message, ChatStackParamList } from "../../types/chat.types";
+import { conversationService } from "../../services/conversationService";
+import { messageService } from "../../services/messageService";
+import { chatSocket } from "../../services/socketService";
+import { localDatabase } from "../../services/localDatabase";
+import { getCurrentUserId } from "../../services/api";
+import Avatar from "../../components/common/Avatar";
 
 type Props = {
-  navigation: NativeStackNavigationProp<ChatStackParamList, 'Chat'>;
-  route: RouteProp<ChatStackParamList, 'Chat'>;
+  navigation: NativeStackNavigationProp<ChatStackParamList, "Chat">;
+  route: RouteProp<ChatStackParamList, "Chat">;
 };
 
 const PAGE_SIZE = 30;
 
 function formatBubbleTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -62,7 +62,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const currentUserId = getCurrentUserId();
 
   const [messages, setMessages] = useState<Message[]>([]);
-  const [text, setText] = useState('');
+  const [text, setText] = useState("");
   const [isTyping, setIsTyping] = useState(false); // other user typing
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -76,7 +76,10 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     // 1. Load from local SQLite immediately (no loading spinner needed)
-    const local = messageService.list(conversationId, { page: 0, limit: PAGE_SIZE });
+    const local = messageService.list(conversationId, {
+      page: 0,
+      limit: PAGE_SIZE,
+    });
     setMessages(local);
     setHasMore(local.length === PAGE_SIZE);
 
@@ -89,7 +92,9 @@ export default function ChatScreen({ navigation, route }: Props) {
           setMessages(seeded);
           setHasMore(seeded.length === PAGE_SIZE);
         })
-        .catch(() => {/* seed silently fails — user can still chat */})
+        .catch(() => {
+          /* seed silently fails — user can still chat */
+        })
         .finally(() => setSeeding(false));
     }
 
@@ -113,7 +118,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     const onDelivered = (data: {
       messageId: string;
       conversationId: string;
-      status: Message['status'];
+      status: Message["status"];
     }) => {
       if (data.conversationId !== conversationId) return;
       setMessages((prev) =>
@@ -133,29 +138,26 @@ export default function ChatScreen({ navigation, route }: Props) {
       setIsTyping(data.isTyping);
     };
 
-    const onRead = (data: {
-      conversationId: string;
-      messageId: string;
-    }) => {
+    const onRead = (data: { conversationId: string; messageId: string }) => {
       if (data.conversationId !== conversationId) return;
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === data.messageId ? { ...m, status: 'read' } : m,
+          m.id === data.messageId ? { ...m, status: "read" } : m,
         ),
       );
     };
 
-    chatSocket.on('receiveMessage', onMessage);
-    chatSocket.on('messageDelivered', onDelivered);
-    chatSocket.on('userTyping', onTyping);
-    chatSocket.on('messageRead', onRead);
+    chatSocket.on("receiveMessage", onMessage);
+    chatSocket.on("messageDelivered", onDelivered);
+    chatSocket.on("userTyping", onTyping);
+    chatSocket.on("messageRead", onRead);
 
     return () => {
       // Clean up exact handlers — does NOT remove other screens' listeners
-      chatSocket.off('receiveMessage', onMessage);
-      chatSocket.off('messageDelivered', onDelivered);
-      chatSocket.off('userTyping', onTyping);
-      chatSocket.off('messageRead', onRead);
+      chatSocket.off("receiveMessage", onMessage);
+      chatSocket.off("messageDelivered", onDelivered);
+      chatSocket.off("userTyping", onTyping);
+      chatSocket.off("messageRead", onRead);
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
     };
   }, [conversationId, currentUserId]);
@@ -182,7 +184,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    setText('');
+    setText("");
     Keyboard.dismiss();
 
     // Stop typing indicator
@@ -225,19 +227,23 @@ export default function ChatScreen({ navigation, route }: Props) {
       const showAvatar = !isMe && prevMsg?.senderId !== item.senderId;
 
       return (
-        <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowThem]}>
+        <View
+          style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowThem]}
+        >
           {!isMe && (
             <View style={styles.avatarSlot}>
               {showAvatar && (
                 <Avatar
                   name={participant.displayName}
-                  avatarUrl={participant.avatarUrl ||undefined}
+                  avatarUrl={participant.avatarUrl || undefined}
                   size={28}
                 />
               )}
             </View>
           )}
-          <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
+          <View
+            style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}
+          >
             <Text
               style={[
                 styles.bubbleText,
@@ -254,16 +260,16 @@ export default function ChatScreen({ navigation, route }: Props) {
                 <Text
                   style={[
                     styles.statusTick,
-                    item.status === 'failed' && styles.statusFailed,
+                    item.status === "failed" && styles.statusFailed,
                   ]}
                 >
-                  {item.status === 'sending'
-                    ? '○'
-                    : item.status === 'failed'
-                    ? '✕'
-                    : item.status === 'read'
-                    ? '✓✓'
-                    : '✓'}
+                  {item.status === "sending"
+                    ? "○"
+                    : item.status === "failed"
+                      ? "✕"
+                      : item.status === "read"
+                        ? "✓✓"
+                        : "✓"}
                 </Text>
               )}
             </View>
@@ -290,7 +296,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         <TouchableOpacity
           style={styles.headerCenter}
           onPress={() =>
-            navigation.navigate('ChatInfo', {
+            navigation.navigate("ChatInfo", {
               conversationId,
               participant,
               isMuted: isMuted ?? false,
@@ -309,10 +315,10 @@ export default function ChatScreen({ navigation, route }: Props) {
             <Text style={styles.headerName}>{participant.displayName}</Text>
             <Text style={styles.headerStatus}>
               {participant.isOnline
-                ? 'Online'
+                ? "Online"
                 : participant.lastSeen
-                ? `Last seen ${formatBubbleTime(participant.lastSeen)}`
-                : 'Offline'}
+                  ? `Last seen ${formatBubbleTime(participant.lastSeen)}`
+                  : "Offline"}
             </Text>
           </View>
         </TouchableOpacity>
@@ -320,7 +326,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         <TouchableOpacity
           style={commonChatStyles.iconBtn}
           onPress={() =>
-            navigation.navigate('ChatInfo', {
+            navigation.navigate("ChatInfo", {
               conversationId,
               participant,
               isMuted: isMuted ?? false,
@@ -334,13 +340,19 @@ export default function ChatScreen({ navigation, route }: Props) {
       {/* Messages */}
       <KeyboardAvoidingView
         style={commonChatStyles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={0}
       >
         {seeding && messages.length === 0 ? (
           <View style={commonChatStyles.centered}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={{ color: COLORS.textSecondary, marginTop: 8, fontSize: 13 }}>
+            <Text
+              style={{
+                color: COLORS.textSecondary,
+                marginTop: 8,
+                fontSize: 13,
+              }}
+            >
               Loading messages…
             </Text>
           </View>
@@ -390,10 +402,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             returnKeyType="default"
           />
           <TouchableOpacity
-            style={[
-              styles.sendBtn,
-              !text.trim() && styles.sendBtnDisabled,
-            ]}
+            style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
             onPress={handleSend}
             disabled={!text.trim()}
             activeOpacity={0.8}
@@ -409,12 +418,12 @@ export default function ChatScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   headerCenter: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: SPACING.sm,
   },
   headerInfo: { flex: 1 },
-  headerName: { fontSize: 15, fontWeight: '600', color: COLORS.textPrimary },
+  headerName: { fontSize: 15, fontWeight: "600", color: COLORS.textPrimary },
   headerStatus: { fontSize: 12, color: COLORS.textSecondary, marginTop: 1 },
 
   msgList: {
@@ -423,16 +432,16 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   msgRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     gap: SPACING.sm,
     marginVertical: 2,
   },
-  msgRowMe: { justifyContent: 'flex-end' },
-  msgRowThem: { justifyContent: 'flex-start' },
-  avatarSlot: { width: 28, alignItems: 'center' },
+  msgRowMe: { justifyContent: "flex-end" },
+  msgRowThem: { justifyContent: "flex-start" },
+  avatarSlot: { width: 28, alignItems: "center" },
   bubble: {
-    maxWidth: '75%',
+    maxWidth: "75%",
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 18,
@@ -448,20 +457,20 @@ const styles = StyleSheet.create({
   bubbleTextMe: { color: COLORS.surface },
   bubbleTextThem: { color: COLORS.textPrimary },
   bubbleMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 3,
     marginTop: 3,
   },
   bubbleTime: { fontSize: 10, color: COLORS.textSecondary },
-  bubbleTimeMe: { color: 'rgba(255,255,255,0.65)' },
-  statusTick: { fontSize: 10, color: 'rgba(255,255,255,0.65)' },
-  statusFailed: { color: '#FF6B6B' },
+  bubbleTimeMe: { color: "rgba(255,255,255,0.65)" },
+  statusTick: { fontSize: 10, color: "rgba(255,255,255,0.65)" },
+  statusFailed: { color: "#FF6B6B" },
 
   typingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: SPACING.sm,
     marginBottom: SPACING.sm,
   },
@@ -474,11 +483,15 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: COLORS.border,
   },
-  typingText: { fontSize: 13, color: COLORS.textSecondary, fontStyle: 'italic' },
+  typingText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontStyle: "italic",
+  },
 
   inputBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     gap: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
@@ -504,9 +517,9 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   sendBtnDisabled: { backgroundColor: COLORS.border },
-  sendIcon: { fontSize: 17, color: COLORS.surface, fontWeight: '600' },
+  sendIcon: { fontSize: 17, color: COLORS.surface, fontWeight: "600" },
 });

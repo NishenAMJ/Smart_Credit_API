@@ -16,7 +16,7 @@ export interface UserDoc {
 export interface ConversationDoc {
   id: string;
   participantIds: [string, string]; // always sorted alphabetically
-  key: string;                      // participantIds.join('_') — for fast lookup
+  key: string; // participantIds.join('_') — for fast lookup
   lastMessage: {
     text: string;
     senderId: string;

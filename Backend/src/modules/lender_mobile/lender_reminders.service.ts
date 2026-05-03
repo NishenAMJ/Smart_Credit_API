@@ -27,7 +27,9 @@ export class LenderRemindersService {
 
     const db = this.firebaseService.db;
     const now = new Date();
-    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysFromNow = new Date(
+      now.getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
 
     // Try 'loans' collection first (primary)
     const snapshot = await db
@@ -64,7 +66,9 @@ export class LenderRemindersService {
           loanId: doc.id,
           borrowerId: loan.borrowerId ?? '',
           borrowerName: loan.borrowerName ?? 'Unknown',
-          amountDue: Number(loan.nextInstallmentAmount ?? loan.monthlyInstallment ?? 0),
+          amountDue: Number(
+            loan.nextInstallmentAmount ?? loan.monthlyInstallment ?? 0,
+          ),
           dueDate: dueDate.toISOString(),
           status: isPaid ? 'paid' : isPastDue ? 'pending' : 'pending',
         });
@@ -72,9 +76,13 @@ export class LenderRemindersService {
     }
 
     // Sort by due date ascending
-    reminders.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    reminders.sort(
+      (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+    );
 
-    this.logger.debug(`Found ${reminders.length} reminders for lender ${lenderId}`);
+    this.logger.debug(
+      `Found ${reminders.length} reminders for lender ${lenderId}`,
+    );
     return reminders;
   }
 }

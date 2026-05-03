@@ -147,7 +147,7 @@ export default function PaymentCard({
             </>
           ) : (
             <>
-              <Feather name='check-circle' size={14} color={statusColor} />
+              <Feather name="check-circle" size={14} color={statusColor} />
               <Text style={[styles.statusText, { color: statusColor }]}>
                 {statusLabel}
               </Text>

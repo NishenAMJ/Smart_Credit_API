@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { COLORS } from '../../styles/lender.styles';
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { COLORS } from "../../styles/lender.styles";
 
 interface StatCardProps {
   icon: string;
@@ -27,8 +27,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 16,
-    alignItems: 'flex-start',
-    shadowColor: '#000',
+    alignItems: "flex-start",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -37,15 +37,15 @@ const styles = StyleSheet.create({
   },
 
   iconContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 8,
   },
 
   value: {
     fontSize: 26,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   label: {

@@ -98,7 +98,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   const [loginIdentifier, setLoginIdentifier] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [registerForm, setRegisterForm] = useState(initialRegisterForm);
-  const [session, setSession] = useState<SharedSession | null>(() => loadStoredSession());
+  const [session, setSession] = useState<SharedSession | null>(() =>
+    loadStoredSession(),
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [uploadStatus, setUploadStatus] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState("");
@@ -159,7 +161,10 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
     window.location.assign(handoffUrl.toString());
   }
 
-  function handleSuccessfulSession(nextSession: SharedSession, successCopy: string) {
+  function handleSuccessfulSession(
+    nextSession: SharedSession,
+    successCopy: string,
+  ) {
     if (nextSession.user.role === "admin") {
       clearLenderSession();
       setAdminSession(nextSession.accessToken, nextSession.user);
@@ -269,7 +274,10 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
 
     try {
       setLoading(true);
-      const response = await loginWithRole(loginIdentifier.trim(), loginPassword);
+      const response = await loginWithRole(
+        loginIdentifier.trim(),
+        loginPassword,
+      );
       handleSuccessfulSession(
         {
           accessToken: response.accessToken,
@@ -406,8 +414,8 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
           </h1>
           <p>
             Sign in with your credentials and let the backend confirm the right
-            access level for your account. Public signup stays available only for
-            lenders and borrowers.
+            access level for your account. Public signup stays available only
+            for lenders and borrowers.
           </p>
         </div>
 
@@ -466,7 +474,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
           </div>
 
           {(apiError || infoMessage) && (
-            <div className={`shared-auth-banner ${apiError ? "error" : "success"}`}>
+            <div
+              className={`shared-auth-banner ${apiError ? "error" : "success"}`}
+            >
               {apiError || infoMessage}
             </div>
           )}
@@ -486,22 +496,33 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                   </div>
                 ))}
               </div>
-              <button type="button" className="shared-auth-primary" onClick={handleLogout}>
+              <button
+                type="button"
+                className="shared-auth-primary"
+                onClick={handleLogout}
+              >
                 Sign Out
               </button>
             </section>
           ) : mode === "login" ? (
-            <form className="shared-auth-card shared-auth-form" onSubmit={handleLogin}>
+            <form
+              className="shared-auth-card shared-auth-form"
+              onSubmit={handleLogin}
+            >
               <div className="shared-auth-field-card">
                 <div className="shared-auth-section-head">
                   <strong>Sign in</strong>
-                  <span>Enter the credentials stored for your Smart Credit account.</span>
+                  <span>
+                    Enter the credentials stored for your Smart Credit account.
+                  </span>
                 </div>
 
                 <div className="shared-auth-note-box">
                   <strong>Backend-resolved access</strong>
                   <span>
-                    Your session is issued with the role stored on the backend, so the login form stays focused on identity and password only.
+                    Your session is issued with the role stored on the backend,
+                    so the login form stays focused on identity and password
+                    only.
                   </span>
                 </div>
               </div>
@@ -516,7 +537,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                     disabled={loading}
                   />
                   {fieldErrors.identifier ? (
-                    <small className="shared-auth-error-text">{fieldErrors.identifier}</small>
+                    <small className="shared-auth-error-text">
+                      {fieldErrors.identifier}
+                    </small>
                   ) : null}
                 </label>
 
@@ -530,7 +553,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                     disabled={loading}
                   />
                   {fieldErrors.password ? (
-                    <small className="shared-auth-error-text">{fieldErrors.password}</small>
+                    <small className="shared-auth-error-text">
+                      {fieldErrors.password}
+                    </small>
                   ) : null}
                 </label>
               </div>
@@ -538,25 +563,37 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
               <div className="shared-auth-inline-note">
                 <span className="shared-auth-inline-dot" />
                 <p>
-                  The backend validates your credentials and signs the session with the role assigned to your account.
+                  The backend validates your credentials and signs the session
+                  with the role assigned to your account.
                 </p>
               </div>
 
-              <button type="submit" className="shared-auth-primary" disabled={loading}>
+              <button
+                type="submit"
+                className="shared-auth-primary"
+                disabled={loading}
+              >
                 {loading ? "Signing in..." : "Sign In"}
               </button>
             </form>
           ) : (
-            <form className="shared-auth-card shared-auth-form" onSubmit={handleRegister}>
+            <form
+              className="shared-auth-card shared-auth-form"
+              onSubmit={handleRegister}
+            >
               <div className="shared-auth-onboarding-strip">
-                <div className={`shared-auth-onboarding-step ${registerStep === "account" ? "active" : "complete"}`}>
+                <div
+                  className={`shared-auth-onboarding-step ${registerStep === "account" ? "active" : "complete"}`}
+                >
                   <span>1</span>
                   <div>
                     <strong>Account</strong>
                     <p>Create sign-in credentials.</p>
                   </div>
                 </div>
-                <div className={`shared-auth-onboarding-step ${registerStep === "kyc" ? "active" : ""}`}>
+                <div
+                  className={`shared-auth-onboarding-step ${registerStep === "kyc" ? "active" : ""}`}
+                >
                   <span>2</span>
                   <div>
                     <strong>KYC</strong>
@@ -569,21 +606,23 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                 <label className="shared-auth-field">
                   <span>Create account for</span>
                   <div className="shared-auth-role-chip-row">
-                    {(["lender", "borrower"] as PublicSignupRole[]).map((role) => (
-                      <button
-                        key={role}
-                        type="button"
-                        className={`shared-auth-role-chip ${registerForm.role === role ? "active" : ""}`}
-                        onClick={() =>
-                          setRegisterForm((current) => ({
-                            ...current,
-                            role,
-                          }))
-                        }
-                      >
-                        {role.charAt(0).toUpperCase() + role.slice(1)}
-                      </button>
-                    ))}
+                    {(["lender", "borrower"] as PublicSignupRole[]).map(
+                      (role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          className={`shared-auth-role-chip ${registerForm.role === role ? "active" : ""}`}
+                          onClick={() =>
+                            setRegisterForm((current) => ({
+                              ...current,
+                              role,
+                            }))
+                          }
+                        >
+                          {role.charAt(0).toUpperCase() + role.slice(1)}
+                        </button>
+                      ),
+                    )}
                   </div>
                 </label>
               </div>
@@ -593,7 +632,10 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                   <div className="shared-auth-field-card">
                     <div className="shared-auth-section-head">
                       <strong>Account details</strong>
-                      <span>Use the contact details and password you will sign in with later.</span>
+                      <span>
+                        Use the contact details and password you will sign in
+                        with later.
+                      </span>
                     </div>
 
                     <div className="shared-auth-grid two-column">
@@ -607,7 +649,8 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                               fullName: event.target.value,
                               kyc: {
                                 ...current.kyc,
-                                fullName: current.kyc.fullName || event.target.value,
+                                fullName:
+                                  current.kyc.fullName || event.target.value,
                               },
                             }))
                           }
@@ -615,7 +658,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                           disabled={loading}
                         />
                         {fieldErrors.fullName ? (
-                          <small className="shared-auth-error-text">{fieldErrors.fullName}</small>
+                          <small className="shared-auth-error-text">
+                            {fieldErrors.fullName}
+                          </small>
                         ) : null}
                       </label>
 
@@ -633,7 +678,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                           disabled={loading}
                         />
                         {fieldErrors.phone ? (
-                          <small className="shared-auth-error-text">{fieldErrors.phone}</small>
+                          <small className="shared-auth-error-text">
+                            {fieldErrors.phone}
+                          </small>
                         ) : null}
                       </label>
                     </div>
@@ -653,7 +700,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                         disabled={loading}
                       />
                       {fieldErrors.email ? (
-                        <small className="shared-auth-error-text">{fieldErrors.email}</small>
+                        <small className="shared-auth-error-text">
+                          {fieldErrors.email}
+                        </small>
                       ) : null}
                     </label>
 
@@ -673,7 +722,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                           disabled={loading}
                         />
                         {fieldErrors.password ? (
-                          <small className="shared-auth-error-text">{fieldErrors.password}</small>
+                          <small className="shared-auth-error-text">
+                            {fieldErrors.password}
+                          </small>
                         ) : null}
                       </label>
 
@@ -692,7 +743,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                           disabled={loading}
                         />
                         {fieldErrors.confirmPassword ? (
-                          <small className="shared-auth-error-text">{fieldErrors.confirmPassword}</small>
+                          <small className="shared-auth-error-text">
+                            {fieldErrors.confirmPassword}
+                          </small>
                         ) : null}
                       </label>
                     </div>
@@ -712,14 +765,18 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                   <div className="shared-auth-section-divider">
                     <strong>KYC verification</strong>
                     <span>
-                      Submit your identity details on this separate step so your {registerRoleLabel} account can be reviewed immediately.
+                      Submit your identity details on this separate step so your{" "}
+                      {registerRoleLabel} account can be reviewed immediately.
                     </span>
                   </div>
 
                   <div className="shared-auth-field-card">
                     <div className="shared-auth-section-head">
                       <strong>Identity details</strong>
-                      <span>Make sure the name and number exactly match the selected ID.</span>
+                      <span>
+                        Make sure the name and number exactly match the selected
+                        ID.
+                      </span>
                     </div>
 
                     <label className="shared-auth-field">
@@ -739,7 +796,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                         disabled={loading}
                       />
                       {fieldErrors.kycFullName ? (
-                        <small className="shared-auth-error-text">{fieldErrors.kycFullName}</small>
+                        <small className="shared-auth-error-text">
+                          {fieldErrors.kycFullName}
+                        </small>
                       ) : null}
                     </label>
 
@@ -761,12 +820,18 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                         >
                           <option value="national_id">National ID</option>
                           <option value="passport">Passport</option>
-                          <option value="driving_license">Driving License</option>
+                          <option value="driving_license">
+                            Driving License
+                          </option>
                         </select>
                       </label>
 
                       <label className="shared-auth-field">
-                        <span>{getDocumentNumberLabel(registerForm.kyc.documentType)}</span>
+                        <span>
+                          {getDocumentNumberLabel(
+                            registerForm.kyc.documentType,
+                          )}
+                        </span>
                         <input
                           value={registerForm.kyc.documentNumber}
                           onChange={(event) =>
@@ -782,7 +847,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                           disabled={loading}
                         />
                         {fieldErrors.documentNumber ? (
-                          <small className="shared-auth-error-text">{fieldErrors.documentNumber}</small>
+                          <small className="shared-auth-error-text">
+                            {fieldErrors.documentNumber}
+                          </small>
                         ) : null}
                       </label>
                     </div>
@@ -829,7 +896,10 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                   <div className="shared-auth-field-card">
                     <div className="shared-auth-section-head">
                       <strong>Upload files</strong>
-                      <span>Upload clear files for your ID front, optional back, and selfie with the ID.</span>
+                      <span>
+                        Upload clear files for your ID front, optional back, and
+                        selfie with the ID.
+                      </span>
                     </div>
 
                     <div className="shared-auth-grid two-column">
@@ -838,7 +908,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                         <input
                           type="file"
                           accept="image/*,.pdf"
-                          onChange={(event) => void handleFileUpload("documentFrontUrl", event)}
+                          onChange={(event) =>
+                            void handleFileUpload("documentFrontUrl", event)
+                          }
                           disabled={loading}
                         />
                         {uploadStatus.documentFrontUrl ? (
@@ -847,7 +919,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                           </small>
                         ) : null}
                         {fieldErrors.documentFrontUrl ? (
-                          <small className="shared-auth-error-text">{fieldErrors.documentFrontUrl}</small>
+                          <small className="shared-auth-error-text">
+                            {fieldErrors.documentFrontUrl}
+                          </small>
                         ) : null}
                       </label>
 
@@ -856,7 +930,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                         <input
                           type="file"
                           accept="image/*,.pdf"
-                          onChange={(event) => void handleFileUpload("documentBackUrl", event)}
+                          onChange={(event) =>
+                            void handleFileUpload("documentBackUrl", event)
+                          }
                           disabled={loading}
                         />
                         {uploadStatus.documentBackUrl ? (
@@ -872,7 +948,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(event) => void handleFileUpload("selfieUrl", event)}
+                        onChange={(event) =>
+                          void handleFileUpload("selfieUrl", event)
+                        }
                         disabled={loading}
                       />
                       {uploadStatus.selfieUrl ? (
@@ -881,7 +959,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                         </small>
                       ) : null}
                       {fieldErrors.selfieUrl ? (
-                        <small className="shared-auth-error-text">{fieldErrors.selfieUrl}</small>
+                        <small className="shared-auth-error-text">
+                          {fieldErrors.selfieUrl}
+                        </small>
                       ) : null}
                     </label>
                   </div>
@@ -895,7 +975,11 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                     >
                       Back
                     </button>
-                    <button type="submit" className="shared-auth-primary" disabled={loading}>
+                    <button
+                      type="submit"
+                      className="shared-auth-primary"
+                      disabled={loading}
+                    >
                       {loading ? "Creating account..." : "Create Account"}
                     </button>
                   </div>

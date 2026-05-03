@@ -33,7 +33,7 @@ export default function LenderActionItem({
         <Feather name={icon as any} size={20} color={iconColor} />
       </View>
       <Text style={[commonStyles.textPrimary, styles.label]}>{label}</Text>
-      <Feather name='chevron-right' size={18} color={COLORS.textSecondary} />
+      <Feather name="chevron-right" size={18} color={COLORS.textSecondary} />
     </TouchableOpacity>
   );
 }

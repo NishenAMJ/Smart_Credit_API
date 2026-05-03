@@ -65,7 +65,8 @@ function readFileAsDataUrl(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = () =>
       resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.onerror = () => reject(new Error("Failed to read the selected file."));
+    reader.onerror = () =>
+      reject(new Error("Failed to read the selected file."));
     reader.readAsDataURL(file);
   });
 }
@@ -129,7 +130,10 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
       return false;
     }
 
-    if (!signUpForm.email.trim() || !/\S+@\S+\.\S+/.test(signUpForm.email.trim())) {
+    if (
+      !signUpForm.email.trim() ||
+      !/\S+@\S+\.\S+/.test(signUpForm.email.trim())
+    ) {
       setError("Enter a valid email address.");
       return false;
     }
@@ -244,7 +248,9 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
         accessToken: data.accessToken,
       });
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Login failed.");
+      setError(
+        nextError instanceof Error ? nextError.message : "Login failed.",
+      );
     } finally {
       setLoading(false);
     }
@@ -334,7 +340,9 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
             </article>
             <article className="auth-highlight">
               <strong>Lender workspace ready</strong>
-              <span>Open the dashboard as soon as the lender session is issued.</span>
+              <span>
+                Open the dashboard as soon as the lender session is issued.
+              </span>
             </article>
           </div>
         </div>
@@ -433,7 +441,8 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                             fullName: event.target.value,
                             kyc: {
                               ...current.kyc,
-                              fullName: current.kyc.fullName || event.target.value,
+                              fullName:
+                                current.kyc.fullName || event.target.value,
                             },
                           }))
                         }
@@ -493,7 +502,9 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                     </label>
 
                     <label className="auth-field">
-                      <span className="auth-field__label">Confirm password</span>
+                      <span className="auth-field__label">
+                        Confirm password
+                      </span>
                       <input
                         className="input"
                         type="password"
@@ -510,7 +521,11 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                     </label>
                   </div>
 
-                  <button type="submit" className="auth-submit" disabled={loading}>
+                  <button
+                    type="submit"
+                    className="auth-submit"
+                    disabled={loading}
+                  >
                     {loading ? "Continuing..." : authCopy.buttonLabel}
                   </button>
                 </>
@@ -540,7 +555,9 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                     </label>
 
                     <label className="auth-field">
-                      <span className="auth-field__label">{documentNumberLabel}</span>
+                      <span className="auth-field__label">
+                        {documentNumberLabel}
+                      </span>
                       <input
                         className="input"
                         type="text"
@@ -623,7 +640,9 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
 
                   <div className="auth-upload-list">
                     <label className="auth-upload-card">
-                      <span className="auth-field__label">{documentLabel} front</span>
+                      <span className="auth-field__label">
+                        {documentLabel} front
+                      </span>
                       <input
                         type="file"
                         accept="image/*,.pdf"
@@ -638,7 +657,9 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                     </label>
 
                     <label className="auth-upload-card">
-                      <span className="auth-field__label">{documentLabel} back</span>
+                      <span className="auth-field__label">
+                        {documentLabel} back
+                      </span>
                       <input
                         type="file"
                         accept="image/*,.pdf"
@@ -659,7 +680,9 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(event) => void handleFileChange("selfieUrl", event)}
+                        onChange={(event) =>
+                          void handleFileChange("selfieUrl", event)
+                        }
                         disabled={loading}
                       />
                       <small className="auth-upload-card__meta">

@@ -25,10 +25,18 @@ import {
 
 export default function Analytics() {
   const navigate = useNavigate();
-  const [usersReport, setUsersReport] = useState<UsersReportResponse["data"] | null>(null);
-  const [loansReport, setLoansReport] = useState<LoansReportResponse["data"] | null>(null);
-  const [transactionsReport, setTransactionsReport] = useState<TransactionsReportResponse["data"] | null>(null);
-  const [revenueReport, setRevenueReport] = useState<RevenueReportResponse["data"] | null>(null);
+  const [usersReport, setUsersReport] = useState<
+    UsersReportResponse["data"] | null
+  >(null);
+  const [loansReport, setLoansReport] = useState<
+    LoansReportResponse["data"] | null
+  >(null);
+  const [transactionsReport, setTransactionsReport] = useState<
+    TransactionsReportResponse["data"] | null
+  >(null);
+  const [revenueReport, setRevenueReport] = useState<
+    RevenueReportResponse["data"] | null
+  >(null);
   const [error, setError] = useState("");
 
   const loadReports = useCallback(async () => {
@@ -46,7 +54,9 @@ export default function Analytics() {
       setRevenueReport(revenue.data);
       setError("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load analytics.");
+      setError(
+        err instanceof Error ? err.message : "Failed to load analytics.",
+      );
     }
   }, []);
 
@@ -128,11 +138,17 @@ export default function Analytics() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Analytics</h1>
-          <p className="page-subtitle">Reports powered by the live NestJS admin endpoints</p>
+          <p className="page-subtitle">
+            Reports powered by the live NestJS admin endpoints
+          </p>
         </div>
       </div>
 
-      {error && <div className="card" style={S.errorCard}>{error}</div>}
+      {error && (
+        <div className="card" style={S.errorCard}>
+          {error}
+        </div>
+      )}
 
       <div style={S.statsGrid}>
         {summaryCards.map((card) => {
@@ -178,11 +194,30 @@ export default function Analytics() {
                   <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#F3F4F6"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="month"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: "#6B7280" }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: "#6B7280" }}
+              />
               <Tooltip />
-              <Area type="monotone" dataKey="revenue" stroke="#10B981" fill="url(#revenueFill)" strokeWidth={2.5} />
+              <Area
+                type="monotone"
+                dataKey="revenue"
+                stroke="#10B981"
+                fill="url(#revenueFill)"
+                strokeWidth={2.5}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -194,9 +229,22 @@ export default function Analytics() {
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={userBreakdown}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#F3F4F6"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: "#6B7280" }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: "#6B7280" }}
+              />
               <Tooltip />
               <Bar dataKey="value" fill="#007AFF" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -210,7 +258,10 @@ export default function Analytics() {
             <p style={S.chartTitle}>Loan Status Breakdown</p>
             <p style={S.chartSub}>Aggregated loan report from the backend</p>
           </div>
-          <div className="table-container" style={{ boxShadow: "none", border: "none", padding: 0 }}>
+          <div
+            className="table-container"
+            style={{ boxShadow: "none", border: "none", padding: 0 }}
+          >
             <table>
               <thead>
                 <tr>
@@ -227,7 +278,14 @@ export default function Analytics() {
                 ))}
                 {!loanBreakdown.length && (
                   <tr>
-                    <td colSpan={2} style={{ textAlign: "center", padding: 24, color: "#6B7280" }}>
+                    <td
+                      colSpan={2}
+                      style={{
+                        textAlign: "center",
+                        padding: 24,
+                        color: "#6B7280",
+                      }}
+                    >
                       No analytics data available.
                     </td>
                   </tr>

@@ -39,7 +39,14 @@ describe('AdsController', () => {
   it('returns ad stats from the service', async () => {
     getAdStatsMock.mockResolvedValue({
       success: true,
-      stats: { all: 4, active: 1, approved: 1, pending: 1, rejected: 1, closed: 0 },
+      stats: {
+        all: 4,
+        active: 1,
+        approved: 1,
+        pending: 1,
+        rejected: 1,
+        closed: 0,
+      },
     });
 
     const result = await controller.getAdStats();

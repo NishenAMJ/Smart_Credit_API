@@ -228,29 +228,47 @@ export class AnalyticsService {
     range: RangeConfig & { start: Date; end: Date },
   ): Promise<AnalyticsSummaryResponse> {
     const db = this.firebaseService.getDb();
-    const [allLoanSnapshot, rangeLoanSnapshot, adSnapshot, totalCollected, activeLoans, completedLoans, defaultedLoans, activeAds, openDisputes] =
-      await Promise.all([
-        db.collection('loans').where('lenderId', '==', lenderId).get(),
+    const [
+      allLoanSnapshot,
+      rangeLoanSnapshot,
+      adSnapshot,
+      totalCollected,
+      activeLoans,
+      completedLoans,
+      defaultedLoans,
+      activeAds,
+      openDisputes,
+    ] = await Promise.all([
+      db.collection('loans').where('lenderId', '==', lenderId).get(),
+      db
+        .collection('loans')
+        .where('lenderId', '==', lenderId)
+        .where('createdAt', '>=', range.start)
+        .where('createdAt', '<=', range.end)
+        .get(),
+      db.collection('ads').where('lenderId', '==', lenderId).get(),
+      this.sumRepaymentTransactionsInRange(db, lenderId, range),
+      this.getCountWithFallback(
         db
           .collection('loans')
           .where('lenderId', '==', lenderId)
-          .where('createdAt', '>=', range.start)
-          .where('createdAt', '<=', range.end)
-          .get(),
-        db.collection('ads').where('lenderId', '==', lenderId).get(),
-        this.sumRepaymentTransactionsInRange(db, lenderId, range),
-        this.getCountWithFallback(
-          db.collection('loans').where('lenderId', '==', lenderId).where('status', '==', 'active'),
-        ),
-        this.getCountWithFallback(
-          db.collection('loans').where('lenderId', '==', lenderId).where('status', '==', 'completed'),
-        ),
-        this.getCountWithFallback(
-          db.collection('loans').where('lenderId', '==', lenderId).where('status', '==', 'defaulted'),
-        ),
-        this.getActiveAdsCount(db, lenderId, range.end),
-        this.getOpenDisputesCount(db, lenderId),
-      ]);
+          .where('status', '==', 'active'),
+      ),
+      this.getCountWithFallback(
+        db
+          .collection('loans')
+          .where('lenderId', '==', lenderId)
+          .where('status', '==', 'completed'),
+      ),
+      this.getCountWithFallback(
+        db
+          .collection('loans')
+          .where('lenderId', '==', lenderId)
+          .where('status', '==', 'defaulted'),
+      ),
+      this.getActiveAdsCount(db, lenderId, range.end),
+      this.getOpenDisputesCount(db, lenderId),
+    ]);
 
     const [allLoans, rangeLoans] = await Promise.all([
       Promise.all(allLoanSnapshot.docs.map((doc) => this.mapLoan(db, doc))),

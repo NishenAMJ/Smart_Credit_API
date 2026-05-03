@@ -134,55 +134,55 @@ export class LoanRequestsService {
 
     const borrowerProfiles = await this.getBorrowerProfiles(borrowerIds);
 
-    const requests: PendingRequestListItem[] = prioritizedRequests.map((request) => {
-      const borrower = request.borrowerId
-        ? borrowerProfiles.get(request.borrowerId)
-        : undefined;
+    const requests: PendingRequestListItem[] = prioritizedRequests.map(
+      (request) => {
+        const borrower = request.borrowerId
+          ? borrowerProfiles.get(request.borrowerId)
+          : undefined;
 
-      return {
-        requestId: request.requestId,
-        borrowerId: request.borrowerId ?? 'unknown-borrower',
-        borrowerName: borrower?.fullName ?? 'Unknown borrower',
-        borrowerEmail: borrower?.email ?? 'No email',
-        borrowerPhone: borrower?.phone ?? null,
-        borrowerCreditScore: borrower?.creditScore ?? null,
-        borrowerKycStatus: borrower?.kycStatus ?? 'not_submitted',
-        amount: request.amount,
-        tenureMonths: request.tenureMonths,
-        purpose: request.purpose,
-        purposeCategory: request.purposeCategory,
-        status: request.status,
-        urgency: request.urgency,
-        suggestedInterestRate: request.suggestedInterestRate,
-        monthlyIncome: request.monthlyIncome,
-        incomeSource: request.incomeSource,
-        requestedRegion: request.requestedRegion,
-        collateralOffered: request.collateralOffered,
-        targetType: request.adId ? 'targeted' : 'marketplace',
-        adId: request.adId,
-        adTitle: request.adId ? adTitleMap.get(request.adId) ?? null : null,
-        createdAt: request.createdAt ? request.createdAt.toISOString() : null,
-        updatedAt: request.updatedAt ? request.updatedAt.toISOString() : null,
-        notes: request.notes,
-        matchedLenderIds: request.matchedLenderIds,
-      };
-    });
+        return {
+          requestId: request.requestId,
+          borrowerId: request.borrowerId ?? 'unknown-borrower',
+          borrowerName: borrower?.fullName ?? 'Unknown borrower',
+          borrowerEmail: borrower?.email ?? 'No email',
+          borrowerPhone: borrower?.phone ?? null,
+          borrowerCreditScore: borrower?.creditScore ?? null,
+          borrowerKycStatus: borrower?.kycStatus ?? 'not_submitted',
+          amount: request.amount,
+          tenureMonths: request.tenureMonths,
+          purpose: request.purpose,
+          purposeCategory: request.purposeCategory,
+          status: request.status,
+          urgency: request.urgency,
+          suggestedInterestRate: request.suggestedInterestRate,
+          monthlyIncome: request.monthlyIncome,
+          incomeSource: request.incomeSource,
+          requestedRegion: request.requestedRegion,
+          collateralOffered: request.collateralOffered,
+          targetType: request.adId ? 'targeted' : 'marketplace',
+          adId: request.adId,
+          adTitle: request.adId ? (adTitleMap.get(request.adId) ?? null) : null,
+          createdAt: request.createdAt ? request.createdAt.toISOString() : null,
+          updatedAt: request.updatedAt ? request.updatedAt.toISOString() : null,
+          notes: request.notes,
+          matchedLenderIds: request.matchedLenderIds,
+        };
+      },
+    );
 
     const summary = includeSummary
-      ? await this.buildSummary(
-          db,
-          lenderId,
-          adIds,
-          adId,
-          includeAllStatuses,
-        )
+      ? await this.buildSummary(db, lenderId, adIds, adId, includeAllStatuses)
       : this.buildSummaryFromRequests(prioritizedRequests);
 
     return {
       lenderId,
       summary,
       requests,
-      pageInfo: buildPageInfo(prioritizedRequests, safePageSize, pagedRequests.items.length > safePageSize),
+      pageInfo: buildPageInfo(
+        prioritizedRequests,
+        safePageSize,
+        pagedRequests.items.length > safePageSize,
+      ),
       generatedAt: new Date().toISOString(),
     };
   }
@@ -192,7 +192,10 @@ export class LoanRequestsService {
     requestId: string,
     notes?: string,
   ): Promise<LoanRequestDecisionResponse> {
-    const { ref, request } = await this.getAuthorizedRequestRef(lenderId, requestId);
+    const { ref, request } = await this.getAuthorizedRequestRef(
+      lenderId,
+      requestId,
+    );
 
     if (request.status === 'approved') {
       throw new BadRequestException('This request is already approved.');
@@ -221,7 +224,10 @@ export class LoanRequestsService {
     requestId: string,
     reason: string,
   ): Promise<LoanRequestDecisionResponse> {
-    const { ref, request } = await this.getAuthorizedRequestRef(lenderId, requestId);
+    const { ref, request } = await this.getAuthorizedRequestRef(
+      lenderId,
+      requestId,
+    );
 
     if (request.status === 'rejected') {
       throw new BadRequestException('This request is already rejected.');
@@ -253,7 +259,10 @@ export class LoanRequestsService {
     requestId: string,
     notes?: string,
   ): Promise<LoanRequestDecisionResponse> {
-    const { ref, request } = await this.getAuthorizedRequestRef(lenderId, requestId);
+    const { ref, request } = await this.getAuthorizedRequestRef(
+      lenderId,
+      requestId,
+    );
 
     if (request.status === 'approved' || request.status === 'rejected') {
       throw new BadRequestException(
@@ -332,7 +341,8 @@ export class LoanRequestsService {
   private buildSummaryFromRequests(requests: RawLoanRequest[]) {
     return {
       totalPendingRequests: requests.length,
-      targetedRequests: requests.filter((request) => Boolean(request.adId)).length,
+      targetedRequests: requests.filter((request) => Boolean(request.adId))
+        .length,
       marketplaceMatches: requests.filter((request) => !request.adId).length,
       highUrgencyRequests: requests.filter((request) =>
         ['high', 'critical'].includes(request.urgency),
@@ -352,8 +362,8 @@ export class LoanRequestsService {
 
     return Boolean(
       request.targetLenderId === lenderId ||
-        request.matchedLenderIds.includes(lenderId) ||
-        (request.adId && adIds.has(request.adId)),
+      request.matchedLenderIds.includes(lenderId) ||
+      (request.adId && adIds.has(request.adId)),
     );
   }
 
@@ -370,7 +380,9 @@ export class LoanRequestsService {
       throw new NotFoundException(`Loan request ${requestId} was not found.`);
     }
 
-    const request = this.mapLoanRequest(snapshot as QueryDocumentSnapshot<DocumentData>);
+    const request = this.mapLoanRequest(
+      snapshot as QueryDocumentSnapshot<DocumentData>,
+    );
     const adIds = await this.getLenderAdIds(db, lenderId);
 
     if (!this.isRequestVisibleToLender(request, lenderId, adIds)) {
@@ -429,7 +441,13 @@ export class LoanRequestsService {
   ): Promise<QueryDocumentSnapshot<DocumentData>[]> {
     const docsById = new Map<string, QueryDocumentSnapshot<DocumentData>>();
 
-    for (const query of this.buildRequestQueries(db, lenderId, adIds, null, adId)) {
+    for (const query of this.buildRequestQueries(
+      db,
+      lenderId,
+      adIds,
+      null,
+      adId,
+    )) {
       let nextCursor: string | null = null;
       let hasMore = true;
 
@@ -488,7 +506,9 @@ export class LoanRequestsService {
       ),
       applyDateCursor(
         orderByDateAndId(
-          db.collection('loanRequests').where('matchedLenderIds', 'array-contains', lenderId),
+          db
+            .collection('loanRequests')
+            .where('matchedLenderIds', 'array-contains', lenderId),
           'createdAt',
         ),
         cursor,
@@ -559,7 +579,8 @@ export class LoanRequestsService {
         typeof data.targetLenderId === 'string' ? data.targetLenderId : null,
       amount: this.toNumber(data.amount),
       tenureMonths: this.toNumber(data.tenureMonths),
-      purpose: typeof data.purpose === 'string' ? data.purpose : 'Unknown purpose',
+      purpose:
+        typeof data.purpose === 'string' ? data.purpose : 'Unknown purpose',
       purposeCategory:
         typeof data.purposeCategory === 'string'
           ? data.purposeCategory
@@ -571,7 +592,9 @@ export class LoanRequestsService {
       incomeSource:
         typeof data.incomeSource === 'string' ? data.incomeSource : 'unknown',
       requestedRegion:
-        typeof data.requestedRegion === 'string' ? data.requestedRegion : 'Unknown',
+        typeof data.requestedRegion === 'string'
+          ? data.requestedRegion
+          : 'Unknown',
       collateralOffered: data.collateralOffered === true,
       matchedLenderIds: readStringArray(data.matchedLenderIds),
       notes: typeof data.notes === 'string' ? data.notes : '',
@@ -591,7 +614,9 @@ export class LoanRequestsService {
 
     const db = this.firebaseService.getDb();
     const snapshots = await db.getAll(
-      ...borrowerIds.map((borrowerId) => db.collection('users').doc(borrowerId)),
+      ...borrowerIds.map((borrowerId) =>
+        db.collection('users').doc(borrowerId),
+      ),
     );
 
     return new Map<string, BorrowerProfile>(
@@ -602,10 +627,13 @@ export class LoanRequestsService {
           snapshot.id,
           {
             fullName:
-              data && typeof data.fullName === 'string' && data.fullName.trim().length > 0
+              data &&
+              typeof data.fullName === 'string' &&
+              data.fullName.trim().length > 0
                 ? data.fullName
                 : snapshot.id,
-            email: data && typeof data.email === 'string' ? data.email : 'No email',
+            email:
+              data && typeof data.email === 'string' ? data.email : 'No email',
             phone: data && typeof data.phone === 'string' ? data.phone : null,
             creditScore:
               data &&
@@ -627,7 +655,10 @@ export class LoanRequestsService {
     db: Firestore,
     lenderId: string,
   ): Promise<Set<string>> {
-    const adsSnapshot = await db.collection('ads').where('lenderId', '==', lenderId).get();
+    const adsSnapshot = await db
+      .collection('ads')
+      .where('lenderId', '==', lenderId)
+      .get();
     return new Set<string>(adsSnapshot.docs.map((doc) => doc.id));
   }
 

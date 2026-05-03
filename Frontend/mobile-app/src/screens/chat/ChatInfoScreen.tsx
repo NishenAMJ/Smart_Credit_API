@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,17 +11,23 @@ import {
   SafeAreaView,
   StatusBar,
   Modal,
-} from 'react-native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RouteProp } from '@react-navigation/native';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants';
-import { ChatStackParamList } from '../../types';
-import { conversationService, userService } from '../../services';
-import Avatar from '../../components/common/Avatar';
+} from "react-native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RouteProp } from "@react-navigation/native";
+import {
+  COLORS,
+  TYPOGRAPHY,
+  SPACING,
+  BORDER_RADIUS,
+  SHADOWS,
+} from "../../constants";
+import { ChatStackParamList } from "../../types";
+import { conversationService, userService } from "../../services";
+import Avatar from "../../components/common/Avatar";
 
 type Props = {
-  navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatInfo'>;
-  route: RouteProp<ChatStackParamList, 'ChatInfo'>;
+  navigation: NativeStackNavigationProp<ChatStackParamList, "ChatInfo">;
+  route: RouteProp<ChatStackParamList, "ChatInfo">;
 };
 
 export default function ChatInfoScreen({ navigation, route }: Props) {
@@ -55,7 +61,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
       await userService.blockUser(participant.id);
       setShowBlockModal(false);
       // Navigate back to chat list after blocking
-      navigation.navigate('ChatList');
+      navigation.navigate("ChatList");
     } catch {
       setBlocking(false);
       setShowBlockModal(false);
@@ -68,7 +74,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
       setDeleting(true);
       await conversationService.delete(conversationId);
       setShowDeleteModal(false);
-      navigation.navigate('ChatList');
+      navigation.navigate("ChatList");
     } catch {
       setDeleting(false);
       setShowDeleteModal(false);
@@ -81,7 +87,10 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+        >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chat info</Text>
@@ -89,7 +98,6 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-
         {/* Profile section */}
         <View style={styles.profileSection}>
           <Avatar
@@ -105,18 +113,24 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
             <View
               style={[
                 styles.onlineDot,
-                { backgroundColor: participant.isOnline ? COLORS.success : COLORS.textSecondary },
+                {
+                  backgroundColor: participant.isOnline
+                    ? COLORS.success
+                    : COLORS.textSecondary,
+                },
               ]}
             />
             <Text style={styles.onlineText}>
               {participant.isOnline
-                ? 'Online'
+                ? "Online"
                 : participant.lastSeen
-                ? `Last seen ${new Date(participant.lastSeen).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}`
-                : 'Offline'}
+                  ? `Last seen ${new Date(
+                      participant.lastSeen,
+                    ).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : "Offline"}
             </Text>
           </View>
         </View>
@@ -153,7 +167,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
           <InfoRow
             label="Blocked users"
             showChevron
-            onPress={() => navigation.navigate('BlockedUsers')}
+            onPress={() => navigation.navigate("BlockedUsers")}
           />
         </View>
 
@@ -170,7 +184,6 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
             onPress={() => setShowDeleteModal(true)}
           />
         </View>
-
       </ScrollView>
 
       {/* Block confirmation modal */}
@@ -222,7 +235,9 @@ function InfoRow({
       activeOpacity={onPress ? 0.7 : 1}
       disabled={!onPress}
     >
-      <Text style={[styles.infoLabel, danger && styles.infoLabelDanger]}>{label}</Text>
+      <Text style={[styles.infoLabel, danger && styles.infoLabelDanger]}>
+        {label}
+      </Text>
       {right ?? (showChevron && <Text style={styles.chevron}>›</Text>)}
     </TouchableOpacity>
   );
@@ -248,14 +263,26 @@ function ConfirmModal({
   onCancel: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
-      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onCancel}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onCancel}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={onCancel}
+      >
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>{title}</Text>
           <Text style={styles.sheetBody}>{body}</Text>
           <TouchableOpacity
-            style={[styles.sheetConfirm, confirmDanger && styles.sheetConfirmDanger]}
+            style={[
+              styles.sheetConfirm,
+              confirmDanger && styles.sheetConfirmDanger,
+            ]}
             onPress={onConfirm}
             disabled={loading}
           >
@@ -265,7 +292,11 @@ function ConfirmModal({
               <Text style={styles.sheetConfirmText}>{confirmLabel}</Text>
             )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.sheetCancel} onPress={onCancel} disabled={loading}>
+          <TouchableOpacity
+            style={styles.sheetCancel}
+            onPress={onCancel}
+            disabled={loading}
+          >
             <Text style={styles.sheetCancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -279,9 +310,9 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
@@ -293,15 +324,15 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: BORDER_RADIUS.full,
     backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   backIcon: { fontSize: 22, color: COLORS.primary, lineHeight: 26 },
   headerTitle: { ...TYPOGRAPHY.subtitle, color: COLORS.textPrimary },
 
   // Profile
   profileSection: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: SPACING.xxl,
     paddingHorizontal: SPACING.lg,
     backgroundColor: COLORS.surface,
@@ -319,8 +350,8 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   onlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: SPACING.xs,
     marginTop: 2,
   },
@@ -337,9 +368,9 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
     paddingVertical: 14,
     borderBottomWidth: 0.5,
@@ -349,14 +380,14 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     color: COLORS.textPrimary,
   },
-  infoLabelDanger: { color: '#EF4444' },
+  infoLabelDanger: { color: "#EF4444" },
   chevron: { fontSize: 20, color: COLORS.textSecondary, lineHeight: 22 },
 
   // Modal / sheet
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
   },
   sheet: {
     backgroundColor: COLORS.surface,
@@ -371,20 +402,20 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: COLORS.border,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: SPACING.lg,
   },
   sheetTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.textPrimary,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: SPACING.sm,
   },
   sheetBody: {
     fontSize: 13,
     color: COLORS.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 19,
     marginBottom: SPACING.xl,
   },
@@ -392,16 +423,20 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderRadius: BORDER_RADIUS.medium,
     paddingVertical: 13,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: SPACING.sm,
   },
-  sheetConfirmDanger: { backgroundColor: '#EF4444' },
-  sheetConfirmText: { fontSize: 15, fontWeight: '600', color: COLORS.surface },
+  sheetConfirmDanger: { backgroundColor: "#EF4444" },
+  sheetConfirmText: { fontSize: 15, fontWeight: "600", color: COLORS.surface },
   sheetCancel: {
     backgroundColor: COLORS.background,
     borderRadius: BORDER_RADIUS.medium,
     paddingVertical: 13,
-    alignItems: 'center',
+    alignItems: "center",
   },
-  sheetCancelText: { fontSize: 15, fontWeight: '600', color: COLORS.textPrimary },
+  sheetCancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
 });

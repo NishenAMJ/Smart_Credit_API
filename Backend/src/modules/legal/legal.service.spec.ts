@@ -108,7 +108,9 @@ describe('LegalService', () => {
               }),
               where: jest.fn((_field: string, _op: string, loanId: string) => ({
                 get: jest.fn(async () => ({
-                  empty: legalDocs.filter((item) => item.loanId === loanId).length === 0,
+                  empty:
+                    legalDocs.filter((item) => item.loanId === loanId)
+                      .length === 0,
                   docs: legalDocs
                     .filter((item) => item.loanId === loanId)
                     .map((item) => ({

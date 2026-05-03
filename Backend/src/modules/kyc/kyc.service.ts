@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { KycDocument } from './interfaces/kyc-document.interface';
@@ -48,7 +52,11 @@ export class KycService {
     return Math.min(Math.max(Math.trunc(parsed), 1), KycService.MAX_PAGE_SIZE);
   }
 
-  private async uploadBase64ToStorage(userId: string, fieldName: string, dataUrl: string): Promise<string> {
+  private async uploadBase64ToStorage(
+    userId: string,
+    fieldName: string,
+    dataUrl: string,
+  ): Promise<string> {
     if (!dataUrl.startsWith('data:')) {
       return dataUrl;
     }
@@ -61,9 +69,10 @@ export class KycService {
     const mimeType = matches[1];
     const base64Data = matches[2];
     const buffer = Buffer.from(base64Data, 'base64');
-    
+
     let extension = 'bin';
-    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) extension = 'jpg';
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg'))
+      extension = 'jpg';
     else if (mimeType.includes('png')) extension = 'png';
     else if (mimeType.includes('pdf')) extension = 'pdf';
 
@@ -74,15 +83,15 @@ export class KycService {
     await file.save(buffer, {
       metadata: { contentType: mimeType },
     });
-    
+
     const bucketName = this.firebaseService.bucket.name;
     const encodedPath = encodeURIComponent(filePath);
     return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media`;
   }
 
   private async processKycUrls(
-    userId: string, 
-    fields: Record<string, string | undefined>
+    userId: string,
+    fields: Record<string, string | undefined>,
   ): Promise<Record<string, string | undefined>> {
     const result: Record<string, string | undefined> = {};
     for (const [key, value] of Object.entries(fields)) {
@@ -133,13 +142,16 @@ export class KycService {
             nicFrontUrl: processedUrls.nicFrontUrl || dto.nicFrontUrl,
             nicBackUrl: processedUrls.nicBackUrl || dto.nicBackUrl,
             addressProofNumber: dto.addressProofNumber,
-            addressProofUrl: processedUrls.addressProofUrl || dto.addressProofUrl,
+            addressProofUrl:
+              processedUrls.addressProofUrl || dto.addressProofUrl,
             bankAccountNumber: dto.bankAccountNumber,
             bankName: dto.bankName,
             branchCode: dto.branchCode,
             accountType: dto.accountType,
-            bankDocumentUrl: processedUrls.bankDocumentUrl || dto.bankDocumentUrl,
-            profilePhotoUrl: processedUrls.profilePhotoUrl || dto.profilePhotoUrl,
+            bankDocumentUrl:
+              processedUrls.bankDocumentUrl || dto.bankDocumentUrl,
+            profilePhotoUrl:
+              processedUrls.profilePhotoUrl || dto.profilePhotoUrl,
             submittedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -178,9 +190,7 @@ export class KycService {
       const kycSnapshot = await query.limit(pageSize + 1).get();
       const pageDocs = kycSnapshot.docs.slice(0, pageSize);
 
-      const documents = pageDocs.map((doc) =>
-        this.mapUserToKycDocument(doc),
-      );
+      const documents = pageDocs.map((doc) => this.mapUserToKycDocument(doc));
 
       return {
         success: true,
@@ -188,7 +198,9 @@ export class KycService {
         documents,
         hasMore: kycSnapshot.size > pageSize,
         nextCursor:
-          kycSnapshot.size > pageSize ? pageDocs[pageDocs.length - 1]?.id : undefined,
+          kycSnapshot.size > pageSize
+            ? pageDocs[pageDocs.length - 1]?.id
+            : undefined,
       };
     } catch (error) {
       console.error('Error fetching pending KYC documents:', error);

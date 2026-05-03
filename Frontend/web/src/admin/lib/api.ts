@@ -16,7 +16,12 @@ export type AdminUserRole = "admin" | "borrower" | "lender";
 export type AdminUserStatus = "active" | "pending" | "suspended" | "inactive";
 export type AuditSeverity = "info" | "warning" | "critical" | "success";
 export type AuditTargetType = "user" | "ad" | "system" | "report";
-export type AdStatus = "pending" | "approved" | "rejected" | "active" | "closed";
+export type AdStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "active"
+  | "closed";
 export type WebLoginRole = "admin" | "lender";
 export type PublicSignupRole = "borrower" | "lender";
 export type SubmitKycPayload = {
@@ -39,7 +44,10 @@ type ApiOptions = RequestInit & {
 };
 
 // Centralizes request setup so auth handling and JSON parsing stay consistent across pages.
-async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
+async function apiRequest<T>(
+  path: string,
+  options: ApiOptions = {},
+): Promise<T> {
   const headers = new Headers(options.headers);
 
   if (!headers.has("Content-Type") && options.body) {
@@ -340,7 +348,12 @@ export interface AuditLogsResponse {
   logs: AuditLogEntry[];
 }
 
-export type DisputeStatus = "open" | "in-progress" | "resolved" | "escalated" | "closed";
+export type DisputeStatus =
+  | "open"
+  | "in-progress"
+  | "resolved"
+  | "escalated"
+  | "closed";
 export type DisputePriority = "low" | "medium" | "high" | "critical";
 export type DisputeCategory = "payment" | "fraud" | "service" | "other";
 
@@ -426,7 +439,12 @@ export function submitKyc(accessToken: string, payload: SubmitKycPayload) {
   return apiRequest<{
     message: string;
     submission: {
-      status: "not_submitted" | "pending" | "under_review" | "approved" | "rejected";
+      status:
+        | "not_submitted"
+        | "pending"
+        | "under_review"
+        | "approved"
+        | "rejected";
     };
   }>("/kyc/submit", {
     method: "POST",
@@ -455,15 +473,21 @@ export function getUsers(params?: UserQueryParams & CursorQueryParams) {
   const searchParams = new URLSearchParams();
 
   if (params?.search) searchParams.set("search", params.search);
-  if (params?.role && params.role !== "all") searchParams.set("role", params.role);
-  if (params?.status && params.status !== "all") searchParams.set("status", params.status);
-  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (params?.role && params.role !== "all")
+    searchParams.set("role", params.role);
+  if (params?.status && params.status !== "all")
+    searchParams.set("status", params.status);
+  if (typeof params?.limit === "number")
+    searchParams.set("limit", String(params.limit));
   if (params?.cursor) searchParams.set("cursor", params.cursor);
 
   const query = searchParams.toString();
-  return apiRequest<UsersResponse & PaginationMeta>(`/admin/users${query ? `?${query}` : ""}`, {
-    auth: true,
-  });
+  return apiRequest<UsersResponse & PaginationMeta>(
+    `/admin/users${query ? `?${query}` : ""}`,
+    {
+      auth: true,
+    },
+  );
 }
 
 // Separates aggregate dashboard data from the full user list request.
@@ -494,12 +518,16 @@ export function activateUser(userId: string) {
 // Gives the KYC page a single typed entry point for review data.
 export function getPendingKyc(params?: CursorQueryParams) {
   const searchParams = new URLSearchParams();
-  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (typeof params?.limit === "number")
+    searchParams.set("limit", String(params.limit));
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   const query = searchParams.toString();
-  return apiRequest<KycPendingResponse & PaginationMeta>(`/admin/kyc/pending${query ? `?${query}` : ""}`, {
-    auth: true,
-  });
+  return apiRequest<KycPendingResponse & PaginationMeta>(
+    `/admin/kyc/pending${query ? `?${query}` : ""}`,
+    {
+      auth: true,
+    },
+  );
 }
 
 // Uses a shared default note so approval messages stay consistent.
@@ -551,9 +579,12 @@ export function getTransactions(limit = 25, cursor?: string) {
   const searchParams = new URLSearchParams();
   searchParams.set("limit", String(limit));
   if (cursor) searchParams.set("cursor", cursor);
-  return apiRequest<TransactionsResponse & PaginationMeta>(`/admin/transactions?${searchParams.toString()}`, {
-    auth: true,
-  });
+  return apiRequest<TransactionsResponse & PaginationMeta>(
+    `/admin/transactions?${searchParams.toString()}`,
+    {
+      auth: true,
+    },
+  );
 }
 
 export function subscribeToTransactions(
@@ -594,12 +625,16 @@ export function getRevenueReport() {
 // Gives the ads page a typed moderation data source.
 export function getAds(params?: CursorQueryParams) {
   const searchParams = new URLSearchParams();
-  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (typeof params?.limit === "number")
+    searchParams.set("limit", String(params.limit));
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   const query = searchParams.toString();
-  return apiRequest<AdsResponse & PaginationMeta>(`/admin/ads${query ? `?${query}` : ""}`, {
-    auth: true,
-  });
+  return apiRequest<AdsResponse & PaginationMeta>(
+    `/admin/ads${query ? `?${query}` : ""}`,
+    {
+      auth: true,
+    },
+  );
 }
 
 export function getAdStats() {
@@ -642,22 +677,30 @@ export function updateAdStatus(
 // Keeps audit pages isolated from raw request details.
 export function getAuditLogs(params?: CursorQueryParams) {
   const searchParams = new URLSearchParams();
-  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (typeof params?.limit === "number")
+    searchParams.set("limit", String(params.limit));
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   const query = searchParams.toString();
-  return apiRequest<AuditLogsResponse & PaginationMeta>(`/admin/audit-logs${query ? `?${query}` : ""}`, {
-    auth: true,
-  });
+  return apiRequest<AuditLogsResponse & PaginationMeta>(
+    `/admin/audit-logs${query ? `?${query}` : ""}`,
+    {
+      auth: true,
+    },
+  );
 }
 
 export function getDisputes(params?: CursorQueryParams) {
   const searchParams = new URLSearchParams();
-  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+  if (typeof params?.limit === "number")
+    searchParams.set("limit", String(params.limit));
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   const query = searchParams.toString();
-  return apiRequest<DisputesResponse & PaginationMeta>(`/admin/disputes${query ? `?${query}` : ""}`, {
-    auth: true,
-  });
+  return apiRequest<DisputesResponse & PaginationMeta>(
+    `/admin/disputes${query ? `?${query}` : ""}`,
+    {
+      auth: true,
+    },
+  );
 }
 
 export function resolveDispute(

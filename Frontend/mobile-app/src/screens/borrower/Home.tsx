@@ -111,12 +111,12 @@ export default function Home({ navigation }: MyLoansScreenProps) {
         ]);
 
       let dashData = dashboardResponse;
-      // If the service returned the wrapper instead of the metrics, unwrap it
+      // Unwrap nested data if the service returned the response wrapper instead of the metrics directly
       if (dashData && dashData.data && !dashData.totalOutstanding) {
         dashData = dashData.data;
       }
 
-      // If dashboard doesn't include profile, fetch it separately
+      // If the dashboard came back without a profile name, fetch it separately
       if (dashData && !dashData.profile?.fullName) {
         try {
           const profile = await profileService.getMyProfile();
@@ -129,12 +129,15 @@ export default function Home({ navigation }: MyLoansScreenProps) {
         } catch (profileError) {
           console.warn(
             "Could not fetch profile separately:",
-            getApiErrorMessage(profileError, "Profile details are unavailable."),
+            getApiErrorMessage(
+              profileError,
+              "Profile details are unavailable.",
+            ),
           );
         }
       }
 
-      // Merge credit score data if dashboard is missing it
+      // Pull credit score from the dedicated endpoint if the dashboard didn't include it
       if (
         dashData &&
         (!dashData.creditScore || dashData.creditScore === 0) &&
@@ -146,7 +149,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
         };
       }
 
-      // Calculate total outstanding from active loans if dashboard doesn't have it
+      // Derive total outstanding from active loans when the dashboard field is zero or missing
       if (
         dashData &&
         (!dashData.totalOutstanding || dashData.totalOutstanding === 0) &&
@@ -263,7 +266,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color={COLORS.primary} />
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
@@ -289,7 +292,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
             style={styles.heroIconButton}
             onPress={() => setSidebarVisible(true)}
           >
-            <Feather name='menu' size={22} color='#FFFFFF' />
+            <Feather name="menu" size={22} color="#FFFFFF" />
           </TouchableOpacity>
 
           <Animated.Text
@@ -302,7 +305,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
             style={styles.heroIconButton}
             onPress={() => navigation.navigate("Notifications")}
           >
-            <Feather name='bell' size={20} color='#FFFFFF' />
+            <Feather name="bell" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </Animated.View>
 
@@ -361,7 +364,11 @@ export default function Home({ navigation }: MyLoansScreenProps) {
       >
         {errorMessage ? (
           <View style={styles.errorBanner}>
-            <Feather name="alert-circle" size={16} color={COLORS.error ?? "#DC2626"} />
+            <Feather
+              name="alert-circle"
+              size={16}
+              color={COLORS.error ?? "#DC2626"}
+            />
             <Text style={styles.errorBannerText}>{errorMessage}</Text>
           </View>
         ) : null}
@@ -433,9 +440,11 @@ export default function Home({ navigation }: MyLoansScreenProps) {
               (new Date(dashboard.nextDueDate).getTime() - Date.now()) /
                 (1000 * 60 * 60 * 24) >
                 25) ? (
-              <View style={{ alignItems: "center", paddingVertical: SPACING.sm }}>
+              <View
+                style={{ alignItems: "center", paddingVertical: SPACING.sm }}
+              >
                 <Feather
-                  name='check-circle'
+                  name="check-circle"
                   size={32}
                   color={COLORS.primary}
                   style={{ marginBottom: SPACING.sm }}
@@ -451,7 +460,11 @@ export default function Home({ navigation }: MyLoansScreenProps) {
                 <Text
                   style={[
                     styles.heroSubtitle,
-                    { color: COLORS.textSecondary, textAlign: "center", marginBottom: 0 },
+                    {
+                      color: COLORS.textSecondary,
+                      textAlign: "center",
+                      marginBottom: 0,
+                    },
                   ]}
                 >
                   You're all caught up!
@@ -480,7 +493,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
                 <View style={styles.nextPaymentMetaRow}>
                   <View style={styles.metaPill}>
-                    <Feather name='calendar' size={14} color={COLORS.primary} />
+                    <Feather name="calendar" size={14} color={COLORS.primary} />
                     <Text style={styles.metaPillText}>
                       {formatDateLabel(dashboard?.nextDueDate)}
                     </Text>
@@ -494,7 +507,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
                       })
                     }
                   >
-                    <Feather name='clock' size={14} color={COLORS.primary} />
+                    <Feather name="clock" size={14} color={COLORS.primary} />
                     <Text style={styles.metaPillText}>View History</Text>
                   </TouchableOpacity>
                 </View>
@@ -559,7 +572,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
               <Text style={styles.secondaryActionText}>
                 {loans.length - ACTIVE_LOAN_PREVIEW_LIMIT} more active loans
               </Text>
-              <Feather name='arrow-right' size={16} color={COLORS.primary} />
+              <Feather name="arrow-right" size={16} color={COLORS.primary} />
             </TouchableOpacity>
           ) : null}
 
@@ -924,4 +937,3 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 });
-    

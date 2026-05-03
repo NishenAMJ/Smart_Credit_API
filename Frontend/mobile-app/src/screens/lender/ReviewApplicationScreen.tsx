@@ -1,18 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
-  ScrollView, View, TouchableOpacity, Text, StyleSheet,
-  SafeAreaView, ActivityIndicator, Alert,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { LenderHeader, AlertBanner } from '../../components/lender';
-import { LoanRequestsService } from '../../services/lender.service';
+  ScrollView,
+  View,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { commonStyles, COLORS } from "../../styles/lender.styles";
+import { LenderHeader, AlertBanner } from "../../components/lender";
+import { LoanRequestsService } from "../../services/lender.service";
 
 export default function ReviewApplicationScreen({ navigation, route }: any) {
   // appId can come from navigation params (from ApplicationsReceivedScreen)
   // The full `app` object may also be passed from LenderDashboardScreen
   const passedApp = route?.params?.app;
-  const appId = route?.params?.appId || passedApp?.id || passedApp?.requestId || 'unknown';
+  const appId =
+    route?.params?.appId || passedApp?.id || passedApp?.requestId || "unknown";
 
   const [app, setApp] = useState<any>(passedApp ?? null);
   const [loading, setLoading] = useState(!passedApp);
@@ -38,7 +45,7 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
         );
         setApp(found ?? null);
       } catch (e: any) {
-        setError('Failed to load application details');
+        setError("Failed to load application details");
       } finally {
         setLoading(false);
       }
@@ -47,22 +54,25 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
 
   const handleApprove = async () => {
     Alert.alert(
-      'Approve Application',
-      'Are you sure you want to approve this loan application?',
+      "Approve Application",
+      "Are you sure you want to approve this loan application?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Approve',
-          style: 'default',
+          text: "Approve",
+          style: "default",
           onPress: async () => {
             setSubmitting(true);
             try {
               await LoanRequestsService.approveRequest(appId);
-              Alert.alert('Success', 'Application approved successfully!', [
-                { text: 'OK', onPress: () => navigation.goBack() },
+              Alert.alert("Success", "Application approved successfully!", [
+                { text: "OK", onPress: () => navigation.goBack() },
               ]);
             } catch (e: any) {
-              Alert.alert('Error', e?.response?.data?.message ?? 'Failed to approve application');
+              Alert.alert(
+                "Error",
+                e?.response?.data?.message ?? "Failed to approve application",
+              );
             } finally {
               setSubmitting(false);
             }
@@ -73,14 +83,21 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
   };
 
   const handleReject = () => {
-    navigation.navigate('ApproveReject', { appId, action: 'reject' });
+    navigation.navigate("ApproveReject", { appId, action: "reject" });
   };
 
   if (loading) {
     return (
       <SafeAreaView style={commonStyles.safe}>
-        <LenderHeader title="Review Application" onBackPress={() => navigation.goBack()} />
-        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+        <LenderHeader
+          title="Review Application"
+          onBackPress={() => navigation.goBack()}
+        />
+        <ActivityIndicator
+          style={{ marginTop: 40 }}
+          color={COLORS.primary}
+          size="large"
+        />
       </SafeAreaView>
     );
   }
@@ -88,26 +105,37 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
   if (!app && !loading) {
     return (
       <SafeAreaView style={commonStyles.safe}>
-        <LenderHeader title="Review Application" onBackPress={() => navigation.goBack()} />
-        <AlertBanner type="error" title="Not Found" message="Application not found or you don't have access." />
+        <LenderHeader
+          title="Review Application"
+          onBackPress={() => navigation.goBack()}
+        />
+        <AlertBanner
+          type="error"
+          title="Not Found"
+          message="Application not found or you don't have access."
+        />
       </SafeAreaView>
     );
   }
 
   // Resolve fields from both dashboard-shape and loan-requests-shape
-  const borrowerName   = app?.borrowerName ?? app?.name ?? 'Unknown';
-  const borrowerId     = app?.borrowerId ?? app?.id ?? '--';
-  const creditScore    = app?.borrowerCreditScore ?? app?.creditScore ?? null;
+  const borrowerName = app?.borrowerName ?? app?.name ?? "Unknown";
+  const borrowerId = app?.borrowerId ?? app?.id ?? "--";
+  const creditScore = app?.borrowerCreditScore ?? app?.creditScore ?? null;
   const requestedAmount = app?.requestedAmount ?? app?.amount ?? 0;
-  const roi            = app?.suggestedInterestRate ?? app?.interestRate ?? app?.roi ?? '--';
-  const tenureMonths   = app?.tenureMonths ?? app?.duration ?? '--';
-  const status         = app?.status ?? 'pending';
-  const purpose        = app?.purpose ?? '--';
-  const kycStatus      = app?.borrowerKycStatus ?? '--';
+  const roi =
+    app?.suggestedInterestRate ?? app?.interestRate ?? app?.roi ?? "--";
+  const tenureMonths = app?.tenureMonths ?? app?.duration ?? "--";
+  const status = app?.status ?? "pending";
+  const purpose = app?.purpose ?? "--";
+  const kycStatus = app?.borrowerKycStatus ?? "--";
 
   return (
     <SafeAreaView style={commonStyles.safe}>
-      <LenderHeader title="Review Application" onBackPress={() => navigation.goBack()} />
+      <LenderHeader
+        title="Review Application"
+        onBackPress={() => navigation.goBack()}
+      />
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {error && <AlertBanner type="error" title="Error" message={error} />}
@@ -131,7 +159,14 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
           {creditScore !== null && (
             <View style={styles.detailRow}>
               <Text style={commonStyles.textSecondary}>Credit Score</Text>
-              <Text style={[commonStyles.textPrimary, { color: creditScore > 700 ? COLORS.success : COLORS.warning }]}>
+              <Text
+                style={[
+                  commonStyles.textPrimary,
+                  {
+                    color: creditScore > 700 ? COLORS.success : COLORS.warning,
+                  },
+                ]}
+              >
                 {creditScore}
               </Text>
             </View>
@@ -151,7 +186,9 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
             </Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={commonStyles.textSecondary}>Suggested Interest Rate</Text>
+            <Text style={commonStyles.textSecondary}>
+              Suggested Interest Rate
+            </Text>
             <Text style={commonStyles.textPrimary}>{roi}%</Text>
           </View>
           <View style={styles.detailRow}>
@@ -164,27 +201,51 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
           </View>
           <View style={styles.detailRow}>
             <Text style={commonStyles.textSecondary}>Current Status</Text>
-            <Text style={[commonStyles.textPrimary, { textTransform: 'capitalize' }]}>{status}</Text>
+            <Text
+              style={[
+                commonStyles.textPrimary,
+                { textTransform: "capitalize" },
+              ]}
+            >
+              {status}
+            </Text>
           </View>
         </View>
 
         {submitting ? (
-          <ActivityIndicator style={{ marginVertical: 20 }} color={COLORS.primary} size="large" />
+          <ActivityIndicator
+            style={{ marginVertical: 20 }}
+            color={COLORS.primary}
+            size="large"
+          />
         ) : (
           <>
-            {(status === 'open' || status === 'under_review' || status === 'matched' || status === 'pending') && (
+            {(status === "open" ||
+              status === "under_review" ||
+              status === "matched" ||
+              status === "pending") && (
               <>
-                <TouchableOpacity style={commonStyles.primaryButton} onPress={handleApprove}>
+                <TouchableOpacity
+                  style={commonStyles.primaryButton}
+                  onPress={handleApprove}
+                >
                   <Feather name="check" size={18} color="#fff" />
-                  <Text style={commonStyles.buttonText}>Approve Application</Text>
+                  <Text style={commonStyles.buttonText}>
+                    Approve Application
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[commonStyles.primaryButton, { backgroundColor: COLORS.danger }]}
+                  style={[
+                    commonStyles.primaryButton,
+                    { backgroundColor: COLORS.danger },
+                  ]}
                   onPress={handleReject}
                 >
                   <Feather name="x" size={18} color="#fff" />
-                  <Text style={commonStyles.buttonText}>Reject Application</Text>
+                  <Text style={commonStyles.buttonText}>
+                    Reject Application
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
@@ -200,8 +261,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,

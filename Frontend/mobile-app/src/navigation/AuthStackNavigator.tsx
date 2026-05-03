@@ -9,7 +9,7 @@ const Stack = createNativeStackNavigator();
 export default function AuthStackNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name='MobileAuth' component={MobileAuthScreen} />
+      <Stack.Screen name="MobileAuth" component={MobileAuthScreen} />
     </Stack.Navigator>
   );
 }

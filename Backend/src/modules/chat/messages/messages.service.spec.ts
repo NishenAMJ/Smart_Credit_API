@@ -37,9 +37,8 @@ describe('MessagesService', () => {
 
     service = module.get<MessagesService>(MessagesService);
     firebaseService = module.get<FirebaseService>(FirebaseService);
-    conversationsService = module.get<ConversationsService>(
-      ConversationsService,
-    );
+    conversationsService =
+      module.get<ConversationsService>(ConversationsService);
   });
 
   afterEach(() => {

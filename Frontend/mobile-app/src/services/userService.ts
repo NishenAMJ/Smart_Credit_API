@@ -4,9 +4,9 @@
  * Used by: NewChatScreen, BlockedUsersScreen, ChatInfoScreen.
  */
 
-import { api } from './api';
-import { localDatabase } from './localDatabase';
-import type { User, BlockedUser } from '../types/chat.types';
+import { api } from "./api";
+import { localDatabase } from "./localDatabase";
+import type { User, BlockedUser } from "../types/chat.types";
 
 export const userService = {
   /**
@@ -34,7 +34,7 @@ export const userService = {
    * Maps to PATCH /users/fcm-token
    */
   updateFcmToken: async (fcmToken: string): Promise<void> => {
-    return api.patch('/users/fcm-token', { fcmToken });
+    return api.patch("/users/fcm-token", { fcmToken });
   },
 
   /**
@@ -43,7 +43,7 @@ export const userService = {
    * Maps to GET /users/blocked
    */
   getBlockedUsers: async (): Promise<BlockedUser[]> => {
-    const data: BlockedUser[] = await api.get('/users/blocked');
+    const data: BlockedUser[] = await api.get("/users/blocked");
     // Cache for offline display
     data.forEach((u) => localDatabase.upsertBlockedUser(u));
     return data;

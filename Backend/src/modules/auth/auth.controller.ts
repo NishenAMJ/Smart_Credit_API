@@ -1,8 +1,21 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
 import { AuthService } from './auth.service';
-import { AuthResponseDto, MeResponseDto, RegisterResponseDto } from './dto/auth-response.dto';
+import {
+  AuthResponseDto,
+  MeResponseDto,
+  RegisterResponseDto,
+} from './dto/auth-response.dto';
 import { DashboardResponseDto } from './dto/dashboard-response.dto';
 import { SessionResponseDto } from './dto/session-response.dto';
 import { LoginDto } from './dto/login.dto';
@@ -16,7 +29,9 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
+  async register(
+    @Body() registerDto: RegisterDto,
+  ): Promise<RegisterResponseDto> {
     return this.authService.register(registerDto);
   }
 

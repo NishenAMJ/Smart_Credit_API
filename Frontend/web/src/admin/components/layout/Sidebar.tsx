@@ -15,16 +15,16 @@ import {
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { to: "/admin/dashboard",    icon: LayoutDashboard, label: "Dashboard"     },
-  { to: "/admin/kyc",          icon: ShieldCheck,     label: "KYC Approvals" },
-  { to: "/admin/lender-ads",   icon: Megaphone,       label: "Lender Ads"    },
-  { to: "/admin/manage-users", icon: Users,           label: "Manage Users"  },
-  { to: "/admin/disputes",     icon: MessageSquareWarning, label: "Disputes" },
-  { to: "/admin/analytics",    icon: BarChart2,       label: "Analytics"     },
-  { to: "/admin/transactions", icon: ReceiptText,     label: "Transactions"  },
-  { to: "/admin/agreements",   icon: FileText,        label: "Agreements"    },
-  { to: "/admin/audit-logs",   icon: ScrollText,      label: "Audit Logs"    },
-  { to: "/admin/settings",     icon: Settings,        label: "Settings"      },
+  { to: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/admin/kyc", icon: ShieldCheck, label: "KYC Approvals" },
+  { to: "/admin/lender-ads", icon: Megaphone, label: "Lender Ads" },
+  { to: "/admin/manage-users", icon: Users, label: "Manage Users" },
+  { to: "/admin/disputes", icon: MessageSquareWarning, label: "Disputes" },
+  { to: "/admin/analytics", icon: BarChart2, label: "Analytics" },
+  { to: "/admin/transactions", icon: ReceiptText, label: "Transactions" },
+  { to: "/admin/agreements", icon: FileText, label: "Agreements" },
+  { to: "/admin/audit-logs", icon: ScrollText, label: "Audit Logs" },
+  { to: "/admin/settings", icon: Settings, label: "Settings" },
 ];
 
 // ── Styles ───────────────────────────────────────────────────────────────────
@@ -151,7 +151,6 @@ export default function Sidebar() {
 
   return (
     <aside style={S.sidebar}>
-
       {/* Logo */}
       <div style={S.logoWrap}>
         <div style={S.logoInner}>
@@ -181,9 +180,7 @@ export default function Sidebar() {
               fontSize: "14px",
               fontWeight: 500,
               color: isActive ? "#FFFFFF" : "#8A9BB5",
-              background: isActive
-                ? "rgba(0, 122, 255, 0.85)"
-                : "transparent",
+              background: isActive ? "rgba(0, 122, 255, 0.85)" : "transparent",
               transition: "background 0.15s, color 0.15s",
               position: "relative",
             })}
@@ -232,7 +229,6 @@ export default function Sidebar() {
 
       {/* Bottom section — admin info + logout */}
       <div style={S.bottomWrap}>
-
         {/* Admin profile */}
         <div style={S.adminWrap}>
           <div style={S.adminAvatar}>A</div>
@@ -258,7 +254,6 @@ export default function Sidebar() {
           <LogOut size={17} style={{ flexShrink: 0 }} />
           Log Out
         </button>
-
       </div>
     </aside>
   );

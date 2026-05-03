@@ -37,14 +37,18 @@ export default function LoanCard({
             </Text>
           ) : (
             <Text style={styles.amount}>
-              LKR {loan.minAmount?.toLocaleString() ?? "0"} -{" "}
-              LKR {loan.maxAmount?.toLocaleString() ?? "0"}
+              LKR {loan.minAmount?.toLocaleString() ?? "0"} - LKR{" "}
+              {loan.maxAmount?.toLocaleString() ?? "0"}
             </Text>
           )}
           <Text style={styles.duration}>{loan.durationMonths ?? 0} months</Text>
         </View>
         <Text style={styles.totalAmount}>
-          {loan.interestRate ? `${loan.interestRate}% p.a.` : loan.amount ? `LKR ${loan.amount.toLocaleString()}` : ""}
+          {loan.interestRate
+            ? `${loan.interestRate}% p.a.`
+            : loan.amount
+              ? `LKR ${loan.amount.toLocaleString()}`
+              : ""}
         </Text>
       </View>
 
