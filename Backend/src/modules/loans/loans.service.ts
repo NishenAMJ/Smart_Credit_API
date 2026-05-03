@@ -27,6 +27,11 @@ export class LoansService {
     return roleValue === expectedRole;
   }
 
+  private async getCount(query: FirebaseFirestore.Query): Promise<number> {
+    const snapshot = await query.count().get();
+    return snapshot.data().count;
+  }
+
   private async validateUserRole(
     userId: string,
     expectedRole: 'borrower' | 'lender',
@@ -134,17 +139,32 @@ export class LoansService {
   }
 
   async getLoanStatistics() {
-    const snapshot = await this.firebaseService.db.collection('loans').get();
-    const loans = snapshot.docs.map((doc) => doc.data());
+    const loansCollection = this.firebaseService.db.collection('loans');
+    const [totalLoans, activeLoans, completedLoans, snapshot] =
+      await Promise.all([
+        this.getCount(loansCollection),
+        this.getCount(loansCollection.where('status', 'in', ['active', 'ACTIVE'])),
+        this.getCount(
+          loansCollection.where('status', 'in', ['completed', 'COMPLETED']),
+        ),
+        loansCollection.select('amount', 'principalAmount').get(),
+      ]);
+
+    const totalAmount = snapshot.docs.reduce((sum: number, doc) => {
+      const loan = doc.data();
+      return (
+        sum +
+        Number(
+          loan.amount ?? loan.principalAmount ?? 0,
+        )
+      );
+    }, 0);
 
     return {
-      totalLoans: loans.length,
-      activeLoans: loans.filter((l: any) => l.status === 'ACTIVE').length,
-      completedLoans: loans.filter((l: any) => l.status === 'COMPLETED').length,
-      totalAmount: loans.reduce(
-        (sum: number, l: any) => sum + (l.amount || 0),
-        0,
-      ),
+      totalLoans,
+      activeLoans,
+      completedLoans,
+      totalAmount,
     };
   }
 

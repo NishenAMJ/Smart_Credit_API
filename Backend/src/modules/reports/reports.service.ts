@@ -28,48 +28,43 @@ export class ReportsService {
       : null;
   }
 
+  private async getCount(query: FirebaseFirestore.Query): Promise<number> {
+    const snapshot = await query.count().get();
+    return snapshot.data().count;
+  }
+
   async getUsersReport(): Promise<{ success: boolean; data: UserReport }> {
     try {
       const db = this.firebaseService.db;
-      const usersSnapshot = await db.collection('users').get();
-
-      let totalUsers = 0;
-      let activeUsers = 0;
-      let suspendedUsers = 0;
-      let borrowers = 0;
-      let lenders = 0;
-      let admins = 0;
-      let newUsersThisMonth = 0;
+      const usersCollection = db.collection('users');
 
       const currentDate = new Date();
       const currentMonth = currentDate.getMonth();
       const currentYear = currentDate.getFullYear();
-
-      usersSnapshot.forEach((doc) => {
-        const user = doc.data();
-        const primaryRole = this.getPrimaryRole(user.role);
-        const status =
-          user.status || (user.kycStatus === 'pending' ? 'pending' : 'active');
-
-        totalUsers++;
-
-        if (status === 'active') activeUsers++;
-        if (status === 'suspended') suspendedUsers++;
-
-        if (primaryRole === 'borrower') borrowers++;
-        if (primaryRole === 'lender') lenders++;
-        if (primaryRole === 'admin') admins++;
-
-        if (user.createdAt) {
-          const createdDate = user.createdAt.toDate();
-          if (
-            createdDate.getMonth() === currentMonth &&
-            createdDate.getFullYear() === currentYear
-          ) {
-            newUsersThisMonth++;
-          }
-        }
-      });
+      const monthStart = new Date(currentYear, currentMonth, 1);
+      const [
+        totalUsers,
+        suspendedUsers,
+        inactiveUsers,
+        pendingUsers,
+        borrowers,
+        lenders,
+        admins,
+        newUsersThisMonth,
+      ] = await Promise.all([
+        this.getCount(usersCollection),
+        this.getCount(usersCollection.where('status', '==', 'suspended')),
+        this.getCount(usersCollection.where('status', '==', 'inactive')),
+        this.getCount(usersCollection.where('accountStatus', '==', 'pending')),
+        this.getCount(usersCollection.where('role', 'array-contains', 'borrower')),
+        this.getCount(usersCollection.where('role', 'array-contains', 'lender')),
+        this.getCount(usersCollection.where('role', 'array-contains', 'admin')),
+        this.getCount(usersCollection.where('createdAt', '>=', monthStart)),
+      ]);
+      const activeUsers = Math.max(
+        totalUsers - suspendedUsers - inactiveUsers - pendingUsers,
+        0,
+      );
 
       return {
         success: true,
@@ -99,37 +94,36 @@ export class ReportsService {
   async getLoansReport(): Promise<{ success: boolean; data: LoanReport }> {
     try {
       const db = this.firebaseService.db;
-      const [loansSnapshot, requestsSnapshot] = await Promise.all([
-        db.collection('loans').get(),
-        db.collection('loanRequests').get(),
+      const loansCollection = db.collection('loans');
+      const requestsCollection = db.collection('loanRequests');
+      const [
+        totalLoans,
+        activeLoans,
+        completedLoans,
+        defaultedLoans,
+        acceptedRequests,
+        pendingRequests,
+        rejectedRequests,
+        loansSnapshot,
+      ] = await Promise.all([
+        this.getCount(loansCollection),
+        this.getCount(loansCollection.where('status', '==', 'active')),
+        this.getCount(loansCollection.where('status', '==', 'completed')),
+        this.getCount(loansCollection.where('status', '==', 'defaulted')),
+        this.getCount(requestsCollection.where('status', '==', 'accepted')),
+        this.getCount(requestsCollection.where('status', '==', 'pending')),
+        this.getCount(requestsCollection.where('status', '==', 'rejected')),
+        loansCollection.select('principalAmount').get(),
       ]);
 
-      let totalLoans = 0;
-      let activeLoans = 0;
-      let completedLoans = 0;
-      let acceptedRequests = 0;
-      let pendingRequests = 0;
-      let rejectedRequests = 0;
       let totalAmount = 0;
 
       loansSnapshot.forEach((doc) => {
         const loan = doc.data();
-        totalLoans++;
-
-        if (loan.status === 'active') activeLoans++;
-        if (loan.status === 'completed') completedLoans++;
 
         if (loan.principalAmount) {
           totalAmount += Number(loan.principalAmount);
         }
-      });
-
-      requestsSnapshot.forEach((doc) => {
-        const request = doc.data();
-
-        if (request.status === 'accepted') acceptedRequests++;
-        if (request.status === 'pending') pendingRequests++;
-        if (request.status === 'rejected') rejectedRequests++;
       });
 
       const averageLoanAmount = totalLoans > 0 ? totalAmount / totalLoans : 0;
@@ -140,7 +134,7 @@ export class ReportsService {
           totalLoans,
           activeLoans,
           completedLoans,
-          defaultedLoans: 0,
+          defaultedLoans,
           totalLoanAmount: totalAmount,
           averageLoanAmount: Math.round(averageLoanAmount * 100) / 100,
           pendingApprovals: pendingRequests,
@@ -164,25 +158,28 @@ export class ReportsService {
   }> {
     try {
       const db = this.firebaseService.db;
-      const txnSnapshot = await db.collection('transactions').get();
+      const transactionsCollection = db.collection('transactions');
+      const [totalTransactions, failedTransactions, completedTransactions, txnSnapshot] =
+        await Promise.all([
+          this.getCount(transactionsCollection),
+          this.getCount(transactionsCollection.where('status', '==', 'failed')),
+          this.getCount(
+            transactionsCollection.where('status', '==', 'completed'),
+          ),
+          transactionsCollection
+            .select('status', 'verifiedByLender', 'amount', 'paymentType', 'type')
+            .get(),
+        ]);
 
-      let totalTransactions = 0;
       let successfulTransactions = 0;
-      let failedTransactions = 0;
-      let pendingTransactions = 0;
       let totalVolume = 0;
       const transactionsByType: { [key: string]: number } = {};
 
       txnSnapshot.forEach((doc) => {
         const txn = doc.data();
-        totalTransactions++;
 
         if (txn.verifiedByLender === true || txn.status === 'completed') {
           successfulTransactions++;
-        } else if (txn.status === 'failed') {
-          failedTransactions++;
-        } else {
-          pendingTransactions++;
         }
 
         if (txn.amount) {
@@ -194,6 +191,15 @@ export class ReportsService {
           (transactionsByType[transactionType] || 0) + 1;
       });
 
+      const normalizedSuccessfulTransactions = Math.max(
+        successfulTransactions,
+        completedTransactions,
+      );
+      const pendingTransactions = Math.max(
+        totalTransactions - normalizedSuccessfulTransactions - failedTransactions,
+        0,
+      );
+
       const averageAmount =
         totalTransactions > 0 ? totalVolume / totalTransactions : 0;
 
@@ -201,7 +207,7 @@ export class ReportsService {
         success: true,
         data: {
           totalTransactions,
-          successfulTransactions,
+          successfulTransactions: normalizedSuccessfulTransactions,
           failedTransactions,
           pendingTransactions,
           totalTransactionVolume: totalVolume,
@@ -218,8 +224,11 @@ export class ReportsService {
     try {
       const db = this.firebaseService.db;
       const [txnSnapshot, loansSnapshot] = await Promise.all([
-        db.collection('transactions').get(),
-        db.collection('loans').get(),
+        db
+          .collection('transactions')
+          .select('amount', 'platformFee', 'fee', 'paidAt', 'createdAt')
+          .get(),
+        db.collection('loans').select('totalRepayable', 'principalAmount').get(),
       ]);
 
       let totalRevenue = 0;
@@ -303,59 +312,60 @@ export class ReportsService {
   }> {
     try {
       const db = this.firebaseService.db;
-
-      const [
-        usersSnapshot,
-        loansSnapshot,
-        requestsSnapshot,
-        disputesSnapshot,
-        txnSnapshot,
-      ] = await Promise.all([
-        db.collection('users').get(),
-        db.collection('loans').get(),
-        db.collection('loanRequests').get(),
-        db.collection('disputes').get(),
-        db.collection('transactions').get(),
-      ]);
-
-      let activeDisputes = 0;
-      let disputesResolvedToday = 0;
-      let newUsersToday = 0;
-      let loansCreatedToday = 0;
-      let transactionsToday = 0;
-      let totalRevenue = 0;
-
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      disputesSnapshot.forEach((doc) => {
-        const dispute = doc.data();
-        if (
-          dispute.status === 'open' ||
-          dispute.status === 'in-progress' ||
-          dispute.status === 'escalated'
-        ) {
-          activeDisputes++;
-        }
+      const [
+        totalUsers,
+        totalLoans,
+        activeDisputesOpen,
+        activeDisputesInProgress,
+        activeDisputesEscalated,
+        newUsersToday,
+        loansCreatedToday,
+        disputesResolvedToday,
+        pendingRequests,
+        pendingKyc,
+        totalDisputes,
+        resolvedDisputes,
+        txnSnapshot,
+      ] = await Promise.all([
+        this.getCount(db.collection('users')),
+        this.getCount(db.collection('loans')),
+        this.getCount(db.collection('disputes').where('status', '==', 'open')),
+        this.getCount(
+          db.collection('disputes').where('status', '==', 'in-progress'),
+        ),
+        this.getCount(
+          db.collection('disputes').where('status', '==', 'escalated'),
+        ),
+        this.getCount(db.collection('users').where('createdAt', '>=', today)),
+        this.getCount(
+          db.collection('loanRequests').where('createdAt', '>=', today),
+        ),
+        this.getCount(
+          db.collection('disputes').where('resolvedAt', '>=', today),
+        ),
+        this.getCount(
+          db.collection('loanRequests').where('status', '==', 'pending'),
+        ),
+        this.getCount(
+          db.collection('users').where('accountStatus', '==', 'pending'),
+        ),
+        this.getCount(db.collection('disputes')),
+        this.getCount(db.collection('disputes').where('status', '==', 'resolved')),
+        db
+          .collection('transactions')
+          .select('amount', 'platformFee', 'fee', 'paidAt', 'createdAt')
+          .get(),
+      ]);
 
-        if (dispute.resolvedAt?.toDate?.() >= today) {
-          disputesResolvedToday++;
-        }
-      });
-
-      usersSnapshot.forEach((doc) => {
-        const user = doc.data();
-        if (user.createdAt?.toDate?.() >= today) {
-          newUsersToday++;
-        }
-      });
-
-      requestsSnapshot.forEach((doc) => {
-        const request = doc.data();
-        if (request.createdAt?.toDate?.() >= today) {
-          loansCreatedToday++;
-        }
-      });
+      const activeDisputes =
+        activeDisputesOpen +
+        activeDisputesInProgress +
+        activeDisputesEscalated;
+      let transactionsToday = 0;
+      let totalRevenue = 0;
 
       txnSnapshot.forEach((doc) => {
         const txn = doc.data();
@@ -377,13 +387,6 @@ export class ReportsService {
         message: string;
         count: number;
       }> = [];
-
-      const pendingRequests = requestsSnapshot.docs.filter(
-        (doc) => doc.data().status === 'pending',
-      ).length;
-      const pendingKyc = usersSnapshot.docs.filter(
-        (doc) => doc.data().kycStatus === 'pending',
-      ).length;
 
       if (activeDisputes > 0) {
         alerts.push({
@@ -413,8 +416,8 @@ export class ReportsService {
         success: true,
         data: {
           overview: {
-            totalUsers: usersSnapshot.size,
-            totalLoans: loansSnapshot.size,
+            totalUsers,
+            totalLoans,
             totalRevenue: Math.round(totalRevenue * 100) / 100,
             activeDisputes,
           },
@@ -429,13 +432,9 @@ export class ReportsService {
             loanGrowthRate: 0,
             revenueGrowthRate: 0,
             disputeResolutionRate:
-              disputesSnapshot.size > 0
+              totalDisputes > 0
                 ? Number(
-                    (
-                      disputesSnapshot.docs.filter(
-                        (doc) => doc.data().status === 'resolved',
-                      ).length / disputesSnapshot.size
-                    ).toFixed(2),
+                    (resolvedDisputes / totalDisputes).toFixed(2),
                   )
                 : 0,
           },

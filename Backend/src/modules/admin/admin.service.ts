@@ -134,6 +134,11 @@ export class AdminService {
     );
   }
 
+  private async getCount(query: FirebaseFirestore.Query): Promise<number> {
+    const snapshot = await query.count().get();
+    return snapshot.data().count;
+  }
+
   // Returns all users after removing sensitive fields and applying optional filters.
   async getAllUsers(
     query: QueryUsersDto = {},
@@ -228,31 +233,43 @@ export class AdminService {
   // Aggregates user counts by status and role for admin reporting.
   async getUserStats() {
     try {
-      const usersSnapshot = await this.db.collection('users').get();
+      const usersCollection = this.db.collection('users');
+      const [
+        totalUsers,
+        pendingUsers,
+        suspendedUsers,
+        inactiveUsers,
+        admins,
+        borrowers,
+        lenders,
+      ] = await Promise.all([
+        this.getCount(usersCollection),
+        this.getCount(
+          usersCollection.where('accountStatus', '==', 'pending'),
+        ),
+        this.getCount(usersCollection.where('status', '==', 'suspended')),
+        this.getCount(usersCollection.where('status', '==', 'inactive')),
+        this.getCount(usersCollection.where('role', 'array-contains', 'admin')),
+        this.getCount(
+          usersCollection.where('role', 'array-contains', 'borrower'),
+        ),
+        this.getCount(usersCollection.where('role', 'array-contains', 'lender')),
+      ]);
+
+      const activeUsers = Math.max(
+        totalUsers - pendingUsers - suspendedUsers - inactiveUsers,
+        0,
+      );
 
       const stats = {
-        totalUsers: usersSnapshot.size,
-        activeUsers: 0,
-        suspendedUsers: 0,
-        pendingUsers: 0,
-        admins: 0,
-        borrowers: 0,
-        lenders: 0,
+        totalUsers,
+        activeUsers,
+        suspendedUsers,
+        pendingUsers,
+        admins,
+        borrowers,
+        lenders,
       };
-
-      usersSnapshot.forEach((doc) => {
-        const user = doc.data() as Omit<User, 'id'>;
-        const primaryRole = this.getPrimaryRole(user.role);
-        const status = this.getDerivedStatus(user);
-
-        if (status === 'active') stats.activeUsers++;
-        if (status === 'suspended') stats.suspendedUsers++;
-        if (status === 'pending') stats.pendingUsers++;
-
-        if (primaryRole === 'admin') stats.admins++;
-        if (primaryRole === 'borrower') stats.borrowers++;
-        if (primaryRole === 'lender') stats.lenders++;
-      });
 
       return {
         success: true,
