@@ -26,6 +26,14 @@
       ]
     },
     {
+      "collectionGroup": "installments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "lenderId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "loanRequests",
       "queryScope": "COLLECTION",
       "fields": [

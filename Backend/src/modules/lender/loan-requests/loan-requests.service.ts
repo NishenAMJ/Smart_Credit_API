@@ -1,4 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   DocumentData,
   Firestore,
@@ -19,6 +25,7 @@ import {
   PendingRequestListItem,
   PendingRequestsResponse,
 } from './loan-requests.types';
+import { LoanRequestDecisionResponse } from './loan-requests.dto';
 
 type RawLoanRequest = {
   requestId: string;
@@ -180,6 +187,98 @@ export class LoanRequestsService {
     };
   }
 
+  async approveRequest(
+    lenderId: string,
+    requestId: string,
+    notes?: string,
+  ): Promise<LoanRequestDecisionResponse> {
+    const { ref, request } = await this.getAuthorizedRequestRef(lenderId, requestId);
+
+    if (request.status === 'approved') {
+      throw new BadRequestException('This request is already approved.');
+    }
+
+    if (request.status === 'rejected') {
+      throw new BadRequestException('Rejected requests cannot be approved.');
+    }
+
+    const updatedAt = new Date().toISOString();
+    await ref.update({
+      status: 'approved',
+      approvedByLenderId: lenderId,
+      approvedAt: updatedAt,
+      updatedAt,
+      ...(notes && notes.trim().length > 0
+        ? { lenderDecisionNotes: notes.trim() }
+        : {}),
+    });
+
+    return { requestId: ref.id, status: 'approved', updatedAt };
+  }
+
+  async rejectRequest(
+    lenderId: string,
+    requestId: string,
+    reason: string,
+  ): Promise<LoanRequestDecisionResponse> {
+    const { ref, request } = await this.getAuthorizedRequestRef(lenderId, requestId);
+
+    if (request.status === 'rejected') {
+      throw new BadRequestException('This request is already rejected.');
+    }
+
+    if (request.status === 'approved') {
+      throw new BadRequestException('Approved requests cannot be rejected.');
+    }
+
+    const normalizedReason = reason.trim();
+    if (normalizedReason.length === 0) {
+      throw new BadRequestException('A rejection reason is required.');
+    }
+
+    const updatedAt = new Date().toISOString();
+    await ref.update({
+      status: 'rejected',
+      rejectedByLenderId: lenderId,
+      rejectionReason: normalizedReason,
+      rejectedAt: updatedAt,
+      updatedAt,
+    });
+
+    return { requestId: ref.id, status: 'rejected', updatedAt };
+  }
+
+  async markUnderReview(
+    lenderId: string,
+    requestId: string,
+    notes?: string,
+  ): Promise<LoanRequestDecisionResponse> {
+    const { ref, request } = await this.getAuthorizedRequestRef(lenderId, requestId);
+
+    if (request.status === 'approved' || request.status === 'rejected') {
+      throw new BadRequestException(
+        'Only open requests can be moved into review.',
+      );
+    }
+
+    if (request.status === 'under_review') {
+      throw new BadRequestException('This request is already under review.');
+    }
+
+    const updatedAt = new Date().toISOString();
+    await ref.update({
+      status: 'under_review',
+      reviewStartedByLenderId: lenderId,
+      reviewStartedAt: updatedAt,
+      updatedAt,
+      ...(notes && notes.trim().length > 0
+        ? { lenderDecisionNotes: notes.trim() }
+        : {}),
+    });
+
+    return { requestId: ref.id, status: 'under_review', updatedAt };
+  }
+
   private async getRequestsPage(
     db: Firestore,
     lenderId: string,
@@ -256,6 +355,31 @@ export class LoanRequestsService {
         request.matchedLenderIds.includes(lenderId) ||
         (request.adId && adIds.has(request.adId)),
     );
+  }
+
+  private async getAuthorizedRequestRef(lenderId: string, requestId: string) {
+    if (!requestId || requestId.trim().length === 0) {
+      throw new BadRequestException('requestId is required.');
+    }
+
+    const db = this.firebaseService.getDb();
+    const ref = db.collection('loanRequests').doc(requestId.trim());
+    const snapshot = await ref.get();
+
+    if (!snapshot.exists) {
+      throw new NotFoundException(`Loan request ${requestId} was not found.`);
+    }
+
+    const request = this.mapLoanRequest(snapshot as QueryDocumentSnapshot<DocumentData>);
+    const adIds = await this.getLenderAdIds(db, lenderId);
+
+    if (!this.isRequestVisibleToLender(request, lenderId, adIds)) {
+      throw new ForbiddenException(
+        `Loan request ${requestId} is not available for this lender.`,
+      );
+    }
+
+    return { ref, request };
   }
 
   private isStatusIncluded(
@@ -497,6 +621,14 @@ export class LoanRequestsService {
         ] as const;
       }),
     );
+  }
+
+  private async getLenderAdIds(
+    db: Firestore,
+    lenderId: string,
+  ): Promise<Set<string>> {
+    const adsSnapshot = await db.collection('ads').where('lenderId', '==', lenderId).get();
+    return new Set<string>(adsSnapshot.docs.map((doc) => doc.id));
   }
 
   private getUrgencyScore(value: string): number {

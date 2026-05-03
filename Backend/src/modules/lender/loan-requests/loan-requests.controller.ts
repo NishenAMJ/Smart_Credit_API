@@ -1,6 +1,10 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
   Get,
+  Param,
+  Post,
   Query,
   Req,
   UseGuards,
@@ -9,6 +13,7 @@ import type { AuthenticatedRequest } from '../../../common/types/authenticated-r
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { LoanRequestDecisionResponse } from './loan-requests.dto';
 import { LoanRequestsService } from './loan-requests.service';
 import { PendingRequestsResponse } from './loan-requests.types';
 
@@ -35,6 +40,49 @@ export class LoanRequestsController {
       includeSummary !== 'false',
       adId?.trim() || null,
       includeAllStatuses === 'true',
+    );
+  }
+
+  @Post(':requestId/approve')
+  approveRequest(
+    @Req() req: AuthenticatedRequest,
+    @Param('requestId') requestId: string,
+    @Body() body?: { notes?: string },
+  ): Promise<LoanRequestDecisionResponse> {
+    return this.loanRequestsService.approveRequest(
+      req.user.sub,
+      requestId?.trim(),
+      body?.notes,
+    );
+  }
+
+  @Post(':requestId/reject')
+  rejectRequest(
+    @Req() req: AuthenticatedRequest,
+    @Param('requestId') requestId: string,
+    @Body() body?: { reason?: string },
+  ): Promise<LoanRequestDecisionResponse> {
+    if (!body?.reason || body.reason.trim().length === 0) {
+      throw new BadRequestException('reason is required for rejection.');
+    }
+
+    return this.loanRequestsService.rejectRequest(
+      req.user.sub,
+      requestId?.trim(),
+      body.reason,
+    );
+  }
+
+  @Post(':requestId/review')
+  markUnderReview(
+    @Req() req: AuthenticatedRequest,
+    @Param('requestId') requestId: string,
+    @Body() body?: { notes?: string },
+  ): Promise<LoanRequestDecisionResponse> {
+    return this.loanRequestsService.markUnderReview(
+      req.user.sub,
+      requestId?.trim(),
+      body?.notes,
     );
   }
 

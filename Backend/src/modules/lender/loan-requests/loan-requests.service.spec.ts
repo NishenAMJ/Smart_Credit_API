@@ -336,4 +336,117 @@ describe('LoanRequestsService', () => {
       adId: 'ad_1',
     });
   });
+
+  it('approves a lender-visible request', async () => {
+    const update = jest.fn().mockResolvedValue(undefined);
+    const requestData: Record<string, unknown> = {
+      requestId: 'req_1',
+      borrowerId: 'borrower_1',
+      adId: 'ad_1',
+      targetLenderId: 'lender_1',
+      status: 'open',
+      matchedLenderIds: [],
+      createdAt: '2026-04-21T00:00:00.000Z',
+      updatedAt: '2026-04-21T00:00:00.000Z',
+    };
+    const requestSnapshot = {
+      exists: true,
+      id: 'req_1',
+      data: () => requestData,
+      get: (field: string) => requestData[field],
+    } as any;
+    const db = {
+      collection: jest.fn((name: string) => {
+        if (name === 'loanRequests') {
+          return {
+            doc: jest.fn(() => ({
+              id: 'req_1',
+              get: jest.fn().mockResolvedValue(requestSnapshot),
+              update,
+            })),
+          };
+        }
+
+        if (name === 'ads') {
+          return {
+            where: jest.fn().mockReturnValue({
+              get: jest.fn().mockResolvedValue({ docs: [createDoc('ad_1', {})] }),
+            }),
+          };
+        }
+
+        return {};
+      }),
+    };
+
+    const service = new LoanRequestsService({ getDb: () => db } as any);
+
+    const result = await service.approveRequest('lender_1', 'req_1', 'Looks good');
+
+    expect(result.requestId).toBe('req_1');
+    expect(result.status).toBe('approved');
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'approved',
+        approvedByLenderId: 'lender_1',
+        lenderDecisionNotes: 'Looks good',
+      }),
+    );
+  });
+
+  it('rejects a lender-visible request with a reason', async () => {
+    const update = jest.fn().mockResolvedValue(undefined);
+    const requestData: Record<string, unknown> = {
+      requestId: 'req_1',
+      borrowerId: 'borrower_1',
+      adId: null,
+      targetLenderId: 'lender_1',
+      status: 'under_review',
+      matchedLenderIds: [],
+      createdAt: '2026-04-21T00:00:00.000Z',
+      updatedAt: '2026-04-21T00:00:00.000Z',
+    };
+    const requestSnapshot = {
+      exists: true,
+      id: 'req_1',
+      data: () => requestData,
+      get: (field: string) => requestData[field],
+    } as any;
+    const db = {
+      collection: jest.fn((name: string) => {
+        if (name === 'loanRequests') {
+          return {
+            doc: jest.fn(() => ({
+              id: 'req_1',
+              get: jest.fn().mockResolvedValue(requestSnapshot),
+              update,
+            })),
+          };
+        }
+
+        if (name === 'ads') {
+          return {
+            where: jest.fn().mockReturnValue({
+              get: jest.fn().mockResolvedValue({ docs: [] }),
+            }),
+          };
+        }
+
+        return {};
+      }),
+    };
+
+    const service = new LoanRequestsService({ getDb: () => db } as any);
+
+    const result = await service.rejectRequest('lender_1', 'req_1', 'Income proof mismatch');
+
+    expect(result.status).toBe('rejected');
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'rejected',
+        rejectedByLenderId: 'lender_1',
+        rejectionReason: 'Income proof mismatch',
+      }),
+    );
+  });
 });

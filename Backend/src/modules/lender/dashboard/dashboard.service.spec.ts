@@ -174,6 +174,49 @@ describe('DashboardService', () => {
     });
   });
 
+  it('passes the search term into the loan-derived fallback when relation data is unavailable', async () => {
+    const db = {
+      collection: jest.fn(() => ({
+        where: jest.fn(() => ({
+          get: jest.fn().mockResolvedValue({ docs: [] }),
+        })),
+      })),
+    };
+    const service = new DashboardService({ getDb: () => db } as any);
+
+    jest.spyOn(service as any, 'getBorrowersFromRelations').mockResolvedValue(null);
+    jest.spyOn(service as any, 'mapLoan').mockResolvedValue({
+      id: 'loan_1',
+      borrowerId: 'borrower_1',
+      amount: 100000,
+      remainingAmount: 40000,
+      interestRate: 12,
+      tenureMonths: 12,
+      status: 'active',
+      createdAt: new Date('2026-04-01T00:00:00.000Z'),
+    });
+    const getRecentBorrowersSpy = jest
+      .spyOn(service as any, 'getRecentBorrowers')
+      .mockResolvedValue({
+        borrowers: [],
+        pageInfo: {
+          pageSize: 8,
+          hasMore: false,
+          nextCursor: null,
+        },
+      });
+
+    await service.getBorrowers('lender_1', 8, null, 'ann');
+
+    expect(getRecentBorrowersSpy).toHaveBeenCalledWith(
+      db,
+      expect.any(Array),
+      8,
+      null,
+      'ann',
+    );
+  });
+
   it('falls back overdue count to nested installments when aggregate query fails', async () => {
     const overdueInstallment = createDoc('inst_overdue', { status: 'overdue' });
     const nonOverdueInstallment = createDoc('inst_paid', { status: 'paid' });
@@ -208,5 +251,68 @@ describe('DashboardService', () => {
     );
 
     expect(result).toBe(1);
+  });
+
+  it('returns an empty borrower page instead of falling back when a search has no relation matches', async () => {
+    const getMock = jest.fn().mockResolvedValue({ empty: true, docs: [] });
+    const db = {
+      collection: jest.fn((collectionName: string) => {
+        if (collectionName === 'lenderBorrowers') {
+          return {
+            where: jest.fn(() => ({
+              where: jest.fn(() => ({
+                get: getMock,
+              })),
+              get: getMock,
+            })),
+          };
+        }
+
+        return {
+          where: jest.fn(() => ({
+            get: jest.fn().mockResolvedValue({ docs: [] }),
+          })),
+        };
+      }),
+    };
+    const service = new DashboardService({ getDb: () => db } as any);
+
+    const getRecentBorrowersSpy = jest.spyOn(service as any, 'getRecentBorrowers');
+
+    const result = await service.getBorrowers('lender_1', 8, null, 'missing borrower');
+
+    expect(result.borrowers).toEqual([]);
+    expect(result.pageInfo).toEqual({
+      pageSize: 8,
+      hasMore: false,
+      nextCursor: null,
+    });
+    expect(getRecentBorrowersSpy).not.toHaveBeenCalled();
+  });
+
+  it('matches borrower search terms by token prefix instead of broad substring fragments', async () => {
+    const service = new DashboardService({ getDb: () => ({}) } as any);
+
+    expect(
+      (service as any).borrowerMatchesSearch(
+        {
+          id: 'borrower_1',
+          fullName: 'Ann Perera',
+          email: 'ann.perera@example.com',
+        },
+        'ann per',
+      ),
+    ).toBe(true);
+
+    expect(
+      (service as any).borrowerMatchesSearch(
+        {
+          id: 'borrower_2',
+          fullName: 'Joanna Silva',
+          email: 'joanna@example.com',
+        },
+        'ann',
+      ),
+    ).toBe(false);
   });
 });

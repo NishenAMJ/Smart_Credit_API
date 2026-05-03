@@ -501,10 +501,10 @@ export default function DashboardPage({
                     loans stay out of this view.
                   </p>
                 </div>
-                <form className="search-field" onSubmit={handleBorrowerSearchSubmit}>
+                <form className="search-field search-field--with-submit" onSubmit={handleBorrowerSearchSubmit}>
                   <button
                     type="submit"
-                    className="search-field__icon search-field__submit"
+                    className="search-field__submit"
                     aria-label="Search borrowers"
                     disabled={isBorrowersLoading}
                   >

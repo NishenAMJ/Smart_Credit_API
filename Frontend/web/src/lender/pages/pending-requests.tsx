@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LenderSession } from "../lib/lender-session";
 import {
+  approvePendingRequest,
   fetchPendingRequests,
+  markPendingRequestUnderReview,
+  rejectPendingRequest,
   type PendingRequest,
   type PendingRequestsResponse,
 } from "../lib/pending-requests-api";
@@ -81,40 +84,46 @@ export default function PendingRequestsPage({
   const [selectedRequest, setSelectedRequest] = useState<PendingRequest | null>(
     null,
   );
+  const [decisionNotes, setDecisionNotes] = useState("");
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [decisionSuccess, setDecisionSuccess] = useState<string | null>(null);
+  const [isDecisionSaving, setIsDecisionSaving] = useState(false);
+
+  async function loadRequests(nextSelectedRequestId?: string | null) {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await fetchPendingRequests(API_LIMIT);
+      setResponse(data);
+
+      if (typeof nextSelectedRequestId === "string") {
+        const nextSelected =
+          data.requests.find(
+            (request) => request.requestId === nextSelectedRequestId,
+          ) ?? null;
+        setSelectedRequest(nextSelected);
+      }
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Failed to load pending requests.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   useEffect(() => {
-    let isMounted = true;
-
-    const loadRequests = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const data = await fetchPendingRequests(API_LIMIT);
-
-        if (isMounted) {
-          setResponse(data);
-        }
-      } catch (loadError) {
-        if (isMounted) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load pending requests.",
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
     void loadRequests();
-
-    return () => {
-      isMounted = false;
-    };
   }, [session.lenderId]);
+
+  useEffect(() => {
+    setDecisionNotes("");
+    setDecisionError(null);
+    setDecisionSuccess(null);
+    setIsDecisionSaving(false);
+  }, [selectedRequest?.requestId]);
 
   useEffect(() => {
     if (!selectedRequest) {
@@ -195,6 +204,65 @@ export default function PendingRequestsPage({
       accent: "HI",
     },
   ];
+
+  const selectedRequestStatus = selectedRequest?.status ?? null;
+  const canApprove =
+    selectedRequestStatus !== null &&
+    selectedRequestStatus !== "approved" &&
+    selectedRequestStatus !== "rejected";
+  const canReject =
+    selectedRequestStatus !== null &&
+    selectedRequestStatus !== "approved" &&
+    selectedRequestStatus !== "rejected";
+  const canMarkUnderReview =
+    selectedRequestStatus !== null &&
+    selectedRequestStatus !== "under_review" &&
+    selectedRequestStatus !== "approved" &&
+    selectedRequestStatus !== "rejected";
+
+  async function handleDecision(action: "approve" | "reject" | "review") {
+    if (!selectedRequest) {
+      return;
+    }
+
+    const trimmedNotes = decisionNotes.trim();
+
+    if (action === "reject" && trimmedNotes.length === 0) {
+      setDecisionError("A rejection reason is required.");
+      setDecisionSuccess(null);
+      return;
+    }
+
+    try {
+      setIsDecisionSaving(true);
+      setDecisionError(null);
+      setDecisionSuccess(null);
+
+      if (action === "approve") {
+        await approvePendingRequest(selectedRequest.requestId, trimmedNotes);
+        setDecisionSuccess("Request approved successfully.");
+      } else if (action === "reject") {
+        await rejectPendingRequest(selectedRequest.requestId, trimmedNotes);
+        setDecisionSuccess("Request rejected successfully.");
+      } else {
+        await markPendingRequestUnderReview(
+          selectedRequest.requestId,
+          trimmedNotes,
+        );
+        setDecisionSuccess("Request moved to under review.");
+      }
+
+      await loadRequests(selectedRequest.requestId);
+    } catch (decisionLoadError) {
+      setDecisionError(
+        decisionLoadError instanceof Error
+          ? decisionLoadError.message
+          : "Failed to update the request.",
+      );
+    } finally {
+      setIsDecisionSaving(false);
+    }
+  }
 
   return (
     <>
@@ -560,6 +628,76 @@ export default function PendingRequestsPage({
                       )}
                     </div>
                   </article>
+                </section>
+
+                <section className="pending-request-decision-card">
+                  <div className="pending-request-decision-card__header">
+                    <div>
+                      <p className="borrower-loan-card__eyebrow">
+                        Lender decision
+                      </p>
+                      <h4 className="borrower-loan-card__title">
+                        Review and update request status
+                      </h4>
+                    </div>
+                    <span
+                      className={`badge ${getStatusBadgeClass(selectedRequest.status)}`}
+                    >
+                      {formatLabel(selectedRequest.status)}
+                    </span>
+                  </div>
+
+                  <label className="pending-request-decision-card__field">
+                    <span>
+                      {selectedRequest.status === "rejected"
+                        ? "Rejection reason"
+                        : "Decision note"}
+                    </span>
+                    <textarea
+                      className="input pending-request-decision-card__textarea"
+                      rows={4}
+                      placeholder="Add a note for this decision. Rejection requires a reason."
+                      value={decisionNotes}
+                      onChange={(event) => setDecisionNotes(event.target.value)}
+                      disabled={isDecisionSaving}
+                    />
+                  </label>
+
+                  {decisionError ? (
+                    <p className="auth-error">{decisionError}</p>
+                  ) : null}
+                  {decisionSuccess ? (
+                    <p className="pending-request-decision-card__success">
+                      {decisionSuccess}
+                    </p>
+                  ) : null}
+
+                  <div className="pending-request-decision-card__actions">
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      onClick={() => void handleDecision("review")}
+                      disabled={!canMarkUnderReview || isDecisionSaving}
+                    >
+                      Mark Under Review
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      onClick={() => void handleDecision("approve")}
+                      disabled={!canApprove || isDecisionSaving}
+                    >
+                      Approve Request
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-danger"
+                      onClick={() => void handleDecision("reject")}
+                      disabled={!canReject || isDecisionSaving}
+                    >
+                      Reject Request
+                    </button>
+                  </div>
                 </section>
               </div>
             </div>

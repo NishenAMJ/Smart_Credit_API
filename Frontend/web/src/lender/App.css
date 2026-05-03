@@ -618,6 +618,7 @@
   min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
+  overflow-x: hidden;
 }
 
 .lender-sidebar__logo-wrap,
@@ -827,6 +828,8 @@
 }
 
 .lender-sidebar__bottom-wrap {
+  display: flex;
+  flex-direction: column;
   gap: var(--spacing-4);
   padding-top: var(--spacing-6);
   margin-top: auto;
@@ -930,10 +933,15 @@
 .lender-sidebar--collapsed .lender-sidebar__account-row {
   flex-direction: column;
   align-items: center;
+  gap: var(--spacing-2);
 }
 
 .lender-sidebar--collapsed .lender-sidebar__profile-trigger {
-  width: 100%;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: var(--radius-lg);
 }
 
 .lender-profile-modal {
@@ -1331,6 +1339,40 @@
 .create-ad-tips-card__list {
   display: grid;
   gap: var(--spacing-3);
+}
+
+.create-ad-tips-card--fullwidth {
+  margin-top: var(--spacing-5);
+}
+
+.create-ad-tips-card__list--detailed {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.create-ad-tip--detailed {
+  display: grid;
+  gap: var(--spacing-2);
+}
+
+.create-ad-tip__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+}
+
+.create-ad-tip__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-13);
+}
+
+.create-ad-tip__meta {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
 }
 
 .create-ad-tip {
@@ -2368,6 +2410,10 @@
   width: min(360px, 100%);
 }
 
+.search-field--with-submit .input {
+  padding-left: 78px;
+}
+
 .search-field__icon {
   position: absolute;
   top: 50%;
@@ -2380,6 +2426,9 @@
 
 .search-field__submit {
   appearance: none;
+  position: absolute;
+  top: 50%;
+  left: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2395,6 +2444,11 @@
   pointer-events: auto;
   cursor: pointer;
   font: inherit;
+  white-space: nowrap;
+  transform: translateY(-50%);
+  transition:
+    color 160ms ease,
+    opacity 160ms ease;
 }
 
 .search-field__submit:disabled {
@@ -2405,10 +2459,17 @@
 .search-field__submit:hover,
 .search-field__submit:active,
 .search-field__submit:focus-visible {
+  color: var(--color-text-primary);
   transform: translateY(-50%);
 }
 
-.search-field .input {
+.search-field__submit:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 60%, white);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+.search-field:not(.search-field--with-submit) .input {
   padding-left: 78px;
 }
 
@@ -2742,6 +2803,17 @@
   transform: none;
 }
 
+.button-danger {
+  background: var(--color-danger);
+  color: var(--color-surface);
+}
+
+.button-danger:hover,
+.button-danger:focus-visible {
+  background: #dc2626;
+  transform: none;
+}
+
 .borrower-modal__state {
   padding: var(--spacing-10);
   text-align: center;
@@ -2773,6 +2845,49 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-2);
+}
+
+.pending-request-decision-card {
+  display: grid;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.pending-request-decision-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+}
+
+.pending-request-decision-card__field {
+  display: grid;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
+}
+
+.pending-request-decision-card__textarea {
+  resize: vertical;
+  min-height: 112px;
+}
+
+.pending-request-decision-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+.pending-request-decision-card__success {
+  margin: 0;
+  color: var(--color-success);
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
 }
 
 .table-footer {
@@ -2867,6 +2982,14 @@
 
   .create-ad-preview-column {
     position: static;
+  }
+
+  .create-ad-tips-card__list--detailed {
+    grid-template-columns: 1fr;
+  }
+
+  .create-ad-tip__grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3145,6 +3268,16 @@
 
   .dashboard-quick-action {
     flex: 0 0 auto;
+  }
+
+  .pending-request-notes-section {
+    grid-template-columns: 1fr;
+  }
+
+  .pending-request-decision-card__header,
+  .pending-request-decision-card__actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .metric-card,

@@ -7,12 +7,9 @@ import {
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import {
-  applyDateCursor,
   buildPageInfo,
   decodeCursor,
   hasRole,
-  encodeCursor,
-  orderByDateAndId,
   readDate,
   readNumber,
   readString,
@@ -130,6 +127,7 @@ export class DashboardService {
         lenderLoans,
         safePageSize,
         cursor,
+        search,
       )),
       generatedAt: new Date().toISOString(),
     };
@@ -307,6 +305,7 @@ export class DashboardService {
         .where('lenderId', '==', lenderId)
         .where('paidAt', '>=', start)
         .where('paidAt', '<', end)
+        .orderBy('paidAt', 'desc')
         .get();
 
       return snapshot.docs.reduce(
@@ -348,10 +347,12 @@ export class DashboardService {
     loans: DashboardLoanRecord[],
     pageSize: number,
     cursor?: string | null,
+    search?: string | null,
   ): Promise<{
     borrowers: DashboardBorrower[];
     pageInfo: CursorPageInfo;
   }> {
+    const searchTerm = this.normalizeBorrowerSearch(search);
     const borrowerLoanMap = this.groupLoansByBorrower(loans);
     const borrowerIds = Array.from(borrowerLoanMap.keys());
 
@@ -376,6 +377,10 @@ export class DashboardService {
         ),
       )
       .filter(isDashboardBorrower)
+      .filter(
+        (borrower) =>
+          !searchTerm || this.borrowerMatchesSearch(borrower, searchTerm),
+      )
       .sort((left, right) => {
         const leftTime = left.latestLoanCreatedAt
           ? new Date(left.latestLoanCreatedAt).getTime()
@@ -409,77 +414,54 @@ export class DashboardService {
   } | null> {
     try {
       const searchTerm = this.normalizeBorrowerSearch(search);
-      const searchKeyword = searchTerm
-        ? this.getPrimarySearchKeyword(searchTerm)
-        : null;
-      let query = db
+      const snapshot = await db
         .collection('lenderBorrowers')
-        .where('lenderId', '==', lenderId);
+        .where('lenderId', '==', lenderId)
+        .get();
 
-      if (searchKeyword) {
-        query = query.where('searchKeywords', 'array-contains', searchKeyword);
+      if (snapshot.empty) {
+        return null;
       }
 
-      const batchSize = Math.max(pageSize * 2, pageSize);
-      let currentCursor = cursor ?? null;
-      let exhausted = false;
-      const items: DashboardBorrowerPageItem[] = [];
-
-      while (items.length < pageSize + 1 && !exhausted) {
-        const snapshot = await applyDateCursor(
-          orderByDateAndId(query, 'latestLoanCreatedAt'),
-          currentCursor,
-        )
-          .limit(batchSize)
-          .get();
-
-        if (snapshot.empty) {
-          return cursor ? this.createBorrowerPage([], pageSize, false) : null;
-        }
-
-        const borrowerIds: string[] = Array.from(
-          new Set<string>(
-            snapshot.docs
-              .map((doc) => readString(doc.data().borrowerId))
-              .filter((id): id is string => Boolean(id)),
-          ),
-        );
-        const userDataById = await this.getUsersByIds(db, borrowerIds);
-
-        for (const doc of snapshot.docs) {
+      const borrowerIds: string[] = Array.from(
+        new Set<string>(
+          snapshot.docs
+            .map((doc) => readString(doc.data().borrowerId))
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+      const userDataById = await this.getUsersByIds(db, borrowerIds);
+      const borrowers = snapshot.docs
+        .map((doc) => {
           const mapped = this.mapBorrowerFromRelation(doc.data(), userDataById);
 
-          if (
-            !mapped ||
-            (searchTerm && !this.borrowerMatchesSearch(mapped, searchTerm))
-          ) {
-            continue;
+          if (!mapped) {
+            return null;
           }
 
-          items.push({
+          return {
             ...mapped,
             cursorDate: readDate(doc.get('latestLoanCreatedAt')),
             cursorId: doc.id,
-          });
+          };
+        })
+        .filter((borrower): borrower is DashboardBorrowerPageItem => Boolean(borrower))
+        .filter(
+          (borrower) =>
+            !searchTerm || this.borrowerMatchesSearch(borrower, searchTerm),
+        )
+        .sort((left, right) => {
+          const leftTime = left.cursorDate ? left.cursorDate.getTime() : 0;
+          const rightTime = right.cursorDate ? right.cursorDate.getTime() : 0;
 
-          if (items.length >= pageSize + 1) {
-            break;
+          if (leftTime !== rightTime) {
+            return rightTime - leftTime;
           }
-        }
 
-        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-        currentCursor = encodeCursor(
-          readDate(lastDoc.get('latestLoanCreatedAt')),
-          lastDoc.id,
-        );
-        exhausted = snapshot.docs.length < batchSize || !currentCursor;
-      }
+          return right.cursorId.localeCompare(left.cursorId);
+        });
 
-      return this.createBorrowerPage(
-        items.slice(0, pageSize),
-        pageSize,
-        items.length > pageSize,
-      );
+      return this.paginateBorrowerItems(borrowers, pageSize, cursor);
     } catch (error) {
       this.logFallback(
         'borrowers:lender-relations',
@@ -584,22 +566,30 @@ export class DashboardService {
     borrower: DashboardBorrower,
     searchTerm: string,
   ): boolean {
-    const haystack = [borrower.fullName, borrower.email, borrower.id]
-      .filter((value) => value.trim().length > 0)
-      .join(' ')
-      .toLowerCase();
     const searchTerms = searchTerm.split(/\s+/).filter(Boolean);
+    const searchTokens = this.buildBorrowerSearchTokens(borrower);
 
-    return searchTerms.every((term) => haystack.includes(term));
+    return searchTerms.every((term) =>
+      searchTokens.some((token) => token.startsWith(term)),
+    );
   }
 
-  private getPrimarySearchKeyword(searchTerm: string): string | null {
-    const [keyword] = searchTerm
-      .split(/\s+/)
-      .filter((term) => term.length >= 2)
-      .sort((left, right) => right.length - left.length);
+  private buildBorrowerSearchTokens(borrower: DashboardBorrower): string[] {
+    return Array.from(
+      new Set(
+        [borrower.fullName, borrower.email]
+          .flatMap((value) => this.normalizeSearchTokens(value))
+          .filter((token) => token.length > 0),
+      ),
+    );
+  }
 
-    return keyword ?? null;
+  private normalizeSearchTokens(value: string): string[] {
+    return value
+      .trim()
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean);
   }
 
   private async getCountWithFallback(
