@@ -5,6 +5,7 @@ import {
   Param,
   Body,
   Query,
+  Req,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -15,6 +16,7 @@ import { RejectKycDto } from './dto/reject-kyc.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
 
 @Controller('admin/kyc')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -37,8 +39,9 @@ export class KycController {
   async approveDocument(
     @Param('documentId') documentId: string,
     @Body() dto: ApproveKycDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.kycService.approveDocument(documentId, dto.notes);
+    return this.kycService.approveDocument(documentId, req.user.sub, dto.notes);
   }
 
   @Post(':documentId/reject')
@@ -46,7 +49,8 @@ export class KycController {
   async rejectDocument(
     @Param('documentId') documentId: string,
     @Body() dto: RejectKycDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.kycService.rejectDocument(documentId, dto.reason);
+    return this.kycService.rejectDocument(documentId, dto.reason, req.user.sub);
   }
 }

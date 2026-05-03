@@ -1,12 +1,15 @@
 export interface KycDocument {
   id: string;
   userId: string;
-  fullName?: string;
-  email?: string;
-  phone?: string;
   documentType: string;
+  originalFilename?: string;
+  mimeType?: string;
+  fileHash?: string;
+  cloudinaryPublicId?: string;
+  cloudinaryResourceType?: string;
+  cloudinaryDeliveryType?: string;
   documentUrl?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending_review' | 'approved' | 'rejected' | 'expired' | 'deleted';
   submittedAt: any;
   reviewedAt?: any;
   reviewedBy?: string;
