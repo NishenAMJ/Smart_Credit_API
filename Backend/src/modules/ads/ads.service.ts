@@ -43,7 +43,11 @@ export class AdsService {
   ): Ad['status'] {
     const rawStatus = data.status;
 
-    if (rawStatus === 'pending' || rawStatus === 'rejected' || rawStatus === 'closed') {
+    if (
+      rawStatus === 'pending' ||
+      rawStatus === 'rejected' ||
+      rawStatus === 'closed'
+    ) {
       return rawStatus;
     }
 
@@ -54,9 +58,7 @@ export class AdsService {
     return 'pending';
   }
 
-  private async getLoanBackedAdIds(
-    adIds: string[],
-  ): Promise<Set<string>> {
+  private async getLoanBackedAdIds(adIds: string[]): Promise<Set<string>> {
     if (adIds.length === 0) {
       return new Set<string>();
     }
@@ -158,7 +160,10 @@ export class AdsService {
     }
   }
 
-  async getAllAds(limit?: string, cursor?: string): Promise<{
+  async getAllAds(
+    limit?: string,
+    cursor?: string,
+  ): Promise<{
     success: boolean;
     count: number;
     ads: Ad[];
@@ -180,7 +185,9 @@ export class AdsService {
       }
 
       const snapshot = await query.limit(pageSize + 1).get();
-      const visibleDocs = snapshot.docs.filter((doc) => Boolean(doc.data()?.lenderId));
+      const visibleDocs = snapshot.docs.filter((doc) =>
+        Boolean(doc.data()?.lenderId),
+      );
       const activeAdIds = await this.getLoanBackedAdIds(
         visibleDocs.map((doc) => doc.id),
       );
@@ -200,7 +207,10 @@ export class AdsService {
     }
   }
 
-  async getPendingAds(limit?: string, cursor?: string): Promise<{
+  async getPendingAds(
+    limit?: string,
+    cursor?: string,
+  ): Promise<{
     success: boolean;
     count: number;
     ads: Ad[];
@@ -231,7 +241,10 @@ export class AdsService {
         count: ads.length,
         ads,
         hasMore: snapshot.size > pageSize,
-        nextCursor: snapshot.size > pageSize ? pageDocs[pageDocs.length - 1]?.id : undefined,
+        nextCursor:
+          snapshot.size > pageSize
+            ? pageDocs[pageDocs.length - 1]?.id
+            : undefined,
       };
     } catch (error) {
       rethrowFirebaseError(error, 'Failed to fetch pending ads');

@@ -12,7 +12,10 @@ export class AdminAuditController {
 
   // Returns the latest admin-facing activity feed generated from stored records.
   @Get()
-  async getAuditLogs(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+  async getAuditLogs(
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
     return this.adminAuditService.getAuditLogs(limit, cursor);
   }
 }

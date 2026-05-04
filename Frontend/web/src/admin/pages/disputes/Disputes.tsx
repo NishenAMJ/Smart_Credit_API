@@ -1,6 +1,14 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Eye, Search, ShieldAlert, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Eye,
+  Search,
+  ShieldAlert,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import {
   escalateDispute,
   getDisputes,
@@ -36,18 +44,30 @@ type DisputeRow = {
 function mapDispute(dispute: AdminDispute): DisputeRow {
   return {
     id: dispute.id,
-    disputeCode: dispute.disputeCode || `DSP-${dispute.id.slice(0, 6).toUpperCase()}`,
+    disputeCode:
+      dispute.disputeCode || `DSP-${dispute.id.slice(0, 6).toUpperCase()}`,
     title: dispute.title || `${dispute.category} dispute`,
     transactionId: dispute.transactionId || "N/A",
     loanId: dispute.loanId || "N/A",
-    raisedBy: dispute.raisedBy || dispute.borrowerName || dispute.borrowerId || "Unknown",
-    againstUser: dispute.againstUser || dispute.lenderName || dispute.lenderId || "Unknown",
-    description: dispute.description || dispute.title || "No description provided",
+    raisedBy:
+      dispute.raisedBy ||
+      dispute.borrowerName ||
+      dispute.borrowerId ||
+      "Unknown",
+    againstUser:
+      dispute.againstUser ||
+      dispute.lenderName ||
+      dispute.lenderId ||
+      "Unknown",
+    description:
+      dispute.description || dispute.title || "No description provided",
     category: dispute.category,
     status: dispute.status,
     priority: dispute.priority,
     disputedAmount:
-      typeof dispute.disputedAmount === "number" ? `LKR ${dispute.disputedAmount.toLocaleString()}` : "N/A",
+      typeof dispute.disputedAmount === "number"
+        ? `LKR ${dispute.disputedAmount.toLocaleString()}`
+        : "N/A",
     evidenceUrls: dispute.evidenceUrls || [],
     createdAt: formatFirestoreDate(dispute.createdAt),
     resolution: dispute.resolution || "N/A",
@@ -81,9 +101,13 @@ function PriorityBadge({ priority }: { priority: DisputePriority }) {
 
 export default function Disputes() {
   const [disputes, setDisputes] = useState<DisputeRow[]>([]);
-  const [selectedDispute, setSelectedDispute] = useState<DisputeRow | null>(null);
+  const [selectedDispute, setSelectedDispute] = useState<DisputeRow | null>(
+    null,
+  );
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<DisputeStatus | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<DisputeStatus | "all">(
+    "all",
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -95,20 +119,25 @@ export default function Disputes() {
   const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [totalLoaded, setTotalLoaded] = useState(0);
 
-  const loadDisputes = useCallback(async (cursor?: string) => {
-    setLoading(true);
-    try {
-      const response = await getDisputes({ limit: pageSize, cursor });
-      setDisputes(response.disputes.map(mapDispute));
-      setHasMore(response.hasMore ?? false);
-      setNextCursor(response.nextCursor);
-      setTotalLoaded(response.count);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load disputes.");
-    } finally {
-      setLoading(false);
-    }
-  }, [pageSize]);
+  const loadDisputes = useCallback(
+    async (cursor?: string) => {
+      setLoading(true);
+      try {
+        const response = await getDisputes({ limit: pageSize, cursor });
+        setDisputes(response.disputes.map(mapDispute));
+        setHasMore(response.hasMore ?? false);
+        setNextCursor(response.nextCursor);
+        setTotalLoaded(response.count);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to load disputes.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pageSize],
+  );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -118,7 +147,8 @@ export default function Disputes() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      const activeCursor = currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+      const activeCursor =
+        currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
       void loadDisputes(activeCursor);
     }, 10000);
 
@@ -137,7 +167,8 @@ export default function Disputes() {
         dispute.raisedBy.toLowerCase().includes(searchValue) ||
         dispute.againstUser.toLowerCase().includes(searchValue) ||
         dispute.description.toLowerCase().includes(searchValue);
-      const matchesStatus = filterStatus === "all" || dispute.status === filterStatus;
+      const matchesStatus =
+        filterStatus === "all" || dispute.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
   }, [disputes, filterStatus, search]);
@@ -153,7 +184,8 @@ export default function Disputes() {
     if (currentPage <= 1) return;
     const newStack = [...cursorStack];
     newStack.pop();
-    const prevCursor = newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
+    const prevCursor =
+      newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
     setCursorStack(newStack);
     setCurrentPage((prev) => prev - 1);
     const goToCursor = currentPage <= 2 ? undefined : prevCursor;
@@ -169,16 +201,27 @@ export default function Disputes() {
   const counts = {
     all: disputes.length,
     open: disputes.filter((dispute) => dispute.status === "open").length,
-    inProgress: disputes.filter((dispute) => dispute.status === "in-progress").length,
-    escalated: disputes.filter((dispute) => dispute.status === "escalated").length,
-    resolved: disputes.filter((dispute) => dispute.status === "resolved").length,
+    inProgress: disputes.filter((dispute) => dispute.status === "in-progress")
+      .length,
+    escalated: disputes.filter((dispute) => dispute.status === "escalated")
+      .length,
+    resolved: disputes.filter((dispute) => dispute.status === "resolved")
+      .length,
   };
 
-  function syncStatus(id: string, status: DisputeStatus, patch: Partial<DisputeRow> = {}) {
+  function syncStatus(
+    id: string,
+    status: DisputeStatus,
+    patch: Partial<DisputeRow> = {},
+  ) {
     setDisputes((prev) =>
-      prev.map((dispute) => (dispute.id === id ? { ...dispute, ...patch, status } : dispute)),
+      prev.map((dispute) =>
+        dispute.id === id ? { ...dispute, ...patch, status } : dispute,
+      ),
     );
-    setSelectedDispute((prev) => (prev?.id === id ? { ...prev, ...patch, status } : prev));
+    setSelectedDispute((prev) =>
+      prev?.id === id ? { ...prev, ...patch, status } : prev,
+    );
   }
 
   async function handleResolve(dispute: DisputeRow) {
@@ -188,7 +231,9 @@ export default function Disputes() {
       await resolveDispute(dispute.id, resolution);
       syncStatus(dispute.id, "resolved", { resolution });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to resolve dispute.");
+      setError(
+        err instanceof Error ? err.message : "Failed to resolve dispute.",
+      );
     }
   }
 
@@ -199,7 +244,9 @@ export default function Disputes() {
       await escalateDispute(dispute.id, escalationReason);
       syncStatus(dispute.id, "escalated", { escalationReason });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to escalate dispute.");
+      setError(
+        err instanceof Error ? err.message : "Failed to escalate dispute.",
+      );
     }
   }
 
@@ -212,11 +259,18 @@ export default function Disputes() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Disputes</h1>
-          <p className="page-subtitle">Review borrower and lender complaints connected to loans and repayments</p>
+          <p className="page-subtitle">
+            Review borrower and lender complaints connected to loans and
+            repayments
+          </p>
         </div>
       </div>
 
-      {error && <div className="card" style={S.errorCard}>{error}</div>}
+      {error && (
+        <div className="card" style={S.errorCard}>
+          {error}
+        </div>
+      )}
 
       <div style={S.summaryGrid}>
         {[
@@ -228,7 +282,9 @@ export default function Disputes() {
         ].map((item) => (
           <div key={item.label} className="card">
             <p style={S.cardLabel}>{item.label}</p>
-            <p style={{ ...S.cardValue, color: item.color }}>{loading ? "..." : item.count}</p>
+            <p style={{ ...S.cardValue, color: item.color }}>
+              {loading ? "..." : item.count}
+            </p>
           </div>
         ))}
       </div>
@@ -246,7 +302,16 @@ export default function Disputes() {
         </div>
 
         <div className="tabs">
-          {(["all", "open", "in-progress", "escalated", "resolved", "closed"] as const).map((status) => (
+          {(
+            [
+              "all",
+              "open",
+              "in-progress",
+              "escalated",
+              "resolved",
+              "closed",
+            ] as const
+          ).map((status) => (
             <button
               key={status}
               className={`tab ${filterStatus === status ? "active" : ""}`}
@@ -285,27 +350,65 @@ export default function Disputes() {
                   <td>
                     <div style={{ maxWidth: 260 }}>
                       <p style={{ fontWeight: 700 }}>{dispute.title}</p>
-                      <p style={S.mutedLine}>Case: {dispute.disputeCode} • Loan: {dispute.loanId}</p>
+                      <p style={S.mutedLine}>
+                        Case: {dispute.disputeCode} • Loan: {dispute.loanId}
+                      </p>
                     </div>
                   </td>
                   <td>{dispute.raisedBy}</td>
                   <td>{dispute.againstUser}</td>
-                  <td style={{ textTransform: "capitalize" }}>{dispute.category}</td>
-                  <td><PriorityBadge priority={dispute.priority} /></td>
+                  <td style={{ textTransform: "capitalize" }}>
+                    {dispute.category}
+                  </td>
+                  <td>
+                    <PriorityBadge priority={dispute.priority} />
+                  </td>
                   <td>{dispute.createdAt}</td>
-                  <td><StatusBadge status={dispute.status} /></td>
+                  <td>
+                    <StatusBadge status={dispute.status} />
+                  </td>
                   <td style={S.actionCell}>
                     <div style={S.actionRow}>
-                      <button style={S.iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedDispute(dispute)} title="View" aria-label="View dispute">
-                        <Eye size={14} color="#6B7280" strokeWidth={2.2} style={S.iconGraphic} />
+                      <button
+                        style={S.iconButton("#6B7280", "#F3F4F6")}
+                        onClick={() => setSelectedDispute(dispute)}
+                        title="View"
+                        aria-label="View dispute"
+                      >
+                        <Eye
+                          size={14}
+                          color="#6B7280"
+                          strokeWidth={2.2}
+                          style={S.iconGraphic}
+                        />
                       </button>
                       {canAct(dispute) && (
                         <>
-                          <button style={S.iconButton("#10B981", "#ECFDF5")} onClick={() => void handleResolve(dispute)} title="Resolve" aria-label="Resolve dispute">
-                            <CheckCircle2 size={14} color="#10B981" strokeWidth={2.2} style={S.iconGraphic} />
+                          <button
+                            style={S.iconButton("#10B981", "#ECFDF5")}
+                            onClick={() => void handleResolve(dispute)}
+                            title="Resolve"
+                            aria-label="Resolve dispute"
+                          >
+                            <CheckCircle2
+                              size={14}
+                              color="#10B981"
+                              strokeWidth={2.2}
+                              style={S.iconGraphic}
+                            />
                           </button>
-                          <button style={S.iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleEscalate(dispute)} title="Escalate" aria-label="Escalate dispute">
-                            <ShieldAlert size={14} color="#EF4444" strokeWidth={2.2} style={S.iconGraphic} />
+                          <button
+                            style={S.iconButton("#EF4444", "#FEF2F2")}
+                            onClick={() => void handleEscalate(dispute)}
+                            title="Escalate"
+                            aria-label="Escalate dispute"
+                          >
+                            <ShieldAlert
+                              size={14}
+                              color="#EF4444"
+                              strokeWidth={2.2}
+                              style={S.iconGraphic}
+                            />
                           </button>
                         </>
                       )}
@@ -321,8 +424,12 @@ export default function Disputes() {
         <div style={S.paginationBar}>
           <div style={S.paginationInfo}>
             <span style={{ fontSize: 13, color: "#6B7280" }}>
-              Showing {filteredDisputes.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
-              –{(currentPage - 1) * pageSize + totalLoaded} {hasMore ? "" : "(last page)"}
+              Showing{" "}
+              {filteredDisputes.length > 0
+                ? (currentPage - 1) * pageSize + 1
+                : 0}
+              –{(currentPage - 1) * pageSize + totalLoaded}{" "}
+              {hasMore ? "" : "(last page)"}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
@@ -332,7 +439,9 @@ export default function Disputes() {
                 style={S.pageSizeSelect}
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size}</option>
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
                 ))}
               </select>
             </div>
@@ -370,43 +479,80 @@ export default function Disputes() {
                   <AlertTriangle size={20} color="#F59E0B" />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700 }}>{selectedDispute.title}</h3>
+                  <h3 style={{ fontSize: 18, fontWeight: 700 }}>
+                    {selectedDispute.title}
+                  </h3>
                   <p style={S.mutedLine}>Case: {selectedDispute.disputeCode}</p>
                 </div>
               </div>
-              <button style={S.closeButton} onClick={() => setSelectedDispute(null)}>x</button>
+              <button
+                style={S.closeButton}
+                onClick={() => setSelectedDispute(null)}
+              >
+                x
+              </button>
             </div>
 
             <div style={S.detailsGrid}>
               <Detail label="Status" value={selectedDispute.status} />
               <Detail label="Priority" value={selectedDispute.priority} />
               <Detail label="Raised By" value={selectedDispute.raisedBy} />
-              <Detail label="Against User" value={selectedDispute.againstUser} />
+              <Detail
+                label="Against User"
+                value={selectedDispute.againstUser}
+              />
               <Detail label="Created" value={selectedDispute.createdAt} />
-              <Detail label="Disputed Amount" value={selectedDispute.disputedAmount} />
+              <Detail
+                label="Disputed Amount"
+                value={selectedDispute.disputedAmount}
+              />
               <Detail label="Category" value={selectedDispute.category} />
               <Detail label="Case Code" value={selectedDispute.disputeCode} />
-              <Detail label="Description" value={selectedDispute.description} wide />
               <Detail
-                label="Evidence"
-                value={selectedDispute.evidenceUrls.length ? selectedDispute.evidenceUrls.join(", ") : "N/A"}
+                label="Description"
+                value={selectedDispute.description}
                 wide
               />
-              {selectedDispute.status === "resolved" && selectedDispute.resolution !== "N/A" && (
-                <Detail label="Resolution" value={selectedDispute.resolution} wide />
-              )}
-              {selectedDispute.status === "escalated" && selectedDispute.escalationReason !== "N/A" && (
-                <Detail label="Escalation Reason" value={selectedDispute.escalationReason} wide />
-              )}
+              <Detail
+                label="Evidence"
+                value={
+                  selectedDispute.evidenceUrls.length
+                    ? selectedDispute.evidenceUrls.join(", ")
+                    : "N/A"
+                }
+                wide
+              />
+              {selectedDispute.status === "resolved" &&
+                selectedDispute.resolution !== "N/A" && (
+                  <Detail
+                    label="Resolution"
+                    value={selectedDispute.resolution}
+                    wide
+                  />
+                )}
+              {selectedDispute.status === "escalated" &&
+                selectedDispute.escalationReason !== "N/A" && (
+                  <Detail
+                    label="Escalation Reason"
+                    value={selectedDispute.escalationReason}
+                    wide
+                  />
+                )}
             </div>
 
             <div style={S.modalActions}>
               {canAct(selectedDispute) && (
                 <>
-                  <button className="btn-success btn-sm" onClick={() => void handleResolve(selectedDispute)}>
+                  <button
+                    className="btn-success btn-sm"
+                    onClick={() => void handleResolve(selectedDispute)}
+                  >
                     Resolve
                   </button>
-                  <button className="btn-danger btn-sm" onClick={() => void handleEscalate(selectedDispute)}>
+                  <button
+                    className="btn-danger btn-sm"
+                    onClick={() => void handleEscalate(selectedDispute)}
+                  >
                     Escalate
                   </button>
                 </>
@@ -419,7 +565,15 @@ export default function Disputes() {
   );
 }
 
-function Detail({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+function Detail({
+  label,
+  value,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+}) {
   return (
     <div style={{ ...S.detailCard, ...(wide ? S.detailWide : {}) }}>
       <div style={S.detailLabel}>{label}</div>

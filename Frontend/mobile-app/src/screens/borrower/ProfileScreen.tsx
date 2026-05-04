@@ -420,9 +420,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             <View style={styles.completionBlock}>
               <View style={styles.completionHeader}>
                 <Text style={styles.completionLabel}>Profile completion</Text>
-                <Text style={styles.completionValue}>
-                  {profileCompletion}%
-                </Text>
+                <Text style={styles.completionValue}>{profileCompletion}%</Text>
               </View>
               <View style={styles.completionTrack}>
                 <View
@@ -458,13 +456,18 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               <View>
                 <Text style={styles.scoreLabel}>Credit Score</Text>
                 <View style={styles.scoreValueRow}>
-                  <Text style={[styles.scoreValue, { color: creditScoreColor }]}>
+                  <Text
+                    style={[styles.scoreValue, { color: creditScoreColor }]}
+                  >
                     {creditScore}
                   </Text>
                   <Text
                     style={[
                       styles.scoreRating,
-                      { backgroundColor: `${creditScoreColor}18`, color: creditScoreColor },
+                      {
+                        backgroundColor: `${creditScoreColor}18`,
+                        color: creditScoreColor,
+                      },
                     ]}
                   >
                     {creditRating}
@@ -485,10 +488,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               />
             </View>
             {financeRows.map((row) => (
-              <View
-                key={row.label}
-                style={styles.detailRow}
-              >
+              <View key={row.label} style={styles.detailRow}>
                 <View style={styles.rowLeft}>
                   <Feather name={row.icon} size={16} color="#007AFF" />
                   <Text style={styles.detailLabel}>{row.label}</Text>
@@ -497,10 +497,23 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   <Text style={styles.detailValue}>{row.value}</Text>
                   {row.label === "KYC Status" && !profile?.kycVerified && (
                     <TouchableOpacity
-                      style={{ marginLeft: 10, backgroundColor: '#007AFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}
-                      onPress={() => Alert.alert('Complete KYC', 'Please log out and log in via the signup flow to complete your KYC submission, or contact support.')}
+                      style={{
+                        marginLeft: 10,
+                        backgroundColor: "#007AFF",
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 4,
+                      }}
+                      onPress={() =>
+                        Alert.alert(
+                          "Complete KYC",
+                          "Please log out and log in via the signup flow to complete your KYC submission, or contact support.",
+                        )
+                      }
                     >
-                      <Text style={{ color: '#fff', fontSize: 12 }}>Complete KYC</Text>
+                      <Text style={{ color: "#fff", fontSize: 12 }}>
+                        Complete KYC
+                      </Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -550,7 +563,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                     <Text style={styles.readOnlyLabel}>NIC</Text>
                     <Feather name="lock" size={12} color="#DC2626" />
                   </View>
-                  <Text style={styles.readOnlyValue}>{profile?.nic ?? "-"}</Text>
+                  <Text style={styles.readOnlyValue}>
+                    {profile?.nic ?? "-"}
+                  </Text>
                 </View>
                 <View style={styles.readOnlyRow}>
                   <View style={styles.lockedLabelRow}>
@@ -593,9 +608,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                         row.multiline && styles.multilineInput,
                       ]}
                       value={
-                        editableProfile[
-                          row.key as keyof typeof editableProfile
-                        ]
+                        editableProfile[row.key as keyof typeof editableProfile]
                       }
                       onChangeText={(value) =>
                         onChangeEditableField(row.key, value)
@@ -701,9 +714,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                             style={styles.confirmButton}
                             onPress={onVerifySensitiveChanges}
                           >
-                            <Text style={styles.confirmButtonText}>
-                              Verify
-                            </Text>
+                            <Text style={styles.confirmButtonText}>Verify</Text>
                           </TouchableOpacity>
                         </>
                       ) : null}

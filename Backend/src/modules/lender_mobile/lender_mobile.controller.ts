@@ -10,9 +10,7 @@ import { LenderMobileService } from './lender_mobile.service';
 export class LenderMobileController {
   private readonly logger = new Logger(LenderMobileController.name);
 
-  constructor(
-    private readonly lenderMobileService: LenderMobileService,
-  ) {}
+  constructor(private readonly lenderMobileService: LenderMobileService) {}
 
   @Get()
   async getDashboard() {
@@ -29,14 +27,9 @@ export class LenderMobileController {
         data,
       };
     } catch (error) {
-      this.logger.error(
-        'Error while fetching dashboard data',
-        error.stack,
-      );
+      this.logger.error('Error while fetching dashboard data', error.stack);
 
-      throw new InternalServerErrorException(
-        'Failed to load dashboard data',
-      );
+      throw new InternalServerErrorException('Failed to load dashboard data');
     }
   }
 
@@ -45,8 +38,7 @@ export class LenderMobileController {
     try {
       this.logger.log('Fetching lender dashboard summary');
 
-      const data =
-        await this.lenderMobileService.getDashboardSummary();
+      const data = await this.lenderMobileService.getDashboardSummary();
 
       this.logger.debug('Dashboard summary fetched successfully');
 
@@ -56,10 +48,7 @@ export class LenderMobileController {
         data,
       };
     } catch (error) {
-      this.logger.error(
-        'Error while fetching dashboard summary',
-        error.stack,
-      );
+      this.logger.error('Error while fetching dashboard summary', error.stack);
 
       throw new InternalServerErrorException(
         'Failed to load dashboard summary',
@@ -72,8 +61,7 @@ export class LenderMobileController {
     try {
       this.logger.log('Fetching lender dashboard statistics');
 
-      const data =
-        await this.lenderMobileService.getDashboardStats();
+      const data = await this.lenderMobileService.getDashboardStats();
 
       this.logger.debug('Dashboard statistics fetched successfully');
 

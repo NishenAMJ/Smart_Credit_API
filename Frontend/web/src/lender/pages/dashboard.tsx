@@ -267,9 +267,7 @@ export default function DashboardPage({
       try {
         setIsBorrowerLoading(true);
         setBorrowerError(null);
-        const details = await fetchBorrowerDetails(
-          selectedBorrowerId,
-        );
+        const details = await fetchBorrowerDetails(selectedBorrowerId);
 
         if (isMounted) {
           setSelectedBorrower(details);
@@ -501,7 +499,10 @@ export default function DashboardPage({
                     loans stay out of this view.
                   </p>
                 </div>
-                <form className="search-field search-field--with-submit" onSubmit={handleBorrowerSearchSubmit}>
+                <form
+                  className="search-field search-field--with-submit"
+                  onSubmit={handleBorrowerSearchSubmit}
+                >
                   <button
                     type="submit"
                     className="search-field__submit"
@@ -613,9 +614,7 @@ export default function DashboardPage({
                 <p>
                   Showing {visibleBorrowers.length} lender-linked borrowers on
                   page {currentPage}
-                  {borrowerSearch
-                    ? ` for "${borrowerSearch}"`
-                    : ""}
+                  {borrowerSearch ? ` for "${borrowerSearch}"` : ""}
                 </p>
 
                 <div className="pagination">
@@ -630,9 +629,7 @@ export default function DashboardPage({
                     Previous
                   </button>
 
-                  <span className="pagination-status">
-                    Page {currentPage}
-                  </span>
+                  <span className="pagination-status">Page {currentPage}</span>
 
                   <button
                     type="button"

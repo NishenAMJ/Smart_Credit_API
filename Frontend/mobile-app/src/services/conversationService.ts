@@ -5,9 +5,9 @@
  * Used by: ChatListScreen, ChatScreen, ChatInfoScreen, NewChatScreen.
  */
 
-import { api } from './api';
-import { localDatabase } from './localDatabase';
-import type { Conversation } from '../types/chat.types';
+import { api } from "./api";
+import { localDatabase } from "./localDatabase";
+import type { Conversation } from "../types/chat.types";
 
 export const conversationService = {
   /**
@@ -16,7 +16,7 @@ export const conversationService = {
    * If offline, ChatListScreen falls back to localDatabase.getConversations().
    */
   getAll: async (): Promise<Conversation[]> => {
-    const data: Conversation[] = await api.get('/conversations');
+    const data: Conversation[] = await api.get("/conversations");
     // Sync to local DB so the list is available offline
     data.forEach((conv) => localDatabase.upsertConversation(conv));
     return data;
@@ -28,7 +28,7 @@ export const conversationService = {
    * Maps to POST /conversations — called from NewChatScreen.
    */
   start: async (targetUserId: string): Promise<Conversation> => {
-    return api.post('/conversations', { targetUserId });
+    return api.post("/conversations", { targetUserId });
   },
 
   /**

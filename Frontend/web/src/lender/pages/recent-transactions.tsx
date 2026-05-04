@@ -87,8 +87,9 @@ export default function RecentTransactionsPage({
   const [listError, setListError] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [summary, setSummary] =
-    useState<RecentTransactionsResponse["summary"] | null>(null);
+  const [summary, setSummary] = useState<
+    RecentTransactionsResponse["summary"] | null
+  >(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -491,15 +492,23 @@ export default function RecentTransactionsPage({
           </section>
         ) : (
           <>
-            <section className="summary-grid" aria-label="Loan activity summary">
+            <section
+              className="summary-grid"
+              aria-label="Loan activity summary"
+            >
               <article className="card metric-card">
-                <div className="metric-icon metric-icon--primary" aria-hidden="true">
+                <div
+                  className="metric-icon metric-icon--primary"
+                  aria-hidden="true"
+                >
                   PM
                 </div>
                 <div className="metric-copy">
                   <p className="metric-label">Total Payments</p>
                   <p className="metric-value">
-                    {isSummaryLoading ? "..." : String(displaySummary.totalTransactions)}
+                    {isSummaryLoading
+                      ? "..."
+                      : String(displaySummary.totalTransactions)}
                   </p>
                   <p className="metric-caption">
                     {summaryError ??
@@ -508,7 +517,10 @@ export default function RecentTransactionsPage({
                 </div>
               </article>
               <article className="card metric-card">
-                <div className="metric-icon metric-icon--success" aria-hidden="true">
+                <div
+                  className="metric-icon metric-icon--success"
+                  aria-hidden="true"
+                >
                   LKR
                 </div>
                 <div className="metric-copy">
@@ -524,13 +536,18 @@ export default function RecentTransactionsPage({
                 </div>
               </article>
               <article className="card metric-card">
-                <div className="metric-icon metric-icon--warning" aria-hidden="true">
+                <div
+                  className="metric-icon metric-icon--warning"
+                  aria-hidden="true"
+                >
                   LN
                 </div>
                 <div className="metric-copy">
                   <p className="metric-label">Loans With Activity</p>
                   <p className="metric-value">
-                    {isSummaryLoading ? "..." : String(displaySummary.loansWithActivity)}
+                    {isSummaryLoading
+                      ? "..."
+                      : String(displaySummary.loansWithActivity)}
                   </p>
                   <p className="metric-caption">
                     Loans with at least one recorded repayment
@@ -538,7 +555,10 @@ export default function RecentTransactionsPage({
                 </div>
               </article>
               <article className="card metric-card">
-                <div className="metric-icon metric-icon--danger" aria-hidden="true">
+                <div
+                  className="metric-icon metric-icon--danger"
+                  aria-hidden="true"
+                >
                   OD
                 </div>
                 <div className="metric-copy">

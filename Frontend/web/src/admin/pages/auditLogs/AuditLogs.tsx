@@ -1,19 +1,77 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Download, AlertTriangle, FileText, Shield, UserCheck, Eye, UserX, ChevronLeft, ChevronRight } from "lucide-react";
-import { getAuditLogs, type AuditLogEntry, type AuditSeverity } from "../../lib/api";
+import {
+  Search,
+  Download,
+  AlertTriangle,
+  FileText,
+  Shield,
+  UserCheck,
+  Eye,
+  UserX,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import {
+  getAuditLogs,
+  type AuditLogEntry,
+  type AuditSeverity,
+} from "../../lib/api";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
-const ACTION_META: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
-  kyc_approved: { label: "KYC Approved", icon: UserCheck, color: "#10B981", bg: "#ECFDF5" },
-  kyc_rejected: { label: "KYC Rejected", icon: UserX, color: "#EF4444", bg: "#FEF2F2" },
-  user_suspended: { label: "User Suspended", icon: Shield, color: "#EF4444", bg: "#FEF2F2" },
-  user_activated: { label: "User Activated", icon: UserCheck, color: "#10B981", bg: "#ECFDF5" },
-  ad_approved: { label: "Ad Approved", icon: FileText, color: "#007AFF", bg: "#EFF6FF" },
-  ad_rejected: { label: "Ad Rejected", icon: FileText, color: "#EF4444", bg: "#FEF2F2" },
-  report_generated: { label: "Report Event", icon: FileText, color: "#8B5CF6", bg: "#F5F3FF" },
-  system_event: { label: "System Event", icon: AlertTriangle, color: "#F59E0B", bg: "#FFFBEB" },
+const ACTION_META: Record<
+  string,
+  { label: string; icon: React.ElementType; color: string; bg: string }
+> = {
+  kyc_approved: {
+    label: "KYC Approved",
+    icon: UserCheck,
+    color: "#10B981",
+    bg: "#ECFDF5",
+  },
+  kyc_rejected: {
+    label: "KYC Rejected",
+    icon: UserX,
+    color: "#EF4444",
+    bg: "#FEF2F2",
+  },
+  user_suspended: {
+    label: "User Suspended",
+    icon: Shield,
+    color: "#EF4444",
+    bg: "#FEF2F2",
+  },
+  user_activated: {
+    label: "User Activated",
+    icon: UserCheck,
+    color: "#10B981",
+    bg: "#ECFDF5",
+  },
+  ad_approved: {
+    label: "Ad Approved",
+    icon: FileText,
+    color: "#007AFF",
+    bg: "#EFF6FF",
+  },
+  ad_rejected: {
+    label: "Ad Rejected",
+    icon: FileText,
+    color: "#EF4444",
+    bg: "#FEF2F2",
+  },
+  report_generated: {
+    label: "Report Event",
+    icon: FileText,
+    color: "#8B5CF6",
+    bg: "#F5F3FF",
+  },
+  system_event: {
+    label: "System Event",
+    icon: AlertTriangle,
+    color: "#F59E0B",
+    bg: "#FFFBEB",
+  },
 };
 
 const SEVERITY_META: Record<AuditSeverity, { color: string; bg: string }> = {
@@ -36,7 +94,9 @@ function splitDateTime(dateTime: string) {
 export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [search, setSearch] = useState("");
-  const [filterSeverity, setFilterSeverity] = useState<AuditSeverity | "all">("all");
+  const [filterSeverity, setFilterSeverity] = useState<AuditSeverity | "all">(
+    "all",
+  );
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -49,20 +109,25 @@ export default function AuditLogs() {
   const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [totalLoaded, setTotalLoaded] = useState(0);
 
-  const loadLogs = useCallback(async (cursor?: string) => {
-    setLoading(true);
-    try {
-      const response = await getAuditLogs({ limit: pageSize, cursor });
-      setLogs(response.logs);
-      setHasMore(response.hasMore ?? false);
-      setNextCursor(response.nextCursor);
-      setTotalLoaded(response.count);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load audit logs.");
-    } finally {
-      setLoading(false);
-    }
-  }, [pageSize]);
+  const loadLogs = useCallback(
+    async (cursor?: string) => {
+      setLoading(true);
+      try {
+        const response = await getAuditLogs({ limit: pageSize, cursor });
+        setLogs(response.logs);
+        setHasMore(response.hasMore ?? false);
+        setNextCursor(response.nextCursor);
+        setTotalLoaded(response.count);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to load audit logs.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pageSize],
+  );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -72,7 +137,8 @@ export default function AuditLogs() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      const activeCursor = currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+      const activeCursor =
+        currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
       void loadLogs(activeCursor);
     }, 10000);
 
@@ -86,7 +152,8 @@ export default function AuditLogs() {
         log.description.toLowerCase().includes(searchValue) ||
         log.targetName.toLowerCase().includes(searchValue) ||
         log.id.toLowerCase().includes(searchValue);
-      const matchesSeverity = filterSeverity === "all" || log.severity === filterSeverity;
+      const matchesSeverity =
+        filterSeverity === "all" || log.severity === filterSeverity;
       return matchesSearch && matchesSeverity;
     });
   }, [filterSeverity, logs, search]);
@@ -102,7 +169,8 @@ export default function AuditLogs() {
     if (currentPage <= 1) return;
     const newStack = [...cursorStack];
     newStack.pop();
-    const prevCursor = newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
+    const prevCursor =
+      newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
     setCursorStack(newStack);
     setCurrentPage((prev) => prev - 1);
     const goToCursor = currentPage <= 2 ? undefined : prevCursor;
@@ -117,7 +185,15 @@ export default function AuditLogs() {
 
   // Exports the filtered view so the downloaded file matches what the admin sees.
   function exportCsv() {
-    const headers = ["ID", "Action", "Description", "Performed By", "Target", "Date", "Severity"];
+    const headers = [
+      "ID",
+      "Action",
+      "Description",
+      "Performed By",
+      "Target",
+      "Date",
+      "Severity",
+    ];
     const rows = filteredLogs.map((log) => [
       log.id,
       ACTION_META[log.actionType]?.label || log.actionType,
@@ -150,32 +226,65 @@ export default function AuditLogs() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Audit Logs</h1>
-          <p className="page-subtitle">Activity feed generated from real admin-side Firebase records</p>
+          <p className="page-subtitle">
+            Activity feed generated from real admin-side Firebase records
+          </p>
         </div>
-        <button className="btn-primary btn-sm" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={exportCsv}>
+        <button
+          className="btn-primary btn-sm"
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+          onClick={exportCsv}
+        >
           <Download size={14} /> Export CSV
         </button>
       </div>
 
-      {error && <div className="card" style={S.errorCard}>{error}</div>}
+      {error && (
+        <div className="card" style={S.errorCard}>
+          {error}
+        </div>
+      )}
 
       <div style={S.summaryGrid}>
-        {(["all", "success", "info", "warning", "critical"] as const).map((severity) => (
-          <div
-            key={severity}
-            className="card"
-            style={{
-              cursor: "pointer",
-              border: filterSeverity === severity ? "2px solid #007AFF" : "1px solid transparent",
-            }}
-            onClick={() => setFilterSeverity(severity)}
-          >
-            <p style={{ fontSize: 12, color: "#6B7280", fontWeight: 500, marginBottom: 4 }}>{severity}</p>
-            <p style={{ fontSize: 26, fontWeight: 700, color: severity === "all" ? "#007AFF" : SEVERITY_META[severity].color }}>
-              {loading ? "..." : counts[severity]}
-            </p>
-          </div>
-        ))}
+        {(["all", "success", "info", "warning", "critical"] as const).map(
+          (severity) => (
+            <div
+              key={severity}
+              className="card"
+              style={{
+                cursor: "pointer",
+                border:
+                  filterSeverity === severity
+                    ? "2px solid #007AFF"
+                    : "1px solid transparent",
+              }}
+              onClick={() => setFilterSeverity(severity)}
+            >
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "#6B7280",
+                  fontWeight: 500,
+                  marginBottom: 4,
+                }}
+              >
+                {severity}
+              </p>
+              <p
+                style={{
+                  fontSize: 26,
+                  fontWeight: 700,
+                  color:
+                    severity === "all"
+                      ? "#007AFF"
+                      : SEVERITY_META[severity].color,
+                }}
+              >
+                {loading ? "..." : counts[severity]}
+              </p>
+            </div>
+          ),
+        )}
       </div>
 
       <div style={S.filtersRow}>
@@ -213,7 +322,8 @@ export default function AuditLogs() {
               </tr>
             ) : (
               filteredLogs.map((log) => {
-                const action = ACTION_META[log.actionType] || ACTION_META.system_event;
+                const action =
+                  ACTION_META[log.actionType] || ACTION_META.system_event;
                 const Icon = action.icon;
                 const severity = SEVERITY_META[log.severity];
                 const dateParts = splitDateTime(log.dateTime);
@@ -221,11 +331,29 @@ export default function AuditLogs() {
                 return (
                   <tr key={log.id}>
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ width: 30, height: 30, borderRadius: 8, background: action.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 8,
+                            background: action.bg,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
                           <Icon size={14} color={action.color} />
                         </div>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>{action.label}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>
+                          {action.label}
+                        </span>
                       </div>
                     </td>
                     <td style={{ maxWidth: 260 }}>{log.description}</td>
@@ -233,15 +361,28 @@ export default function AuditLogs() {
                     <td>
                       <div>
                         <div style={{ fontWeight: 600 }}>{log.targetName}</div>
-                        <div style={{ fontSize: 11, color: "#9CA3AF" }}>{log.targetType}</div>
+                        <div style={{ fontSize: 11, color: "#9CA3AF" }}>
+                          {log.targetType}
+                        </div>
                       </div>
                     </td>
                     <td style={S.dateCell}>
                       <div style={S.dateText}>{dateParts.date}</div>
-                      {dateParts.time && <div style={S.timeText}>{dateParts.time}</div>}
+                      {dateParts.time && (
+                        <div style={S.timeText}>{dateParts.time}</div>
+                      )}
                     </td>
                     <td>
-                      <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, color: severity.color, background: severity.bg }}>
+                      <span
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 20,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: severity.color,
+                          background: severity.bg,
+                        }}
+                      >
                         {log.severity}
                       </span>
                     </td>
@@ -253,7 +394,12 @@ export default function AuditLogs() {
                           title="View"
                           aria-label="View audit log"
                         >
-                          <Eye size={14} color="#6B7280" strokeWidth={2.2} style={S.iconGraphic} />
+                          <Eye
+                            size={14}
+                            color="#6B7280"
+                            strokeWidth={2.2}
+                            style={S.iconGraphic}
+                          />
                         </button>
                       </div>
                     </td>
@@ -268,8 +414,10 @@ export default function AuditLogs() {
         <div style={S.paginationBar}>
           <div style={S.paginationInfo}>
             <span style={{ fontSize: 13, color: "#6B7280" }}>
-              Showing {filteredLogs.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
-              –{(currentPage - 1) * pageSize + totalLoaded} {hasMore ? "" : "(last page)"}
+              Showing{" "}
+              {filteredLogs.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}–
+              {(currentPage - 1) * pageSize + totalLoaded}{" "}
+              {hasMore ? "" : "(last page)"}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
@@ -279,7 +427,9 @@ export default function AuditLogs() {
                 style={S.pageSizeSelect}
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size}</option>
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
                 ))}
               </select>
             </div>
@@ -312,12 +462,25 @@ export default function AuditLogs() {
         <div style={S.modalOverlay} onClick={() => setSelectedLog(null)}>
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
             <div style={S.modalHeader}>
-              <h3 style={{ fontSize: 18, fontWeight: 700 }}>Audit Log Details</h3>
-              <button style={S.closeButton} onClick={() => setSelectedLog(null)}>×</button>
+              <h3 style={{ fontSize: 18, fontWeight: 700 }}>
+                Audit Log Details
+              </h3>
+              <button
+                style={S.closeButton}
+                onClick={() => setSelectedLog(null)}
+              >
+                ×
+              </button>
             </div>
             <div style={S.detailGrid}>
               <Detail label="ID" value={selectedLog.id} />
-              <Detail label="Action" value={ACTION_META[selectedLog.actionType]?.label || selectedLog.actionType} />
+              <Detail
+                label="Action"
+                value={
+                  ACTION_META[selectedLog.actionType]?.label ||
+                  selectedLog.actionType
+                }
+              />
               <Detail label="Performed By" value={selectedLog.performedBy} />
               <Detail label="Target" value={selectedLog.targetName} />
               <Detail label="Target Type" value={selectedLog.targetType} />
@@ -336,8 +499,19 @@ export default function AuditLogs() {
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div style={S.detailCard}>
-      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", wordBreak: "break-word" }}>{value}</div>
+      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 600,
+          color: "#111827",
+          wordBreak: "break-word",
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }

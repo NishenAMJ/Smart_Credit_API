@@ -20,8 +20,12 @@ import {
 } from "../../lib/api";
 
 export default function Dashboard() {
-  const [dashboard, setDashboard] = useState<DashboardAnalyticsResponse["data"] | null>(null);
-  const [usersReport, setUsersReport] = useState<UsersReportResponse["data"] | null>(null);
+  const [dashboard, setDashboard] = useState<
+    DashboardAnalyticsResponse["data"] | null
+  >(null);
+  const [usersReport, setUsersReport] = useState<
+    UsersReportResponse["data"] | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -35,7 +39,9 @@ export default function Dashboard() {
       setUsersReport(usersResponse.data);
       setError("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load dashboard.");
+      setError(
+        err instanceof Error ? err.message : "Failed to load dashboard.",
+      );
     } finally {
       setLoading(false);
     }
@@ -121,7 +127,10 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Admin Dashboard</h1>
-          <p className="page-subtitle">Live metrics from Firestore users, loans, requests, transactions, and disputes</p>
+          <p className="page-subtitle">
+            Live metrics from Firestore users, loans, requests, transactions,
+            and disputes
+          </p>
         </div>
         <div style={{ fontSize: 13, color: "#6B7280" }}>
           {new Date().toLocaleDateString("en-US", {
@@ -133,7 +142,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {error && <div className="card" style={S.errorCard}>{error}</div>}
+      {error && (
+        <div className="card" style={S.errorCard}>
+          {error}
+        </div>
+      )}
 
       <div style={S.statsGrid}>
         {statCards.map((card) => {
@@ -150,7 +163,14 @@ export default function Dashboard() {
                   <Icon size={20} color={card.color} />
                 </div>
               </div>
-              <p style={{ fontSize: 12, fontWeight: 500, color: card.up ? "#10B981" : "#EF4444", marginTop: 10 }}>
+              <p
+                style={{
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: card.up ? "#10B981" : "#EF4444",
+                  marginTop: 10,
+                }}
+              >
                 {card.up ? "▲" : "▼"} {card.change}
               </p>
             </div>
@@ -159,7 +179,10 @@ export default function Dashboard() {
       </div>
 
       <div style={S.chartsRow}>
-        <div className="card" style={{ flex: 2, display: "flex", flexDirection: "column" }}>
+        <div
+          className="card"
+          style={{ flex: 2, display: "flex", flexDirection: "column" }}
+        >
           <div style={S.cardHeader}>
             <p style={S.cardTitle}>User Role Overview</p>
             <div style={S.legendRow}>
@@ -173,34 +196,59 @@ export default function Dashboard() {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={roleBreakdown} barSize={32} barGap={10}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
-              <Tooltip />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                {roleBreakdown.map((entry) => (
-                  <Cell
-                    key={entry.label}
-                    fill={
-                      entry.label === "Lenders"
-                        ? "#007AFF"
-                        : entry.label === "Borrowers"
-                          ? "#10B981"
-                          : "#8B5CF6"
-                    }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#F3F4F6"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="label"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: "#6B7280" }}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: "#6B7280" }}
+                />
+                <Tooltip />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {roleBreakdown.map((entry) => (
+                    <Cell
+                      key={entry.label}
+                      fill={
+                        entry.label === "Lenders"
+                          ? "#007AFF"
+                          : entry.label === "Borrowers"
+                            ? "#10B981"
+                            : "#8B5CF6"
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <div
+          className="card"
+          style={{ flex: 1, display: "flex", flexDirection: "column" }}
+        >
           <div style={S.cardHeader}>
             <p style={S.cardTitle}>Today&apos;s Activity</p>
           </div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 30 }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 30,
+            }}
+          >
             <PieChart width={180} height={180}>
               <Pie
                 data={pieData}
@@ -217,14 +265,38 @@ export default function Dashboard() {
               </Pie>
             </PieChart>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 220 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                width: "100%",
+                maxWidth: 220,
+              }}
+            >
               {pieData.map((item) => (
                 <div key={item.name} style={S.legendItem}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 13, color: "#6B7280" }}>{item.name}</span>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <div
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        background: item.color,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span style={{ fontSize: 13, color: "#6B7280" }}>
+                      {item.name}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>{item.value}</span>
+                  <span
+                    style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
+                  >
+                    {item.value}
+                  </span>
                 </div>
               ))}
             </div>

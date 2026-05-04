@@ -144,9 +144,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
       try {
         setIsLoading(true);
         setError(null);
-        const data = await fetchAnalyticsOverview(
-          selectedRange,
-        );
+        const data = await fetchAnalyticsOverview(selectedRange);
 
         if (isMounted) {
           setOverview(data);

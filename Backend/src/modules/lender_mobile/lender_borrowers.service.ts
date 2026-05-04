@@ -17,8 +17,18 @@ export class LenderBorrowersService {
   private readonly logger = new Logger(LenderBorrowersService.name);
 
   private borrowers: Borrower[] = [
-    { id: '1', name: 'John Doe', email: 'john@example.com', phone: '1234567890' },
-    { id: '2', name: 'Jane Smith', email: 'jane@example.com', phone: '0987654321' },
+    {
+      id: '1',
+      name: 'John Doe',
+      email: 'john@example.com',
+      phone: '1234567890',
+    },
+    {
+      id: '2',
+      name: 'Jane Smith',
+      email: 'jane@example.com',
+      phone: '0987654321',
+    },
   ];
 
   private creditScores: Record<string, number> = {
@@ -38,18 +48,14 @@ export class LenderBorrowersService {
       ],
     },
     '2': {
-      loans: [
-        { amount: 1500, date: '2025-03-01', status: 'paid' },
-      ],
-      payments: [
-        { amount: 1500, date: '2025-04-01' },
-      ],
+      loans: [{ amount: 1500, date: '2025-03-01', status: 'paid' }],
+      payments: [{ amount: 1500, date: '2025-04-01' }],
     },
   };
 
   async getBorrower(borrowerId: string): Promise<Borrower | undefined> {
     this.logger.debug(`Looking up borrower ${borrowerId}`);
-    return this.borrowers.find(b => b.id === borrowerId);
+    return this.borrowers.find((b) => b.id === borrowerId);
   }
 
   async getCreditScore(borrowerId: string): Promise<number | null> {
@@ -57,7 +63,9 @@ export class LenderBorrowersService {
     return this.creditScores[borrowerId] ?? null;
   }
 
-  async getBorrowerHistory(borrowerId: string): Promise<BorrowerHistory | undefined> {
+  async getBorrowerHistory(
+    borrowerId: string,
+  ): Promise<BorrowerHistory | undefined> {
     this.logger.debug(`Looking up history for ${borrowerId}`);
     return this.histories[borrowerId];
   }

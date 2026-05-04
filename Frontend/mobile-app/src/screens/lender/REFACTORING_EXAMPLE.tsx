@@ -1,16 +1,23 @@
 // REFACTORED EXAMPLE - Much Shorter!
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { LenderHeader, LenderActionItem } from '../../components/lender';
+import React from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { commonStyles, COLORS } from "../../styles/lender.styles";
+import { LenderHeader, LenderActionItem } from "../../components/lender";
 
 const PROFILE_ACTIONS = [
-  { icon: 'user', label: 'Edit Profile', color: COLORS.primary },
-  { icon: 'lock', label: 'Change Password', color: '#8B5CF6' },
-  { icon: 'bell', label: 'Notifications', color: COLORS.warning },
-  { icon: 'credit-card', label: 'Payment Methods', color: COLORS.success },
-  { icon: 'log-out', label: 'Logout', color: COLORS.danger },
+  { icon: "user", label: "Edit Profile", color: COLORS.primary },
+  { icon: "lock", label: "Change Password", color: "#8B5CF6" },
+  { icon: "bell", label: "Notifications", color: COLORS.warning },
+  { icon: "credit-card", label: "Payment Methods", color: COLORS.success },
+  { icon: "log-out", label: "Logout", color: COLORS.danger },
 ];
 
 export default function LenderProfileScreen({ navigation }: any) {
@@ -18,8 +25,10 @@ export default function LenderProfileScreen({ navigation }: any) {
     <SafeAreaView style={commonStyles.safe}>
       <LenderHeader title="Profile" onBackPress={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={commonStyles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
+      <ScrollView
+        contentContainerStyle={commonStyles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Info */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
@@ -74,9 +83,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 24,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -88,20 +97,20 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 16,
   },
 
   avatarText: {
     fontSize: 32,
-    fontWeight: '700',
-    color: '#fff',
+    fontWeight: "700",
+    color: "#fff",
   },
 
   name: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.textPrimary,
     marginBottom: 4,
   },
@@ -115,11 +124,11 @@ const styles = StyleSheet.create({
   member: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
 
   statsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginBottom: 24,
   },
@@ -129,8 +138,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -139,7 +148,7 @@ const styles = StyleSheet.create({
 
   statValue: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.primary,
     marginBottom: 4,
   },
@@ -151,7 +160,7 @@ const styles = StyleSheet.create({
 
   actionsList: {
     marginBottom: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderRadius: 12,
   },
 });

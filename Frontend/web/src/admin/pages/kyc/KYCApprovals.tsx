@@ -1,7 +1,12 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Eye, Check, X } from "lucide-react";
-import { approveKyc, getPendingKyc, rejectKyc, type KycDocument } from "../../lib/api";
+import {
+  approveKyc,
+  getPendingKyc,
+  rejectKyc,
+  type KycDocument,
+} from "../../lib/api";
 import { formatFirestoreDate } from "../../lib/admin-format";
 
 type KycStatus = "pending" | "approved" | "rejected";
@@ -74,7 +79,9 @@ export default function KYCApprovals() {
       setRecords(response.documents.map(mapDocument));
       setError("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load KYC records.");
+      setError(
+        err instanceof Error ? err.message : "Failed to load KYC records.",
+      );
     } finally {
       setLoading(false);
     }
@@ -102,7 +109,8 @@ export default function KYCApprovals() {
         record.email.toLowerCase().includes(searchValue) ||
         record.id.toLowerCase().includes(searchValue) ||
         record.documentType.toLowerCase().includes(searchValue);
-      const matchesStatus = filterStatus === "all" || record.status === filterStatus;
+      const matchesStatus =
+        filterStatus === "all" || record.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
   }, [filterStatus, records, search]);
@@ -118,7 +126,11 @@ export default function KYCApprovals() {
   async function handleApprove(id: string) {
     try {
       await approveKyc(id);
-      setRecords((prev) => prev.map((record) => (record.id === id ? { ...record, status: "approved" } : record)));
+      setRecords((prev) =>
+        prev.map((record) =>
+          record.id === id ? { ...record, status: "approved" } : record,
+        ),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to approve KYC.");
     }
@@ -128,7 +140,11 @@ export default function KYCApprovals() {
   async function handleReject(id: string) {
     try {
       await rejectKyc(id);
-      setRecords((prev) => prev.map((record) => (record.id === id ? { ...record, status: "rejected" } : record)));
+      setRecords((prev) =>
+        prev.map((record) =>
+          record.id === id ? { ...record, status: "rejected" } : record,
+        ),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject KYC.");
     }
@@ -139,23 +155,58 @@ export default function KYCApprovals() {
       <div className="page-header">
         <div>
           <h1 className="page-title">KYC Approvals</h1>
-          <p className="page-subtitle">KYC status is sourced from Firestore user profiles</p>
+          <p className="page-subtitle">
+            KYC status is sourced from Firestore user profiles
+          </p>
         </div>
         <span style={S.pendingChip}>{counts.pending} Pending</span>
       </div>
 
-      {error && <div className="card" style={S.errorCard}>{error}</div>}
+      {error && (
+        <div className="card" style={S.errorCard}>
+          {error}
+        </div>
+      )}
 
       <div style={S.summaryGrid}>
         {[
-          { label: "Total", count: counts.all, color: "#007AFF", bg: "#EFF6FF" },
-          { label: "Pending", count: counts.pending, color: "#F59E0B", bg: "#FFFBEB" },
-          { label: "Approved", count: counts.approved, color: "#10B981", bg: "#ECFDF5" },
-          { label: "Rejected", count: counts.rejected, color: "#EF4444", bg: "#FEF2F2" },
+          {
+            label: "Total",
+            count: counts.all,
+            color: "#007AFF",
+            bg: "#EFF6FF",
+          },
+          {
+            label: "Pending",
+            count: counts.pending,
+            color: "#F59E0B",
+            bg: "#FFFBEB",
+          },
+          {
+            label: "Approved",
+            count: counts.approved,
+            color: "#10B981",
+            bg: "#ECFDF5",
+          },
+          {
+            label: "Rejected",
+            count: counts.rejected,
+            color: "#EF4444",
+            bg: "#FEF2F2",
+          },
         ].map((item) => (
           <div key={item.label} className="card" style={S.summaryCard}>
-            <p style={{ fontSize: 13, color: "#6B7280", fontWeight: 500 }}>{item.label}</p>
-            <p style={{ fontSize: 28, fontWeight: 700, color: item.color, marginTop: 4 }}>
+            <p style={{ fontSize: 13, color: "#6B7280", fontWeight: 500 }}>
+              {item.label}
+            </p>
+            <p
+              style={{
+                fontSize: 28,
+                fontWeight: 700,
+                color: item.color,
+                marginTop: 4,
+              }}
+            >
               {loading ? "..." : item.count}
             </p>
           </div>
@@ -175,11 +226,17 @@ export default function KYCApprovals() {
         </div>
 
         <div className="tabs">
-          {(["all", "pending", "approved", "rejected"] as const).map((status) => (
-            <button key={status} className={`tab ${filterStatus === status ? "active" : ""}`} onClick={() => setFilterStatus(status)}>
-              {status}
-            </button>
-          ))}
+          {(["all", "pending", "approved", "rejected"] as const).map(
+            (status) => (
+              <button
+                key={status}
+                className={`tab ${filterStatus === status ? "active" : ""}`}
+                onClick={() => setFilterStatus(status)}
+              >
+                {status}
+              </button>
+            ),
+          )}
         </div>
       </div>
 
@@ -206,31 +263,61 @@ export default function KYCApprovals() {
               filtered.map((record) => (
                 <tr key={record.id}>
                   <td>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                      }}
+                    >
                       <span style={{ fontWeight: 600 }}>{record.fullName}</span>
-                      <span style={{ fontSize: 12, color: "#6B7280" }}>{record.documentType}</span>
+                      <span style={{ fontSize: 12, color: "#6B7280" }}>
+                        {record.documentType}
+                      </span>
                     </div>
                   </td>
                   <td style={S.monoCell}>{record.userId}</td>
                   <td>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                      }}
+                    >
                       <span>{record.email}</span>
-                      <span style={{ fontSize: 12, color: "#6B7280" }}>{record.phone}</span>
+                      <span style={{ fontSize: 12, color: "#6B7280" }}>
+                        {record.phone}
+                      </span>
                     </div>
                   </td>
                   <td>{record.submittedAt}</td>
-                  <td><StatusBadge status={record.status} /></td>
+                  <td>
+                    <StatusBadge status={record.status} />
+                  </td>
                   <td>
                     <div style={S.actionRow}>
-                      <button style={iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedRecord(record)} title="View">
+                      <button
+                        style={iconButton("#6B7280", "#F3F4F6")}
+                        onClick={() => setSelectedRecord(record)}
+                        title="View"
+                      >
                         <Eye size={14} />
                       </button>
                       {record.status === "pending" && (
                         <>
-                          <button style={iconButton("#10B981", "#ECFDF5")} onClick={() => void handleApprove(record.id)} title="Approve">
+                          <button
+                            style={iconButton("#10B981", "#ECFDF5")}
+                            onClick={() => void handleApprove(record.id)}
+                            title="Approve"
+                          >
                             <Check size={14} />
                           </button>
-                          <button style={iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleReject(record.id)} title="Reject">
+                          <button
+                            style={iconButton("#EF4444", "#FEF2F2")}
+                            onClick={() => void handleReject(record.id)}
+                            title="Reject"
+                          >
                             <X size={14} />
                           </button>
                         </>
@@ -249,7 +336,12 @@ export default function KYCApprovals() {
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
             <div style={S.modalHeader}>
               <h3 style={{ fontSize: 18, fontWeight: 700 }}>KYC Submission</h3>
-              <button style={S.closeButton} onClick={() => setSelectedRecord(null)}>×</button>
+              <button
+                style={S.closeButton}
+                onClick={() => setSelectedRecord(null)}
+              >
+                ×
+              </button>
             </div>
             <div style={S.detailCard}>
               <Detail label="Record ID" value={selectedRecord.id} />
@@ -257,10 +349,16 @@ export default function KYCApprovals() {
               <Detail label="User ID" value={selectedRecord.userId} />
               <Detail label="Email" value={selectedRecord.email} />
               <Detail label="Phone" value={selectedRecord.phone} />
-              <Detail label="Document Type" value={selectedRecord.documentType} />
+              <Detail
+                label="Document Type"
+                value={selectedRecord.documentType}
+              />
               <Detail label="Status" value={selectedRecord.status} />
               <Detail label="Submitted At" value={selectedRecord.submittedAt} />
-              <Detail label="Document URL" value={selectedRecord.documentUrl || "Not available"} />
+              <Detail
+                label="Document URL"
+                value={selectedRecord.documentUrl || "Not available"}
+              />
             </div>
           </div>
         </div>
@@ -273,8 +371,19 @@ export default function KYCApprovals() {
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", wordBreak: "break-word" }}>{value}</div>
+      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 600,
+          color: "#111827",
+          wordBreak: "break-word",
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { DisputesService } from './disputes.service';
 import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 import { EscalateDisputeDto } from './dto/escalate-dispute.dto';
@@ -13,7 +21,10 @@ export class DisputesController {
   constructor(private readonly disputesService: DisputesService) {}
 
   @Get()
-  async getAllDisputes(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+  async getAllDisputes(
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
     return this.disputesService.getAllDisputes(limit, cursor);
   }
 

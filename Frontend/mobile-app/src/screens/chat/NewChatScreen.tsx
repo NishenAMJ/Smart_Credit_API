@@ -12,7 +12,7 @@
  * Share these logs and we will know the exact line that's wrong.
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -23,19 +23,19 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
-} from 'react-native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../../constants';
-import { User, ChatStackParamList } from '../../types/chat.types';
-import { conversationService } from '../../services/conversationService';
-import { getCurrentUserId } from '../../services/api';
-import Avatar from '../../components/common/Avatar';
+} from "react-native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from "../../constants";
+import { User, ChatStackParamList } from "../../types/chat.types";
+import { conversationService } from "../../services/conversationService";
+import { getCurrentUserId } from "../../services/api";
+import Avatar from "../../components/common/Avatar";
 
 // ── Inline search call with full logging ─────────────────────────────────────
 // Calling fetch directly here (not via userService) so we can log every step
 // and rule out any wrapping issue in userService.ts or api.ts.
 
-const BASE_URL = 'http://192.168.120.219:3000/api';
+const BASE_URL = "http://192.168.120.219:3000/api";
 
 async function searchUsers(query: string): Promise<User[]> {
   const userId = getCurrentUserId();
@@ -45,8 +45,8 @@ async function searchUsers(query: string): Promise<User[]> {
 
   const res = await fetch(url, {
     headers: {
-      'Content-Type': 'application/json',
-      'x-user-id': userId,
+      "Content-Type": "application/json",
+      "x-user-id": userId,
     },
   });
 
@@ -65,10 +65,12 @@ async function searchUsers(query: string): Promise<User[]> {
     data = JSON.parse(text);
   } catch (e) {
     console.error(`[Search] JSON.parse failed:`, e);
-    throw new Error('Response was not valid JSON');
+    throw new Error("Response was not valid JSON");
   }
 
-  console.log(`[Search] parsed type=${typeof data}  isArray=${Array.isArray(data)}  length=${Array.isArray(data) ? data.length : 'N/A'}`);
+  console.log(
+    `[Search] parsed type=${typeof data}  isArray=${Array.isArray(data)}  length=${Array.isArray(data) ? data.length : "N/A"}`,
+  );
 
   // Handle if backend wraps response in { data: [...] } or { results: [...] }
   if (Array.isArray(data)) {
@@ -80,7 +82,10 @@ async function searchUsers(query: string): Promise<User[]> {
     console.log(`[Search] unwrapping data.results`);
     return data.results as User[];
   } else {
-    console.warn(`[Search] unexpected response shape:`, JSON.stringify(data).slice(0, 200));
+    console.warn(
+      `[Search] unexpected response shape:`,
+      JSON.stringify(data).slice(0, 200),
+    );
     return [];
   }
 }
@@ -88,16 +93,16 @@ async function searchUsers(query: string): Promise<User[]> {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 type Props = {
-  navigation: NativeStackNavigationProp<ChatStackParamList, 'NewChat'>;
+  navigation: NativeStackNavigationProp<ChatStackParamList, "NewChat">;
 };
 
-type SearchState = 'idle' | 'loading' | 'results' | 'empty' | 'error';
+type SearchState = "idle" | "loading" | "results" | "empty" | "error";
 
 export default function NewChatScreen({ navigation }: Props) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [results, setResults] = useState<User[]>([]);
-  const [searchState, setSearchState] = useState<SearchState>('idle');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [searchState, setSearchState] = useState<SearchState>("idle");
+  const [errorMessage, setErrorMessage] = useState("");
   const [startingFor, setStartingFor] = useState<string | null>(null);
 
   const searchIdRef = useRef(0);
@@ -109,24 +114,30 @@ export default function NewChatScreen({ navigation }: Props) {
 
     if (!text.trim()) {
       setResults([]);
-      setSearchState('idle');
+      setSearchState("idle");
       return;
     }
 
-    setSearchState('loading');
+    setSearchState("loading");
     const thisSearchId = ++searchIdRef.current;
 
     debounceTimer.current = setTimeout(async () => {
-      console.log(`[Search] debounce fired for "${text.trim()}"  searchId=${thisSearchId}`);
+      console.log(
+        `[Search] debounce fired for "${text.trim()}"  searchId=${thisSearchId}`,
+      );
 
       try {
         const data = await searchUsers(text.trim());
 
-        console.log(`[Search] searchId check: this=${thisSearchId} current=${searchIdRef.current}`);
+        console.log(
+          `[Search] searchId check: this=${thisSearchId} current=${searchIdRef.current}`,
+        );
 
         // Discard stale responses
         if (thisSearchId !== searchIdRef.current) {
-          console.log(`[Search] discarding stale response for "${text.trim()}"`);
+          console.log(
+            `[Search] discarding stale response for "${text.trim()}"`,
+          );
           return;
         }
 
@@ -136,15 +147,16 @@ export default function NewChatScreen({ navigation }: Props) {
         }
 
         setResults(data);
-        const nextState = data.length === 0 ? 'empty' : 'results';
+        const nextState = data.length === 0 ? "empty" : "results";
         console.log(`[Search] setting searchState to "${nextState}"`);
         setSearchState(nextState);
-
       } catch (err: any) {
         if (thisSearchId !== searchIdRef.current) return;
         console.error(`[Search] error:`, err?.message ?? err);
-        setErrorMessage(err?.message ?? 'Search failed. Check your connection.');
-        setSearchState('error');
+        setErrorMessage(
+          err?.message ?? "Search failed. Check your connection.",
+        );
+        setSearchState("error");
       }
     }, 500); // 500ms — wait until user stops typing
   }, []);
@@ -153,10 +165,12 @@ export default function NewChatScreen({ navigation }: Props) {
     if (startingFor) return;
     try {
       setStartingFor(user.id);
-      console.log(`[NewChat] starting conversation with ${user.id} (${user.displayName})`);
+      console.log(
+        `[NewChat] starting conversation with ${user.id} (${user.displayName})`,
+      );
       const conversation = await conversationService.start(user.id);
       console.log(`[NewChat] conversation created: ${conversation.id}`);
-      navigation.replace('Chat', {
+      navigation.replace("Chat", {
         conversationId: conversation.id,
         participant: user,
         isMuted: false,
@@ -200,7 +214,10 @@ export default function NewChatScreen({ navigation }: Props) {
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+        >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>New message</Text>
@@ -225,7 +242,7 @@ export default function NewChatScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {searchState === 'idle' && (
+      {searchState === "idle" && (
         <View style={styles.centered}>
           <View style={styles.idleIcon}>
             <Text style={{ fontSize: 28 }}>💬</Text>
@@ -237,20 +254,20 @@ export default function NewChatScreen({ navigation }: Props) {
         </View>
       )}
 
-      {searchState === 'loading' && (
+      {searchState === "loading" && (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       )}
 
-      {searchState === 'empty' && (
+      {searchState === "empty" && (
         <View style={styles.centered}>
           <Text style={styles.stateTitle}>No users found</Text>
           <Text style={styles.stateSub}>Try a different name or @username</Text>
         </View>
       )}
 
-      {searchState === 'error' && (
+      {searchState === "error" && (
         <View style={styles.centered}>
           <Text style={styles.stateTitle}>Search failed</Text>
           <Text style={styles.errorDetail}>{errorMessage}</Text>
@@ -263,7 +280,7 @@ export default function NewChatScreen({ navigation }: Props) {
         </View>
       )}
 
-      {searchState === 'results' && (
+      {searchState === "results" && (
         <FlatList
           data={results}
           keyExtractor={(item) => item.id}
@@ -280,55 +297,114 @@ export default function NewChatScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.surface, paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md, borderBottomWidth: 0.5, borderBottomColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
   },
   backBtn: {
-    width: 32, height: 32, borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.background,
+    alignItems: "center",
+    justifyContent: "center",
   },
   backIcon: { fontSize: 22, color: COLORS.primary, lineHeight: 26 },
   headerTitle: { ...TYPOGRAPHY.subtitle, color: COLORS.textPrimary },
   searchWrapper: {
-    backgroundColor: COLORS.surface, paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md, borderBottomWidth: 0.5, borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
   },
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background,
-    borderRadius: BORDER_RADIUS.medium, paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm, borderWidth: 0.5, borderColor: COLORS.border, gap: SPACING.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    borderRadius: BORDER_RADIUS.medium,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    gap: SPACING.sm,
   },
   searchIconText: { fontSize: 14 },
-  searchInput: { flex: 1, ...TYPOGRAPHY.body, color: COLORS.textPrimary, padding: 0 },
-  idleIcon: {
-    width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.border,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+  searchInput: {
+    flex: 1,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    padding: 0,
   },
-  idleTitle: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, textAlign: 'center' },
-  idleSub: { fontSize: 13, fontWeight: '400', color: COLORS.textSecondary, textAlign: 'center', lineHeight: 19 },
+  idleIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  idleTitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  idleSub: {
+    fontSize: 13,
+    fontWeight: "400",
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    lineHeight: 19,
+  },
   stateTitle: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary },
   stateSub: { fontSize: 13, color: COLORS.textSecondary },
-  errorDetail: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center', paddingHorizontal: 24, lineHeight: 18 },
+  errorDetail: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: 24,
+    lineHeight: 18,
+  },
   retryBtn: {
-    marginTop: SPACING.sm, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.medium, borderWidth: 1.5, borderColor: COLORS.primary,
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.medium,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
   },
   retryText: { ...TYPOGRAPHY.bodyMedium, color: COLORS.primary },
   listContent: { paddingTop: SPACING.sm },
   separator: { height: 0.5, backgroundColor: COLORS.border, marginLeft: 74 },
   userRow: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.md,
-    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, backgroundColor: COLORS.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.surface,
   },
   userInfo: { flex: 1, minWidth: 0 },
   userName: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary },
   userHandle: { fontSize: 13, color: COLORS.textSecondary, marginTop: 1 },
   startBtn: {
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.medium, backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.medium,
+    backgroundColor: COLORS.primary,
   },
-  startBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.surface },
+  startBtnText: { fontSize: 13, fontWeight: "600", color: COLORS.surface },
 });

@@ -9,7 +9,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { LenderOffersService } from './lender_offers.service';
-import type { CreateOfferInput, UpdateOfferInput } from './lender_offers.service';
+import type {
+  CreateOfferInput,
+  UpdateOfferInput,
+} from './lender_offers.service';
 
 @Controller('lender-mobile/offers')
 export class LenderOffersController {
@@ -32,7 +35,11 @@ export class LenderOffersController {
 
     this.logger.log(`Creating offer for lender ${lenderId}`);
     const offer = await this.offersService.createOffer(lenderId.trim(), body);
-    return { success: true, message: 'Offer created successfully', data: offer };
+    return {
+      success: true,
+      message: 'Offer created successfully',
+      data: offer,
+    };
   }
 
   /**
@@ -50,7 +57,15 @@ export class LenderOffersController {
     }
 
     this.logger.log(`Updating offer ${offerId} for lender ${lenderId}`);
-    const offer = await this.offersService.updateOffer(lenderId.trim(), offerId, body);
-    return { success: true, message: 'Offer updated successfully', data: offer };
+    const offer = await this.offersService.updateOffer(
+      lenderId.trim(),
+      offerId,
+      body,
+    );
+    return {
+      success: true,
+      message: 'Offer updated successfully',
+      data: offer,
+    };
   }
 }

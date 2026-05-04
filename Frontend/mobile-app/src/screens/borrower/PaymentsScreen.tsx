@@ -448,7 +448,7 @@ export default function PaymentsScreen({
 
   const renderPaymentCard = ({ item }: { item: BorrowerRepayment }) => {
     const handleCardPress = () => {
-      // Navigate to TransactionDetailsScreen when paid payment card is tapped
+      // Tap on a paid card goes to the transaction details screen
       navigation.navigate("TransactionDetails", {
         transaction: {
           transactionId:
@@ -483,7 +483,7 @@ export default function PaymentsScreen({
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => setSidebarVisible(true)}>
             <Feather
-              name='menu'
+              name="menu"
               size={24}
               color={COLORS.surface || "#FFFFFF"}
             />
@@ -496,7 +496,7 @@ export default function PaymentsScreen({
             onPress={() => navigation.navigate("Notifications")}
           >
             <Feather
-              name='bell'
+              name="bell"
               size={20}
               color={COLORS.surface || "#FFFFFF"}
             />
@@ -590,7 +590,7 @@ export default function PaymentsScreen({
       {activeTab === "Upcoming" &&
         payments.some((p) => p.status === "PENDING") && (
           <View style={styles.pendingBanner}>
-            <Feather name='clock' size={16} color='#B45309' />
+            <Feather name="clock" size={16} color="#B45309" />
             <Text style={styles.pendingBannerText}>
               You have payments pending verification.
             </Text>
@@ -618,7 +618,7 @@ export default function PaymentsScreen({
           ) : error ? (
             <View style={styles.errorContainer}>
               <Feather
-                name='alert-circle'
+                name="alert-circle"
                 size={48}
                 color={COLORS.error || "#EF4444"}
               />
@@ -648,7 +648,7 @@ export default function PaymentsScreen({
       <Modal
         visible={qrModalVisible}
         transparent
-        animationType='fade'
+        animationType="fade"
         onRequestClose={() => setQrModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -664,7 +664,7 @@ export default function PaymentsScreen({
                 style={styles.modalCloseBtn}
               >
                 <Feather
-                  name='x'
+                  name="x"
                   size={24}
                   color={COLORS.textSecondary || "#6B7280"}
                 />
@@ -692,14 +692,14 @@ export default function PaymentsScreen({
                 <QRCode
                   value={qrToken}
                   size={200}
-                  backgroundColor='#F3F4F6'
+                  backgroundColor="#F3F4F6"
                   color={COLORS.primary}
                 />
               </View>
             ) : (
               <View style={styles.qrPlaceholderBox}>
                 <MaterialCommunityIcons
-                  name='qrcode-scan'
+                  name="qrcode-scan"
                   size={64}
                   color={COLORS.primary || "#007AFF"}
                 />
@@ -711,7 +711,7 @@ export default function PaymentsScreen({
 
             <View style={styles.qrInfoBox}>
               <Feather
-                name='info'
+                name="info"
                 size={16}
                 color={COLORS.primary || "#007AFF"}
               />
@@ -728,7 +728,7 @@ export default function PaymentsScreen({
       <Modal
         visible={bankTransferModalVisible}
         transparent
-        animationType='slide'
+        animationType="slide"
         onRequestClose={() => setBankTransferModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -740,7 +740,7 @@ export default function PaymentsScreen({
                 style={styles.modalCloseBtn}
               >
                 <Feather
-                  name='x'
+                  name="x"
                   size={24}
                   color={COLORS.textSecondary || "#6B7280"}
                 />

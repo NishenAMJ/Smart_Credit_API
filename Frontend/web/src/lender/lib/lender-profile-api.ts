@@ -44,16 +44,13 @@ export async function fetchLenderProfile(): Promise<LenderProfile> {
 export async function updateLenderProfile(
   payload: UpdateLenderProfilePayload,
 ): Promise<LenderProfile> {
-  const response = await fetchLenderApi(
-    "/lender-profile/me",
-    {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+  const response = await fetchLenderApi("/lender-profile/me", {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify(payload),
+  });
 
   if (!response.ok) {
     return parseApiError(response, "Failed to update lender profile.");

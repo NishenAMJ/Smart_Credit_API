@@ -1,19 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
-  View, Text, TouchableOpacity, ScrollView,
-  SafeAreaView, TextInput, Alert, ActivityIndicator,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { AdService } from '../../services/advertisement.service';
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { commonStyles, COLORS } from "../../styles/lender.styles";
+import { AdService } from "../../services/advertisement.service";
 
 export default function BoostAdScreen({ route, navigation }: any) {
   const { ad } = route.params;
 
-  const [packages,   setPackages]   = useState<any[]>([]);
-  const [selected,   setSelected]   = useState('');
-  const [paymentRef, setPaymentRef] = useState('');
-  const [loading,    setLoading]    = useState(false);
+  const [packages, setPackages] = useState<any[]>([]);
+  const [selected, setSelected] = useState("");
+  const [paymentRef, setPaymentRef] = useState("");
+  const [loading, setLoading] = useState(false);
   const [pkgLoading, setPkgLoading] = useState(true);
 
   useEffect(() => {
@@ -26,7 +32,10 @@ export default function BoostAdScreen({ route, navigation }: any) {
       const data = await AdService.getBoostPackages();
       setPackages(data);
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.message || 'Failed to load packages');
+      Alert.alert(
+        "Error",
+        e?.response?.data?.message || "Failed to load packages",
+      );
     } finally {
       setPkgLoading(false);
     }
@@ -34,12 +43,12 @@ export default function BoostAdScreen({ route, navigation }: any) {
 
   const handleBoost = async () => {
     if (!selected) {
-      Alert.alert('Validation Error', 'Please select a package');
+      Alert.alert("Validation Error", "Please select a package");
       return;
     }
 
     if (!paymentRef.trim()) {
-      Alert.alert('Validation Error', 'Please enter your payment reference');
+      Alert.alert("Validation Error", "Please enter your payment reference");
       return;
     }
 
@@ -49,16 +58,16 @@ export default function BoostAdScreen({ route, navigation }: any) {
     try {
       setLoading(true);
       await AdService.boostAd(ad.adId, {
-        package:          selected,
-        amount:           pkg.price,
+        package: selected,
+        amount: pkg.price,
         paymentReference: paymentRef.trim(),
       });
 
-      Alert.alert('Success', 'Ad boosted successfully!', [
-        { text: 'OK', onPress: () => navigation.navigate('MyAds') },
+      Alert.alert("Success", "Ad boosted successfully!", [
+        { text: "OK", onPress: () => navigation.navigate("MyAds") },
       ]);
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.message || 'Failed to boost ad');
+      Alert.alert("Error", e?.response?.data?.message || "Failed to boost ad");
     } finally {
       setLoading(false);
     }
@@ -77,16 +86,24 @@ export default function BoostAdScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView style={commonStyles.scrollContainer}>
-
         <View style={commonStyles.card}>
           <Text style={commonStyles.sectionTitle}>Current Ad</Text>
           <Text style={commonStyles.textPrimary}>{ad.title}</Text>
           <Text style={commonStyles.textSecondary}>
-            LKR {ad.minAmount.toLocaleString()} – {ad.maxAmount.toLocaleString()}
+            LKR {ad.minAmount.toLocaleString()} –{" "}
+            {ad.maxAmount.toLocaleString()}
           </Text>
           {ad.isBoosted && (
-            <Text style={{ marginTop: 8, fontSize: 12, color: COLORS.warning, fontWeight: '600' }}>
-              ⚡ Already boosted — boosting again will extend after current boost expires
+            <Text
+              style={{
+                marginTop: 8,
+                fontSize: 12,
+                color: COLORS.warning,
+                fontWeight: "600",
+              }}
+            >
+              ⚡ Already boosted — boosting again will extend after current
+              boost expires
             </Text>
           )}
         </View>
@@ -94,7 +111,7 @@ export default function BoostAdScreen({ route, navigation }: any) {
         <Text style={commonStyles.sectionTitle}>Select Package</Text>
 
         {pkgLoading ? (
-          <View style={{ padding: 24, alignItems: 'center' }}>
+          <View style={{ padding: 24, alignItems: "center" }}>
             <ActivityIndicator color={COLORS.primary} />
           </View>
         ) : (
@@ -106,14 +123,18 @@ export default function BoostAdScreen({ route, navigation }: any) {
                 commonStyles.card,
                 {
                   borderWidth: 2,
-                  borderColor: selected === pkg.package ? COLORS.primary : 'transparent',
-                  backgroundColor: selected === pkg.package ? '#EBF4FF' : COLORS.surface,
+                  borderColor:
+                    selected === pkg.package ? COLORS.primary : "transparent",
+                  backgroundColor:
+                    selected === pkg.package ? "#EBF4FF" : COLORS.surface,
                 },
               ]}
             >
               <View style={commonStyles.rowSpaceBetween}>
                 <View>
-                  <Text style={commonStyles.textPrimary}>{pkg.description}</Text>
+                  <Text style={commonStyles.textPrimary}>
+                    {pkg.description}
+                  </Text>
                   <Text style={[commonStyles.textSecondary, { marginTop: 4 }]}>
                     {pkg.days} days
                   </Text>
@@ -124,8 +145,17 @@ export default function BoostAdScreen({ route, navigation }: any) {
               </View>
               {selected === pkg.package && (
                 <View style={[commonStyles.row, { marginTop: 12 }]}>
-                  <Feather name="check-circle" size={16} color={COLORS.primary} />
-                  <Text style={[commonStyles.textPrimary, { marginLeft: 6, color: COLORS.primary }]}>
+                  <Feather
+                    name="check-circle"
+                    size={16}
+                    color={COLORS.primary}
+                  />
+                  <Text
+                    style={[
+                      commonStyles.textPrimary,
+                      { marginLeft: 6, color: COLORS.primary },
+                    ]}
+                  >
                     Selected
                   </Text>
                 </View>
@@ -157,17 +187,15 @@ export default function BoostAdScreen({ route, navigation }: any) {
             { marginVertical: 24, opacity: !selected || loading ? 0.5 : 1 },
           ]}
         >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : (
-              <>
-                <Feather name="trending-up" size={18} color="#fff" />
-                <Text style={commonStyles.buttonText}>Confirm Boost</Text>
-              </>
-            )
-          }
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Feather name="trending-up" size={18} color="#fff" />
+              <Text style={commonStyles.buttonText}>Confirm Boost</Text>
+            </>
+          )}
         </TouchableOpacity>
-
       </ScrollView>
     </SafeAreaView>
   );

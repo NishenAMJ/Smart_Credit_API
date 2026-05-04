@@ -121,9 +121,18 @@ describe('AdsService', () => {
       .mockResolvedValueOnce({ data: () => ({ count: 2 }) });
     approvedLikeGetMock.mockResolvedValue({
       docs: [
-        { id: 'ad-approved', data: () => ({ lenderId: 'lender-1', status: 'approved' }) },
-        { id: 'ad-active-1', data: () => ({ lenderId: 'lender-2', status: 'approved' }) },
-        { id: 'ad-active-2', data: () => ({ lenderId: 'lender-3', status: 'active' }) },
+        {
+          id: 'ad-approved',
+          data: () => ({ lenderId: 'lender-1', status: 'approved' }),
+        },
+        {
+          id: 'ad-active-1',
+          data: () => ({ lenderId: 'lender-2', status: 'approved' }),
+        },
+        {
+          id: 'ad-active-2',
+          data: () => ({ lenderId: 'lender-3', status: 'active' }),
+        },
       ],
     });
     loanGetMock.mockResolvedValue({

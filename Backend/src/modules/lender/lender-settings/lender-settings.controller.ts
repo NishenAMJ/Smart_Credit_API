@@ -16,7 +16,9 @@ import {
 
 type UpdateLenderSettingsBody = {
   notifications?: Partial<Record<keyof LenderSettingsNotifications, unknown>>;
-  lendingDefaults?: Partial<Record<keyof LenderSettingsLendingDefaults, unknown>>;
+  lendingDefaults?: Partial<
+    Record<keyof LenderSettingsLendingDefaults, unknown>
+  >;
   workspace?: Partial<Record<keyof LenderSettingsWorkspace, unknown>>;
 };
 
@@ -27,7 +29,9 @@ export class LenderSettingsController {
   constructor(private readonly lenderSettingsService: LenderSettingsService) {}
 
   @Get('me')
-  getSettings(@Req() req: AuthenticatedRequest): Promise<LenderSettingsResponse> {
+  getSettings(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<LenderSettingsResponse> {
     return this.lenderSettingsService.getSettings(req.user.sub);
   }
 
@@ -42,7 +46,9 @@ export class LenderSettingsController {
     );
   }
 
-  private toUpdateInput(body: UpdateLenderSettingsBody): UpdateLenderSettingsInput {
+  private toUpdateInput(
+    body: UpdateLenderSettingsBody,
+  ): UpdateLenderSettingsInput {
     return {
       notifications: body.notifications
         ? {
@@ -163,7 +169,9 @@ export class LenderSettingsController {
 
   private toOptionalStringArray(value: unknown): string[] | undefined {
     if (Array.isArray(value)) {
-      return value.filter((entry): entry is string => typeof entry === 'string');
+      return value.filter(
+        (entry): entry is string => typeof entry === 'string',
+      );
     }
 
     if (typeof value === 'string') {
@@ -176,12 +184,8 @@ export class LenderSettingsController {
     return undefined;
   }
 
-  private toOptionalLandingPage(
-    value: unknown,
-  ): LenderLandingPage | undefined {
-    return value === 'dashboard' || value === 'analytics'
-      ? value
-      : undefined;
+  private toOptionalLandingPage(value: unknown): LenderLandingPage | undefined {
+    return value === 'dashboard' || value === 'analytics' ? value : undefined;
   }
 
   private toOptionalAnalyticsRange(

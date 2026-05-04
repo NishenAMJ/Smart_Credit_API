@@ -19,16 +19,3 @@ key/
 .env.development.local
 .env.test.local
 .env.production.local
-
-# Firebase config and rules
-firebase.json
-firestore.rules
-firestore.indexes.json
-
-# Seed and Mock Data
-Backend/seed-mock-data.js
-scripts/
-Backend/uploads/
-
-# Root lock file
-package-lock.json

@@ -1,7 +1,13 @@
 /** @format */
 
 import React from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Card from "../../components/common/Card";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
@@ -25,7 +31,8 @@ export default function LenderHomeScreen() {
       <View style={styles.hero}>
         <Text style={styles.badge}>Lender Mobile</Text>
         <Text style={styles.title}>
-          {dashboard?.headline ?? `Welcome back, ${session?.user.fullName?.split(' ')[0] ?? "Lender"}`}
+          {dashboard?.headline ??
+            `Welcome back, ${session?.user.fullName?.split(" ")[0] ?? "Lender"}`}
         </Text>
         <Text style={styles.summary}>
           {dashboard?.summary ??
@@ -43,54 +50,53 @@ export default function LenderHomeScreen() {
       </View>
 
       <View style={styles.mainContent}>
-
-      <Card style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>
-          {dashboard?.primaryListTitle ?? "Portfolio overview"}
-        </Text>
-        {(dashboard?.primaryList ?? []).length > 0 ? (
-          dashboard?.primaryList.map((item) => (
-            <View key={item.id} style={styles.listItem}>
-              <View style={styles.listMain}>
-                <Text style={styles.listTitle}>{item.title}</Text>
-                <Text style={styles.listSubtitle}>{item.subtitle}</Text>
-              </View>
-              <View style={styles.listMeta}>
-                <Text style={styles.listMetaText}>{item.meta}</Text>
-                <Text style={styles.listStatus}>{item.status}</Text>
-              </View>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.emptyText}>
-            No lender portfolio records are available yet.
+        <Card style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>
+            {dashboard?.primaryListTitle ?? "Portfolio overview"}
           </Text>
-        )}
-      </Card>
+          {(dashboard?.primaryList ?? []).length > 0 ? (
+            dashboard?.primaryList.map((item) => (
+              <View key={item.id} style={styles.listItem}>
+                <View style={styles.listMain}>
+                  <Text style={styles.listTitle}>{item.title}</Text>
+                  <Text style={styles.listSubtitle}>{item.subtitle}</Text>
+                </View>
+                <View style={styles.listMeta}>
+                  <Text style={styles.listMetaText}>{item.meta}</Text>
+                  <Text style={styles.listStatus}>{item.status}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>
+              No lender portfolio records are available yet.
+            </Text>
+          )}
+        </Card>
 
-      <Card style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>
-          {dashboard?.secondaryListTitle ?? "Borrower relationships"}
-        </Text>
-        {(dashboard?.secondaryList ?? []).length > 0 ? (
-          dashboard?.secondaryList.map((item) => (
-            <View key={item.id} style={styles.listItem}>
-              <View style={styles.listMain}>
-                <Text style={styles.listTitle}>{item.title}</Text>
-                <Text style={styles.listSubtitle}>{item.subtitle}</Text>
-              </View>
-              <View style={styles.listMeta}>
-                <Text style={styles.listMetaText}>{item.meta}</Text>
-                <Text style={styles.listStatus}>{item.status}</Text>
-              </View>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.emptyText}>
-            No borrower relationship records are available yet.
+        <Card style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>
+            {dashboard?.secondaryListTitle ?? "Borrower relationships"}
           </Text>
-        )}
-      </Card>
+          {(dashboard?.secondaryList ?? []).length > 0 ? (
+            dashboard?.secondaryList.map((item) => (
+              <View key={item.id} style={styles.listItem}>
+                <View style={styles.listMain}>
+                  <Text style={styles.listTitle}>{item.title}</Text>
+                  <Text style={styles.listSubtitle}>{item.subtitle}</Text>
+                </View>
+                <View style={styles.listMeta}>
+                  <Text style={styles.listMetaText}>{item.meta}</Text>
+                  <Text style={styles.listStatus}>{item.status}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>
+              No borrower relationship records are available yet.
+            </Text>
+          )}
+        </Card>
       </View>
     </ScrollView>
   );

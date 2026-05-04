@@ -29,12 +29,18 @@ export class AdsController {
   }
 
   @Get()
-  async getAllAds(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+  async getAllAds(
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
     return this.adsService.getAllAds(limit, cursor);
   }
 
   @Get('pending')
-  async getPendingAds(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+  async getPendingAds(
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
     return this.adsService.getPendingAds(limit, cursor);
   }
 

@@ -8,9 +8,12 @@ export function formatDateLabel(value?: any) {
   if (!value) {
     return "-";
   }
-  
+
   let dateToFormat = value;
-  if (typeof value === "object" && ("_seconds" in value || "seconds" in value)) {
+  if (
+    typeof value === "object" &&
+    ("_seconds" in value || "seconds" in value)
+  ) {
     const seconds = value._seconds ?? value.seconds;
     if (typeof seconds === "number") {
       dateToFormat = seconds * 1000;

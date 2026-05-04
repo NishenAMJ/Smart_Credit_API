@@ -31,7 +31,11 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { instanceToPlain } from 'class-transformer';
 import { BORROWER_DEFAULTS, BORROWER_FLOW } from './borrower.constants';
 import { CreditScoreService } from './credit-score.service';
-import { randomBytes, scryptSync } from 'crypto';
+import { randomBytes, scrypt } from 'crypto';
+import { promisify } from 'util';
+
+// Promisified async version of scrypt — avoids blocking the event loop.
+const scryptAsync = promisify(scrypt);
 
 type TimestampLike =
   | FirebaseFirestore.Timestamp
@@ -48,9 +52,13 @@ type QrTokenPayload = {
   issuedAt: number;
 };
 
+/**
+ * Core borrower service — covers profiles, loans, applications, repayments, QR tokens,
+ * and dashboard aggregation.
+ */
 @Injectable()
 export class BorrowerService {
-  // Firestore collection names used by borrower workflows.
+  // Firestore collection names used across this service.
   private readonly USERS_COL = 'users';
   private readonly BORROWERS_COL = 'borrowers';
   private readonly LOAN_APPS_COL = 'loanRequests';
@@ -71,145 +79,143 @@ export class BorrowerService {
     return this.firebaseService.db;
   }
 
-  // ==================== DASHBOARD ====================
+  // DASHBOARD
 
+  /**
+   * Returns aggregated dashboard metrics for the borrower home screen.
+   */
   async getDashboard(borrowerId: string) {
+    const metrics = await this.fetchBorrowerMetrics(borrowerId);
+
+    return {
+      statusCode: 200,
+      message: 'Dashboard data retrieved successfully',
+      data: {
+        profile: metrics.profile,
+        activeLoans: metrics.activeLoansCount,
+        pendingApplications: metrics.pendingApplications,
+        totalOutstanding: metrics.totalOutstanding,
+        nextDueDate: this.toTimestamp(metrics.nextDueDate),
+        nextPaymentAmount: metrics.nextPaymentAmount,
+        creditScore: metrics.profile?.creditScore || 0,
+        totalBorrowed: metrics.totalBorrowed,
+        totalRepaid: metrics.totalRepaid,
+      },
+    };
+  }
+
+  /**
+   * Internal helper to aggregate profile, loan, and application metrics.
+   * Ensures consistent logic across all dashboard-style endpoints.
+   */
+  private async fetchBorrowerMetrics(borrowerId: string) {
     if (!borrowerId) {
       throw new BadRequestException('Borrower ID is required');
     }
 
-    try {
-      const profileDoc = await this.db
-        .collection(this.BORROWERS_COL)
-        .doc(borrowerId)
-        .get();
-      // Fallback to 'users' collection if borrower profile doesn't exist yet
-      let profileData = profileDoc.exists ? profileDoc.data() : null;
+    const profile = await this.getProfile(borrowerId);
 
-      if (!profileData) {
-        const userDoc = await this.db.collection('users').doc(borrowerId).get();
-        profileData = userDoc.exists ? userDoc.data() : {};
-      }
+    // Single query for all loans; active loans are derived by filtering to avoid
+    // a redundant Firestore read.
+    const allLoans = await this.getLoans(borrowerId);
+    const activeLoans = allLoans.filter((l) => l.status === LoanStatus.ACTIVE);
 
-      const loansSnapshot = await this.db
-        .collection('loans')
-        .where('borrowerId', '==', borrowerId)
-        .get();
+    // Pending applications count uses the shared helper to keep status lists in sync.
+    const pendingApplications =
+      await this.getPendingApplicationsCount(borrowerId);
 
-      let activeLoansCount = 0;
-      let totalOutstanding = 0;
-      let totalBorrowed = 0;
-      let totalRepaid = 0;
-      let nextPaymentAmount = 0;
-      let nextDueDate: TimestampLike = null;
+    let totalOutstanding = 0;
+    let totalBorrowed = 0;
+    let totalRepaid = 0;
+    let nextPaymentAmount = 0;
+    let nextDueDate: TimestampLike = null;
 
-      loansSnapshot.forEach((doc) => {
-        const data = doc.data();
-        const loan = this.normalizeLoanDocument(data, doc.id);
+    // Aggregate metrics across all loans owned by borrower.
+    allLoans.forEach((loan) => {
+      totalBorrowed += loan.principalAmount || 0;
 
-        // Sum total principal ever borrowed
-        totalBorrowed += loan.principalAmount || 0;
-
-        // Calculate total repaid (Total Repayable - Current Outstanding)
-        const totalRepayable =
-          (loan.principalAmount || 0) + this.toNumber(data.totalInterest);
-        const repaidOnThisLoan = Math.max(
-          0,
-          totalRepayable - (loan.outstandingBalance || 0),
-        );
-        totalRepaid += repaidOnThisLoan;
-
-        if (data.status === 'active') {
-          activeLoansCount++;
-          totalOutstanding += loan.outstandingBalance || 0;
-
-          if (loan.nextDueDate) {
-            const loanDate = new Date(this.timestampToMillis(loan.nextDueDate));
-            const currentNextDate = nextDueDate
-              ? new Date(this.timestampToMillis(nextDueDate))
-              : null;
-
-            if (!currentNextDate || loanDate < currentNextDate) {
-              nextDueDate = loan.nextDueDate;
-              nextPaymentAmount = Math.min(
-                loan.monthlyInstallment || 0,
-                loan.outstandingBalance || 0,
-              );
-            }
-          }
-        }
-      });
-
-      const pendingApplications = await this.getPendingApplicationsCount(
-        borrowerId,
+      // Calculate total repaid (Original principal + interest - current outstanding).
+      const totalRepayable =
+        (loan.principalAmount || 0) + this.toNumber((loan as any).totalInterest);
+      const repaidOnThisLoan = Math.max(
+        0,
+        totalRepayable - (loan.outstandingBalance || 0),
       );
+      totalRepaid += repaidOnThisLoan;
 
-      const dashboard = {
-        profile: profileData,
-        activeLoans: activeLoansCount,
-        pendingApplications,
-        totalOutstanding,
-        nextDueDate,
-        nextPaymentAmount,
-        creditScore: profileData?.creditScore || 0,
-        totalBorrowed,
-        totalRepaid,
-      };
+      if (loan.status === LoanStatus.ACTIVE) {
+        totalOutstanding += loan.outstandingBalance || 0;
+      }
+    });
 
-      return {
-        statusCode: 200,
-        message: 'Dashboard data retrieved successfully',
-        data: dashboard,
-      };
-    } catch (error) {
-      console.error('Error fetching dashboard:', error);
-      throw new InternalServerErrorException('Failed to fetch dashboard data');
+    // Find the nearest next payment from active loans.
+    const sortedByNextPayment = [...activeLoans].sort((a, b) => {
+      const aTime = this.timestampToMillis(a.nextDueDate);
+      const bTime = this.timestampToMillis(b.nextDueDate);
+      return aTime - bTime;
+    });
+
+    const nextLoan = sortedByNextPayment[0];
+    if (nextLoan) {
+      nextDueDate = nextLoan.nextDueDate;
+      nextPaymentAmount = Math.min(
+        nextLoan.monthlyInstallment || 0,
+        nextLoan.outstandingBalance || 0,
+      );
     }
+
+    return {
+      profile,
+      activeLoansCount: activeLoans.length,
+      pendingApplications,
+      totalOutstanding: Math.round(totalOutstanding * 100) / 100,
+      totalBorrowed: Math.round(totalBorrowed * 100) / 100,
+      totalRepaid: Math.round(totalRepaid * 100) / 100,
+      nextDueDate,
+      nextPaymentAmount,
+    };
   }
 
+  /**
+   * Counts pending and draft applications without pulling full documents.
+   * Single source of truth for the status list used by all dashboard queries.
+   */
   private async getPendingApplicationsCount(
     borrowerId: string,
   ): Promise<number> {
+    const statuses = [
+      LoanApplicationStatus.DRAFT,
+      LoanApplicationStatus.PENDING,
+      LoanApplicationStatus.UNDER_REVIEW,
+      'open', 
+    ];
     const query = this.db
-        .collection('loanRequests')
-        .where('borrowerId', '==', borrowerId)
-        .where('status', 'in', ['pending', 'PENDING', 'draft', 'DRAFT']);
+      .collection(this.LOAN_APPS_COL)
+      .where('borrowerId', '==', borrowerId)
+      .where('status', 'in', statuses);
     return this.getCountForQuery(query);
   }
 
+  /**
+   * Returns the borrower's loans, optionally filtered by loan status.
+   * Delegates to getLoans for core logic and sorting.
+   */
   async getMyLoans(borrowerId: string, status?: string) {
-    if (!borrowerId) {
-      throw new BadRequestException('Borrower ID is required');
-    }
+    const loans = await this.getLoans(borrowerId, status as LoanStatus);
 
-    try {
-      let query: any = this.db
-        .collection('loans')
-        .where('borrowerId', '==', borrowerId);
-
-      if (status) {
-        query = query.where('status', '==', status);
-      }
-
-      const snapshot = await query.get();
-      const loans = snapshot.docs.map((doc) =>
-        this.normalizeLoanDocument(doc.data(), doc.id),
-      );
-
-      return {
-        statusCode: 200,
-        message: 'Loans retrieved successfully',
-        total: loans.length,
-        data: loans,
-      };
-    } catch (error) {
-      console.error('Error fetching loans:', error);
-      throw new InternalServerErrorException('Failed to fetch loans');
-    }
+    return {
+      statusCode: 200,
+      message: 'Loans retrieved successfully',
+      total: loans.length,
+      data: loans,
+    };
   }
 
+  /**
+   * Strips undefined values from an object before it goes to Firestore,
+   * which rejects undefined fields and throws at write time.
+   */
   private removeUndefinedDeep<T>(value: T): T {
-    // Firestore rejects undefined values, so recursively strip them from payloads.
     if (Array.isArray(value)) {
       return value
         .map((item) => this.removeUndefinedDeep(item))
@@ -230,6 +236,7 @@ export class BorrowerService {
     return value;
   }
 
+  /** Converts any Firestore-compatible timestamp to milliseconds, or 0 if null. */
   private timestampToMillis(value: TimestampLike): number {
     if (!value) {
       return 0;
@@ -250,12 +257,14 @@ export class BorrowerService {
     return 0;
   }
 
+  /** Safely casts a value to a finite number, returning a fallback when it isn't. */
   private toNumber(value: unknown, fallback = 0): number {
     return typeof value === 'number' && Number.isFinite(value)
       ? value
       : fallback;
   }
 
+  /** Normalizes a raw date-like value into a Firestore Timestamp, or undefined if unresolvable. */
   private toTimestamp(value: unknown): FirebaseFirestore.Timestamp | undefined {
     if (!value) {
       return undefined;
@@ -277,6 +286,10 @@ export class BorrowerService {
     return undefined;
   }
 
+  /**
+   * Maps any raw status string to a known LoanStatus enum value, defaulting to ACTIVE.
+   * Logs a warning when an unrecognised status is encountered so it surfaces in monitoring.
+   */
   private normalizeLoanStatus(value: unknown): LoanStatus {
     const status = String(value ?? '').toLowerCase();
 
@@ -284,9 +297,17 @@ export class BorrowerService {
       return status as LoanStatus;
     }
 
+    console.warn(
+      `[BorrowerService] Unrecognised loan status "${status}" — defaulting to ACTIVE`,
+    );
+
     return LoanStatus.ACTIVE;
   }
 
+  /**
+   * Converts a raw Firestore loan document into a typed Loan object,
+   * filling in sensible numeric defaults for any missing fields.
+   */
   private normalizeLoanDocument(
     data: FirebaseFirestore.DocumentData,
     documentId?: string,
@@ -339,6 +360,10 @@ export class BorrowerService {
     };
   }
 
+  /**
+   * Converts a raw lender ad document into the loan-shaped structure
+   * the borrower UI expects for discovery cards.
+   */
   private normalizeAdDocument(
     data: FirebaseFirestore.DocumentData,
     documentId?: string,
@@ -368,6 +393,10 @@ export class BorrowerService {
     };
   }
 
+  /**
+   * Picks the first non-empty display name from a Firestore document,
+   * trying fullName, displayName, and name in order.
+   */
   private readDisplayName(
     data?: FirebaseFirestore.DocumentData,
   ): string | null {
@@ -501,6 +530,10 @@ export class BorrowerService {
     return { ...created.data() } as BorrowerProfile;
   }
 
+  /**
+   * Returns a borrower profile, merging photo URL fields from both
+   * the borrowers and users collections so the UI always has an image to display.
+   */
   async getProfile(userId: string): Promise<BorrowerProfile> {
     const [doc, userDoc] = await Promise.all([
       this.db.collection(this.BORROWERS_COL).doc(userId).get(),
@@ -553,6 +586,10 @@ export class BorrowerService {
     } as BorrowerProfile;
   }
 
+  /**
+   * Updates editable profile fields and syncs name and email to the users collection.
+   * Hashes and salts a new password if one was provided.
+   */
   async updateProfile(
     userId: string,
     dto: UpdateBorrowerProfileDto,
@@ -582,10 +619,11 @@ export class BorrowerService {
     if (dto.email) userUpdate.email = dto.email;
     if (password) {
       const passwordSalt = randomBytes(16).toString('hex');
+      // scryptAsync is the non-blocking version — scryptSync would stall the event loop.
       userUpdate.passwordSalt = passwordSalt;
-      userUpdate.passwordHash = scryptSync(password, passwordSalt, 64).toString(
-        'hex',
-      );
+      userUpdate.passwordHash = (
+        (await scryptAsync(password, passwordSalt, 64)) as Buffer
+      ).toString('hex');
       userUpdate.passwordUpdatedAt = FieldValue.serverTimestamp();
     }
 
@@ -638,10 +676,14 @@ export class BorrowerService {
     const now = FieldValue.serverTimestamp();
     const appRef = this.db.collection(this.LOAN_APPS_COL).doc();
 
+    // Destructure loanPurpose so it isn't spread twice — purpose is the canonical
+    // field name stored on the document; loanPurpose is the DTO input name.
+    const { loanPurpose, ...restPlainDto } = plainDto;
+
     const applicationData = {
       requestId: appRef.id,
-      ...plainDto,
-      purpose: plainDto.loanPurpose,
+      ...restPlainDto,
+      purpose: loanPurpose,
 
       borrowerName: profile.fullName || 'Unknown',
       borrowerPhotoURL: (profile as any).photoURL || '',
@@ -910,8 +952,9 @@ export class BorrowerService {
     const principal = loan.principalAmount;
     const term = loan.tenureMonths;
 
-    const disbursedAt =
-      loan.startDate instanceof Date ? loan.startDate : loan.startDate.toDate();
+    // timestampToMillis handles all TimestampLike variants safely — avoids a
+    // direct .toDate() call that would crash if startDate isn't a Firestore Timestamp.
+    const disbursedAt = new Date(this.timestampToMillis(loan.startDate));
 
     const schedule: Array<{
       installmentNumber: number;
@@ -1053,8 +1096,15 @@ export class BorrowerService {
         );
     }
 
-    const created = await repaymentRef.get();
-    return { ...created.data() } as Repayment;
+    // The batch is already committed at this point. If the read-back fails,
+    // fall back to the locally constructed repayment so the caller still gets
+    // a meaningful response rather than a 500 for a write that succeeded.
+    try {
+      const created = await repaymentRef.get();
+      return { ...created.data() } as Repayment;
+    } catch {
+      return repaymentData as unknown as Repayment;
+    }
   }
 
   /**
@@ -1067,10 +1117,17 @@ export class BorrowerService {
       throw new BadRequestException('Cannot generate QR for a completed loan.');
     }
 
+    // Guard against loans that are not yet marked completed but carry a zero balance,
+    if (loan.outstandingBalance <= 0) {
+      throw new BadRequestException(
+        'Cannot generate QR for a loan with no outstanding balance.',
+      );
+    }
+
     const preferredAmount =
       typeof amount === 'number' && amount > 0
         ? amount
-        : loan.monthlyInstallment || BORROWER_DEFAULTS.REPAYMENT_AMOUNT;
+        : loan.monthlyInstallment || 0;
 
     const safeAmount = Math.min(preferredAmount, loan.outstandingBalance);
     const now = Date.now();
@@ -1190,42 +1247,9 @@ export class BorrowerService {
    * Returns aggregated borrower profile, loan, and recent activity data.
    */
   async getDashboardDetailed(userId: string): Promise<BorrowerDashboard> {
-    const profile = await this.getProfile(userId);
+    const metrics = await this.fetchBorrowerMetrics(userId);
 
-    // Fetch active loans
-    const activeLoansSnapshot = await this.db
-      .collection(this.LOANS_COL)
-      .where('borrowerId', '==', userId)
-      .where('status', '==', LoanStatus.ACTIVE)
-      .get();
-
-    // Fetch pending applications
-    const pendingAppsQuery = this.db
-      .collection(this.LOAN_APPS_COL)
-      .where('borrowerId', '==', userId)
-      .where('status', 'in', [
-        LoanApplicationStatus.PENDING,
-        LoanApplicationStatus.UNDER_REVIEW,
-      ]);
-    const pendingApplications = await this.getCountForQuery(pendingAppsQuery);
-
-    const activeLoans = activeLoansSnapshot.docs.map((d) => d.data() as Loan);
-
-    const totalOutstanding = activeLoans.reduce(
-      (sum, loan) => sum + loan.outstandingBalance,
-      0,
-    );
-
-    // Find the nearest next payment
-    const sortedByNextPayment = [...activeLoans].sort((a, b) => {
-      const aDate = a.nextDueDate?.toDate?.() ?? new Date(0);
-      const bDate = b.nextDueDate?.toDate?.() ?? new Date(0);
-      return aDate.getTime() - bDate.getTime();
-    });
-
-    const nextLoan = sortedByNextPayment[0];
-
-    // Recent activity (last 5 repayments)
+    // Detailed dashboard includes the latest activity list
     const recentRepaymentsSnapshot = await this.db
       .collection(this.REPAYMENTS_COL)
       .where('borrowerId', '==', userId)
@@ -1240,36 +1264,38 @@ export class BorrowerService {
       )
       .slice(0, BORROWER_FLOW.RECENT_ACTIVITY_LIMIT);
 
-    const recentActivity = recentRepayments.map((r) => {
-      return {
-        type: 'repayment' as const,
-        description: `Repayment of LKR ${r.amount.toLocaleString()} for loan ${r.loanId}`,
-        amount: r.amount,
-        date: r.paidAt!,
-      };
-    });
+    const recentActivity = recentRepayments.map((r) => ({
+      type: 'repayment' as const,
+      description: `Repayment of LKR ${r.amount.toLocaleString()} for loan ${r.loanId}`,
+      amount: r.amount,
+      date: r.paidAt!,
+    }));
 
     return {
       profile: {
-        userId: profile.userId,
-        fullName: profile.fullName,
-        email: profile.email,
-        phone: profile.phone,
-        kycVerified: profile.kycVerified,
-        profileComplete: profile.profileComplete,
+        userId: metrics.profile.userId,
+        fullName: metrics.profile.fullName,
+        email: metrics.profile.email,
+        phone: metrics.profile.phone,
+        kycVerified: metrics.profile.kycVerified,
+        profileComplete: metrics.profile.profileComplete,
       },
-      activeLoans: activeLoans.length,
-      pendingApplications,
-      totalOutstanding: Math.round(totalOutstanding * 100) / 100,
-      nextDueDate: nextLoan?.nextDueDate,
-      nextPaymentAmount: nextLoan?.monthlyInstallment,
-      creditScore: profile.creditScore,
-      totalBorrowed: profile.totalBorrowed,
-      totalRepaid: profile.totalRepaid,
+      activeLoans: metrics.activeLoansCount,
+      pendingApplications: metrics.pendingApplications,
+      totalOutstanding: metrics.totalOutstanding,
+      nextDueDate: this.toTimestamp(metrics.nextDueDate),
+      nextPaymentAmount: metrics.nextPaymentAmount,
+      creditScore: metrics.profile.creditScore,
+      totalBorrowed: metrics.totalBorrowed,
+      totalRepaid: metrics.totalRepaid,
       recentActivity,
     };
   }
 
+  /**
+   * Uses Firestore count() to avoid loading full documents.
+   * Falls back to a full snapshot.size if the count API throws.
+   */
   private async getCountForQuery(
     query: FirebaseFirestore.Query,
   ): Promise<number> {
@@ -1286,18 +1312,21 @@ export class BorrowerService {
    * Returns mock support ticket statuses for the borrower.
    */
   async getSupportStatus(borrowerId: string) {
-    // In a real application, this would query a tickets collection
-    // For now, return dynamic mock data that looks realistic
+    // In a real application, this would query a tickets collection.
+    // ticket/reply numbers are generated once per call so id and value stay in sync.
+    const ticketNum = Math.floor(Math.random() * 90000) + 10000;
+    const replyNum = Math.floor(Math.random() * 90000) + 10000;
+
     return [
       {
-        id: `TCK-${Math.floor(Math.random() * 90000) + 10000}`,
+        id: `TCK-${ticketNum}`,
         title: 'Open Ticket',
-        value: `TCK-${Math.floor(Math.random() * 90000) + 10000}`,
+        value: `TCK-${ticketNum}`,
         subtitle: 'In Progress - Payment verification',
         color: '#F59E0B',
       },
       {
-        id: `RPL-${Math.floor(Math.random() * 90000) + 10000}`,
+        id: `RPL-${replyNum}`,
         title: 'Expected Reply',
         value: 'Within 2 hours',
         subtitle: 'Average first response time',

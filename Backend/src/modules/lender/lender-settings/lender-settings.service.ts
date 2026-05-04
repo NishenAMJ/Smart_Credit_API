@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { hasRole, readDate } from '../../../firebase/firestore-query.utils';
@@ -85,8 +89,12 @@ export class LenderSettingsService {
       notifications: next.notifications,
       lendingDefaults: {
         ...next.lendingDefaults,
-        preferredPurposes: this.uniqueValues(next.lendingDefaults.preferredPurposes),
-        preferredRegions: this.uniqueValues(next.lendingDefaults.preferredRegions),
+        preferredPurposes: this.uniqueValues(
+          next.lendingDefaults.preferredPurposes,
+        ),
+        preferredRegions: this.uniqueValues(
+          next.lendingDefaults.preferredRegions,
+        ),
       },
       workspace: next.workspace,
       updatedAt: timestamp,
@@ -329,14 +337,14 @@ export class LenderSettingsService {
       );
     }
 
-    if (
-      !LANDING_PAGE_OPTIONS.includes(settings.workspace.defaultLandingPage)
-    ) {
+    if (!LANDING_PAGE_OPTIONS.includes(settings.workspace.defaultLandingPage)) {
       throw new BadRequestException('defaultLandingPage is invalid.');
     }
 
     if (
-      !ANALYTICS_RANGE_OPTIONS.includes(settings.workspace.defaultAnalyticsRange)
+      !ANALYTICS_RANGE_OPTIONS.includes(
+        settings.workspace.defaultAnalyticsRange,
+      )
     ) {
       throw new BadRequestException('defaultAnalyticsRange is invalid.');
     }
@@ -374,7 +382,9 @@ export class LenderSettingsService {
 
   private uniqueValues(values: string[]): string[] {
     return Array.from(
-      new Set(values.map((value) => value.trim()).filter((value) => value.length > 0)),
+      new Set(
+        values.map((value) => value.trim()).filter((value) => value.length > 0),
+      ),
     );
   }
 
@@ -389,7 +399,9 @@ export class LenderSettingsService {
   }
 
   private readNumber(value: unknown, fallback: number): number {
-    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback;
   }
 
   private readStringArray(value: unknown, fallback: string[]): string[] {

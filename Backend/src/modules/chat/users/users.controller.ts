@@ -52,10 +52,7 @@ export class UsersController {
    * Case-insensitive partial match.
    */
   @Get('search')
-  async search(
-    @Query('q') q: string,
-    @CurrentUser() userId: string,
-  ) {
+  async search(@Query('q') q: string, @CurrentUser() userId: string) {
     this.logger.log(`[search] q="${q}" userId="${userId}"`);
     const results = await this.usersService.search(q ?? '', userId);
     this.logger.log(`[search] returning ${results.length} results`);
@@ -73,19 +70,13 @@ export class UsersController {
 
   /** POST /users/block/:targetId — block a user */
   @Post('block/:targetId')
-  block(
-    @CurrentUser() userId: string,
-    @Param('targetId') targetId: string,
-  ) {
+  block(@CurrentUser() userId: string, @Param('targetId') targetId: string) {
     return this.blocksService.blockUser(userId, targetId);
   }
 
   /** DELETE /users/block/:targetId — unblock a user */
   @Delete('block/:targetId')
-  unblock(
-    @CurrentUser() userId: string,
-    @Param('targetId') targetId: string,
-  ) {
+  unblock(@CurrentUser() userId: string, @Param('targetId') targetId: string) {
     return this.blocksService.unblockUser(userId, targetId);
   }
 

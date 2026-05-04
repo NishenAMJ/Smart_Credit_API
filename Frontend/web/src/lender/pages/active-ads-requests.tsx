@@ -1,185 +1,184 @@
-import { useEffect, useState } from 'react'
-import type { LenderView } from '../components/common/LenderSidebar'
+import { useEffect, useState } from "react";
+import type { LenderView } from "../components/common/LenderSidebar";
 import {
   fetchAnalyticsDrilldown,
   type AnalyticsDrilldownItem,
   type AnalyticsDrilldownResponse,
-} from '../lib/analytics-api'
+} from "../lib/analytics-api";
 import {
   fetchPendingRequests,
   type PendingRequestsResponse,
-} from '../lib/pending-requests-api'
-import type { LenderSession } from '../lib/lender-session'
+} from "../lib/pending-requests-api";
+import type { LenderSession } from "../lib/lender-session";
 
 type ActiveAdsRequestsPageProps = {
-  session: LenderSession
-  onNavigate: (view: LenderView) => void
-}
+  session: LenderSession;
+  onNavigate: (view: LenderView) => void;
+};
 
-const ADS_PAGE_SIZE = 5
-const REQUEST_LIMIT = 30
+const ADS_PAGE_SIZE = 5;
+const REQUEST_LIMIT = 30;
 
-const currencyFormatter = new Intl.NumberFormat('en-LK', {
-  style: 'currency',
-  currency: 'LKR',
+const currencyFormatter = new Intl.NumberFormat("en-LK", {
+  style: "currency",
+  currency: "LKR",
   maximumFractionDigits: 0,
-})
+});
 
 function formatCurrency(value: number): string {
-  return currencyFormatter.format(value)
+  return currencyFormatter.format(value);
 }
 
 function formatLabel(value: string): string {
   return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function formatDate(value: string | null): string {
   if (!value) {
-    return 'Unknown'
+    return "Unknown";
   }
 
-  const parsed = new Date(value)
+  const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return 'Unknown'
+    return "Unknown";
   }
 
-  return new Intl.DateTimeFormat('en-LK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(parsed)
+  return new Intl.DateTimeFormat("en-LK", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(parsed);
 }
 
 export default function ActiveAdsRequestsPage({
   session,
   onNavigate,
 }: ActiveAdsRequestsPageProps) {
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
-  const [adsResponse, setAdsResponse] = useState<AnalyticsDrilldownResponse | null>(null)
-  const [isAdsLoading, setIsAdsLoading] = useState(true)
-  const [adsError, setAdsError] = useState<string | null>(null)
-  const [selectedAd, setSelectedAd] = useState<AnalyticsDrilldownItem | null>(null)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
+  const [adsResponse, setAdsResponse] =
+    useState<AnalyticsDrilldownResponse | null>(null);
+  const [isAdsLoading, setIsAdsLoading] = useState(true);
+  const [adsError, setAdsError] = useState<string | null>(null);
+  const [selectedAd, setSelectedAd] = useState<AnalyticsDrilldownItem | null>(
+    null,
+  );
   const [requestsResponse, setRequestsResponse] =
-    useState<PendingRequestsResponse | null>(null)
-  const [isRequestsLoading, setIsRequestsLoading] = useState(false)
-  const [requestsError, setRequestsError] = useState<string | null>(null)
+    useState<PendingRequestsResponse | null>(null);
+  const [isRequestsLoading, setIsRequestsLoading] = useState(false);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
 
-  const activeCursor = pageCursors[currentPage - 1] ?? null
-  const ads = adsResponse?.items ?? []
-  const requests = requestsResponse?.requests ?? []
-
-  useEffect(() => {
-    setCurrentPage(1)
-    setPageCursors([null])
-    setAdsResponse(null)
-    setSelectedAd(null)
-    setRequestsResponse(null)
-    setAdsError(null)
-    setRequestsError(null)
-  }, [session.lenderId])
+  const activeCursor = pageCursors[currentPage - 1] ?? null;
+  const ads = adsResponse?.items ?? [];
+  const requests = requestsResponse?.requests ?? [];
 
   useEffect(() => {
-    let isMounted = true
+    setCurrentPage(1);
+    setPageCursors([null]);
+    setAdsResponse(null);
+    setSelectedAd(null);
+    setRequestsResponse(null);
+    setAdsError(null);
+    setRequestsError(null);
+  }, [session.lenderId]);
+
+  useEffect(() => {
+    let isMounted = true;
 
     const loadAds = async () => {
       try {
-        setIsAdsLoading(true)
-        setAdsError(null)
-        setAdsResponse(null)
-        setSelectedAd(null)
-        setRequestsResponse(null)
-        const data = await fetchAnalyticsDrilldown(
-          'active-ads',
-          '90d',
-          {
-            pageSize: ADS_PAGE_SIZE,
-            cursor: activeCursor,
-          },
-        )
+        setIsAdsLoading(true);
+        setAdsError(null);
+        setAdsResponse(null);
+        setSelectedAd(null);
+        setRequestsResponse(null);
+        const data = await fetchAnalyticsDrilldown("active-ads", "90d", {
+          pageSize: ADS_PAGE_SIZE,
+          cursor: activeCursor,
+        });
 
         if (!isMounted) {
-          return
+          return;
         }
 
-        setAdsResponse(data)
+        setAdsResponse(data);
 
         if (data.pageInfo.nextCursor) {
           setPageCursors((current) => {
             if (current[currentPage] === data.pageInfo.nextCursor) {
-              return current
+              return current;
             }
 
-            return [...current.slice(0, currentPage), data.pageInfo.nextCursor]
-          })
+            return [...current.slice(0, currentPage), data.pageInfo.nextCursor];
+          });
         }
       } catch (loadError) {
         if (isMounted) {
           setAdsError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load active ads.',
-          )
+              : "Failed to load active ads.",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsAdsLoading(false)
+          setIsAdsLoading(false);
         }
       }
-    }
+    };
 
-    void loadAds()
+    void loadAds();
 
     return () => {
-      isMounted = false
-    }
-  }, [activeCursor, currentPage, session.lenderId])
+      isMounted = false;
+    };
+  }, [activeCursor, currentPage, session.lenderId]);
 
   useEffect(() => {
     if (!selectedAd) {
-      return
+      return;
     }
 
-    let isMounted = true
+    let isMounted = true;
 
     const loadRequests = async () => {
       try {
-        setIsRequestsLoading(true)
-        setRequestsError(null)
-        setRequestsResponse(null)
+        setIsRequestsLoading(true);
+        setRequestsError(null);
+        setRequestsResponse(null);
         const data = await fetchPendingRequests({
           limit: REQUEST_LIMIT,
           adId: selectedAd.id,
           includeSummary: false,
           includeAllStatuses: true,
-        })
+        });
 
         if (isMounted) {
-          setRequestsResponse(data)
+          setRequestsResponse(data);
         }
       } catch (loadError) {
         if (isMounted) {
           setRequestsError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load borrower requests for this ad.',
-          )
+              : "Failed to load borrower requests for this ad.",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsRequestsLoading(false)
+          setIsRequestsLoading(false);
         }
       }
-    }
+    };
 
-    void loadRequests()
+    void loadRequests();
 
     return () => {
-      isMounted = false
-    }
-  }, [selectedAd, session.lenderId])
+      isMounted = false;
+    };
+  }, [selectedAd, session.lenderId]);
 
   return (
     <section className="dashboard-panel">
@@ -200,7 +199,7 @@ export default function ActiveAdsRequestsPage({
           <button
             type="button"
             className="analytics-range-tab"
-            onClick={() => onNavigate('analytics')}
+            onClick={() => onNavigate("analytics")}
           >
             Back to Analytics
           </button>
@@ -215,7 +214,9 @@ export default function ActiveAdsRequestsPage({
           <div className="metric-copy">
             <p className="metric-label">Ads Per Page</p>
             <p className="metric-value">{ADS_PAGE_SIZE}</p>
-            <p className="metric-caption">Loads smaller batches for faster review</p>
+            <p className="metric-caption">
+              Loads smaller batches for faster review
+            </p>
           </div>
         </article>
         <article className="card metric-card">
@@ -225,7 +226,9 @@ export default function ActiveAdsRequestsPage({
           <div className="metric-copy">
             <p className="metric-label">Current Page</p>
             <p className="metric-value">{currentPage}</p>
-            <p className="metric-caption">Only the current ad batch is requested</p>
+            <p className="metric-caption">
+              Only the current ad batch is requested
+            </p>
           </div>
         </article>
       </section>
@@ -250,14 +253,14 @@ export default function ActiveAdsRequestsPage({
           ) : ads.length > 0 ? (
             <div className="active-ads-list">
               {ads.map((ad) => {
-                const isSelected = selectedAd?.id === ad.id
+                const isSelected = selectedAd?.id === ad.id;
 
                 return (
                   <button
                     key={ad.id}
                     type="button"
                     className={`active-ads-list__item${
-                      isSelected ? ' active-ads-list__item--selected' : ''
+                      isSelected ? " active-ads-list__item--selected" : ""
                     }`}
                     onClick={() => setSelectedAd(ad)}
                   >
@@ -266,11 +269,13 @@ export default function ActiveAdsRequestsPage({
                       <p className="active-ads-list__subtitle">{ad.subtitle}</p>
                     </div>
                     <div className="active-ads-list__meta">
-                      <span className="badge badge-gray">{formatLabel(ad.status)}</span>
+                      <span className="badge badge-gray">
+                        {formatLabel(ad.status)}
+                      </span>
                       <p>{ad.metric}</p>
                     </div>
                   </button>
-                )
+                );
               })}
             </div>
           ) : (
@@ -280,7 +285,9 @@ export default function ActiveAdsRequestsPage({
           )}
 
           <div className="table-footer">
-            <p>Showing up to {ADS_PAGE_SIZE} active ads on page {currentPage}.</p>
+            <p>
+              Showing up to {ADS_PAGE_SIZE} active ads on page {currentPage}.
+            </p>
 
             <div className="pagination">
               <button
@@ -310,12 +317,14 @@ export default function ActiveAdsRequestsPage({
           <div className="analytics-card__header">
             <div>
               <h2 className="section-title">
-                {selectedAd ? 'Borrower Requests For Selected Ad' : 'Borrower Requests'}
+                {selectedAd
+                  ? "Borrower Requests For Selected Ad"
+                  : "Borrower Requests"}
               </h2>
               <p className="section-subtitle">
                 {selectedAd
                   ? `Review borrower requests linked to ${selectedAd.title}.`
-                  : 'Choose an active ad first to inspect its borrower requests.'}
+                  : "Choose an active ad first to inspect its borrower requests."}
               </p>
             </div>
           </div>
@@ -329,11 +338,16 @@ export default function ActiveAdsRequestsPage({
               {requestsError}
             </div>
           ) : isRequestsLoading ? (
-            <div className="borrower-modal__state">Loading borrower requests...</div>
+            <div className="borrower-modal__state">
+              Loading borrower requests...
+            </div>
           ) : requests.length > 0 ? (
             <div className="active-ads-request-list">
               {requests.map((request) => (
-                <article className="analytics-drilldown-item" key={request.requestId}>
+                <article
+                  className="analytics-drilldown-item"
+                  key={request.requestId}
+                >
                   <div className="analytics-drilldown-item__main">
                     <h3 className="analytics-drilldown-item__title">
                       {request.borrowerName}
@@ -343,12 +357,15 @@ export default function ActiveAdsRequestsPage({
                     </p>
                   </div>
                   <div className="analytics-drilldown-item__meta">
-                    <span className="badge badge-gray">{formatLabel(request.status)}</span>
+                    <span className="badge badge-gray">
+                      {formatLabel(request.status)}
+                    </span>
                     <p className="analytics-drilldown-item__metric">
                       {formatCurrency(request.amount)}
                     </p>
                     <p className="analytics-drilldown-item__secondary">
-                      {request.tenureMonths} months · {formatLabel(request.urgency)}
+                      {request.tenureMonths} months ·{" "}
+                      {formatLabel(request.urgency)}
                     </p>
                     <p className="analytics-drilldown-item__date">
                       {formatDate(request.createdAt)}
@@ -365,5 +382,5 @@ export default function ActiveAdsRequestsPage({
         </article>
       </section>
     </section>
-  )
+  );
 }

@@ -1,37 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity,
-  ScrollView, SafeAreaView, Alert, ActivityIndicator,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { AdService } from '../../services/advertisement.service';
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { commonStyles, COLORS } from "../../styles/lender.styles";
+import { AdService } from "../../services/advertisement.service";
 
-const LOCATIONS = ['Colombo', 'Kandy', 'Galle', 'Negombo', 'Kurunegala', 'Jaffna'];
+const LOCATIONS = [
+  "Colombo",
+  "Kandy",
+  "Galle",
+  "Negombo",
+  "Kurunegala",
+  "Jaffna",
+];
 
 export default function EditAdScreen({ route, navigation }: any) {
   const { ad } = route.params;
 
-  const [loading,     setLoading]     = useState(false);
-  const [title,       setTitle]       = useState(ad.title);
+  const [loading, setLoading] = useState(false);
+  const [title, setTitle] = useState(ad.title);
   const [description, setDescription] = useState(ad.description);
-  const [minAmount,   setMinAmount]   = useState(String(ad.minAmount));
-  const [maxAmount,   setMaxAmount]   = useState(String(ad.maxAmount));
-  const [rate,        setRate]        = useState(String(ad.preferredInterestRate));
-  const [minTenure,   setMinTenure]   = useState(String(ad.minTenureMonths));
-  const [maxTenure,   setMaxTenure]   = useState(String(ad.maxTenureMonths));
-  const [capital,     setCapital]     = useState(String(ad.availableCapital));
+  const [minAmount, setMinAmount] = useState(String(ad.minAmount));
+  const [maxAmount, setMaxAmount] = useState(String(ad.maxAmount));
+  const [rate, setRate] = useState(String(ad.preferredInterestRate));
+  const [minTenure, setMinTenure] = useState(String(ad.minTenureMonths));
+  const [maxTenure, setMaxTenure] = useState(String(ad.maxTenureMonths));
+  const [capital, setCapital] = useState(String(ad.availableCapital));
   const [responseHrs, setResponseHrs] = useState(String(ad.responseTimeHours));
-  const [location,    setLocation]    = useState(ad.location);
+  const [location, setLocation] = useState(ad.location);
 
   const handleUpdate = async () => {
     if (Number(minAmount) >= Number(maxAmount)) {
-      Alert.alert('Validation Error', 'Maximum amount must be greater than minimum amount');
+      Alert.alert(
+        "Validation Error",
+        "Maximum amount must be greater than minimum amount",
+      );
       return;
     }
 
     if (Number(minTenure) > Number(maxTenure)) {
-      Alert.alert('Validation Error', 'Maximum tenure must be >= minimum tenure');
+      Alert.alert(
+        "Validation Error",
+        "Maximum tenure must be >= minimum tenure",
+      );
       return;
     }
 
@@ -40,21 +59,21 @@ export default function EditAdScreen({ route, navigation }: any) {
       await AdService.updateAd(ad.adId, {
         title,
         description,
-        minAmount:             Number(minAmount),
-        maxAmount:             Number(maxAmount),
+        minAmount: Number(minAmount),
+        maxAmount: Number(maxAmount),
         preferredInterestRate: Number(rate),
-        minTenureMonths:       Number(minTenure),
-        maxTenureMonths:       Number(maxTenure),
-        availableCapital:      Number(capital),
-        responseTimeHours:     Number(responseHrs),
+        minTenureMonths: Number(minTenure),
+        maxTenureMonths: Number(maxTenure),
+        availableCapital: Number(capital),
+        responseTimeHours: Number(responseHrs),
         location,
       });
 
-      Alert.alert('Success', 'Ad updated successfully!', [
-        { text: 'OK', onPress: () => navigation.navigate('MyAds') },
+      Alert.alert("Success", "Ad updated successfully!", [
+        { text: "OK", onPress: () => navigation.navigate("MyAds") },
       ]);
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.message || 'Failed to update ad');
+      Alert.alert("Error", e?.response?.data?.message || "Failed to update ad");
     } finally {
       setLoading(false);
     }
@@ -73,7 +92,6 @@ export default function EditAdScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView style={commonStyles.scrollContainer}>
-
         <Text style={commonStyles.sectionTitle}>Ad Details</Text>
         <View style={commonStyles.card}>
           <Text style={commonStyles.textPrimary}>Title</Text>
@@ -185,15 +203,18 @@ export default function EditAdScreen({ route, navigation }: any) {
               style={[commonStyles.row, { paddingVertical: 8 }]}
               onPress={() => setLocation(loc)}
             >
-              <View style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                borderWidth: 2,
-                borderColor: COLORS.primary,
-                backgroundColor: location === loc ? COLORS.primary : 'transparent',
-                marginRight: 8,
-              }} />
+              <View
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 4,
+                  borderWidth: 2,
+                  borderColor: COLORS.primary,
+                  backgroundColor:
+                    location === loc ? COLORS.primary : "transparent",
+                  marginRight: 8,
+                }}
+              />
               <Text style={commonStyles.textPrimary}>{loc}</Text>
             </TouchableOpacity>
           ))}
@@ -202,14 +223,17 @@ export default function EditAdScreen({ route, navigation }: any) {
         <TouchableOpacity
           onPress={handleUpdate}
           disabled={loading}
-          style={[commonStyles.primaryButton, { marginVertical: 24, opacity: loading ? 0.7 : 1 }]}
+          style={[
+            commonStyles.primaryButton,
+            { marginVertical: 24, opacity: loading ? 0.7 : 1 },
+          ]}
         >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={commonStyles.buttonText}>Save Changes</Text>
-          }
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={commonStyles.buttonText}>Save Changes</Text>
+          )}
         </TouchableOpacity>
-
       </ScrollView>
     </SafeAreaView>
   );

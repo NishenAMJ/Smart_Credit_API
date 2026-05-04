@@ -1,4 +1,7 @@
-export type AgreementStatus = "generated" | "partially_accepted" | "fully_accepted";
+export type AgreementStatus =
+  | "generated"
+  | "partially_accepted"
+  | "fully_accepted";
 
 export interface PartySignatureAudit {
   userId: string;

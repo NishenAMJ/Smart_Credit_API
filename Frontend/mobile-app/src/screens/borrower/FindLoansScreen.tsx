@@ -72,7 +72,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
     "";
 
   const locationOptions = useMemo(() => {
-    // Build dynamic location options from API data while preserving custom user input.
+    // Derive location options from what the API returned, keeping any custom input the user typed.
     const uniqueLocations = Array.from(
       new Set(
         loans
@@ -303,7 +303,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => setSidebarVisible(true)}>
-            <Feather name='menu' size={24} color='#FFFFFF' />
+            <Feather name="menu" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Find Loans</Text>
         </View>
@@ -312,23 +312,23 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
             style={styles.iconButton}
             onPress={() => navigation.navigate("Notifications")}
           >
-            <Feather name='bell' size={20} color='#FFFFFF' />
+            <Feather name="bell" size={20} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton}>
-            <Feather name='map-pin' size={20} color='#FFFFFF' />
+            <Feather name="map-pin" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.searchContainer}>
         <TouchableOpacity style={styles.searchIcon} onPress={handleSearch}>
-          <Feather name='search' size={20} color='#007AFF' />
+          <Feather name="search" size={20} color="#007AFF" />
         </TouchableOpacity>
 
         <TextInput
           style={styles.searchInput}
-          placeholder='Search loans...'
-          placeholderTextColor='#9CA3AF'
+          placeholder="Search loans..."
+          placeholderTextColor="#9CA3AF"
           value={searchQuery}
           onChangeText={(text) => {
             setSearchQuery(text);
@@ -337,7 +337,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
             }
           }}
           onSubmitEditing={handleSearch}
-          returnKeyType='search'
+          returnKeyType="search"
         />
 
         {searchQuery.length > 0 && (
@@ -348,7 +348,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
               void fetchFeaturedLoans();
             }}
           >
-            <Feather name='x-circle' size={20} color='#9CA3AF' />
+            <Feather name="x-circle" size={20} color="#9CA3AF" />
           </TouchableOpacity>
         )}
       </View>
@@ -374,9 +374,9 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
                 </Text>
               </View>
               <Feather
-                name='chevron-down'
+                name="chevron-down"
                 size={14}
-                color='#1A1A1A'
+                color="#1A1A1A"
                 style={styles.filterChipIcon}
               />
             </TouchableOpacity>
@@ -394,7 +394,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor='#007AFF'
+            tintColor="#007AFF"
           />
         }
         ListEmptyComponent={
@@ -405,7 +405,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
       <Modal
         visible={dropdownConfig !== null}
         transparent
-        animationType='fade'
+        animationType="fade"
         onRequestClose={() => setActiveDropdown(null)}
       >
         <View style={styles.dropdownOverlay}>
@@ -427,7 +427,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
                 style={styles.dropdownCloseButton}
                 onPress={() => setActiveDropdown(null)}
               >
-                <Feather name='x' size={20} color='#6B7280' />
+                <Feather name="x" size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
@@ -441,9 +441,9 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
                     style={styles.locationInput}
                     value={locationInput}
                     onChangeText={setLocationInput}
-                    placeholder='Enter city, district, or area'
-                    placeholderTextColor='#9CA3AF'
-                    returnKeyType='done'
+                    placeholder="Enter city, district, or area"
+                    placeholderTextColor="#9CA3AF"
+                    returnKeyType="done"
                     onSubmitEditing={onApplyTypedLocation}
                   />
                   <TouchableOpacity
@@ -473,7 +473,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
                       Any
                     </Text>
                     {selectedLocation === "Any" ? (
-                      <Feather name='check' size={18} color='#007AFF' />
+                      <Feather name="check" size={18} color="#007AFF" />
                     ) : null}
                   </TouchableOpacity>
                 </View>
@@ -501,7 +501,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
                         {option}
                       </Text>
                       {isSelected ? (
-                        <Feather name='check' size={18} color='#007AFF' />
+                        <Feather name="check" size={18} color="#007AFF" />
                       ) : null}
                     </TouchableOpacity>
                   );

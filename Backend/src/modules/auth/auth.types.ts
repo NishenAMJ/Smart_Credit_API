@@ -5,7 +5,12 @@ export const USER_ROLES = [...PUBLIC_USER_ROLES, 'admin'] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
 export type PublicUserRole = (typeof PUBLIC_USER_ROLES)[number];
-export type KycStatus = 'not_submitted' | 'pending' | 'under_review' | 'approved' | 'rejected';
+export type KycStatus =
+  | 'not_submitted'
+  | 'pending'
+  | 'under_review'
+  | 'approved'
+  | 'rejected';
 export type AccountStatus = 'active' | 'suspended' | 'blocked';
 
 export type UserDocument = {

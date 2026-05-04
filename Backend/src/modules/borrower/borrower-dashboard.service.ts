@@ -15,6 +15,10 @@ type TimestampLike =
   | null
   | undefined;
 
+/**
+ * Builds the borrower home dashboard by aggregating loan, application,
+ * and profile data into a single response.
+ */
 @Injectable()
 export class BorrowerDashboardService {
   private readonly BORROWERS_COL = 'borrowers';
@@ -28,6 +32,10 @@ export class BorrowerDashboardService {
     return this.firebaseService.db;
   }
 
+  /**
+   * Returns all dashboard metrics for the given borrower —
+   * falls back to the users collection if no borrower profile exists yet.
+   */
   async getDashboard(borrowerId: string) {
     if (!borrowerId) {
       throw new BadRequestException('Borrower ID is required');
@@ -95,9 +103,8 @@ export class BorrowerDashboardService {
         }
       });
 
-      const pendingApplications = await this.getPendingApplicationsCount(
-        borrowerId,
-      );
+      const pendingApplications =
+        await this.getPendingApplicationsCount(borrowerId);
 
       const dashboard = {
         profile: profileData,
@@ -122,18 +129,22 @@ export class BorrowerDashboardService {
     }
   }
 
+  /**
+   * Counts pending and draft applications without loading full documents.
+   * Falls back to a full query if the count API isn't available.
+   */
   private async getPendingApplicationsCount(
     borrowerId: string,
   ): Promise<number> {
     const query = this.db
-        .collection(this.LOAN_APPS_COL)
-        .where('borrowerId', '==', borrowerId)
-        .where('status', 'in', [
-          LoanApplicationStatus.PENDING,
-          'PENDING',
-          LoanApplicationStatus.DRAFT,
-          'DRAFT',
-        ]);
+      .collection(this.LOAN_APPS_COL)
+      .where('borrowerId', '==', borrowerId)
+      .where('status', 'in', [
+        LoanApplicationStatus.PENDING,
+        'PENDING',
+        LoanApplicationStatus.DRAFT,
+        'DRAFT',
+      ]);
 
     try {
       const snapshot = await query.count().get();
@@ -144,6 +155,7 @@ export class BorrowerDashboardService {
     }
   }
 
+  /** Converts any Firestore-compatible timestamp to milliseconds, or 0 if null. */
   private timestampToMillis(value: TimestampLike): number {
     if (!value) {
       return 0;
@@ -164,12 +176,14 @@ export class BorrowerDashboardService {
     return 0;
   }
 
+  /** Safely casts a value to a finite number, returning a fallback when it isn't. */
   private toNumber(value: unknown, fallback = 0): number {
     return typeof value === 'number' && Number.isFinite(value)
       ? value
       : fallback;
   }
 
+  /** Normalizes a raw date-like value into a Firestore Timestamp, or undefined if unresolvable. */
   private toTimestamp(value: unknown): FirebaseFirestore.Timestamp | undefined {
     if (!value) {
       return undefined;
@@ -191,6 +205,7 @@ export class BorrowerDashboardService {
     return undefined;
   }
 
+  /** Maps any raw status string to a known LoanStatus enum value, defaulting to ACTIVE. */
   private normalizeLoanStatus(value: unknown): LoanStatus {
     const status = String(value ?? '').toLowerCase();
 
@@ -201,6 +216,10 @@ export class BorrowerDashboardService {
     return LoanStatus.ACTIVE;
   }
 
+  /**
+   * Converts a raw Firestore loan document into a typed Loan object,
+   * filling in sensible numeric defaults for any missing fields.
+   */
   private normalizeLoanDocument(
     data: FirebaseFirestore.DocumentData,
     documentId?: string,

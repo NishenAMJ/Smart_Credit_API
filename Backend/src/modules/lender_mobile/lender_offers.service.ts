@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { FirebaseService } from '../../firebase/firebase.service';
 
 export interface LoanOffer {
@@ -42,7 +47,10 @@ export class LenderOffersService {
    * Create a new loan offer for this lender.
    * Writes to the 'loanOffers' Firestore collection.
    */
-  async createOffer(lenderId: string, input: Record<string, any>): Promise<LoanOffer> {
+  async createOffer(
+    lenderId: string,
+    input: Record<string, any>,
+  ): Promise<LoanOffer> {
     this.logger.log(`Creating loan offer for lender ${lenderId}`);
 
     const now = new Date().toISOString();
@@ -72,10 +80,16 @@ export class LenderOffersService {
    * Update an existing loan offer (must belong to this lender).
    * PATCH on the 'loanOffers' collection doc.
    */
-  async updateOffer(lenderId: string, offerId: string, input: Record<string, any>): Promise<LoanOffer> {
+  async updateOffer(
+    lenderId: string,
+    offerId: string,
+    input: Record<string, any>,
+  ): Promise<LoanOffer> {
     this.logger.log(`Updating offer ${offerId} for lender ${lenderId}`);
 
-    const offerRef = this.firebaseService.db.collection('loanOffers').doc(offerId);
+    const offerRef = this.firebaseService.db
+      .collection('loanOffers')
+      .doc(offerId);
     const doc = await offerRef.get();
 
     if (!doc.exists) {
@@ -87,12 +101,18 @@ export class LenderOffersService {
       throw new ForbiddenException('You can only update your own offers');
     }
 
-    const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
-    if (input.minAmount   !== undefined) updateData.minAmount   = Number(input.minAmount);
-    if (input.maxAmount   !== undefined) updateData.maxAmount   = Number(input.maxAmount);
-    if (input.interestRate !== undefined) updateData.interestRate = Number(input.interestRate);
-    if (input.tenureMonths !== undefined) updateData.tenureMonths = Number(input.tenureMonths);
-    if (input.active      !== undefined) updateData.active = input.active;
+    const updateData: Record<string, any> = {
+      updatedAt: new Date().toISOString(),
+    };
+    if (input.minAmount !== undefined)
+      updateData.minAmount = Number(input.minAmount);
+    if (input.maxAmount !== undefined)
+      updateData.maxAmount = Number(input.maxAmount);
+    if (input.interestRate !== undefined)
+      updateData.interestRate = Number(input.interestRate);
+    if (input.tenureMonths !== undefined)
+      updateData.tenureMonths = Number(input.tenureMonths);
+    if (input.active !== undefined) updateData.active = input.active;
 
     await offerRef.update(updateData);
 

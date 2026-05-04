@@ -101,8 +101,7 @@ export async function fetchLenderNotifications(
   return response.json();
 }
 
-export async function fetchLenderNotificationSummary(
-): Promise<LenderNotificationsSummaryResponse> {
+export async function fetchLenderNotificationSummary(): Promise<LenderNotificationsSummaryResponse> {
   const response = await fetchLenderApi("/lender-notifications/summary");
 
   if (!response.ok) {

@@ -1,6 +1,16 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Eye, Ban, CheckCircle, Users, UserCheck, Shield, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Search,
+  Eye,
+  Ban,
+  CheckCircle,
+  Users,
+  UserCheck,
+  Shield,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import {
   activateUser,
   getUsers,
@@ -80,7 +90,15 @@ function RoleBadge({ role }: { role: AdminUserRole }) {
   }[role];
 
   return (
-    <span style={{ ...styles, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+    <span
+      style={{
+        ...styles,
+        padding: "3px 10px",
+        borderRadius: 20,
+        fontSize: 12,
+        fontWeight: 600,
+      }}
+    >
       {role}
     </span>
   );
@@ -109,7 +127,9 @@ function iconButton(color: string, bg: string): CSSProperties {
 export default function ManageUsers() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<AdminUserStatus | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<AdminUserStatus | "all">(
+    "all",
+  );
   const [filterRole, setFilterRole] = useState<AdminUserRole | "all">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -131,35 +151,38 @@ export default function ManageUsers() {
   const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [totalLoaded, setTotalLoaded] = useState(0);
 
-  const loadUsers = useCallback(async (cursor?: string) => {
-    setLoading(true);
-    try {
-      const [usersResponse, statsResponse] = await Promise.all([
-        getUsers({ limit: pageSize, cursor }),
-        !cursor ? getUserStats() : Promise.resolve(null),
-      ]);
+  const loadUsers = useCallback(
+    async (cursor?: string) => {
+      setLoading(true);
+      try {
+        const [usersResponse, statsResponse] = await Promise.all([
+          getUsers({ limit: pageSize, cursor }),
+          !cursor ? getUserStats() : Promise.resolve(null),
+        ]);
 
-      setUsers(usersResponse.users.map(mapApiUser));
-      setHasMore(usersResponse.hasMore ?? false);
-      setNextCursor(usersResponse.nextCursor);
-      setTotalLoaded(usersResponse.count);
+        setUsers(usersResponse.users.map(mapApiUser));
+        setHasMore(usersResponse.hasMore ?? false);
+        setNextCursor(usersResponse.nextCursor);
+        setTotalLoaded(usersResponse.count);
 
-      if (statsResponse) {
-        setStats({
-          totalUsers: statsResponse.stats.totalUsers,
-          activeUsers: statsResponse.stats.activeUsers,
-          pendingUsers: statsResponse.stats.pendingUsers,
-          suspendedUsers: statsResponse.stats.suspendedUsers,
-          borrowers: statsResponse.stats.borrowers,
-          lenders: statsResponse.stats.lenders,
-        });
+        if (statsResponse) {
+          setStats({
+            totalUsers: statsResponse.stats.totalUsers,
+            activeUsers: statsResponse.stats.activeUsers,
+            pendingUsers: statsResponse.stats.pendingUsers,
+            suspendedUsers: statsResponse.stats.suspendedUsers,
+            borrowers: statsResponse.stats.borrowers,
+            lenders: statsResponse.stats.lenders,
+          });
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load users.");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load users.");
-    } finally {
-      setLoading(false);
-    }
-  }, [pageSize]);
+    },
+    [pageSize],
+  );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -169,7 +192,8 @@ export default function ManageUsers() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      const activeCursor = currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+      const activeCursor =
+        currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
       void loadUsers(activeCursor);
     }, 10000);
 
@@ -183,7 +207,8 @@ export default function ManageUsers() {
         user.name.toLowerCase().includes(searchValue) ||
         user.email.toLowerCase().includes(searchValue) ||
         user.id.toLowerCase().includes(searchValue);
-      const matchesStatus = filterStatus === "all" || user.status === filterStatus;
+      const matchesStatus =
+        filterStatus === "all" || user.status === filterStatus;
       const matchesRole = filterRole === "all" || user.role === filterRole;
       return matchesSearch && matchesStatus && matchesRole;
     });
@@ -200,7 +225,8 @@ export default function ManageUsers() {
     if (currentPage <= 1) return;
     const newStack = [...cursorStack];
     newStack.pop();
-    const prevCursor = newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
+    const prevCursor =
+      newStack.length > 0 ? newStack[newStack.length - 1] : undefined;
     setCursorStack(newStack);
     setCurrentPage((prev) => prev - 1);
     const goToCursor = currentPage <= 2 ? undefined : prevCursor;
@@ -217,7 +243,11 @@ export default function ManageUsers() {
   async function handleSuspend(userId: string) {
     try {
       await suspendUser(userId, DEFAULT_USER_SUSPENSION_REASON);
-      setUsers((prev) => prev.map((user) => (user.id === userId ? { ...user, status: "suspended" } : user)));
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === userId ? { ...user, status: "suspended" } : user,
+        ),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to suspend user.");
     }
@@ -227,7 +257,11 @@ export default function ManageUsers() {
   async function handleActivate(userId: string) {
     try {
       await activateUser(userId);
-      setUsers((prev) => prev.map((user) => (user.id === userId ? { ...user, status: "active" } : user)));
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === userId ? { ...user, status: "active" } : user,
+        ),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to activate user.");
     }
@@ -238,26 +272,58 @@ export default function ManageUsers() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Manage Users</h1>
-          <p className="page-subtitle">Users loaded from Firestore with lender and borrower credit data</p>
+          <p className="page-subtitle">
+            Users loaded from Firestore with lender and borrower credit data
+          </p>
         </div>
         <span style={S.pendingChip}>{stats.pendingUsers} Pending</span>
       </div>
 
-      {error && <div className="card" style={S.errorCard}>{error}</div>}
+      {error && (
+        <div className="card" style={S.errorCard}>
+          {error}
+        </div>
+      )}
 
       <div style={S.summaryGrid}>
         {[
-          { label: "Total Users", count: stats.totalUsers, color: "#007AFF", bg: "#EFF6FF", icon: Users },
-          { label: "Active", count: stats.activeUsers, color: "#10B981", bg: "#ECFDF5", icon: UserCheck },
-          { label: "Borrowers", count: stats.borrowers, color: "#8B5CF6", bg: "#F5F3FF", icon: Users },
-          { label: "Suspended", count: stats.suspendedUsers, color: "#6B7280", bg: "#F3F4F6", icon: Shield },
+          {
+            label: "Total Users",
+            count: stats.totalUsers,
+            color: "#007AFF",
+            bg: "#EFF6FF",
+            icon: Users,
+          },
+          {
+            label: "Active",
+            count: stats.activeUsers,
+            color: "#10B981",
+            bg: "#ECFDF5",
+            icon: UserCheck,
+          },
+          {
+            label: "Borrowers",
+            count: stats.borrowers,
+            color: "#8B5CF6",
+            bg: "#F5F3FF",
+            icon: Users,
+          },
+          {
+            label: "Suspended",
+            count: stats.suspendedUsers,
+            color: "#6B7280",
+            bg: "#F3F4F6",
+            icon: Shield,
+          },
         ].map((item) => {
           const Icon = item.icon;
           return (
             <div key={item.label} className="card" style={S.summaryCard}>
               <div>
                 <p style={S.summaryLabel}>{item.label}</p>
-                <p style={{ ...S.summaryValue, color: item.color }}>{loading ? "..." : item.count}</p>
+                <p style={{ ...S.summaryValue, color: item.color }}>
+                  {loading ? "..." : item.count}
+                </p>
               </div>
               <div style={{ ...S.iconWrap, background: item.bg }}>
                 <Icon size={18} color={item.color} />
@@ -280,16 +346,26 @@ export default function ManageUsers() {
         </div>
 
         <div className="tabs">
-          {(["all", "active", "pending", "suspended", "inactive"] as const).map((status) => (
-            <button key={status} className={`tab ${filterStatus === status ? "active" : ""}`} onClick={() => setFilterStatus(status)}>
-              {status}
-            </button>
-          ))}
+          {(["all", "active", "pending", "suspended", "inactive"] as const).map(
+            (status) => (
+              <button
+                key={status}
+                className={`tab ${filterStatus === status ? "active" : ""}`}
+                onClick={() => setFilterStatus(status)}
+              >
+                {status}
+              </button>
+            ),
+          )}
         </div>
 
         <div className="tabs">
           {(["all", "borrower", "lender", "admin"] as const).map((role) => (
-            <button key={role} className={`tab ${filterRole === role ? "active" : ""}`} onClick={() => setFilterRole(role)}>
+            <button
+              key={role}
+              className={`tab ${filterRole === role ? "active" : ""}`}
+              onClick={() => setFilterRole(role)}
+            >
               {role}
             </button>
           ))}
@@ -321,29 +397,71 @@ export default function ManageUsers() {
               filteredUsers.map((user) => (
                 <tr key={user.id}>
                   <td>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                      }}
+                    >
                       <span style={{ fontWeight: 600 }}>{user.name}</span>
-                      <span style={{ fontSize: 12, color: "#6B7280" }}>{user.email}</span>
+                      <span style={{ fontSize: 12, color: "#6B7280" }}>
+                        {user.email}
+                      </span>
                     </div>
                   </td>
                   <td>{user.phone}</td>
                   <td style={S.monoCell}>{user.id}</td>
-                  <td><RoleBadge role={user.role} /></td>
+                  <td>
+                    <RoleBadge role={user.role} />
+                  </td>
                   <td>{user.kycStatus}</td>
                   <td>{user.joinDate}</td>
-                  <td><StatusBadge status={user.status} /></td>
+                  <td>
+                    <StatusBadge status={user.status} />
+                  </td>
                   <td style={S.actionCell}>
                     <div style={S.actionRow}>
-                      <button style={iconButton("#6B7280", "#F3F4F6")} onClick={() => setSelectedUser(user)} title="View" aria-label="View user">
-                        <Eye size={14} color="#6B7280" strokeWidth={2.2} style={S.iconGraphic} />
+                      <button
+                        style={iconButton("#6B7280", "#F3F4F6")}
+                        onClick={() => setSelectedUser(user)}
+                        title="View"
+                        aria-label="View user"
+                      >
+                        <Eye
+                          size={14}
+                          color="#6B7280"
+                          strokeWidth={2.2}
+                          style={S.iconGraphic}
+                        />
                       </button>
                       {user.status === "suspended" ? (
-                        <button style={iconButton("#10B981", "#ECFDF5")} onClick={() => void handleActivate(user.id)} title="Activate" aria-label="Activate user">
-                          <CheckCircle size={14} color="#10B981" strokeWidth={2.2} style={S.iconGraphic} />
+                        <button
+                          style={iconButton("#10B981", "#ECFDF5")}
+                          onClick={() => void handleActivate(user.id)}
+                          title="Activate"
+                          aria-label="Activate user"
+                        >
+                          <CheckCircle
+                            size={14}
+                            color="#10B981"
+                            strokeWidth={2.2}
+                            style={S.iconGraphic}
+                          />
                         </button>
                       ) : (
-                        <button style={iconButton("#EF4444", "#FEF2F2")} onClick={() => void handleSuspend(user.id)} title="Suspend" aria-label="Suspend user">
-                          <Ban size={14} color="#EF4444" strokeWidth={2.2} style={S.iconGraphic} />
+                        <button
+                          style={iconButton("#EF4444", "#FEF2F2")}
+                          onClick={() => void handleSuspend(user.id)}
+                          title="Suspend"
+                          aria-label="Suspend user"
+                        >
+                          <Ban
+                            size={14}
+                            color="#EF4444"
+                            strokeWidth={2.2}
+                            style={S.iconGraphic}
+                          />
                         </button>
                       )}
                     </div>
@@ -358,8 +476,10 @@ export default function ManageUsers() {
         <div style={S.paginationBar}>
           <div style={S.paginationInfo}>
             <span style={{ fontSize: 13, color: "#6B7280" }}>
-              Showing {filteredUsers.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
-              –{(currentPage - 1) * pageSize + totalLoaded} {hasMore ? "" : "(last page)"}
+              Showing{" "}
+              {filteredUsers.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}–
+              {(currentPage - 1) * pageSize + totalLoaded}{" "}
+              {hasMore ? "" : "(last page)"}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
@@ -369,7 +489,9 @@ export default function ManageUsers() {
                 style={S.pageSizeSelect}
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size}</option>
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
                 ))}
               </select>
             </div>
@@ -403,7 +525,12 @@ export default function ManageUsers() {
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
             <div style={S.modalHeader}>
               <h3 style={{ fontSize: 18, fontWeight: 700 }}>User Details</h3>
-              <button style={S.closeButton} onClick={() => setSelectedUser(null)}>×</button>
+              <button
+                style={S.closeButton}
+                onClick={() => setSelectedUser(null)}
+              >
+                ×
+              </button>
             </div>
             <div style={S.modalGrid}>
               <Detail label="Name" value={selectedUser.name} />
@@ -415,10 +542,22 @@ export default function ManageUsers() {
               <Detail label="Rating" value={String(selectedUser.rating)} />
               <Detail label="Join Date" value={selectedUser.joinDate} />
               <Detail label="Updated At" value={selectedUser.updatedAt} />
-              <Detail label="Loans Completed" value={String(selectedUser.totalLoansCompleted)} />
-              <Detail label="Total Lent" value={`LKR ${selectedUser.totalAmountLent.toLocaleString()}`} />
-              <Detail label="Total Borrowed" value={`LKR ${selectedUser.totalAmountBorrowed.toLocaleString()}`} />
-              <Detail label="Suspension Reason" value={selectedUser.suspensionReason || "N/A"} />
+              <Detail
+                label="Loans Completed"
+                value={String(selectedUser.totalLoansCompleted)}
+              />
+              <Detail
+                label="Total Lent"
+                value={`LKR ${selectedUser.totalAmountLent.toLocaleString()}`}
+              />
+              <Detail
+                label="Total Borrowed"
+                value={`LKR ${selectedUser.totalAmountBorrowed.toLocaleString()}`}
+              />
+              <Detail
+                label="Suspension Reason"
+                value={selectedUser.suspensionReason || "N/A"}
+              />
             </div>
           </div>
         </div>
@@ -431,8 +570,12 @@ export default function ManageUsers() {
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div style={S.detailCard}>
-      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{value}</div>
+      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>
+        {value}
+      </div>
     </div>
   );
 }

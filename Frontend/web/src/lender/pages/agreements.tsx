@@ -14,23 +14,27 @@ export default function LenderAgreements({ session }: AgreementsPageProps) {
     return {
       success: true,
       documents: response.documents as any[],
-      count: response.documents?.length || 0
+      count: response.documents?.length || 0,
     };
   }, []);
 
   const handleDownload = (documentId: string, pdfDownloadPath?: string) => {
     const token = session.accessToken;
     if (!token) return;
-    
-    const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "/api";
+
+    const API_BASE_URL =
+      (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
+        /\/$/,
+        "",
+      ) ?? "/api";
     const path = pdfDownloadPath ?? `/legal/documents/${documentId}/download`;
     const fullUrl = `${API_BASE_URL}${path}?token=${encodeURIComponent(token)}`;
-    
+
     window.open(fullUrl, "_blank");
   };
 
   return (
-    <AgreementsPage 
+    <AgreementsPage
       role="lender"
       fetcher={fetcher}
       onDownload={handleDownload}

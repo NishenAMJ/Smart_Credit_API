@@ -43,7 +43,9 @@ export class LenderProfileController {
     );
   }
 
-  private toUpdateInput(body: UpdateLenderProfileBody): UpdateLenderProfileInput {
+  private toUpdateInput(
+    body: UpdateLenderProfileBody,
+  ): UpdateLenderProfileInput {
     return {
       fullName: typeof body.fullName === 'string' ? body.fullName : '',
       email: typeof body.email === 'string' ? body.email : '',

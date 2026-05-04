@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js}\""
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -33,6 +34,7 @@
   "devDependencies": {
     "@types/node": "^25.6.0",
     "@types/react": "~19.1.10",
+    "prettier": "^3.8.3",
     "typescript": "~5.9.2"
   },
   "private": true

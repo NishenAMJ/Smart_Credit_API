@@ -1,15 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, FlatList, Dimensions,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { StatCard, QuickAction, LenderActionItem, AlertBanner } from '../../components/lender';
-import { ActivityIndicator } from 'react-native';
-import { DashboardService, LoanRequestsService, LenderProfileService } from '../../services/lender.service';
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  FlatList,
+  Dimensions,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { commonStyles, COLORS } from "../../styles/lender.styles";
+import {
+  StatCard,
+  QuickAction,
+  LenderActionItem,
+  AlertBanner,
+} from "../../components/lender";
+import { ActivityIndicator } from "react-native";
+import {
+  DashboardService,
+  LoanRequestsService,
+  LenderProfileService,
+} from "../../services/lender.service";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 // ── Main Component ────────────────────────────────────────
 export default function LenderDashboardScreen({ navigation }: any) {
@@ -34,10 +49,10 @@ export default function LenderDashboardScreen({ navigation }: any) {
           const prof = await LenderProfileService.getProfile();
           setProfile(prof);
         } catch (profileError) {
-          console.log('Profile not found or failed to load:', profileError);
+          console.log("Profile not found or failed to load:", profileError);
         }
       } catch (e: any) {
-        setError(e?.response?.data?.message ?? 'Failed to load dashboard');
+        setError(e?.response?.data?.message ?? "Failed to load dashboard");
       } finally {
         setLoading(false);
       }
@@ -47,31 +62,59 @@ export default function LenderDashboardScreen({ navigation }: any) {
   const summaryData = summary?.summary ?? summary ?? {};
   const STATS = summaryData
     ? [
-        { id: '1', icon: 'users',         color: COLORS.primary, value: String(summaryData.totalBorrowers ?? 0),                                                      label: 'Borrowers'       },
-        { id: '2', icon: 'dollar-sign',   color: COLORS.success, value: `LKR ${((summaryData.todaysCollection ?? 0) / 1000).toFixed(1)}K`, label: "Today's Collection" },
-        { id: '3', icon: 'radio',         color: COLORS.warning, value: String(summaryData.activeAds ?? 0),                                                           label: 'Active Ads'      },
-        { id: '4', icon: 'alert-circle',  color: COLORS.danger,  value: String(summaryData.overduePayments ?? 0),                                                     label: 'Overdue'         },
+        {
+          id: "1",
+          icon: "users",
+          color: COLORS.primary,
+          value: String(summaryData.totalBorrowers ?? 0),
+          label: "Borrowers",
+        },
+        {
+          id: "2",
+          icon: "dollar-sign",
+          color: COLORS.success,
+          value: `LKR ${((summaryData.todaysCollection ?? 0) / 1000).toFixed(1)}K`,
+          label: "Today's Collection",
+        },
+        {
+          id: "3",
+          icon: "radio",
+          color: COLORS.warning,
+          value: String(summaryData.activeAds ?? 0),
+          label: "Active Ads",
+        },
+        {
+          id: "4",
+          icon: "alert-circle",
+          color: COLORS.danger,
+          value: String(summaryData.overduePayments ?? 0),
+          label: "Overdue",
+        },
       ]
     : [];
 
   const overdueCount: number = summaryData?.overduePayments ?? 0;
 
   const getStatusColor = (status: string) => {
-    if (status === 'Approved' || status === 'approved') return COLORS.success;
-    if (status === 'Rejected' || status === 'rejected') return COLORS.danger;
+    if (status === "Approved" || status === "approved") return COLORS.success;
+    if (status === "Rejected" || status === "rejected") return COLORS.danger;
     return COLORS.warning;
   };
 
   const getStatusBg = (status: string) => {
-    if (status === 'Approved' || status === 'approved') return '#ECFDF5';
-    if (status === 'Rejected' || status === 'rejected') return '#FEF2F2';
-    return '#FFFBEB';
+    if (status === "Approved" || status === "approved") return "#ECFDF5";
+    if (status === "Rejected" || status === "rejected") return "#FEF2F2";
+    return "#FFFBEB";
   };
 
   if (loading) {
     return (
       <SafeAreaView style={commonStyles.safe}>
-        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" />
+        <ActivityIndicator
+          style={{ marginTop: 40 }}
+          color={COLORS.primary}
+          size="large"
+        />
       </SafeAreaView>
     );
   }
@@ -79,24 +122,29 @@ export default function LenderDashboardScreen({ navigation }: any) {
   return (
     <SafeAreaView style={commonStyles.safe}>
       <ScrollView showsVerticalScrollIndicator={false}>
-
         {/* ── HEADER ────────────────────────────────── */}
         <View style={styles.header}>
           <View style={commonStyles.rowSpaceBetween}>
             <View style={{ width: 40 }} />
             <TouchableOpacity
-              onPress={() => navigation.navigate('LenderProfile')}
+              onPress={() => navigation.navigate("LenderProfile")}
               activeOpacity={0.8}
             >
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {profile?.fullName ? profile.fullName[0].toUpperCase() : (profile?.name ? profile.name[0].toUpperCase() : 'L')}
+                  {profile?.fullName
+                    ? profile.fullName[0].toUpperCase()
+                    : profile?.name
+                      ? profile.name[0].toUpperCase()
+                      : "L"}
                 </Text>
               </View>
             </TouchableOpacity>
           </View>
           <Text style={styles.headerGreeting}>Welcome back</Text>
-          <Text style={styles.headerName}>{profile?.fullName ?? profile?.name ?? 'Lender'}</Text>
+          <Text style={styles.headerName}>
+            {profile?.fullName ?? profile?.name ?? "Lender"}
+          </Text>
         </View>
 
         {/* ── STATS ─────────────────────────────────── */}
@@ -119,7 +167,7 @@ export default function LenderDashboardScreen({ navigation }: any) {
           contentContainerStyle={styles.statsList}
           onScroll={(e) =>
             setActiveSlide(
-              Math.round(e.nativeEvent.contentOffset.x / (width * 0.44 + 12))
+              Math.round(e.nativeEvent.contentOffset.x / (width * 0.44 + 12)),
             )
           }
           scrollEventThrottle={16}
@@ -154,28 +202,28 @@ export default function LenderDashboardScreen({ navigation }: any) {
             backgroundColor="#EBF4FF"
             iconColor={COLORS.primary}
             label="New Offer"
-            onPress={() => navigation.navigate('CreateLoanOffer')}
+            onPress={() => navigation.navigate("CreateLoanOffer")}
           />
           <QuickAction
             icon="layers"
             backgroundColor="#ECFDF5"
             iconColor={COLORS.success}
             label="My Offers"
-            onPress={() => navigation.navigate('MyOffers')}
+            onPress={() => navigation.navigate("MyOffers")}
           />
           <QuickAction
             icon="inbox"
             backgroundColor="#FFFBEB"
             iconColor={COLORS.warning}
             label="Applications"
-            onPress={() => navigation.navigate('ApplicationsReceived')}
+            onPress={() => navigation.navigate("ApplicationsReceived")}
           />
           <QuickAction
             icon="trending-up"
             backgroundColor="#FEF2F2"
             iconColor={COLORS.danger}
             label="Active Loans"
-            onPress={() => navigation.navigate('ActiveLoans')}
+            onPress={() => navigation.navigate("ActiveLoans")}
           />
         </View>
 
@@ -186,28 +234,28 @@ export default function LenderDashboardScreen({ navigation }: any) {
             backgroundColor="#F5F3FF"
             iconColor="#8B5CF6"
             label="My Ads"
-            onPress={() => navigation.navigate('MyAds')}
+            onPress={() => navigation.navigate("MyAds")}
           />
           <QuickAction
             icon="plus-square"
             backgroundColor="#EBF4FF"
             iconColor={COLORS.primary}
             label="Create Ad"
-            onPress={() => navigation.navigate('CreateAd')}
+            onPress={() => navigation.navigate("CreateAd")}
           />
           <QuickAction
             icon="file-text"
             backgroundColor="#ECFDF5"
             iconColor={COLORS.success}
             label="Agreements"
-            onPress={() => navigation.navigate('AgreementsList')}
+            onPress={() => navigation.navigate("AgreementsList")}
           />
           <QuickAction
             icon="maximize"
             backgroundColor="#FEF2F2"
             iconColor={COLORS.danger}
             label="Scan QR"
-            onPress={() => navigation.navigate('QRScanner')}
+            onPress={() => navigation.navigate("QRScanner")}
           />
         </View>
 
@@ -228,44 +276,44 @@ export default function LenderDashboardScreen({ navigation }: any) {
             icon="layers"
             iconColor={COLORS.primary}
             label="My Offers"
-            onPress={() => navigation.navigate('MyOffers')}
+            onPress={() => navigation.navigate("MyOffers")}
             isFirst
           />
           <LenderActionItem
             icon="trending-up"
             iconColor={COLORS.success}
             label="Active Loans"
-            onPress={() => navigation.navigate('ActiveLoans')}
+            onPress={() => navigation.navigate("ActiveLoans")}
           />
           <LenderActionItem
             icon="users"
             iconColor={COLORS.warning}
             label="My Borrowers"
-            onPress={() => navigation.navigate('MyBorrowers')}
+            onPress={() => navigation.navigate("MyBorrowers")}
           />
           <LenderActionItem
             icon="book"
             iconColor={COLORS.danger}
             label="Collection History"
-            onPress={() => navigation.navigate('CollectionHistory')}
+            onPress={() => navigation.navigate("CollectionHistory")}
           />
           <LenderActionItem
             icon="radio"
             iconColor="#8B5CF6"
             label="My Advertisements"
-            onPress={() => navigation.navigate('MyAds')}
+            onPress={() => navigation.navigate("MyAds")}
           />
           <LenderActionItem
             icon="file-text"
             iconColor={COLORS.primary}
             label="Agreements"
-            onPress={() => navigation.navigate('AgreementsList')}
+            onPress={() => navigation.navigate("AgreementsList")}
           />
           <LenderActionItem
             icon="bar-chart-2"
             iconColor={COLORS.success}
             label="Ad Analytics"
-            onPress={() => navigation.navigate('AdSummaryAnalytics')}
+            onPress={() => navigation.navigate("AdSummaryAnalytics")}
           />
         </View>
 
@@ -306,14 +354,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
+    fontWeight: "700",
+    color: "#fff",
   },
   statsList: {
     paddingHorizontal: 16,
@@ -321,8 +369,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     gap: 6,
     marginBottom: 20,
   },
@@ -339,23 +387,23 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
   },
   quickRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingHorizontal: 16,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     marginBottom: 16,
   },
   appAvatar: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#EBF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#EBF4FF",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   appAvatarText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.primary,
   },
   badge: {
@@ -366,11 +414,11 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   actionsList: {
     marginHorizontal: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderRadius: 12,
     marginBottom: 16,
   },

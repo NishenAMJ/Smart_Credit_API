@@ -1,6 +1,9 @@
 import { LenderNotificationsService } from './lender-notifications.service';
 
-function createNotificationDoc(id: string, overrides: Record<string, unknown> = {}) {
+function createNotificationDoc(
+  id: string,
+  overrides: Record<string, unknown> = {},
+) {
   const data = {
     lenderId: 'lender_1',
     category: 'loan_request',
@@ -28,24 +31,30 @@ function createNotificationDoc(id: string, overrides: Record<string, unknown> = 
 
 describe('LenderNotificationsService', () => {
   it('returns paginated notifications while preserving summary counts', async () => {
-    const service = new LenderNotificationsService({ getDb: () => ({}) } as any);
-    jest.spyOn(service as any, 'syncNotifications').mockResolvedValue(undefined);
-    jest.spyOn(service as any, 'getDirectNotificationSummary').mockResolvedValue({
-      lenderId: 'lender_1',
-      unreadCount: 1,
-      totalCount: 2,
-      highPriorityCount: 1,
-      todaysCount: 1,
-      topCategory: 'loan_request',
-      countsByCategory: {
-        loan_request: 1,
-        transaction: 0,
-        repayment_risk: 0,
-        dispute: 0,
-        ad: 1,
-        system: 0,
-      },
-    });
+    const service = new LenderNotificationsService({
+      getDb: () => ({}),
+    } as any);
+    jest
+      .spyOn(service as any, 'syncNotifications')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'getDirectNotificationSummary')
+      .mockResolvedValue({
+        lenderId: 'lender_1',
+        unreadCount: 1,
+        totalCount: 2,
+        highPriorityCount: 1,
+        todaysCount: 1,
+        topCategory: 'loan_request',
+        countsByCategory: {
+          loan_request: 1,
+          transaction: 0,
+          repayment_risk: 0,
+          dispute: 0,
+          ad: 1,
+          system: 0,
+        },
+      });
     jest.spyOn(service as any, 'buildNotificationsQuery').mockReturnValue({
       get: jest.fn().mockResolvedValue({
         docs: Array.from({ length: 11 }, (_, index) =>
@@ -59,7 +68,12 @@ describe('LenderNotificationsService', () => {
       }),
     });
 
-    const result = await service.getNotifications('lender_1', undefined, 'all', 10);
+    const result = await service.getNotifications(
+      'lender_1',
+      undefined,
+      'all',
+      10,
+    );
 
     expect(result.unreadCount).toBe(1);
     expect(result.notifications).toHaveLength(10);
@@ -67,24 +81,30 @@ describe('LenderNotificationsService', () => {
   });
 
   it('keeps summary behavior intact', async () => {
-    const service = new LenderNotificationsService({ getDb: () => ({}) } as any);
-    jest.spyOn(service as any, 'syncNotifications').mockResolvedValue(undefined);
-    jest.spyOn(service as any, 'getDirectNotificationSummary').mockResolvedValue({
-      lenderId: 'lender_1',
-      unreadCount: 1,
-      totalCount: 2,
-      highPriorityCount: 1,
-      todaysCount: 1,
-      topCategory: 'loan_request',
-      countsByCategory: {
-        loan_request: 1,
-        transaction: 0,
-        repayment_risk: 0,
-        dispute: 0,
-        ad: 1,
-        system: 0,
-      },
-    });
+    const service = new LenderNotificationsService({
+      getDb: () => ({}),
+    } as any);
+    jest
+      .spyOn(service as any, 'syncNotifications')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'getDirectNotificationSummary')
+      .mockResolvedValue({
+        lenderId: 'lender_1',
+        unreadCount: 1,
+        totalCount: 2,
+        highPriorityCount: 1,
+        todaysCount: 1,
+        topCategory: 'loan_request',
+        countsByCategory: {
+          loan_request: 1,
+          transaction: 0,
+          repayment_risk: 0,
+          dispute: 0,
+          ad: 1,
+          system: 0,
+        },
+      });
 
     const result = await service.getSummary('lender_1');
 

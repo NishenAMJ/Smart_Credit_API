@@ -72,7 +72,7 @@ export default function ApplicationCard({
 
       <View style={styles.footer}>
         <Text style={styles.viewDetails}>View Details</Text>
-        <Feather name='chevron-right' size={20} color='#6B7280' />
+        <Feather name="chevron-right" size={20} color="#6B7280" />
       </View>
     </TouchableOpacity>
   );

@@ -14,7 +14,14 @@ type AvatarProps = {
   isOnline?: boolean;
 };
 
-export default function Avatar({ name, label, size = 40, avatarUrl, showOnline, isOnline }: AvatarProps) {
+export default function Avatar({
+  name,
+  label,
+  size = 40,
+  avatarUrl,
+  showOnline,
+  isOnline,
+}: AvatarProps) {
   const displayLabel = name || label;
   return (
     <View

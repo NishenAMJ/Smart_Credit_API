@@ -41,7 +41,10 @@ export default function MyLoansScreen({ navigation }: MyLoansScreenProps) {
       const data = await getMyLoans("active");
       setLoans(data ?? []);
     } catch (err) {
-      const message = getApiErrorMessage(err, "Failed to load your active loans.");
+      const message = getApiErrorMessage(
+        err,
+        "Failed to load your active loans.",
+      );
       console.error("Error fetching active loans:", message);
       setError(message);
     } finally {
@@ -69,7 +72,11 @@ export default function MyLoansScreen({ navigation }: MyLoansScreenProps) {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Feather name="arrow-left" size={24} color={COLORS.textPrimary || "#1A1A1A"} />
+          <Feather
+            name="arrow-left"
+            size={24}
+            color={COLORS.textPrimary || "#1A1A1A"}
+          />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Active Loans</Text>
         <View style={styles.headerRight} />
@@ -81,7 +88,11 @@ export default function MyLoansScreen({ navigation }: MyLoansScreenProps) {
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Feather name="alert-circle" size={48} color={COLORS.error || "#EF4444"} />
+          <Feather
+            name="alert-circle"
+            size={48}
+            color={COLORS.error || "#EF4444"}
+          />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={fetchLoans}>
             <Text style={styles.retryButtonText}>Retry</Text>

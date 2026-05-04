@@ -35,7 +35,11 @@ export class LenderRequestsController {
       requestId,
       body?.notes,
     );
-    return { success: true, message: 'Application approved successfully', data: result };
+    return {
+      success: true,
+      message: 'Application approved successfully',
+      data: result,
+    };
   }
 
   /**
@@ -62,6 +66,10 @@ export class LenderRequestsController {
       requestId,
       body.reason.trim(),
     );
-    return { success: true, message: 'Application rejected successfully', data: result };
+    return {
+      success: true,
+      message: 'Application rejected successfully',
+      data: result,
+    };
   }
 }

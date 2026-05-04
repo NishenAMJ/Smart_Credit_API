@@ -26,4 +26,3 @@ export class DashboardResponseDto {
   secondaryListTitle!: string;
   secondaryList!: DashboardListItemDto[];
 }
-

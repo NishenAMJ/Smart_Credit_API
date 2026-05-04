@@ -96,7 +96,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         activeOpacity={0.7}
       >
         {unblocking === item.id ? (
-          <ActivityIndicator size='small' color={COLORS.primary} />
+          <ActivityIndicator size="small" color={COLORS.primary} />
         ) : (
           <Text style={styles.unblockBtnText}>Unblock</Text>
         )}
@@ -118,7 +118,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle='dark-content' backgroundColor={COLORS.surface} />
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -135,7 +135,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       {/* Content */}
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size='large' color={COLORS.primary} />
+          <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       ) : error ? (
         <View style={styles.centered}>
@@ -170,7 +170,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       <Modal
         visible={!!selectedUser}
         transparent
-        animationType='slide'
+        animationType="slide"
         onRequestClose={() => setSelectedUser(null)}
       >
         <TouchableOpacity

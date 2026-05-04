@@ -1,35 +1,46 @@
-﻿import React, { useState } from 'react';
-import { ScrollView, View, TouchableOpacity, Text, StyleSheet, SafeAreaView, TextInput } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { LenderHeader, AlertBanner } from '../../components/lender';
+﻿import React, { useState } from "react";
+import {
+  ScrollView,
+  View,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TextInput,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { commonStyles, COLORS } from "../../styles/lender.styles";
+import { LenderHeader, AlertBanner } from "../../components/lender";
 
 export default function VerifyPaymentScreen({ navigation, route }: any) {
-  const loanId = route?.params?.loanId || 'L-2026-001';
-  
-  const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
-  const [referenceNumber, setReferenceNumber] = useState('');
-  const [notes, setNotes] = useState('');
+  const loanId = route?.params?.loanId || "L-2026-001";
+
+  const [amount, setAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [referenceNumber, setReferenceNumber] = useState("");
+  const [notes, setNotes] = useState("");
 
   const handleVerify = () => {
     if (!amount || !referenceNumber) {
-      alert('Please fill all required fields');
+      alert("Please fill all required fields");
       return;
     }
-    alert('Payment verified successfully');
-    navigation.navigate('ActiveLoans');
+    alert("Payment verified successfully");
+    navigation.navigate("ActiveLoans");
   };
 
   return (
     <SafeAreaView style={commonStyles.safe}>
-      <LenderHeader title="Verify Payment" onBackPress={() => navigation.goBack()} />
-      
+      <LenderHeader
+        title="Verify Payment"
+        onBackPress={() => navigation.goBack()}
+      />
+
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        <AlertBanner 
-          type="info" 
-          title="Payment Verification" 
-          message="Enter payment details to verify and record" 
+        <AlertBanner
+          type="info"
+          title="Payment Verification"
+          message="Enter payment details to verify and record"
         />
 
         <View style={commonStyles.card}>
@@ -55,8 +66,8 @@ export default function VerifyPaymentScreen({ navigation, route }: any) {
 
         <View style={commonStyles.card}>
           <Text style={commonStyles.sectionTitle}>Payment Method</Text>
-          
-          {['bank_transfer', 'card', 'cash', 'check'].map((method) => (
+
+          {["bank_transfer", "card", "cash", "check"].map((method) => (
             <TouchableOpacity
               key={method}
               style={commonStyles.rowSpaceBetween}
@@ -64,10 +75,13 @@ export default function VerifyPaymentScreen({ navigation, route }: any) {
               activeOpacity={0.7}
             >
               <Text style={commonStyles.textPrimary}>
-                {method.replace('_', ' ').toUpperCase()}
+                {method.replace("_", " ").toUpperCase()}
               </Text>
-              <View 
-                style={[styles.radio, paymentMethod === method && styles.radioActive]} 
+              <View
+                style={[
+                  styles.radio,
+                  paymentMethod === method && styles.radioActive,
+                ]}
               >
                 {paymentMethod === method && <View style={styles.radioDot} />}
               </View>
@@ -102,7 +116,10 @@ export default function VerifyPaymentScreen({ navigation, route }: any) {
           />
         </View>
 
-        <TouchableOpacity style={commonStyles.primaryButton} onPress={handleVerify}>
+        <TouchableOpacity
+          style={commonStyles.primaryButton}
+          onPress={handleVerify}
+        >
           <Feather name="check" size={18} color="#fff" />
           <Text style={commonStyles.buttonText}>Verify Payment</Text>
         </TouchableOpacity>
@@ -142,8 +159,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   radioActive: {
     borderColor: COLORS.primary,

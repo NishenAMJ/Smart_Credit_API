@@ -1,15 +1,15 @@
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ChatStackParamList } from '../types';
- 
-import ChatListScreen from '../screens/chat/ChatListScreen';
-import ChatScreen from '../screens/chat/ChatScreen';
-import NewChatScreen from '../screens/chat/NewChatScreen';
-import ChatInfoScreen from '../screens/chat/ChatInfoScreen';
-import BlockedUsersScreen from '../screens/chat/BlockedUsersScreen';
- 
+import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { ChatStackParamList } from "../types";
+
+import ChatListScreen from "../screens/chat/ChatListScreen";
+import ChatScreen from "../screens/chat/ChatScreen";
+import NewChatScreen from "../screens/chat/NewChatScreen";
+import ChatInfoScreen from "../screens/chat/ChatInfoScreen";
+import BlockedUsersScreen from "../screens/chat/BlockedUsersScreen";
+
 const Stack = createNativeStackNavigator<ChatStackParamList>();
- 
+
 export default function ChatNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>

@@ -29,6 +29,10 @@ export interface CreditScoreSummary {
   calculatedAt: TimestampLike;
 }
 
+/**
+ * Calculates, stores, and retrieves the Smart Credit Score for each borrower
+ * using a weighted breakdown of repayment history, profile completeness, and conduct.
+ */
 @Injectable()
 export class CreditScoreService {
   private readonly BORROWERS_COL = 'borrowers';
@@ -43,14 +47,19 @@ export class CreditScoreService {
     return this.firebaseService.db;
   }
 
+  /** Maps a numeric score (300–850) to a human-readable rating label. */
   getScoreRating(score: number): ScoreRating {
     if (score >= 750) return 'Excellent';
     if (score >= 700) return 'Good';
     if (score >= 650) return 'Fair';
-    if (score >= 600) return 'Poor';
+    if (score >= 500) return 'Poor';
     return 'Very Poor';
   }
 
+  /**
+   * Returns the stored credit score summary for a borrower.
+   * Triggers a fresh calculation if the score hasn't been computed yet.
+   */
   async getSummary(borrowerId: string): Promise<CreditScoreSummary> {
     const profileRef = this.db.collection(this.BORROWERS_COL).doc(borrowerId);
     let profileDoc = await profileRef.get();
@@ -82,6 +91,10 @@ export class CreditScoreService {
     };
   }
 
+  /**
+   * Recalculates the borrower's credit score using a weighted formula
+   * and persists both the profile score and a monthly history snapshot.
+   */
   async calculateCreditScore(borrowerId: string): Promise<number> {
     const profileRef = this.db.collection(this.BORROWERS_COL).doc(borrowerId);
     const profileDoc = await profileRef.get();
@@ -98,7 +111,10 @@ export class CreditScoreService {
         .collection(this.REPAYMENTS_COL)
         .where('borrowerId', '==', borrowerId)
         .get(),
-      this.db.collection(this.LOANS_COL).where('borrowerId', '==', borrowerId).get(),
+      this.db
+        .collection(this.LOANS_COL)
+        .where('borrowerId', '==', borrowerId)
+        .get(),
       this.db
         .collection(this.COMPLAINTS_COL)
         .where('againstBorrowerId', '==', borrowerId)
@@ -142,7 +158,10 @@ export class CreditScoreService {
           ),
         )
       : 1;
-    const consistency = Math.min(100, (paidMonths / monthsSinceFirstLoan) * 100);
+    const consistency = Math.min(
+      100,
+      (paidMonths / monthsSinceFirstLoan) * 100,
+    );
 
     const overdueDays = repayments
       .map((repayment) => {
@@ -167,8 +186,9 @@ export class CreditScoreService {
 
     const loansCompleted = Math.min(
       100,
-      loans.filter((loan) => String(loan.status ?? '').toLowerCase() === 'completed')
-        .length * 10,
+      loans.filter(
+        (loan) => String(loan.status ?? '').toLowerCase() === 'completed',
+      ).length * 10,
     );
     const totalRepaid = Math.min(
       100,
@@ -249,6 +269,10 @@ export class CreditScoreService {
     return score;
   }
 
+  /**
+   * Returns up to 12 months of score history for chart rendering.
+   * If no history exists yet, synthesises a single entry from the current profile score.
+   */
   async getScoreHistory(
     borrowerId: string,
   ): Promise<Array<{ month: string; score: number; note: string }>> {
@@ -289,7 +313,13 @@ export class CreditScoreService {
     });
   }
 
-  private calculateProfileCompleteness(profile: FirebaseFirestore.DocumentData) {
+  /**
+   * Calculates what percentage of the borrower's required profile fields are filled in.
+   * Used as one factor in the overall credit score calculation.
+   */
+  private calculateProfileCompleteness(
+    profile: FirebaseFirestore.DocumentData,
+  ) {
     const requiredFields = [
       'fullName',
       'phone',
@@ -312,6 +342,7 @@ export class CreditScoreService {
     return (filled / requiredFields.length) * 100;
   }
 
+  /** Safely casts a raw breakdown value to the typed breakdown record, returning empty if invalid. */
   private normalizeBreakdown(
     value: unknown,
   ): Record<string, ScoreBreakdownItem> {
@@ -322,6 +353,7 @@ export class CreditScoreService {
     return value as Record<string, ScoreBreakdownItem>;
   }
 
+  /** Converts any timestamp-like value to a plain Date, returning null if it can't be resolved. */
   private toDate(value: TimestampLike): Date | null {
     if (!value) {
       return null;
@@ -344,12 +376,14 @@ export class CreditScoreService {
     return null;
   }
 
+  /** Safely casts a value to a finite number, returning a fallback when it isn't. */
   private toNumber(value: unknown, fallback = 0): number {
     return typeof value === 'number' && Number.isFinite(value)
       ? value
       : fallback;
   }
 
+  /** Clamps a score to the valid 300–850 range. */
   private clampScore(score: number): number {
     return Math.max(300, Math.min(850, Math.round(score)));
   }

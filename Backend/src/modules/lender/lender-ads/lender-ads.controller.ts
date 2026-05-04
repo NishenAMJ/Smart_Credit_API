@@ -45,7 +45,9 @@ export class LenderAdsController {
     @Req() req: AuthenticatedRequest,
     @Body() body: CreateLenderAdBody,
   ): Promise<LenderAdResponse> {
-    return this.lenderAdsService.createAd(this.toCreateInput(req.user.sub, body));
+    return this.lenderAdsService.createAd(
+      this.toCreateInput(req.user.sub, body),
+    );
   }
 
   @Get()
@@ -80,7 +82,8 @@ export class LenderAdsController {
         typeof body.processingTime === 'string' ? body.processingTime : '',
       repaymentStyle:
         typeof body.repaymentStyle === 'string' ? body.repaymentStyle : '',
-      requirements: typeof body.requirements === 'string' ? body.requirements : '',
+      requirements:
+        typeof body.requirements === 'string' ? body.requirements : '',
       supportNote: typeof body.supportNote === 'string' ? body.supportNote : '',
     };
   }

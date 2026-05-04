@@ -91,7 +91,9 @@ function loadFirebaseConfig(): ServiceAccount {
 
   try {
     const serviceAccountPath = resolveServiceAccountPath();
-    return JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8')) as ServiceAccount;
+    return JSON.parse(
+      fs.readFileSync(serviceAccountPath, 'utf8'),
+    ) as ServiceAccount;
   } catch (error) {
     console.error(
       error instanceof Error

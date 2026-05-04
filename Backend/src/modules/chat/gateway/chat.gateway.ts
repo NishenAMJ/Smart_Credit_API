@@ -39,7 +39,6 @@ import {
   ConnectedSocket,
   MessageBody,
   WsException,
-  
 } from '@nestjs/websockets';
 import { UseFilters } from '@nestjs/common';
 import type { Server, Socket } from 'socket.io';
@@ -52,12 +51,12 @@ import { BlocksService } from '../users/blocks.service';
 
 interface SendMessagePayload {
   conversationId: string; // which conversation this belongs to
-  recipientId: string;    // who should receive it
+  recipientId: string; // who should receive it
   message: {
-    id: string;           // client-generated UUID (used for dedup + ack)
+    id: string; // client-generated UUID (used for dedup + ack)
     senderId: string;
     text: string;
-    createdAt: string;    // ISO string — client sets this for local-first
+    createdAt: string; // ISO string — client sets this for local-first
   };
 }
 
@@ -192,7 +191,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     // Block check: if recipient has blocked sender, silently drop
-    const isBlocked = await this.blocks.isBlocked(senderId, payload.recipientId);
+    const isBlocked = await this.blocks.isBlocked(
+      senderId,
+      payload.recipientId,
+    );
     if (isBlocked) {
       client.emit('messageFailed', {
         messageId: payload.message.id,
@@ -202,11 +204,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     // Try to deliver to recipient's active sockets
-    const delivered = this.deliverToUser(payload.recipientId, 'receiveMessage', {
-      ...payload.message,
-      conversationId: payload.conversationId,
-      status: 'delivered',
-    });
+    const delivered = this.deliverToUser(
+      payload.recipientId,
+      'receiveMessage',
+      {
+        ...payload.message,
+        conversationId: payload.conversationId,
+        status: 'delivered',
+      },
+    );
 
     if (delivered) {
       // Ack sender: recipient received it in real-time
@@ -311,9 +317,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const queued = this.offlineQueue.get(userId);
     if (!queued || queued.length === 0) return;
 
-    this.logger.log(
-      `Flushing ${queued.length} offline messages to ${userId}`,
-    );
+    this.logger.log(`Flushing ${queued.length} offline messages to ${userId}`);
 
     for (const payload of queued) {
       client.emit('receiveMessage', {

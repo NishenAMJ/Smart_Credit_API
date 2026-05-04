@@ -1,14 +1,18 @@
 /**
  * CHAT INTEGRATION GUIDE
  * =====================
- * 
+ *
  * This guide shows how the chat backend (NestJS) connects to the chat frontend (React Native)
  */
 
-import { useEffect, useState } from 'react';
-import { chatSocket } from '../services/socketService';
-import { conversationService, messageService, userService } from '../services/chatService';
-import type { Conversation, Message, User } from '../types/chat.types';
+import { useEffect, useState } from "react";
+import { chatSocket } from "../services/socketService";
+import {
+  conversationService,
+  messageService,
+  userService,
+} from "../services/chatService";
+import type { Conversation, Message, User } from "../types/chat.types";
 
 export interface ChatAggregatedData {
   conversations: Conversation[];
@@ -20,13 +24,13 @@ export interface ChatAggregatedData {
 /**
  * SETUP CHECKLIST
  * ===============
- * 
+ *
  * 1. BACKEND SETUP (NestJS)
  *    ✅ ChatGateway (WebSocket)
  *       - Location: src/modules/chat/gateway/chat.gateway.ts
  *       - Expects: userId in socket.handshake.auth or headers['x-user-id']
  *       - Emits: message received, typing, presence, read receipts
- *    
+ *
  *    ✅ REST Endpoints (HTTP)
  *       - GET /conversations - list all conversations
  *       - POST /conversations - start new conversation
@@ -36,15 +40,15 @@ export interface ChatAggregatedData {
  *       - DELETE /conversations/:id - delete conversation
  *       - GET /conversations/:conversationId/messages - list messages
  *       - POST /conversations/:conversationId/messages - send text message
- * 
+ *
  * 2. ENVIRONMENT SETUP
  *    ✅ Backend (.env)
  *       CLIENT_ORIGIN=http://localhost:19006 (or your expo URL)
  *       FIREBASE_PROJECT_ID=your_project
- * 
+ *
  *    ✅ Frontend (.env)
  *       EXPO_PUBLIC_API_URL=http://localhost:3000 (or your backend URL)
- * 
+ *
  * 3. AUTHENTICATION
  *    ✅ JWT Token Setup
  *       - Get JWT token from auth system
@@ -73,7 +77,7 @@ export function useChatSetup(jwtToken: string | null) {
     chatSocket.connect(jwtToken);
 
     // Listen to socket events
-    chatSocket.on('receiveMessage', (message: Message) => {
+    chatSocket.on("receiveMessage", (message: Message) => {
       setData((prev) => ({
         ...prev,
         messages: {
@@ -86,7 +90,7 @@ export function useChatSetup(jwtToken: string | null) {
       }));
     });
 
-    chatSocket.on('userTyping', (data) => {
+    chatSocket.on("userTyping", (data) => {
       const { conversationId, userId, isTyping } = data;
       setData((prev) => ({
         ...prev,
@@ -103,7 +107,7 @@ export function useChatSetup(jwtToken: string | null) {
       }));
     });
 
-    chatSocket.on('userOnline', (presenceData) => {
+    chatSocket.on("userOnline", (presenceData) => {
       const { userId, isOnline } = presenceData;
       setData((prev) => ({
         ...prev,
@@ -132,7 +136,7 @@ export async function loadConversations() {
     const conversations = await conversationService.getAll();
     return conversations;
   } catch (error) {
-    console.error('Failed to load conversations:', error);
+    console.error("Failed to load conversations:", error);
   }
 }
 
@@ -142,7 +146,7 @@ export async function startChat(targetUserId: string) {
     const conversation = await userService.startConversation(targetUserId);
     return conversation;
   } catch (error) {
-    console.error('Failed to start conversation:', error);
+    console.error("Failed to start conversation:", error);
   }
 }
 
@@ -153,12 +157,16 @@ export async function sendMessage(conversationId: string, text: string) {
     // Optionally emit via socket for real-time delivery
     return message;
   } catch (error) {
-    console.error('Failed to send message:', error);
+    console.error("Failed to send message:", error);
   }
 }
 
 // Load messages for a conversation
-export async function loadMessages(conversationId: string, page = 0, limit = 30) {
+export async function loadMessages(
+  conversationId: string,
+  page = 0,
+  limit = 30,
+) {
   try {
     const messages = await conversationService.getMessages(conversationId, {
       page,
@@ -166,7 +174,7 @@ export async function loadMessages(conversationId: string, page = 0, limit = 30)
     });
     return messages;
   } catch (error) {
-    console.error('Failed to load messages:', error);
+    console.error("Failed to load messages:", error);
   }
 }
 
@@ -175,7 +183,7 @@ export async function markConversationRead(conversationId: string) {
   try {
     await conversationService.markAsRead(conversationId);
   } catch (error) {
-    console.error('Failed to mark as read:', error);
+    console.error("Failed to mark as read:", error);
   }
 }
 
@@ -184,7 +192,7 @@ export async function toggleMute(conversationId: string, muted: boolean) {
   try {
     await conversationService.mute(conversationId, muted);
   } catch (error) {
-    console.error('Failed to toggle mute:', error);
+    console.error("Failed to toggle mute:", error);
   }
 }
 
@@ -204,7 +212,11 @@ export function leaveConversation(conversationId: string) {
 }
 
 // Send typing indicator
-export function sendTyping(conversationId: string, recipientId: string, isTyping: boolean) {
+export function sendTyping(
+  conversationId: string,
+  recipientId: string,
+  isTyping: boolean,
+) {
   chatSocket.sendTyping(conversationId, recipientId, isTyping);
 }
 
@@ -224,7 +236,7 @@ export function isSocketConnected() {
 
 export function ChatScreen({ conversationId, userId, token }: any) {
   const chatData = useChatSetup(token);
-  const [messageText, setMessageText] = useState('');
+  const [messageText, setMessageText] = useState("");
 
   useEffect(() => {
     // Join room when conversation loads
@@ -240,15 +252,15 @@ export function ChatScreen({ conversationId, userId, token }: any) {
     try {
       // Send via REST API
       const message = await sendMessage(conversationId, messageText);
-      setMessageText('');
+      setMessageText("");
     } catch (error) {
-      console.error('Failed to send:', error);
+      console.error("Failed to send:", error);
     }
   };
 
-const handleTyping = (recipientId: string, isTyping: boolean) => {
-     sendTyping(conversationId, recipientId, isTyping);
-   };
+  const handleTyping = (recipientId: string, isTyping: boolean) => {
+    sendTyping(conversationId, recipientId, isTyping);
+  };
 
   const messages = chatData.messages[conversationId] || [];
 
@@ -267,31 +279,31 @@ const handleTyping = (recipientId: string, isTyping: boolean) => {
 /**
  * DEBUGGING CHECKLIST
  * ===================
- * 
+ *
  * If chat isn't working:
- * 
+ *
  * 1. WebSocket Connection
  *    [ ] Check socket.io is imported correctly
  *    [ ] Verify EXPO_PUBLIC_API_URL matches backend URL
  *    [ ] Check WebSocket port (usually :3000)
  *    [ ] Verify JWT token is valid
  *    [ ] Check browser DevTools Network tab for WebSocket handshake
- * 
+ *
  * 2. JWT Authentication
  *    [ ] Token is sent in socket handshake auth
  *    [ ] Backend correctly extracts userId from token
  *    [ ] userId is properly attached to socket.data
- * 
+ *
  * 3. Backend Endpoints
  *    [ ] Test REST endpoints with Postman/Insomnia
  *    [ ] Verify Authorization header with JWT
  *    [ ] Check Firebase database for data persistence
- * 
+ *
  * 4. Firebase Setup
  *    [ ] Service account configured correctly
  *    [ ] Firestore collections exist (conversations, messages)
  *    [ ] Read/write rules allow authenticated access
- * 
+ *
  * 5. CORS
  *    [ ] Backend CLIENT_ORIGIN matches frontend URL
  *    [ ] Socket.io CORS settings allow frontend origin
