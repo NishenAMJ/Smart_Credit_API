@@ -1,6 +1,6 @@
 /**
  * messageService.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ * 
  * LOCAL-FIRST message operations.
  *
  * Reading:  always from local SQLite (instant, no loading)

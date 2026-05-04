@@ -116,6 +116,7 @@ export class LenderProfileService {
     data: Record<string, unknown>,
   ): LenderProfileResponse {
     return {
+      id: lenderId,
       lenderId,
       fullName:
         typeof data.fullName === 'string' && data.fullName.trim().length > 0
@@ -156,6 +157,16 @@ export class LenderProfileService {
       profilePhotoUrl:
         typeof data.profilePhotoUrl === 'string' ? data.profilePhotoUrl : null,
       updatedAt: this.toIsoString(data.updatedAt),
+      totalLoaned:
+        typeof data.totalAmountLent === 'number' ? data.totalAmountLent : 0,
+      totalReturned:
+        typeof data.totalAmountReturned === 'number'
+          ? data.totalAmountReturned
+          : 0,
+      totalLoansCompleted:
+        typeof data.totalLoansCompleted === 'number'
+          ? data.totalLoansCompleted
+          : 0,
     };
   }
 

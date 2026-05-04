@@ -9,17 +9,17 @@ import { Advertisement } from '../interfaces/advertisement.interface';
 
 @Injectable()
 export class AdvertisementDeleteService {
-  private db         = getFirestore();
+  private db = getFirestore();
   private collection = 'ads';
 
-  // ── Hard delete ───────────────────────────────────
+  //  Hard delete 
   // Permanently removes the ad document
   async deleteAd(
     adId: string,
     lenderId: string,
   ): Promise<{ message: string }> {
 
-    const docRef  = this.db.collection(this.collection).doc(adId);
+    const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
@@ -28,14 +28,14 @@ export class AdvertisementDeleteService {
 
     const data = docSnap.data() as Advertisement;
 
-    // ── Only owner can delete ────────────────────────
+    //  Only owner can delete 
     if (data.lenderId !== lenderId) {
       throw new ForbiddenException(
         'You can only delete your own ads',
       );
     }
 
-    // ── Cannot delete boosted ads ────────────────────
+    //  Cannot delete boosted ads 
     // Must wait for boost to expire first
     if (data.isBoosted) {
       const now = admin.firestore.Timestamp.now();
@@ -54,7 +54,7 @@ export class AdvertisementDeleteService {
     return { message: `Ad ${adId} deleted successfully` };
   }
 
-  // ── Soft delete ───────────────────────────────────
+  //  Soft delete 
   // Marks as expired instead of deleting
   // Better for keeping history
   async softDeleteAd(
@@ -62,7 +62,7 @@ export class AdvertisementDeleteService {
     lenderId: string,
   ): Promise<{ message: string }> {
 
-    const docRef  = this.db.collection(this.collection).doc(adId);
+    const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
@@ -78,7 +78,7 @@ export class AdvertisementDeleteService {
     }
 
     await docRef.update({
-      status:    'expired',
+      status: 'expired',
       updatedAt: admin.firestore.Timestamp.now(),
     });
 

@@ -1,34 +1,3 @@
-/**
- * chat.gateway.ts
- * ─────────────────────────────────────────────────────────────────────────────
- * LOCAL-FIRST ARCHITECTURE
- * ─────────────────────────────────────────────────────────────────────────────
- * The backend is a pure ROUTER — it does NOT store messages in any database.
- * Messages are stored permanently on each user's phone via expo-sqlite.
- *
- * Flow for sending a message:
- *   1. Sender's app saves message locally with status:'sending'
- *   2. Sender emits 'sendMessage' to this gateway
- *   3. Gateway routes the message to the recipient's socket
- *   4. If recipient is online  → delivers instantly, emits 'messageDelivered' back
- *   5. If recipient is offline → stores in offlineQueue (in-memory)
- *                                 when they reconnect, flushes the queue
- *
- * Socket events this gateway handles (client → server):
- *   connect          — authenticate via handshake.auth.userId
- *   sendMessage      — route a message to the target user
- *   messageDelivered — recipient acknowledges delivery
- *   typing           — forward typing indicator
- *   markRead         — forward read receipt
- *
- * Socket events this gateway emits (server → client):
- *   receiveMessage   — incoming message for recipient
- *   messageDelivered — delivery ack back to sender
- *   userTyping       — typing indicator forwarded to conversation partner
- *   messageRead      — read receipt forwarded to sender
- *   userOnline       — presence change broadcast
- *   error            — any WS-level error
- */
 
 import {
   WebSocketGateway,
@@ -47,7 +16,7 @@ import { WsExceptionFilter } from '../common/filters/ws-exception.filter';
 import { UsersService } from '../users/users.service';
 import { BlocksService } from '../users/blocks.service';
 
-// ── DTO shapes ────────────────────────────────────────────────────────────────
+//  DTO shapes 
 
 interface SendMessagePayload {
   conversationId: string; // which conversation this belongs to
@@ -78,7 +47,7 @@ interface DeliveredPayload {
   senderId: string; // original sender
 }
 
-// ── Gateway ───────────────────────────────────────────────────────────────────
+// Gateway 
 
 @UseFilters(WsExceptionFilter)
 @WebSocketGateway({
@@ -113,9 +82,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private users: UsersService,
     private blocks: BlocksService,
-  ) {}
+  ) { }
 
-  // ── Connection lifecycle ──────────────────────────────────────────────────
+  //  Connection lifecycle 
 
   async handleConnection(client: Socket) {
     /**
@@ -171,7 +140,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`[${client.id}] Disconnected — userId: ${userId}`);
   }
 
-  // ── sendMessage ───────────────────────────────────────────────────────────
+  //  sendMessage 
 
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
@@ -238,7 +207,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // ── messageDelivered (ack from recipient) ─────────────────────────────────
+  //  messageDelivered (ack from recipient) 
 
   @SubscribeMessage('messageDelivered')
   handleMessageDelivered(
@@ -254,7 +223,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  // ── typing indicator ──────────────────────────────────────────────────────
+  //  typing indicator 
 
   @SubscribeMessage('typing')
   handleTyping(
@@ -270,7 +239,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  // ── read receipt ──────────────────────────────────────────────────────────
+  //  read receipt 
 
   @SubscribeMessage('markRead')
   handleMarkRead(
@@ -287,7 +256,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  //  Helpers 
 
   /**
    * Deliver an event to ALL active sockets of a given user.

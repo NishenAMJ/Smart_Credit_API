@@ -1,6 +1,7 @@
 /**
  * lender.service.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ * 
+
  * Centralised service layer for all Lender screens.
  *
  * Auth pattern mirrors advertisement.service.ts:
@@ -35,7 +36,8 @@ export const setLenderId = (_id: string) => {
 
 const getLenderId = (): string => getCurrentUserId();
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// Types 
+
 
 export interface LenderProfile {
   id: string;
@@ -71,7 +73,8 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
-// ── DashboardService ──────────────────────────────────────────────────────────
+// DashboardService 
+
 
 export const DashboardService = {
   /**
@@ -110,7 +113,8 @@ export const DashboardService = {
   },
 };
 
-// ── LoanRequestsService ───────────────────────────────────────────────────────
+// LoanRequestsService 
+
 
 export const LoanRequestsService = {
   /**
@@ -159,7 +163,8 @@ export const LoanRequestsService = {
   },
 };
 
-// ── RecentTransactionsService ─────────────────────────────────────────────────
+// RecentTransactionsService 
+
 
 export const RecentTransactionsService = {
   /**
@@ -191,7 +196,8 @@ export const RecentTransactionsService = {
   },
 };
 
-// ── AnalyticsService ──────────────────────────────────────────────────────────
+// AnalyticsService 
+
 
 export const AnalyticsService = {
   /**
@@ -204,7 +210,8 @@ export const AnalyticsService = {
   },
 };
 
-// ── LenderProfileService ──────────────────────────────────────────────────────
+// LenderProfileService 
+
 
 export const LenderProfileService = {
   /**
@@ -238,7 +245,8 @@ export const LenderProfileService = {
   },
 };
 
-// ── LoanOffersService ─────────────────────────────────────────────────────────
+// LoanOffersService 
+
 
 export const LoanOffersService = {
   /**
@@ -288,7 +296,8 @@ export const LoanOffersService = {
   },
 };
 
-// ── PaymentRemindersService ───────────────────────────────────────────────────
+// PaymentRemindersService 
+
 
 export const PaymentRemindersService = {
   /**

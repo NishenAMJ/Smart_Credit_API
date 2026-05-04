@@ -15,12 +15,12 @@ import { AdvertisementCreateService } from './advertisement-create.service';
 
 @Injectable()
 export class AdvertisementReadService {
-  private db         = getFirestore();
+  private db = getFirestore();
   private collection = 'ads';
 
   constructor(
     private createService: AdvertisementCreateService,
-  ) {}
+  ) { }
 
   // Get all active ads with optional filters
   // Boosted ads appear first, then sorted by newest
@@ -100,7 +100,7 @@ export class AdvertisementReadService {
     return ads.map((ad) => this.createService.toResponse(ad));
   }
 
-  // ── Get lender's own ads ─────────────────────────
+  //  Get lender's own ads 
   async getMyAds(lenderId: string): Promise<AdvertisementResponse[]> {
     const snapshot = await this.db
       .collection(this.collection)
@@ -116,7 +116,7 @@ export class AdvertisementReadService {
     });
   }
 
-  // ── Get single ad by ID ──────────────────────────
+  // Get single ad by ID 
   async getAdById(adId: string): Promise<AdvertisementResponse> {
     const doc = await this.db
       .collection(this.collection)
@@ -131,14 +131,14 @@ export class AdvertisementReadService {
     return this.createService.toResponse(data);
   }
 
-  // ── Get ads by lender ID (public — hides private stats) ──
+  //  Get ads by lender ID (public — hides private stats) 
   async getAdsByLender(lenderId: string): Promise<AdvertisementResponse[]> {
     const now = admin.firestore.Timestamp.now();
 
     const snapshot = await this.db
       .collection(this.collection)
       .where('lenderId', '==', lenderId)
-      .where('status',   '==', 'active')
+      .where('status', '==', 'active')
       .where('expiresAt', '>', now)
       .get();
 
@@ -147,16 +147,16 @@ export class AdvertisementReadService {
     return snapshot.docs.map((doc) => {
       const data = doc.data() as Advertisement;
 
-      // ── Hide private analytics from other users ────
+      //  Hide private analytics from other users
       // Views and clicks are private to the lender
       const response = this.createService.toResponse(data);
-      response.views  = 0;
+      response.views = 0;
       response.clicks = 0;
       return response;
     });
   }
 
-  // ── Increment views ──────────────────────────────
+  //  Increment views 
   async incrementViews(adId: string): Promise<void> {
     await this.db
       .collection(this.collection)
@@ -167,7 +167,7 @@ export class AdvertisementReadService {
       });
   }
 
-  // ── Increment clicks ─────────────────────────────
+  //  Increment clicks 
   async incrementClicks(adId: string): Promise<void> {
     await this.db
       .collection(this.collection)
@@ -178,7 +178,7 @@ export class AdvertisementReadService {
       });
   }
 
-  // ── Get analytics for lender's own ad ───────────
+  //  Get analytics for lender's own ad 
   async getAdAnalytics(
     adId: string,
     lenderId: string,
@@ -194,7 +194,7 @@ export class AdvertisementReadService {
 
     const data = doc.data() as Advertisement;
 
-    // ── Only lender can see their own analytics ──────
+    //  Only lender can see their own analytics
     if (data.lenderId !== lenderId) {
       throw new NotFoundException('Ad not found');
     }
@@ -205,8 +205,8 @@ export class AdvertisementReadService {
       : '0%';
 
     return {
-      views:            data.views,
-      clicks:           data.clicks,
+      views: data.views,
+      clicks: data.clicks,
       applicationCount: data.applicationCount,
       fundedLoansCount: data.fundedLoansCount,
       clickThroughRate: ctr,

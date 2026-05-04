@@ -20,7 +20,7 @@ import { COLLECTIONS, UserDoc } from '../common/types';
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private firebase: FirebaseService) {}
+  constructor(private firebase: FirebaseService) { }
 
   async findById(userId: string): Promise<UserDoc> {
     const snap = await this.firebase
@@ -38,7 +38,7 @@ export class UsersService {
     const q = query.toLowerCase().trim();
     if (!q) return [];
 
-    // ── Query users collection ──────────────────────────────────────────────
+    //  Query users collection 
     const usersSnap = await this.firebase
       .collection(COLLECTIONS.USERS) // "users"
       .limit(200)
@@ -51,12 +51,12 @@ export class UsersService {
       const data = d.data();
       this.logger.log(
         `[schema] id="${d.id}" fields=${JSON.stringify(Object.keys(data))} ` +
-          `displayName="${data.displayName}" name="${data.name}" ` +
-          `fullName="${data.fullName}" firstName="${data.firstName}"`,
+        `displayName="${data.displayName}" name="${data.name}" ` +
+        `fullName="${data.fullName}" firstName="${data.firstName}"`,
       );
     });
 
-    // ── Also query "borrowers" collection ───────────────────────────────────
+    //  Also query "borrowers" collection 
     // In case borrowers are stored separately from lenders
     const borrowersSnap = await this.firebase.db
       .collection('borrowers')
@@ -72,13 +72,13 @@ export class UsersService {
         const data = d.data();
         this.logger.log(
           `[borrower schema] id="${d.id}" fields=${JSON.stringify(Object.keys(data))} ` +
-            `displayName="${data.displayName}" name="${data.name}" ` +
-            `fullName="${data.fullName}" firstName="${data.firstName}"`,
+          `displayName="${data.displayName}" name="${data.name}" ` +
+          `fullName="${data.fullName}" firstName="${data.firstName}"`,
         );
       });
     }
 
-    // ── Merge both collections ──────────────────────────────────────────────
+    //  Merge both collections
     const allDocs = [...usersSnap.docs, ...borrowersSnap.docs];
 
     const results = allDocs
@@ -108,7 +108,7 @@ export class UsersService {
         return candidates.some((c) => c.includes(q));
       });
 
-    // ── Map to consistent shape ─────────────────────────────────────────────
+    //  Map to consistent shape 
     // Normalize whatever field name is used into displayName + username
     const normalized = results.map((u: any) => ({
       ...u,

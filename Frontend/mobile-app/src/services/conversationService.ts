@@ -1,6 +1,6 @@
 /**
  * conversationService.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ * 
  * Maps to backend ConversationsController endpoints.
  * Used by: ChatListScreen, ChatScreen, ChatInfoScreen, NewChatScreen.
  */

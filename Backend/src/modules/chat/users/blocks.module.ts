@@ -1,6 +1,6 @@
 /**
  * blocks.module.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ 
  * BlocksController has been REMOVED and merged into UsersController.
  * This module now only provides BlocksService for injection elsewhere.
  *
@@ -14,4 +14,4 @@ import { BlocksService } from './blocks.service';
   providers: [BlocksService],
   exports: [BlocksService],
 })
-export class BlocksModule {}
+export class BlocksModule { }

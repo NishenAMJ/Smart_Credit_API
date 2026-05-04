@@ -1,6 +1,6 @@
 /**
  * messages.service.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ * 
  * LOCAL-FIRST NOTE:
  * In normal operation, messages travel via WebSocket (ChatGateway) and are
  * stored only on each device's local SQLite database — NOT in Firestore.
@@ -24,7 +24,7 @@ export class MessagesService {
   constructor(
     private firebase: FirebaseService,
     private conversations: ConversationsService,
-  ) {}
+  ) { }
 
   /**
    * sendText (HTTP fallback)

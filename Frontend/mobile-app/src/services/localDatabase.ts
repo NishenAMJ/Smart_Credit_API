@@ -1,6 +1,7 @@
 /**
  * localDatabase.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ * 
+
  * LOCAL-FIRST storage layer using expo-sqlite.
  *
  * This is the SOURCE OF TRUTH for messages and conversations on the device.
@@ -109,7 +110,8 @@ export const localDatabase = {
     }
   },
 
-  // ── Messages ──────────────────────────────────────────────────────────────
+  // Messages 
+
 
   insertMessage: (message: Message) => {
     if (useMemory) {
@@ -181,7 +183,8 @@ export const localDatabase = {
     }
   },
 
-  // ── Conversations ─────────────────────────────────────────────────────────
+  // Conversations 
+
 
   upsertConversation: (conv: Conversation) => {
     if (useMemory) {
@@ -241,10 +244,10 @@ export const localDatabase = {
         },
         lastMessage: r.lastMessageText
           ? {
-              text: r.lastMessageText,
-              createdAt: r.lastMessageAt,
-              senderId: r.lastSenderId,
-            }
+            text: r.lastMessageText,
+            createdAt: r.lastMessageAt,
+            senderId: r.lastSenderId,
+          }
           : undefined,
         unreadCount: r.unreadCount,
         isMuted: r.isMuted === 1,
@@ -267,12 +270,12 @@ export const localDatabase = {
       _memoryConversations = _memoryConversations.map((c) =>
         c.id === conversationId
           ? {
-              ...c,
-              lastMessage: { text, createdAt, senderId },
-              unreadCount: incrementUnread
-                ? (c.unreadCount ?? 0) + 1
-                : c.unreadCount,
-            }
+            ...c,
+            lastMessage: { text, createdAt, senderId },
+            unreadCount: incrementUnread
+              ? (c.unreadCount ?? 0) + 1
+              : c.unreadCount,
+          }
           : c,
       );
       return;
@@ -303,7 +306,8 @@ export const localDatabase = {
     }
   },
 
-  // ── Blocked users ─────────────────────────────────────────────────────────
+  // Blocked users 
+
 
   upsertBlockedUser: (user: BlockedUser) => {
     if (useMemory) {

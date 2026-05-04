@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -30,6 +30,13 @@ export class LenderProfileController {
   @Get('me')
   getProfile(@Req() req: AuthenticatedRequest): Promise<LenderProfileResponse> {
     return this.lenderProfileService.getProfile(req.user.sub);
+  }
+
+  @Get(':lenderId')
+  getProfileById(
+    @Param('lenderId') lenderId: string,
+  ): Promise<LenderProfileResponse> {
+    return this.lenderProfileService.getProfile(lenderId);
   }
 
   @Patch('me')

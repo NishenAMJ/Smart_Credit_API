@@ -1,10 +1,10 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 /**
- * @CurrentUser() — HTTP
- * Extracts userId from req.user.id (set by JWT guard) or
- * falls back to x-user-id header for development/legacy support.
- * When real JWT auth is wired up, req.user.id will take over automatically.
+  @CurrentUser() — HTTP
+  Extracts userId from req.user.id (set by JWT guard) or
+  falls back to x-user-id header for development/legacy support.
+  When real JWT auth is wired up, req.user.id will take over automatically.
  */
 export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): string => {
@@ -14,8 +14,8 @@ export const CurrentUser = createParamDecorator(
 );
 
 /**
- * @WsCurrentUser() — WebSocket
- * Extracts userId from socket.data.userId (set in handleConnection).
+  @WsCurrentUser() — WebSocket
+  Extracts userId from socket.data.userId (set in handleConnection).
  */
 export const WsCurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): string => {

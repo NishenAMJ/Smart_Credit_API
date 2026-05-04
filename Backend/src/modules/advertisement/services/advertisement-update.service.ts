@@ -12,12 +12,12 @@ import { AdvertisementCreateService } from './advertisement-create.service';
 
 @Injectable()
 export class AdvertisementUpdateService {
-  private db         = getFirestore();
+  private db = getFirestore();
   private collection = 'ads';
 
   constructor(
     private createService: AdvertisementCreateService,
-  ) {}
+  ) { }
 
   async updateAd(
     adId: string,
@@ -25,8 +25,8 @@ export class AdvertisementUpdateService {
     dto: UpdateAdDto,
   ): Promise<AdvertisementResponse> {
 
-    // ── Check ad exists ──────────────────────────────
-    const docRef  = this.db.collection(this.collection).doc(adId);
+    //  Check ad exists 
+    const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
@@ -35,14 +35,14 @@ export class AdvertisementUpdateService {
 
     const existing = docSnap.data() as Advertisement;
 
-    // ── Check ownership ──────────────────────────────
+    //  Check ownership 
     if (existing.lenderId !== lenderId) {
       throw new ForbiddenException(
         'You can only edit your own ads',
       );
     }
 
-    // ── Validate amounts if both provided ────────────
+    //  Validate amounts if both provided 
     const newMin = dto.minAmount ?? existing.minAmount;
     const newMax = dto.maxAmount ?? existing.maxAmount;
 
@@ -52,7 +52,7 @@ export class AdvertisementUpdateService {
       );
     }
 
-    // ── Validate tenure if both provided ─────────────
+    //  Validate tenure if both provided 
     const newMinTenure = dto.minTenureMonths ?? existing.minTenureMonths;
     const newMaxTenure = dto.maxTenureMonths ?? existing.maxTenureMonths;
 
@@ -62,7 +62,7 @@ export class AdvertisementUpdateService {
       );
     }
 
-    // ── Build update payload ─────────────────────────
+    //  Build update payload 
     // Only update fields that were provided in the DTO
     const updatePayload: Partial<Advertisement> & {
       updatedAt: admin.firestore.Timestamp;
@@ -70,20 +70,20 @@ export class AdvertisementUpdateService {
       updatedAt: admin.firestore.Timestamp.now(),
     };
 
-    if (dto.title              !== undefined) updatePayload.title              = dto.title;
-    if (dto.description        !== undefined) updatePayload.description        = dto.description;
-    if (dto.imageUrl           !== undefined) updatePayload.imageUrl           = dto.imageUrl;
-    if (dto.minAmount          !== undefined) updatePayload.minAmount          = dto.minAmount;
-    if (dto.maxAmount          !== undefined) updatePayload.maxAmount          = dto.maxAmount;
+    if (dto.title !== undefined) updatePayload.title = dto.title;
+    if (dto.description !== undefined) updatePayload.description = dto.description;
+    if (dto.imageUrl !== undefined) updatePayload.imageUrl = dto.imageUrl;
+    if (dto.minAmount !== undefined) updatePayload.minAmount = dto.minAmount;
+    if (dto.maxAmount !== undefined) updatePayload.maxAmount = dto.maxAmount;
     if (dto.preferredInterestRate !== undefined) updatePayload.preferredInterestRate = dto.preferredInterestRate;
-    if (dto.minTenureMonths    !== undefined) updatePayload.minTenureMonths    = dto.minTenureMonths;
-    if (dto.maxTenureMonths    !== undefined) updatePayload.maxTenureMonths    = dto.maxTenureMonths;
-    if (dto.preferredPurposes  !== undefined) updatePayload.preferredPurposes  = dto.preferredPurposes;
-    if (dto.availableCapital   !== undefined) updatePayload.availableCapital   = dto.availableCapital;
-    if (dto.responseTimeHours  !== undefined) updatePayload.responseTimeHours  = dto.responseTimeHours;
-    if (dto.location           !== undefined) updatePayload.location           = dto.location;
-    if (dto.searchKeywords     !== undefined) updatePayload.searchKeywords     = dto.searchKeywords;
-    if (dto.status             !== undefined) updatePayload.status             = dto.status;
+    if (dto.minTenureMonths !== undefined) updatePayload.minTenureMonths = dto.minTenureMonths;
+    if (dto.maxTenureMonths !== undefined) updatePayload.maxTenureMonths = dto.maxTenureMonths;
+    if (dto.preferredPurposes !== undefined) updatePayload.preferredPurposes = dto.preferredPurposes;
+    if (dto.availableCapital !== undefined) updatePayload.availableCapital = dto.availableCapital;
+    if (dto.responseTimeHours !== undefined) updatePayload.responseTimeHours = dto.responseTimeHours;
+    if (dto.location !== undefined) updatePayload.location = dto.location;
+    if (dto.searchKeywords !== undefined) updatePayload.searchKeywords = dto.searchKeywords;
+    if (dto.status !== undefined) updatePayload.status = dto.status;
 
     if (dto.expiresAt !== undefined) {
       updatePayload.expiresAt = admin.firestore.Timestamp.fromDate(
@@ -91,23 +91,23 @@ export class AdvertisementUpdateService {
       );
     }
 
-    // ── Save update ──────────────────────────────────
+    //  Save update 
     await docRef.update(updatePayload);
 
-    // ── Return updated doc ───────────────────────────
+    // Return updated doc
     const updated = await docRef.get();
     return this.createService.toResponse(
       updated.data() as Advertisement,
     );
   }
 
-  // ── Pause ad ─────────────────────────────────────
+  //  Pause ad 
   async pauseAd(
     adId: string,
     lenderId: string,
   ): Promise<{ message: string }> {
 
-    const docRef  = this.db.collection(this.collection).doc(adId);
+    const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
@@ -121,20 +121,20 @@ export class AdvertisementUpdateService {
     }
 
     await docRef.update({
-      status:    'paused',
+      status: 'paused',
       updatedAt: admin.firestore.Timestamp.now(),
     });
 
     return { message: 'Ad paused successfully' };
   }
 
-  // ── Activate ad ──────────────────────────────────
+  //  Activate ad 
   async activateAd(
     adId: string,
     lenderId: string,
   ): Promise<{ message: string }> {
 
-    const docRef  = this.db.collection(this.collection).doc(adId);
+    const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
@@ -156,7 +156,7 @@ export class AdvertisementUpdateService {
     }
 
     await docRef.update({
-      status:    'active',
+      status: 'active',
       updatedAt: admin.firestore.Timestamp.now(),
     });
 

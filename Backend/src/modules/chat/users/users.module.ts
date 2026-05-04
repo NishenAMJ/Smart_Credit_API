@@ -1,6 +1,6 @@
 /**
  * users.module.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ * 
  * FIXED: BlocksController removed — merged into UsersController to eliminate
  * the dual-@Controller('users') route collision that caused /users/search
  * to be intercepted by the wrong handler and return [].
@@ -15,4 +15,4 @@ import { BlocksService } from './blocks.service';
   providers: [UsersService, BlocksService],
   exports: [UsersService, BlocksService],
 })
-export class UsersModule {}
+export class UsersModule { }
