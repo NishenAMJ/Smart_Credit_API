@@ -4,15 +4,18 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { AuthService } from '../auth/auth.service';
 import type { UserDocument } from '../auth/auth.types';
+import { MediaService } from '../media/media.service';
+import { DocumentsService } from '../documents/documents.service';
 import { LegalService } from './legal.service';
 import type { LegalDocument } from './legal.types';
+import type { DocumentRecord } from '../documents/interfaces/document-record.interface';
 
 describe('LegalService', () => {
   let service: LegalService;
   let legalDocs: LegalDocument[];
+  let documentRecords: Partial<DocumentRecord>[];
   let loans: Record<string, Record<string, unknown>>;
   let users: Record<string, UserDocument>;
-  let storedFiles: Record<string, Buffer>;
 
   function buildUser(
     uid: string,
@@ -43,7 +46,7 @@ describe('LegalService', () => {
 
   beforeEach(() => {
     legalDocs = [];
-    storedFiles = {};
+    documentRecords = [];
     loans = {
       'loan-1': {
         borrowerId: 'borrower-1',
@@ -72,6 +75,7 @@ describe('LegalService', () => {
                   id: loanId,
                   data: () => loans[loanId],
                 })),
+                update: jest.fn(async () => {}),
               })),
             };
           }
@@ -125,12 +129,9 @@ describe('LegalService', () => {
         }),
       },
       bucket: {
-        file: jest.fn((path: string) => ({
-          save: jest.fn(async (buffer: Buffer) => {
-            storedFiles[path] = buffer;
-          }),
-          exists: jest.fn(async () => [Boolean(storedFiles[path])]),
-          download: jest.fn(async () => [storedFiles[path]]),
+        file: jest.fn((_path: string) => ({
+          exists: jest.fn(async () => [false]),
+          download: jest.fn(async () => [Buffer.from('')]),
         })),
       },
     } as unknown as FirebaseService;
@@ -144,7 +145,40 @@ describe('LegalService', () => {
       }),
     } as unknown as AuthService;
 
-    service = new LegalService(firebaseService, authService);
+    const mediaService = {
+      ensureCloudinaryConfigured: jest.fn(),
+      uploadBufferAsDocument: jest.fn(async () => ({
+        assetId: 'mock-asset-id',
+        publicId: 'mock-public-id',
+        version: 1,
+        format: 'pdf',
+        bytes: 1024,
+        resourceType: 'raw',
+        deliveryType: 'authenticated',
+        secureUrl: 'https://res.cloudinary.com/mock/raw/authenticated/v1/mock.pdf',
+        uploadedAt: new Date().toISOString(),
+      })),
+      generateSignedDeliveryUrl: jest.fn(() => 'https://res.cloudinary.com/mock/s--sig--/raw/authenticated/v1/mock.pdf'),
+    } as unknown as MediaService;
+
+    const documentsService = {
+      getByRelatedEntity: jest.fn(async () => null),
+      createSystemGeneratedRecord: jest.fn(async () => {
+        const record: Partial<DocumentRecord> = {
+          id: `doc-record-${documentRecords.length + 1}`,
+          status: 'approved',
+          source: 'system_generated',
+        };
+        documentRecords.push(record);
+        return record as DocumentRecord;
+      }),
+      updateCloudinaryAsset: jest.fn(async () => {}),
+      getById: jest.fn(async (id: string) => {
+        return (documentRecords.find((r) => r.id === id) ?? null) as DocumentRecord | null;
+      }),
+    } as unknown as DocumentsService;
+
+    service = new LegalService(firebaseService, authService, mediaService, documentsService);
   });
 
   it('generates a legal document from a loan record', async () => {
@@ -189,9 +223,8 @@ describe('LegalService', () => {
 
     expect(borrowerAccepted.document.status).toBe('partially_accepted');
     expect(lenderAccepted.document.status).toBe('fully_accepted');
-    expect(lenderAccepted.document.signedPdfStoragePath).toContain(
-      'legal-documents/loan-1/',
-    );
+    // Signed PDF is now stored in Cloudinary; the documents record ID is referenced here
+    expect(lenderAccepted.document.signedPdfDocumentId).toBeTruthy();
   });
 
   it('downloads the stored signed pdf when it exists', async () => {

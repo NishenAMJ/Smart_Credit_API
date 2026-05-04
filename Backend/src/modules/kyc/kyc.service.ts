@@ -19,7 +19,7 @@ import { SubmitKycDto } from './dto/submit-kyc.dto';
 type KycUploadField = {
   documentType: 'nic_front' | 'nic_back' | 'address_proof' | 'bank_document';
   label: string;
-  dataUrl: string;
+  documentId: string;
 };
 
 @Injectable()
@@ -104,22 +104,22 @@ export class KycService {
       {
         documentType: 'nic_front',
         label: 'nic-front',
-        dataUrl: dto.nicFrontUrl,
+        documentId: dto.nicFrontDocumentId,
       },
       {
         documentType: 'nic_back',
         label: 'nic-back',
-        dataUrl: dto.nicBackUrl,
+        documentId: dto.nicBackDocumentId,
       },
       {
         documentType: 'address_proof',
         label: 'address-proof',
-        dataUrl: dto.addressProofUrl,
+        documentId: dto.addressProofDocumentId,
       },
       {
         documentType: 'bank_document',
         label: 'bank-document',
-        dataUrl: dto.bankDocumentUrl,
+        documentId: dto.bankDocumentId,
       },
     ];
   }
@@ -162,53 +162,42 @@ export class KycService {
         ? this.db.collection('users').doc(dto.userId)
         : this.db.collection('users').doc();
       const userId = userRef.id;
-      const profileUpload = await this.mediaService.uploadProfilePictureFromDataUrl(
-        userId,
-        dto.profilePhotoUrl,
-      );
 
       const documentRefs: Record<string, string> = {};
 
       for (const field of this.buildUploadFields(dto)) {
-        const prepared = this.mediaService.decodeDataUrl(field.dataUrl, field.label);
-        this.mediaService.validateSensitiveDocument(
-          prepared.mimeType,
-          prepared.buffer.length,
-        );
-        const fileHash = this.mediaService.computeSha256(prepared.buffer);
-
-        const duplicate = await this.documentsService.findDuplicate(
-          userId,
-          fileHash,
-          'kyc',
-        );
-
-        if (duplicate) {
-          throw new BadRequestException(
-            `Duplicate KYC document detected for ${field.documentType}.`,
-          );
+        const docRecord = await this.documentsService.getById(field.documentId);
+        
+        if (!docRecord || docRecord.category !== 'kyc' || docRecord.status === 'deleted') {
+          throw new BadRequestException(`Invalid or missing KYC document for ${field.documentType}.`);
         }
 
-        const uploaded = await this.mediaService.uploadSensitiveDocumentFromDataUrl(
+        // Optional: verify it belongs to the correct user if userId is provided
+        if (dto.userId && docRecord.userId !== dto.userId) {
+          throw new ForbiddenException(`Access denied for document ${field.documentId}.`);
+        }
+
+        documentRefs[field.documentType] = docRecord.id;
+      }
+
+      // Handle profile photo - if it's a data URL, upload it. If it's already a URL, use it.
+      let profilePhotoUrl = dto.profilePhotoUrl;
+      let profilePictureData: any = null;
+
+      if (dto.profilePhotoUrl.startsWith('data:')) {
+        const profileUpload = await this.mediaService.uploadProfilePictureFromDataUrl(
           userId,
-          'kyc',
-          this.db.collection('documents').doc().id,
-          field.dataUrl,
-          field.label,
+          dto.profilePhotoUrl,
         );
-
-        const record = await this.documentsService.createRecord({
-          userId,
-          category: 'kyc',
-          documentType: field.documentType,
-          originalFilename: uploaded.originalFilename,
-          mimeType: uploaded.mimeType,
-          fileHash: uploaded.fileHash,
-          uploadedMedia: uploaded.uploaded,
-          status: 'pending_review',
-        });
-
-        documentRefs[field.documentType] = record.id;
+        profilePhotoUrl = profileUpload.secureUrl;
+        profilePictureData = {
+          cloudinaryPublicId: profileUpload.publicId,
+          secureUrl: profileUpload.secureUrl,
+          version: profileUpload.version,
+          format: profileUpload.format ?? null,
+          fileSize: profileUpload.bytes,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
       }
 
       await userRef.set(
@@ -222,15 +211,8 @@ export class KycService {
           phoneNormalized: this.normalizePhone(dto.phoneNumber),
           nic: dto.nic.trim(),
           dateOfBirth: dto.birthDate.trim(),
-          photoURL: profileUpload.secureUrl,
-          profilePicture: {
-            cloudinaryPublicId: profileUpload.publicId,
-            secureUrl: profileUpload.secureUrl,
-            version: profileUpload.version,
-            format: profileUpload.format ?? null,
-            fileSize: profileUpload.bytes,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
+          photoURL: profilePhotoUrl,
+          profilePicture: profilePictureData,
           passwordHash: dto.passwordHash,
           creditScore: 0,
           rating: 0,

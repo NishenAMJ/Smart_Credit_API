@@ -112,6 +112,19 @@ export class LegalController {
     );
   }
 
+  @Get('documents/:documentId/pdf-access')
+  @UseGuards(JwtAuthGuard)
+  async getSignedPdfAccessUrl(
+    @Param('documentId') documentId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.legalService.getSignedPdfAccessUrl(
+      documentId,
+      req.user.sub,
+      req.user.role,
+    );
+  }
+
   @Get('documents/:documentId/download')
   async downloadDocumentPdf(
     @Param('documentId') documentId: string,

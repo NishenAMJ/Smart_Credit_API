@@ -11,6 +11,8 @@ import { type CollectionReference, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
 import type { UserRole, UserDocument } from '../auth/auth.types';
 import { AuthService } from '../auth/auth.service';
+import { MediaService } from '../media/media.service';
+import { DocumentsService } from '../documents/documents.service';
 import type {
   AcceptLegalDocumentResponseDto,
   LegalDocumentDto,
@@ -40,6 +42,8 @@ export class LegalService {
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly authService: AuthService,
+    private readonly mediaService: MediaService,
+    private readonly documentsService: DocumentsService,
   ) {
     this.legalCollection = this.firebaseService.db.collection(
       'legalDocuments',
@@ -226,8 +230,12 @@ export class LegalService {
     merged.htmlContent = this.buildAgreementHtml(merged);
 
     if (merged.status === 'fully_accepted') {
-      const { storagePath, hash } = await this.persistSignedPdf(merged);
-      merged.signedPdfStoragePath = storagePath;
+      const { documentId: pdfDocumentId, hash } = await this.persistSignedPdfToCloudinary(
+        merged,
+        userId,
+        documentId, // outer param = Firestore legal-document ID
+      );
+      merged.signedPdfDocumentId = pdfDocumentId;
       merged.signedPdfGeneratedAt = now;
       merged.pdfSha256Hash = hash;
 
@@ -247,9 +255,9 @@ export class LegalService {
       ...updateData,
       status: merged.status,
       htmlContent: merged.htmlContent,
-      ...(merged.signedPdfStoragePath
+      ...(merged.signedPdfDocumentId
         ? {
-            signedPdfStoragePath: merged.signedPdfStoragePath,
+            signedPdfDocumentId: merged.signedPdfDocumentId,
             signedPdfGeneratedAt: merged.signedPdfGeneratedAt,
             pdfSha256Hash: merged.pdfSha256Hash,
           }
@@ -386,6 +394,33 @@ export class LegalService {
     const document = doc.data() as LegalDocument;
     this.assertDocumentAccess(document, userId, userRole);
 
+    // ── Priority 1: Cloudinary-backed signed PDF (new path) ───────────────
+    if (document.signedPdfDocumentId) {
+      const docRecord = await this.documentsService.getById(
+        document.signedPdfDocumentId,
+      );
+
+      if (docRecord && docRecord.status !== 'deleted') {
+        const signedUrl = this.mediaService.generateSignedDeliveryUrl({
+          publicId: docRecord.cloudinaryPublicId,
+          resourceType: docRecord.cloudinaryResourceType,
+          deliveryType: docRecord.cloudinaryDeliveryType,
+          version: docRecord.cloudinaryVersion,
+          format: docRecord.format,
+        });
+
+        const response = await fetch(signedUrl);
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          return {
+            buffer: Buffer.from(arrayBuffer),
+            fileName: this.buildPdfFileName(document),
+          };
+        }
+      }
+    }
+
+    // ── Priority 2: Legacy Firebase Storage (backward compat) ─────────────
     if (document.signedPdfStoragePath) {
       const file = this.firebaseService.bucket.file(
         document.signedPdfStoragePath,
@@ -394,7 +429,6 @@ export class LegalService {
 
       if (exists) {
         const [buffer] = await file.download();
-
         return {
           buffer,
           fileName: this.buildPdfFileName(document),
@@ -402,9 +436,60 @@ export class LegalService {
       }
     }
 
+    // ── Priority 3: On-the-fly generation (unsigned / pre-accepted docs) ──
     return {
       buffer: await this.buildAgreementPdf(document),
       fileName: this.buildPdfFileName(document),
+    };
+  }
+
+  /**
+   * Returns a short-lived (5-minute) signed Cloudinary URL for the stored signed PDF.
+   * Preferred over the `/download` streaming endpoint for all new clients.
+   */
+  async getSignedPdfAccessUrl(
+    documentId: string,
+    userId: string,
+    userRole: UserRole,
+  ): Promise<{ accessUrl: string; expiresAt: string; documentId: string }> {
+    const doc = await this.legalCollection.doc(documentId).get();
+
+    if (!doc.exists) {
+      throw new NotFoundException('Legal document not found.');
+    }
+
+    const document = doc.data() as LegalDocument;
+    this.assertDocumentAccess(document, userId, userRole);
+
+    if (!document.signedPdfDocumentId) {
+      throw new NotFoundException(
+        'Signed PDF is not yet available for this document. Both parties must accept first.',
+      );
+    }
+
+    const docRecord = await this.documentsService.getById(
+      document.signedPdfDocumentId,
+    );
+
+    if (!docRecord || docRecord.status === 'deleted') {
+      throw new NotFoundException('Signed PDF document record not found.');
+    }
+
+    const TTL_SECONDS = 300; // 5 minutes
+    const expiresAt = new Date(Date.now() + TTL_SECONDS * 1000).toISOString();
+
+    const accessUrl = this.mediaService.generateSignedDeliveryUrl({
+      publicId: docRecord.cloudinaryPublicId,
+      resourceType: docRecord.cloudinaryResourceType,
+      deliveryType: docRecord.cloudinaryDeliveryType,
+      version: docRecord.cloudinaryVersion,
+      format: docRecord.format,
+    });
+
+    return {
+      accessUrl,
+      expiresAt,
+      documentId: document.signedPdfDocumentId,
     };
   }
 
@@ -624,6 +709,7 @@ export class LegalService {
         document.pdfDownloadPath ??
         `/api/legal/documents/${document.id}/download`,
       signedPdfStoragePath: document.signedPdfStoragePath,
+      signedPdfDocumentId: document.signedPdfDocumentId,
       signedPdfGeneratedAt: document.signedPdfGeneratedAt
         ?.toDate()
         .toISOString(),
@@ -683,25 +769,61 @@ export class LegalService {
     return `smart-credit-loan-agreement-${document.loanId}.pdf`;
   }
 
-  private async persistSignedPdf(
+  /**
+   * Generates the signed-agreement PDF, uploads it to Cloudinary as an authenticated `raw`
+   * asset, then upserts the corresponding `documents` record.
+   * Returns the Firestore document ID and the PDF hash.
+   */
+  private async persistSignedPdfToCloudinary(
     document: LegalDocument,
-  ): Promise<{ storagePath: string; hash: string }> {
+    signingUserId: string,
+    legalDocumentId: string,
+  ): Promise<{ documentId: string; hash: string }> {
     const fileName = this.buildPdfFileName(document);
-    const storagePath = `legal-documents/${document.loanId}/${fileName}`;
     const buffer = await this.buildAgreementPdf(document);
-    const file = this.firebaseService.bucket.file(storagePath);
-
-    await file.save(buffer, {
-      contentType: 'application/pdf',
-      resumable: false,
-      metadata: {
-        contentType: 'application/pdf',
-      },
-    });
-
     const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
-    return { storagePath, hash };
+    // Cloudinary folder/publicId convention: documents/<userId>/agreement/<legalDocId>
+    const folder = `documents/${signingUserId}/agreement`;
+    const publicId = `legal-${legalDocumentId}`;
+
+    const uploadedMedia = await this.mediaService.uploadBufferAsDocument(buffer, {
+      folder,
+      publicId,
+      resourceType: 'raw',
+      deliveryType: 'authenticated',
+      overwrite: true,
+    });
+
+    // Upsert the documents record – if one already exists for this legal document, update it;
+    // otherwise create a new one.
+    const existing = await this.documentsService.getByRelatedEntity(
+      'legal_document',
+      legalDocumentId,
+      'agreement',
+    );
+
+    let docRecord: import('../documents/interfaces/document-record.interface').DocumentRecord | undefined;
+
+    if (existing) {
+      await this.documentsService.updateCloudinaryAsset(existing.id, uploadedMedia, hash);
+      docRecord = existing;
+    } else {
+      docRecord = await this.documentsService.createSystemGeneratedRecord({
+        userId: signingUserId,
+        category: 'agreement',
+        documentType: 'loan_agreement_pdf',
+        originalFilename: fileName,
+        mimeType: 'application/pdf',
+        fileHash: hash,
+        relatedEntityType: 'legal_document',
+        relatedEntityId: legalDocumentId,
+        displayName: `Signed Loan Agreement – ${document.loanId}`,
+        uploadedMedia,
+      });
+    }
+
+    return { documentId: docRecord!.id, hash };
   }
 
   private createSimplePdfBuffer(lines: string[]): Buffer {

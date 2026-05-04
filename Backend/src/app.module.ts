@@ -23,6 +23,7 @@ import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module
 import { ReportsModule } from './modules/reports/reports.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { AdsModule } from './modules/ads/ads.module';
+import { DocumentsModule } from './modules/documents/documents.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { AdsModule } from './modules/ads/ads.module';
     ReportsModule,
     DisputesModule,
     AdsModule,
+    DocumentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

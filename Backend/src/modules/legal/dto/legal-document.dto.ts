@@ -54,6 +54,9 @@ export class LegalDocumentDto {
   lenderSignatureAudit?: LegalPartySignatureAuditDto;
   pdfDownloadPath?: string;
   signedPdfStoragePath?: string;
+  signedPdfDocumentId?: string;
+  /** Short-lived signed Cloudinary URL – only present when the caller requests it via the access endpoint. */
+  signedPdfAccessUrl?: string;
   signedPdfGeneratedAt?: string;
   pdfSha256Hash?: string;
 }

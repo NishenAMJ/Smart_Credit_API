@@ -176,6 +176,131 @@ export class MediaService {
     return `https://res.cloudinary.com/${this.cloudName}/${deliveryPath}`;
   }
 
+  /**
+   * Produces the signed parameters needed for a **client-side** direct upload to Cloudinary.
+   * The client sends a multipart POST to `uploadUrl` with these parameters attached.
+   * Default expiry: 5 minutes.
+   */
+  generateSignedUploadParams(options: {
+    folder: string;
+    publicId: string;
+    resourceType: Exclude<MediaResourceType, 'auto'>;
+    deliveryType: 'upload' | 'authenticated';
+    ttlSeconds?: number;
+  }): import('./media.types').DirectUploadIntent {
+    this.ensureCloudinaryConfigured();
+
+    const ttl = options.ttlSeconds ?? 300; // 5 minutes default
+    const timestamp = Math.floor(Date.now() / 1000) + ttl;
+
+    const sigParams: Record<string, string> = {
+      folder: options.folder,
+      public_id: options.publicId,
+      timestamp: String(timestamp),
+      type: options.deliveryType,
+    };
+
+    const signature = this.createUploadSignature(sigParams);
+
+    return {
+      category: options.folder.split('/')[0] as import('./media.types').MediaUploadCategory,
+      publicId: options.publicId,
+      folder: options.folder,
+      resourceType: options.resourceType,
+      deliveryType: options.deliveryType,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${this.cloudName}/${options.resourceType}/upload`,
+      cloudName: this.cloudName as string,
+      apiKey: this.apiKey as string,
+      timestamp,
+      signature,
+      expiresAt: new Date((timestamp) * 1000).toISOString(),
+    };
+  }
+
+  /**
+   * Calls the Cloudinary Admin API to verify that an asset with the given `publicId` exists
+   * and returns its metadata. Used after a client-side upload to confirm ownership.
+   */
+  async verifyCloudinaryAsset(
+    publicId: string,
+    resourceType: 'image' | 'raw' | 'video' = 'image',
+    deliveryType: 'upload' | 'authenticated' = 'authenticated',
+  ): Promise<UploadedMedia | null> {
+    this.ensureCloudinaryConfigured();
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = this.createUploadSignature({
+      public_id: publicId,
+      timestamp: String(timestamp),
+      type: deliveryType,
+    });
+
+    const params = new URLSearchParams({
+      public_id: publicId,
+      timestamp: String(timestamp),
+      type: deliveryType,
+      api_key: this.apiKey as string,
+      signature,
+    });
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${this.cloudName}/resources/${resourceType}/${deliveryType}/${encodeURIComponent(publicId)}`,
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString('base64')}`,
+        },
+      },
+    );
+
+    // suppress unused variable
+    void params;
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      throw new InternalServerErrorException('Failed to verify Cloudinary asset.');
+    }
+
+    const payload = (await response.json()) as Record<string, unknown>;
+
+    return {
+      assetId: String(payload.asset_id ?? ''),
+      publicId: String(payload.public_id ?? publicId),
+      version: Number(payload.version ?? 0),
+      format: typeof payload.format === 'string' ? payload.format : undefined,
+      bytes: Number(payload.bytes ?? 0),
+      resourceType: String(payload.resource_type ?? resourceType),
+      deliveryType: String(payload.type ?? deliveryType),
+      secureUrl: String(payload.secure_url ?? ''),
+      originalFilename:
+        typeof payload.original_filename === 'string'
+          ? payload.original_filename
+          : undefined,
+      folder: typeof payload.folder === 'string' ? payload.folder : undefined,
+      uploadedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Uploads a raw Buffer to Cloudinary as an authenticated `raw` document (PDF).
+   * Used by backend services (e.g. LegalService) that generate files server-side.
+   */
+  async uploadBufferAsDocument(
+    buffer: Buffer,
+    options: {
+      folder: string;
+      publicId: string;
+      resourceType: Exclude<MediaResourceType, 'auto'>;
+      deliveryType: 'upload' | 'authenticated';
+      overwrite?: boolean;
+    },
+  ): Promise<UploadedMedia> {
+    this.ensureCloudinaryConfigured();
+    return this.uploadBuffer(buffer, options);
+  }
+
   async deleteAsset(
     publicId: string,
     resourceType: 'image' | 'raw' | 'video' = 'image',
