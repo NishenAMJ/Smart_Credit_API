@@ -36,11 +36,11 @@ export class SubmitKycDto {
 
   @IsString()
   @IsNotEmpty()
-  nicFrontUrl: string;
+  nicFrontDocumentId: string;
 
   @IsString()
   @IsNotEmpty()
-  nicBackUrl: string;
+  nicBackDocumentId: string;
 
   @IsString()
   @IsNotEmpty()
@@ -48,7 +48,7 @@ export class SubmitKycDto {
 
   @IsString()
   @IsNotEmpty()
-  addressProofUrl: string;
+  addressProofDocumentId: string;
 
   @IsString()
   @IsNotEmpty()
@@ -68,11 +68,11 @@ export class SubmitKycDto {
 
   @IsString()
   @IsNotEmpty()
-  bankDocumentUrl: string;
+  bankDocumentId: string;
 
   @IsString()
   @IsNotEmpty()
-  profilePhotoUrl: string;
+  profilePhotoUrl: string; // This should now be the final secure URL or an asset ID
 
   @IsOptional()
   userId?: string;

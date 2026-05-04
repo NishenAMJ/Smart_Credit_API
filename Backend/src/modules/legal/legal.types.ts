@@ -52,7 +52,8 @@ export interface LegalDocument {
   borrowerSignatureAudit?: LegalPartySignatureAudit;
   lenderSignatureAudit?: LegalPartySignatureAudit;
   pdfDownloadPath?: string;
-  signedPdfStoragePath?: string;
+  signedPdfStoragePath?: string;  // legacy – Firebase Storage path (kept for backward compat)
+  signedPdfDocumentId?: string;  // preferred – Firestore ID of the documents record for the Cloudinary PDF
   signedPdfGeneratedAt?: Timestamp;
   pdfSha256Hash?: string;
 }

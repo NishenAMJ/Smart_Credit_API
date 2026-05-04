@@ -154,13 +154,8 @@ describe('KycService', () => {
     expect(service).toBeDefined();
   });
 
-  it('rejects duplicate sensitive KYC uploads', async () => {
-    documentsService.findDuplicate.mockResolvedValueOnce({
-      id: 'existing-doc',
-      userId: 'user-1',
-      category: 'kyc',
-      status: 'pending_review',
-    });
+  it('rejects invalid or missing KYC document IDs', async () => {
+    documentsService.getById.mockResolvedValueOnce(null); // nic-front missing
 
     await expect(
       service.submitMobileKyc({
@@ -171,19 +166,65 @@ describe('KycService', () => {
         nic: '123456789V',
         birthDate: '2000-01-01',
         passwordHash: 'hashed-password',
-        nicFrontUrl: 'data:application/pdf;base64,cGRm',
-        nicBackUrl: 'data:application/pdf;base64,cGRm',
+        nicFrontDocumentId: 'doc-invalid',
+        nicBackDocumentId: 'doc-2',
         addressProofNumber: 'ADDR-1',
-        addressProofUrl: 'data:application/pdf;base64,cGRm',
+        addressProofDocumentId: 'doc-3',
         bankAccountNumber: '1234567890',
         bankName: 'Test Bank',
         branchCode: '001',
         accountType: 'savings',
-        bankDocumentUrl: 'data:application/pdf;base64,cGRm',
-        profilePhotoUrl: 'data:image/jpeg;base64,aW1hZ2U=',
+        bankDocumentId: 'doc-4',
+        profilePhotoUrl: 'https://example.com/profile.jpg',
         userId: 'user-1',
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('submits KYC successfully by linking existing documents', async () => {
+    const mockDoc = (id: string) => ({
+      id,
+      userId: 'user-1',
+      category: 'kyc',
+      status: 'pending_review',
+      documentType: 'nic_front',
+      originalFilename: 'test.pdf',
+      mimeType: 'application/pdf',
+      fileHash: 'hash',
+      uploadedMedia: {},
+      uploadedAt: new Date().toISOString(),
+    });
+
+    documentsService.getById
+      .mockResolvedValueOnce(mockDoc('doc-1'))
+      .mockResolvedValueOnce(mockDoc('doc-2'))
+      .mockResolvedValueOnce(mockDoc('doc-3'))
+      .mockResolvedValueOnce(mockDoc('doc-4'));
+
+    const result = await service.submitMobileKyc({
+      role: 'borrower',
+      fullName: 'Test User',
+      email: 'test@example.com',
+      phoneNumber: '0712345678',
+      nic: '123456789V',
+      birthDate: '2000-01-01',
+      passwordHash: 'hashed-password',
+      nicFrontDocumentId: 'doc-1',
+      nicBackDocumentId: 'doc-2',
+      addressProofNumber: 'ADDR-1',
+      addressProofDocumentId: 'doc-3',
+      bankAccountNumber: '1234567890',
+      bankName: 'Test Bank',
+      branchCode: '001',
+      accountType: 'savings',
+      bankDocumentId: 'doc-4',
+      profilePhotoUrl: 'https://example.com/profile.jpg',
+      userId: 'user-1',
+    });
+
+    expect(userSet).toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.documentIds).toContain('doc-1');
   });
 
   it('returns a signed KYC access URL for the document owner', async () => {
