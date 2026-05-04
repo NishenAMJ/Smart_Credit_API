@@ -56,10 +56,17 @@ function formatBubbleTime(iso: string): string {
 }
 
 export default function ChatScreen({ navigation, route }: Props) {
-  const { conversationId, participant, isMuted } = route.params;
+  const { conversationId, participant, isMuted } = route.params || {};
 
-  // TEMP: use lender_004. Replace with real auth hook when ready.
   const currentUserId = getCurrentUserId();
+
+  if (!participant) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <Text>Error: Participant data missing.</Text>
+      </SafeAreaView>
+    );
+  }
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
