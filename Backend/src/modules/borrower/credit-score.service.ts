@@ -52,7 +52,7 @@ export class CreditScoreService {
     if (score >= 750) return 'Excellent';
     if (score >= 700) return 'Good';
     if (score >= 650) return 'Fair';
-    if (score >= 600) return 'Poor';
+    if (score >= 500) return 'Poor';
     return 'Very Poor';
   }
 

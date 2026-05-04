@@ -9,6 +9,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 
 import { BorrowerService } from './borrower.service';
@@ -50,9 +51,12 @@ export class BorrowerController {
    */
   private resolveBorrowerId(borrowerId?: string): string {
     const trimmed = borrowerId?.trim();
-    return trimmed && trimmed.length > 0
-      ? trimmed
-      : BORROWER_DEFAULTS.DEMO_BORROWER_ID;
+    if (!trimmed) {
+      throw new BadRequestException(
+        'Borrower identification is required for this operation.',
+      );
+    }
+    return trimmed;
   }
 
   /**
@@ -290,12 +294,10 @@ export class BorrowerController {
       await this.borrowerApplicationsService.createLoanApplication({
         borrowerId: id,
         adId: payload.adId,
-        amount: Number(payload.amount ?? BORROWER_DEFAULTS.APPLICATION_AMOUNT),
+        amount: Number(payload.amount),
         loanPurpose,
         purposeDescription: payload.description,
-        tenureMonths: Number(
-          payload.tenureMonths ?? BORROWER_DEFAULTS.APPLICATION_TERM_MONTHS,
-        ),
+        tenureMonths: Number(payload.tenureMonths),
         preferredRepaymentMethod:
           (payload.preferredRepaymentMethod as RepaymentMethod) ??
           RepaymentMethod.QR_PAYMENT,
@@ -474,7 +476,7 @@ export class BorrowerController {
     const repayment = await this.borrowerService.makeRepayment({
       loanId: payload.loanId,
       borrowerId: id,
-      amount: Number(payload.amount ?? BORROWER_DEFAULTS.REPAYMENT_AMOUNT),
+      amount: Number(payload.amount),
       paymentMethod: payload.paymentMethod ?? RepaymentMethod.QR_PAYMENT,
       transactionReference: payload.transactionReference,
       paymentProofUrl: payload.paymentProofUrl,
