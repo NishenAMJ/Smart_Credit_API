@@ -12,19 +12,19 @@ import { AdvertisementCreateService } from './advertisement-create.service';
 
 // Boost package durations in days
 const BOOST_PACKAGES = {
-  '7days':  { days: 7,  price: 500  },
+  '7days': { days: 7, price: 500 },
   '14days': { days: 14, price: 1000 },
   '30days': { days: 30, price: 2000 },
 };
 
 @Injectable()
 export class AdvertisementBoostService {
-  private db         = getFirestore();
+  private db = getFirestore();
   private collection = 'ads';
 
   constructor(
     private createService: AdvertisementCreateService,
-  ) {}
+  ) { }
 
   // Apply boost package to an ad to increase visibility
   // Verifies ownership, validates payment amount, calculates expiry date based on package duration
@@ -34,7 +34,7 @@ export class AdvertisementBoostService {
     dto: BoostAdDto,
   ): Promise<AdvertisementResponse> {
 
-    const docRef  = this.db.collection(this.collection).doc(adId);
+    const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
@@ -83,30 +83,30 @@ export class AdvertisementBoostService {
     }
 
     // Calculate when the boost will expire based on package duration
-    const now         = admin.firestore.Timestamp.now();
+    const now = admin.firestore.Timestamp.now();
     const boostExpiry = new Date(now.toDate());
     boostExpiry.setDate(boostExpiry.getDate() + pkg.days);
 
     // Update the ad to mark it as boosted with expiry timestamp and payment info
     await docRef.update({
-      isBoosted:   true,
+      isBoosted: true,
       boostExpiry: admin.firestore.Timestamp.fromDate(boostExpiry),
       boostPaidAt: now,
       boostAmount: dto.amount,
-      updatedAt:   now,
+      updatedAt: now,
     });
 
     // Create a payment record in admin collection for revenue tracking and refunds
     await this.db.collection('boostPayments').add({
       adId,
       lenderId,
-      package:          dto.package,
-      amount:           dto.amount,
+      package: dto.package,
+      amount: dto.amount,
       paymentReference: dto.paymentReference,
-      boostStartAt:     now,
-      boostExpiry:      admin.firestore.Timestamp.fromDate(boostExpiry),
-      status:           'confirmed',
-      createdAt:        now,
+      boostStartAt: now,
+      boostExpiry: admin.firestore.Timestamp.fromDate(boostExpiry),
+      status: 'confirmed',
+      createdAt: now,
     });
 
     // Return the updated ad with all boost metadata
@@ -123,7 +123,7 @@ export class AdvertisementBoostService {
     lenderId: string,
   ): Promise<{ message: string }> {
 
-    const docRef  = this.db.collection(this.collection).doc(adId);
+    const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
@@ -144,20 +144,20 @@ export class AdvertisementBoostService {
 
     // Clear the boost status and expiry
     await docRef.update({
-      isBoosted:   false,
+      isBoosted: false,
       boostExpiry: null,
-      updatedAt:   admin.firestore.Timestamp.now(),
+      updatedAt: admin.firestore.Timestamp.now(),
     });
 
     return { message: 'Boost cancelled successfully' };
   }
 
-  // ── Get boost packages info ───────────────────────
+  //  Get boost packages info 
   getBoostPackages() {
     return Object.entries(BOOST_PACKAGES).map(([key, val]) => ({
-      package:     key,
-      days:        val.days,
-      price:       val.price,
+      package: key,
+      days: val.days,
+      price: val.price,
       description: `Boost your ad for ${val.days} days — LKR ${val.price}`,
     }));
   }
