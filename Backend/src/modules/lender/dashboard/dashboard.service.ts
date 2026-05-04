@@ -63,16 +63,29 @@ export class DashboardService {
 
   async getSummary(lenderId: string): Promise<DashboardSummaryResponse> {
     const db = this.firebaseService.getDb();
-    const [totalBorrowers, todaysCollection, overduePayments, activeAds] =
+    const [userSnapshot, totalBorrowers, todaysCollection, overduePayments, activeAds] =
       await Promise.all([
+        db.collection('users').doc(lenderId).get(),
         this.getTotalBorrowersFromRelations(db, lenderId),
         this.getTodaysPaymentsCollection(db, lenderId),
         this.getOverduePaymentsCount(db, lenderId),
         this.getActiveAdsCount(db, lenderId),
       ]);
 
+    const userData = userSnapshot.data();
+    const lenderName =
+      userData?.fullName || userData?.name || 'Unnamed Lender';
+
+    console.log(`[DashboardService] Stats for ${lenderId} (${lenderName}):`, {
+      totalBorrowers,
+      todaysCollection,
+      overduePayments,
+      activeAds,
+    });
+
     return {
       summary: {
+        lenderName,
         totalBorrowers,
         todaysCollection,
         overduePayments,
