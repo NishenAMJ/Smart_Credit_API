@@ -30,12 +30,13 @@ import { User, ChatStackParamList } from "../../types/chat.types";
 import { conversationService } from "../../services/conversationService";
 import { getCurrentUserId } from "../../services/api";
 import Avatar from "../../components/common/Avatar";
+import { getApiBaseUrl } from "../../api/base-url";
 
 // ── Inline search call with full logging ─────────────────────────────────────
 // Calling fetch directly here (not via userService) so we can log every step
 // and rule out any wrapping issue in userService.ts or api.ts.
 
-const BASE_URL = "http://192.168.120.219:3000/api";
+const BASE_URL = getApiBaseUrl();
 
 async function searchUsers(query: string): Promise<User[]> {
   const userId = getCurrentUserId();

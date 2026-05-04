@@ -11,6 +11,7 @@ export interface UserDoc {
   isOnline: boolean;
   lastSeen: admin.firestore.Timestamp | null;
   createdAt: admin.firestore.Timestamp;
+  [key: string]: any;
 }
 
 export interface ConversationDoc {

@@ -120,8 +120,7 @@ export default function LegalAgreementScreen({
         signedName: signedName.trim(),
       });
       setDocument(response.document);
-
-      if (response.document.status === "fully_accepted") {
+      if (response.document && response.document.status === "fully_accepted") {
         setMessage(
           "Loan is now ACTIVE! Both parties have accepted the agreement.",
         );

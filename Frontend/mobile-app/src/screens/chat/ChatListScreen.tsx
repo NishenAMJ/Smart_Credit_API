@@ -137,8 +137,8 @@ export default function ChatListScreen({ navigation }: Props) {
     setFiltered(
       conversations.filter(
         (c) =>
-          c.participant.displayName.toLowerCase().includes(q) ||
-          c.participant.username.toLowerCase().includes(q),
+          c.participant?.displayName?.toLowerCase().includes(q) ||
+          c.participant?.username?.toLowerCase().includes(q),
       ),
     );
   };
@@ -158,16 +158,16 @@ export default function ChatListScreen({ navigation }: Props) {
       activeOpacity={0.7}
     >
       <Avatar
-        name={item.participant.displayName}
-        avatarUrl={item.participant.avatarUrl || undefined}
+        name={item.participant?.displayName ?? "Unknown"}
+        avatarUrl={item.participant?.avatarUrl || undefined}
         size={50}
         showOnline
-        isOnline={item.participant.isOnline}
+        isOnline={item.participant?.isOnline}
       />
       <View style={styles.convMeta}>
         <View style={styles.convTopRow}>
           <Text style={styles.convName} numberOfLines={1}>
-            {item.participant.displayName}
+            {item.participant?.displayName ?? "Unknown User"}
           </Text>
           <Text style={styles.convTime}>
             {item.lastMessage ? formatTime(item.lastMessage.createdAt) : ""}

@@ -237,8 +237,8 @@ export const localDatabase = {
         id: r.id,
         participant: {
           id: r.participantId,
-          username: r.participantName,
-          displayName: r.participantName,
+          username: r.participantName || "unknown",
+          displayName: r.participantName || "Unknown",
           avatarUrl: r.participantAvatar,
           isOnline: r.isOnline === 1,
         },
@@ -316,14 +316,15 @@ export const localDatabase = {
       return;
     }
     try {
+      if (!user) return;
       runSync(
         `INSERT OR REPLACE INTO blocked_users (id, username, displayName, avatarUrl, createdAt) VALUES (?, ?, ?, ?, ?)`,
         [
           user.id,
-          user.username,
-          user.displayName,
+          user.username ?? "unknown",
+          user.displayName ?? user.username ?? "Unknown User",
           user.avatarUrl ?? null,
-          user.blockedAt,
+          user.blockedAt || new Date().toISOString(),
         ],
       );
     } catch (error) {

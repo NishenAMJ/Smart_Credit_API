@@ -11,7 +11,7 @@ export const COLORS = {
   success: "#10B981",
   warning: "#F59E0B",
   danger: "#EF4444",
-};
+} as const;
 
 export const TYPOGRAPHY = {
   heading: { fontSize: 18, fontWeight: "600", lineHeight: 24 },
@@ -19,7 +19,7 @@ export const TYPOGRAPHY = {
   bodyMedium: { fontSize: 15, fontWeight: "500", lineHeight: 21 },
   body: { fontSize: 15, fontWeight: "400", lineHeight: 21 },
   small: { fontSize: 13, fontWeight: "400", lineHeight: 18 },
-};
+} as const;
 
 export const SPACING = {
   xs: 4,
@@ -27,6 +27,7 @@ export const SPACING = {
   md: 12,
   lg: 16,
   xl: 24,
+  xxl: 32,
 };
 
 export const BORDER_RADIUS = {
