@@ -1,21 +1,14 @@
-import { api } from './api';
+import { api, getCurrentUserId } from './api';
 
 // ─────────────────────────────────────────────────────────────
-// TODO: Replace this with real auth when ready.
-// Example with Firebase Auth:
-//   import { getAuth } from 'firebase/auth';
-//   const getLenderId = () => getAuth().currentUser?.uid ?? '';
+// The shared auth layer in api.ts now owns the current user id.
 // ─────────────────────────────────────────────────────────────
-let _lenderId = 'lender_004';
 
 export const setLenderId = (id: string) => {
-  _lenderId = id;
+  // No-op: the shared auth layer now owns the current user id.
 };
 
-const getLenderId = (): string => {
-  if (!_lenderId) throw new Error('User not authenticated');
-  return _lenderId;
-};
+const getLenderId = (): string => getCurrentUserId();
 
 export const AdService = {
 

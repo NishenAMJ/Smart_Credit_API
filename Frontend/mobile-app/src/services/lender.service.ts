@@ -4,7 +4,7 @@
  * Centralised service layer for all Lender screens.
  *
  * Auth pattern mirrors advertisement.service.ts:
- *   - _lenderId is seeded with 'lender_004' (same placeholder used across the app)
+ *   - The shared auth layer in api.ts owns the current user id.
  *   - Every request embeds lenderId as a query-param so the backend can scope data
  *   - x-user-id header is also sent by api.ts automatically
  *

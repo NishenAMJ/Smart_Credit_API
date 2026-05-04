@@ -10,7 +10,6 @@
  *   - UI components subscribe via on() and unsubscribe via off()
  *
  * TEMP AUTH:
- * Currently sends 'lender_004' as the userId in the socket handshake.
  * When real auth is ready, call chatSocket.connect(realUserId) after login.
  */
 
@@ -68,7 +67,7 @@ class ChatSocket {
    * Call this on login. Connects to the NestJS WebSocket gateway.
    * userId is sent in the handshake so the backend can identify this socket.
    *
-   * @param userId  The logged-in user's ID (currently 'lender_004')
+   * @param userId  The logged-in user's ID.
    */
   connect(userId?: string) {
     if (this.socket?.connected) {
