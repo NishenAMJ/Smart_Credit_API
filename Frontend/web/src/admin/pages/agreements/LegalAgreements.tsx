@@ -1,23 +1,12 @@
 import { useCallback } from "react";
-import {
-  getLegalAgreements,
-  getApiBaseUrl,
-  type AdminLegalDocument,
-} from "../../lib/api";
+import { getLegalAgreements, getApiBaseUrl } from "../../lib/api";
 import { getAdminToken } from "../../lib/auth";
 import AgreementsPage from "../../../legal/AgreementsPage";
 import type { AgreementsResponse } from "../../../legal/types";
 
 export default function LegalAgreements() {
   const fetcher = useCallback(async (): Promise<AgreementsResponse> => {
-    const response = await getLegalAgreements();
-    // Map AdminLegalDocument to SharedLegalDocument if necessary
-    // In this case, they are compatible
-    return {
-      success: true,
-      documents: response.documents as any[],
-      count: response.documents?.length || 0,
-    };
+    return getLegalAgreements();
   }, []);
 
   const handleDownload = (documentId: string, pdfDownloadPath?: string) => {

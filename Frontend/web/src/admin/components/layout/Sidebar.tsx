@@ -31,12 +31,15 @@ const NAV_ITEMS = [
 const S = {
   sidebar: {
     width: "220px",
-    minHeight: "100vh",
+    height: "100vh",
     background: "#0A1628",
     display: "flex",
     flexDirection: "column" as const,
     padding: "24px 0",
     flexShrink: 0,
+    position: "sticky" as const,
+    top: 0,
+    overflow: "hidden",
   },
   logoWrap: {
     padding: "0 20px 28px",
@@ -78,6 +81,7 @@ const S = {
     display: "flex",
     flexDirection: "column" as const,
     gap: "2px",
+    overflowY: "auto" as const,
   },
   sectionLabel: {
     fontSize: "10px",
@@ -91,6 +95,7 @@ const S = {
     padding: "16px 12px 0",
     borderTop: "1px solid rgba(255,255,255,0.06)",
     marginTop: "8px",
+    flexShrink: 0,
   },
   logoutBtn: {
     display: "flex",
@@ -141,6 +146,7 @@ const S = {
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
+// Renders the persistent admin navigation and logout area.
 export default function Sidebar() {
   const navigate = useNavigate();
 

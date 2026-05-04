@@ -32,6 +32,21 @@ const STATUS_FILTERS: Array<{ label: string; value: StatusFilter }> = [
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
+type StyleValue =
+  | CSSProperties
+  | ((disabled: boolean) => CSSProperties)
+  | ((color: string, bg: string) => CSSProperties);
+
+type TransactionSummaryCard = {
+  label: string;
+  value: string;
+  helper: string;
+  icon: React.ElementType;
+  color: string;
+  bg: string;
+};
+
+// Renders the admin transactions ledger with search, filters, and pagination.
 export default function Transactions() {
   const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,58 +174,11 @@ export default function Transactions() {
     setCursorStack([]);
   }
 
-  const stats = useMemo(() => {
-    const completed = transactions.filter((transaction) =>
-      ["completed", "success", "successful"].includes(
-        transaction.status.toLowerCase(),
-      ),
-    ).length;
-    const pending = transactions.filter(
-      (transaction) => transaction.status.toLowerCase() === "pending",
-    ).length;
-    const failed = transactions.filter(
-      (transaction) => transaction.status.toLowerCase() === "failed",
-    ).length;
-    const volume = transactions.reduce(
-      (total, transaction) => total + transaction.amount,
-      0,
-    );
-
-    return [
-      {
-        label: "Total Transactions",
-        value: transactions.length.toLocaleString(),
-        helper: `${filteredTransactions.length} visible`,
-        icon: Activity,
-        color: "#007AFF",
-        bg: "#EFF6FF",
-      },
-      {
-        label: "Completed",
-        value: completed.toLocaleString(),
-        helper: "Verified or settled",
-        icon: CheckCircle2,
-        color: "#10B981",
-        bg: "#ECFDF5",
-      },
-      {
-        label: "Pending",
-        value: pending.toLocaleString(),
-        helper: "Awaiting completion",
-        icon: Clock3,
-        color: "#F59E0B",
-        bg: "#FFFBEB",
-      },
-      {
-        label: "Volume",
-        value: formatCurrency(volume),
-        helper: `${failed} failed`,
-        icon: XCircle,
-        color: "#EF4444",
-        bg: "#FEF2F2",
-      },
-    ];
-  }, [filteredTransactions.length, transactions]);
+  const stats = useMemo(
+    () =>
+      buildTransactionSummaryCards(transactions, filteredTransactions.length),
+    [filteredTransactions.length, transactions],
+  );
 
   return (
     <div>
@@ -482,7 +450,64 @@ function getStatusBadge(status: string) {
   return "badge-info";
 }
 
-const S: Record<string, any> = {
+// Builds the summary cards so the ledger body stays easier to scan.
+function buildTransactionSummaryCards(
+  transactions: AdminTransaction[],
+  visibleCount: number,
+): TransactionSummaryCard[] {
+  const completed = transactions.filter((transaction) =>
+    ["completed", "success", "successful"].includes(
+      transaction.status.toLowerCase(),
+    ),
+  ).length;
+  const pending = transactions.filter(
+    (transaction) => transaction.status.toLowerCase() === "pending",
+  ).length;
+  const failed = transactions.filter(
+    (transaction) => transaction.status.toLowerCase() === "failed",
+  ).length;
+  const volume = transactions.reduce(
+    (total, transaction) => total + transaction.amount,
+    0,
+  );
+
+  return [
+    {
+      label: "Total Transactions",
+      value: transactions.length.toLocaleString(),
+      helper: `${visibleCount} visible`,
+      icon: Activity,
+      color: "#007AFF",
+      bg: "#EFF6FF",
+    },
+    {
+      label: "Completed",
+      value: completed.toLocaleString(),
+      helper: "Verified or settled",
+      icon: CheckCircle2,
+      color: "#10B981",
+      bg: "#ECFDF5",
+    },
+    {
+      label: "Pending",
+      value: pending.toLocaleString(),
+      helper: "Awaiting completion",
+      icon: Clock3,
+      color: "#F59E0B",
+      bg: "#FFFBEB",
+    },
+    {
+      label: "Volume",
+      value: formatCurrency(volume),
+      helper: `${failed} failed`,
+      icon: XCircle,
+      color: "#EF4444",
+      bg: "#FEF2F2",
+    },
+  ];
+}
+
+const S = {
   errorCard: {
     marginBottom: 16,
     color: "#991B1B",
@@ -638,4 +663,4 @@ const S: Record<string, any> = {
     background: "#F3F4F6",
     borderRadius: 8,
   },
-};
+} satisfies Record<string, StyleValue>;

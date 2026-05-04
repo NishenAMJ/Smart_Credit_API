@@ -44,6 +44,7 @@ type ApiOptions = RequestInit & {
 };
 
 // Centralizes request setup so auth handling and JSON parsing stay consistent across pages.
+// Sends authenticated admin requests and normalizes JSON error handling in one place.
 async function apiRequest<T>(
   path: string,
   options: ApiOptions = {},
@@ -622,6 +623,21 @@ export function getRevenueReport() {
   });
 }
 
+// Persists an authenticated admin password change immediately through the backend.
+export function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string,
+) {
+  return apiRequest<{ message: string }>("/auth/change-password", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({
+      currentPassword,
+      newPassword,
+    }),
+  });
+}
+
 // Gives the ads page a typed moderation data source.
 export function getAds(params?: CursorQueryParams) {
   const searchParams = new URLSearchParams();
@@ -727,7 +743,7 @@ export function escalateDispute(
   });
 }
 
-import { SharedLegalDocument, AgreementsResponse } from "../../legal/types";
+import type { AgreementsResponse } from "../../legal/types";
 
 export function getLegalAgreements() {
   return apiRequest<AgreementsResponse>("/legal/documents", {

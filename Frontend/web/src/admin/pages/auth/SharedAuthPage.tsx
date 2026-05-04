@@ -50,6 +50,7 @@ const initialRegisterForm = {
   kyc: initialKycForm,
 };
 
+// Restores the last auth session from local storage when the admin returns to the app.
 function loadStoredSession(): SharedSession | null {
   const rawValue = localStorage.getItem(STORAGE_KEY);
 
@@ -65,6 +66,7 @@ function loadStoredSession(): SharedSession | null {
   }
 }
 
+// Converts an uploaded file into a data URL for preview and submission flows.
 function toDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -76,6 +78,7 @@ function toDataUrl(file: File): Promise<string> {
   });
 }
 
+// Maps document type to the label shown in the KYC form.
 function getDocumentNumberLabel(documentType: string) {
   switch (documentType) {
     case "passport":
@@ -91,6 +94,7 @@ type SharedAuthPageProps = {
   initialMode: AuthMode;
 };
 
+// Handles the shared sign-in and sign-up flow for admin, lender, and borrower auth.
 export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   const navigate = useNavigate();
   const [mode, setMode] = useState<AuthMode>(initialMode);

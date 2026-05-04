@@ -10,6 +10,7 @@ const { buildMockFixtures } = require('./shared/mock-fixtures');
 async function seedAds() {
   const db = getDb();
   const fixtures = buildMockFixtures();
+  const adCount = fixtures.ads.length;
 
   await assertTopLevelDocsExist(
     db,
@@ -30,7 +31,7 @@ async function seedAds() {
 
   await commitSetWrites(db, writes, 'ads');
 
-  console.log('03 complete: ad documents created.');
+  console.log(`03 complete: ${adCount} ad documents created.`);
 }
 
 if (require.main === module) {

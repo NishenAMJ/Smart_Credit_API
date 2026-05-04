@@ -139,6 +139,39 @@ export class AdminService {
     return snapshot.data().count;
   }
 
+  // Collects the core user counts used across admin summaries.
+  private async getUserCounts() {
+    const usersCollection = this.db.collection('users');
+
+    const [
+      totalUsers,
+      pendingUsers,
+      suspendedUsers,
+      inactiveUsers,
+      admins,
+      borrowers,
+      lenders,
+    ] = await Promise.all([
+      this.getCount(usersCollection),
+      this.getCount(usersCollection.where('accountStatus', '==', 'pending')),
+      this.getCount(usersCollection.where('status', '==', 'suspended')),
+      this.getCount(usersCollection.where('status', '==', 'inactive')),
+      this.getCount(usersCollection.where('role', 'array-contains', 'admin')),
+      this.getCount(usersCollection.where('role', 'array-contains', 'borrower')),
+      this.getCount(usersCollection.where('role', 'array-contains', 'lender')),
+    ]);
+
+    return {
+      totalUsers,
+      pendingUsers,
+      suspendedUsers,
+      inactiveUsers,
+      admins,
+      borrowers,
+      lenders,
+    };
+  }
+
   // Returns all users after removing sensitive fields and applying optional filters.
   async getAllUsers(
     query: QueryUsersDto = {},
@@ -233,8 +266,7 @@ export class AdminService {
   // Aggregates user counts by status and role for admin reporting.
   async getUserStats() {
     try {
-      const usersCollection = this.db.collection('users');
-      const [
+      const {
         totalUsers,
         pendingUsers,
         suspendedUsers,
@@ -242,19 +274,7 @@ export class AdminService {
         admins,
         borrowers,
         lenders,
-      ] = await Promise.all([
-        this.getCount(usersCollection),
-        this.getCount(
-          usersCollection.where('accountStatus', '==', 'pending'),
-        ),
-        this.getCount(usersCollection.where('status', '==', 'suspended')),
-        this.getCount(usersCollection.where('status', '==', 'inactive')),
-        this.getCount(usersCollection.where('role', 'array-contains', 'admin')),
-        this.getCount(
-          usersCollection.where('role', 'array-contains', 'borrower'),
-        ),
-        this.getCount(usersCollection.where('role', 'array-contains', 'lender')),
-      ]);
+      } = await this.getUserCounts();
 
       const activeUsers = Math.max(
         totalUsers - pendingUsers - suspendedUsers - inactiveUsers,
