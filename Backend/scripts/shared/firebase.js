@@ -6,7 +6,8 @@ const path = require('path');
 const dotenv = require('dotenv');
 const admin = require('firebase-admin');
 
-const BACKEND_ROOT = path.resolve(__dirname, '..', '..', '..');
+const BACKEND_ROOT = path.resolve(__dirname, '..', '..');
+const PROJECT_ROOT = path.resolve(BACKEND_ROOT, '..');
 
 dotenv.config({ path: path.resolve(BACKEND_ROOT, '.env') });
 
@@ -23,6 +24,7 @@ function resolveServiceAccountPath() {
   const candidateDirs = [
     process.cwd(),
     BACKEND_ROOT,
+    PROJECT_ROOT,
   ];
 
   for (const dir of candidateDirs) {

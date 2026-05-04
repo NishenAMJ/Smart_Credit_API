@@ -18,15 +18,6 @@ async function seedTransactions() {
     '09-seed-transactions',
   );
 
-  await assertTopLevelDocsExist(
-    db,
-    'repayments',
-    Array.from(
-      new Set(fixtures.transactions.map((transaction) => transaction.paymentId)),
-    ),
-    '09-seed-transactions',
-  );
-
   const writes = fixtures.transactions.map((transaction) => ({
     ref: db.collection('transactions').doc(transaction.transactionId),
     data: transaction,

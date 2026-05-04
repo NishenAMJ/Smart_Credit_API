@@ -33,3 +33,21 @@ export type UploadedMedia = {
   folder?: string;
   uploadedAt: string;
 };
+
+export type DirectUploadIntent = {
+  category: MediaUploadCategory;
+  publicId: string;
+  folder: string;
+  resourceType: Exclude<MediaResourceType, 'auto'>;
+  deliveryType: 'upload' | 'authenticated';
+  uploadUrl: string;
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  expiresAt: string;
+};
+
+export type VerifiedUploadedMedia = UploadedMedia & {
+  mimeType: string;
+};
