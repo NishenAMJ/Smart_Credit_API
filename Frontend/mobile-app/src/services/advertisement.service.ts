@@ -1,122 +1,133 @@
-/** @format */
+import { api, getCurrentUserId } from './api';
 
-import { api, getCurrentUserId } from "./api";
+// 
 
-export const setLenderId = (_id: string) => {
-  // Compatibility no-op: the shared auth layer now owns the current user id.
+// The shared auth layer in api.ts now owns the current user id.
+// 
+
+
+export const setLenderId = (id: string) => {
+  // No-op: the shared auth layer now owns the current user id.
 };
 
 const getLenderId = (): string => getCurrentUserId();
 
 export const AdService = {
-  // ── Browse ads (for borrowers) ───────────────────
+
+  // Browse ads (for borrowers) 
+
   getAllAds: async (filters?: {
     location?: string;
     purpose?: string;
     search?: string;
     minAmount?: number;
     maxAmount?: number;
-  }): Promise<any[]> => {
+  }) => {
     const params = new URLSearchParams();
-    if (filters?.location) params.append("location", filters.location);
-    if (filters?.purpose) params.append("purpose", filters.purpose);
-    if (filters?.search) params.append("search", filters.search);
-    if (filters?.minAmount)
-      params.append("minAmount", String(filters.minAmount));
-    if (filters?.maxAmount)
-      params.append("maxAmount", String(filters.maxAmount));
+    if (filters?.location)  params.append('location',  filters.location);
+    if (filters?.purpose)   params.append('purpose',   filters.purpose);
+    if (filters?.search)    params.append('search',    filters.search);
+    if (filters?.minAmount) params.append('minAmount', String(filters.minAmount));
+    if (filters?.maxAmount) params.append('maxAmount', String(filters.maxAmount));
 
-    const query = params.toString() ? `?${params.toString()}` : "";
+    const query = params.toString() ? `?${params.toString()}` : '';
     return api.get(`/advertisements${query}`);
   },
 
-  // ── Get lender's own ads ─────────────────────────
-  getMyAds: async (): Promise<any[]> => {
+  // Get lender's own ads 
+
+  getMyAds: async () => {
     const lenderId = getLenderId();
     return api.get(`/advertisements/my?lenderId=${lenderId}`);
   },
 
-  // ── Get single ad ────────────────────────────────
+  // Get single ad 
+
   getAdById: async (adId: string) => {
     return api.get(`/advertisements/${adId}`);
   },
 
-  // ── Create ad ────────────────────────────────────
+  // Create ad 
+
   createAd: async (data: any) => {
     const lenderId = getLenderId();
     return api.post(`/advertisements?lenderId=${lenderId}`, data);
   },
 
-  // ── Update ad ────────────────────────────────────
+  // Update ad 
+
   updateAd: async (adId: string, data: any) => {
     const lenderId = getLenderId();
     return api.patch(`/advertisements/${adId}?lenderId=${lenderId}`, data);
   },
 
-  // ── Soft delete ad ───────────────────────────────
+  // Soft delete ad 
+
   deleteAd: async (adId: string) => {
     const lenderId = getLenderId();
     return api.delete(`/advertisements/${adId}?lenderId=${lenderId}`);
   },
 
-  // ── Pause ad ─────────────────────────────────────
+  // Pause ad 
+
   pauseAd: async (adId: string) => {
     const lenderId = getLenderId();
     return api.patch(`/advertisements/${adId}/pause?lenderId=${lenderId}`);
   },
 
-  // ── Activate ad ──────────────────────────────────
+  // Activate ad 
+
   activateAd: async (adId: string) => {
     const lenderId = getLenderId();
     return api.patch(`/advertisements/${adId}/activate?lenderId=${lenderId}`);
   },
 
-  // ── Boost ad ─────────────────────────────────────
-  boostAd: async (
-    adId: string,
-    data: {
-      package: string;
-      amount: number;
-      paymentReference: string;
-    },
-  ) => {
+  // Boost ad 
+
+  boostAd: async (adId: string, data: {
+    package: string;
+    amount: number;
+    paymentReference: string;
+  }) => {
     const lenderId = getLenderId();
     return api.post(`/advertisements/${adId}/boost?lenderId=${lenderId}`, data);
   },
 
-  // ── Get boost packages ───────────────────────────
+  // Get boost packages 
+
   getBoostPackages: async () => {
-    return api.get("/advertisements/boost-packages");
+    return api.get('/advertisements/boost-packages');
   },
 
-  // ── Cancel boost ─────────────────────────────────
+  // Cancel boost 
+
   cancelBoost: async (adId: string) => {
     const lenderId = getLenderId();
-    return api.patch(
-      `/advertisements/${adId}/boost/cancel?lenderId=${lenderId}`,
-    );
+    return api.patch(`/advertisements/${adId}/boost/cancel?lenderId=${lenderId}`);
   },
 
-  // ── Analytics summary (all lender ads) ───────────
+  // Analytics summary (all lender ads) 
+
   getAnalyticsSummary: async () => {
     const lenderId = getLenderId();
     return api.get(`/advertisements/analytics/summary?lenderId=${lenderId}`);
   },
 
-  // ── Full analytics for one ad ─────────────────────
+  // Full analytics for one ad 
+
   getAdAnalytics: async (adId: string) => {
     const lenderId = getLenderId();
-    return api.get(
-      `/advertisements/${adId}/analytics/full?lenderId=${lenderId}`,
-    );
+    return api.get(`/advertisements/${adId}/analytics/full?lenderId=${lenderId}`);
   },
 
-  // ── Track view ───────────────────────────────────
+  // Track view 
+
   trackView: async (adId: string) => {
     return api.post(`/advertisements/${adId}/view`);
   },
 
-  // ── Track click ──────────────────────────────────
+  // Track click 
+
   trackClick: async (adId: string) => {
     return api.post(`/advertisements/${adId}/click`);
   },

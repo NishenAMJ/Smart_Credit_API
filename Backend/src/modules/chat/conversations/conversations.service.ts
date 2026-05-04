@@ -1,6 +1,6 @@
 /**
  * conversations.service.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ 
  * Handles conversation metadata stored in Firestore.
  *
  * LOCAL-FIRST NOTE:
@@ -22,11 +22,11 @@ import { COLLECTIONS, ConversationDoc } from '../common/types';
 
 @Injectable()
 export class ConversationsService {
-  constructor(private firebase: FirebaseService) {}
+  constructor(private firebase: FirebaseService) { }
 
   /**
    * getOrCreate
-   * ─────────────────────────────────────────────────────────────────────────
+   * 
    * Idempotent: returns existing conversation or creates a new one.
    * Uses a composite 'key' field (sorted IDs joined with '_') to avoid
    * Firestore's unsupported array equality query.

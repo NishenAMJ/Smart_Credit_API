@@ -1,6 +1,6 @@
 /**
  * chat.module.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ * 
  * Root module for the entire chat feature.
  *
  * LOCAL-FIRST NOTE:
@@ -34,4 +34,4 @@ import { GatewayModule } from './gateway/gateway.module';
     GatewayModule,
   ],
 })
-export class ChatModule {}
+export class ChatModule { }

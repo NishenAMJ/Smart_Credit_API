@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 
-// ── Firestore document shapes ─────────────────────────────────────────────────
+//  Firestore document shapes 
 
 export interface UserDoc {
   id: string;
@@ -47,7 +47,7 @@ export interface BlockDoc {
   createdAt: admin.firestore.Timestamp;
 }
 
-// ── Firestore collection paths ────────────────────────────────────────────────
+//  Firestore collection paths 
 
 export const COLLECTIONS = {
   USERS: 'users',

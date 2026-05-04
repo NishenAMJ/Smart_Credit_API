@@ -1,6 +1,7 @@
 /**
  * chatSocket.ts
- * ─────────────────────────────────────────────────────────────────────────────
+ * 
+
  * Real-time WebSocket client for the local-first chat system.
  *
  * Architecture:
@@ -10,7 +11,6 @@
  *   - UI components subscribe via on() and unsubscribe via off()
  *
  * TEMP AUTH:
- * Currently sends 'lender_004' as the userId in the socket handshake.
  * When real auth is ready, call chatSocket.connect(realUserId) after login.
  */
 
@@ -26,7 +26,8 @@ try {
   console.warn("[ChatSocket] socket.io-client not installed. Chat disabled.");
 }
 
-// ── Event type map ────────────────────────────────────────────────────────────
+// Event type map 
+
 
 export type SocketEventMap = {
   receiveMessage: Message;
@@ -49,7 +50,8 @@ export type SocketEventMap = {
   socketError: { error: string };
 };
 
-// ── ChatSocket class ──────────────────────────────────────────────────────────
+// ChatSocket class 
+
 
 class ChatSocket {
   private socket: any = null;
@@ -61,14 +63,15 @@ class ChatSocket {
    */
   private handlerMap = new Map<string, Map<Function, Function>>();
 
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
+  // Lifecycle 
+
 
   /**
    * connect
    * Call this on login. Connects to the NestJS WebSocket gateway.
    * userId is sent in the handshake so the backend can identify this socket.
    *
-   * @param userId  The logged-in user's ID (currently 'lender_004')
+   * @param userId  The logged-in user's ID.
    */
   connect(userId?: string) {
     if (this.socket?.connected) {
@@ -97,7 +100,8 @@ class ChatSocket {
       reconnectionAttempts: 5,
     });
 
-    // ── Core socket lifecycle events ────────────────────────────────────────
+    // Core socket lifecycle events 
+
 
     this.socket.on("connect", () => {
       console.log("[ChatSocket] Connected. Socket ID:", this.socket.id);
@@ -114,7 +118,8 @@ class ChatSocket {
       this._emit("socketError", { error: err?.message ?? "Unknown error" });
     });
 
-    // ── Incoming message — save to SQLite immediately ───────────────────────
+    // Incoming message — save to SQLite immediately 
+
     this.socket.on("receiveMessage", (message: Message) => {
       // 1. Persist to local SQLite (source of truth)
       localDatabase.insertMessage({ ...message, status: "delivered" });
@@ -139,7 +144,8 @@ class ChatSocket {
       });
     });
 
-    // ── Delivery acknowledgement — update local message status ──────────────
+    // Delivery acknowledgement — update local message status 
+
     this.socket.on(
       "messageDelivered",
       (data: {
@@ -153,23 +159,27 @@ class ChatSocket {
       },
     );
 
-    // ── Typing indicator ────────────────────────────────────────────────────
+    // Typing indicator 
+
     this.socket.on("userTyping", (data: SocketEventMap["userTyping"]) => {
       this._emit("userTyping", data);
     });
 
-    // ── Read receipt — update local status to 'read' ────────────────────────
+    // Read receipt — update local status to 'read' 
+
     this.socket.on("messageRead", (data: SocketEventMap["messageRead"]) => {
       localDatabase.updateMessageStatus(data.messageId, "read");
       this._emit("messageRead", data);
     });
 
-    // ── Presence ────────────────────────────────────────────────────────────
+    // Presence 
+
     this.socket.on("userOnline", (data: SocketEventMap["userOnline"]) => {
       this._emit("userOnline", data);
     });
 
-    // ── Failed message ──────────────────────────────────────────────────────
+    // Failed message 
+
     this.socket.on("messageFailed", (data: SocketEventMap["messageFailed"]) => {
       localDatabase.updateMessageStatus(data.messageId, "sending"); // keep as pending
       this._emit("messageFailed", data);
@@ -188,7 +198,8 @@ class ChatSocket {
     }
   }
 
-  // ── Room management ───────────────────────────────────────────────────────
+  // Room management 
+
 
   /** joinConversation — tells the backend you're actively viewing this chat */
   joinConversation(conversationId: string) {
@@ -200,7 +211,8 @@ class ChatSocket {
     this.socket?.emit("leaveConversation", { conversationId });
   }
 
-  // ── Message sending ───────────────────────────────────────────────────────
+  // Message sending 
+
 
   /**
    * sendMessage
@@ -225,19 +237,22 @@ class ChatSocket {
     return true;
   }
 
-  // ── Typing indicator ──────────────────────────────────────────────────────
+  // Typing indicator 
+
 
   sendTyping(conversationId: string, recipientId: string, isTyping: boolean) {
     this.socket?.emit("typing", { conversationId, recipientId, isTyping });
   }
 
-  // ── Read receipt ──────────────────────────────────────────────────────────
+  // Read receipt 
+
 
   markMessageRead(conversationId: string, messageId: string, senderId: string) {
     this.socket?.emit("markRead", { conversationId, messageId, senderId });
   }
 
-  // ── Event subscription ────────────────────────────────────────────────────
+  // Event subscription 
+
 
   /**
    * on — subscribe to a socket event.
@@ -266,7 +281,8 @@ class ChatSocket {
     this.handlerMap.get(event)?.delete(handler);
   }
 
-  // ── Internal emit ─────────────────────────────────────────────────────────
+  // Internal emit 
+
 
   /** _emit — calls all registered handlers for an internal event */
   private _emit<K extends keyof SocketEventMap>(
@@ -279,7 +295,8 @@ class ChatSocket {
     }
   }
 
-  // ── Status helpers ────────────────────────────────────────────────────────
+  // Status helpers 
+
 
   get isConnected(): boolean {
     return this.socket?.connected ?? false;

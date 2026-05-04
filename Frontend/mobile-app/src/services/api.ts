@@ -37,7 +37,7 @@ export const api = _api as unknown as {
 
 export const API_BASE_URL = getApiBaseUrl();
 
-let _currentUserId = "lender_001";
+let _currentUserId: string | undefined;
 
 export function setAuthToken(token: string | null) {
   if (token) {
@@ -48,15 +48,11 @@ export function setAuthToken(token: string | null) {
 }
 
 export function getCurrentUserId(): string {
-  return _currentUserId;
+  return _currentUserId ?? "";
 }
 
 export function setCurrentUserId(userId: string | null | undefined) {
-  // Fall back to a default lender ID if nothing valid is passed in
-  _currentUserId =
-    typeof userId === "string" && userId.trim().length > 0
-      ? userId.trim()
-      : "lender_001";
+  _currentUserId = userId ?? undefined;
 }
 
 export type ApiResponse<T = any> = T;

@@ -3,9 +3,9 @@ import { BaseWsExceptionFilter, WsException } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
 
 /**
- * WsExceptionFilter
- * Catches all WebSocket handler exceptions and emits a structured
- * 'error' event back to the client instead of crashing the gateway.
+  WsExceptionFilter
+  Catches all WebSocket handler exceptions and emits a structured
+ 'error' event back to the client instead of crashing the gateway.
  */
 @Catch()
 export class WsExceptionFilter extends BaseWsExceptionFilter {
