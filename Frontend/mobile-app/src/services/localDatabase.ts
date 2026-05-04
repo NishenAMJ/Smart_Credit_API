@@ -192,6 +192,10 @@ export const localDatabase = {
       return;
     }
     try {
+      if (!conv || !conv.participant) {
+        console.warn("[LocalDB] Cannot upsert conversation: participant is undefined");
+        return;
+      }
       runSync(
         `INSERT OR REPLACE INTO conversations
          (id, participantId, participantName, participantAvatar, isOnline, lastMessageText,
@@ -200,7 +204,7 @@ export const localDatabase = {
         [
           conv.id,
           conv.participant.id,
-          conv.participant.displayName,
+          conv.participant.displayName ?? conv.participant.username ?? "Unknown",
           conv.participant.avatarUrl ?? null,
           conv.participant.isOnline ? 1 : 0,
           conv.lastMessage?.text ?? null,

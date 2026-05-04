@@ -120,12 +120,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleConnection(client: Socket) {
     /**
      * Auth: the mobile app sends userId in socket handshake.
-     * In the future, replace this with a real JWT verification:
-     *   const token = client.handshake.auth?.token;
-     *   const payload = this.jwtService.verify(token);
-     *   const userId = payload.sub;
-     *
-     * For now: userId is passed directly (matches lender_004 placeholder).
+     * When real JWT auth is wired up, verify the token here.
      */
     const userId =
       client.handshake.auth?.userId ??

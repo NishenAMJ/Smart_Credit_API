@@ -9,8 +9,7 @@
  *   PATCH /:id/mute            — toggle mute
  *   DELETE /:id                — delete conversation
  *
- * Auth: temporarily uses lender_004 via x-user-id header.
- * Replace @CurrentUser() extraction logic with real JWT when auth is ready.
+ * Auth: Uses the @CurrentUser() decorator to extract identity.
  */
 import {
   Controller,

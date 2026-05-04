@@ -3,9 +3,7 @@ import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 /**
  * @CurrentUser() — HTTP
  * Extracts userId from req.user.id (set by JWT guard) or
- * falls back to x-user-id header (used for temporary lender_004 auth).
- *
- * TEMP AUTH: Currently the frontend sends 'lender_004' as x-user-id.
+ * falls back to x-user-id header for development/legacy support.
  * When real JWT auth is wired up, req.user.id will take over automatically.
  */
 export const CurrentUser = createParamDecorator(
