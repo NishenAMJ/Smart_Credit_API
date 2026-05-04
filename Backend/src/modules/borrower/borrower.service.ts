@@ -1112,7 +1112,7 @@ export class BorrowerService {
     const preferredAmount =
       typeof amount === 'number' && amount > 0
         ? amount
-        : loan.monthlyInstallment || BORROWER_DEFAULTS.REPAYMENT_AMOUNT;
+        : loan.monthlyInstallment || 0;
 
     const safeAmount = Math.min(preferredAmount, loan.outstandingBalance);
     const now = Date.now();
