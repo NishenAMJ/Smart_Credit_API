@@ -10,6 +10,7 @@ import {
   fetchAnalyticsOverview,
 } from "../lib/analytics-api";
 import type { LenderSession } from "../lib/lender-session";
+import type { DefaultAnalyticsRange } from "../lib/lender-settings-api";
 
 const RANGE_OPTIONS = [
   { key: "30d", label: "30 Days" },
@@ -120,11 +121,15 @@ function StatusBreakdown({ data }: { data: AnalyticsBreakdownPoint[] }) {
 
 type AnalyticsPageProps = {
   session: LenderSession;
+  defaultRange: DefaultAnalyticsRange;
 };
 
-export default function AnalyticsPage({ session }: AnalyticsPageProps) {
+export default function AnalyticsPage({
+  session,
+  defaultRange,
+}: AnalyticsPageProps) {
   const [selectedRange, setSelectedRange] =
-    useState<(typeof RANGE_OPTIONS)[number]["key"]>("90d");
+    useState<(typeof RANGE_OPTIONS)[number]["key"]>(defaultRange);
   const [overview, setOverview] = useState<AnalyticsOverviewResponse | null>(
     null,
   );
@@ -136,6 +141,13 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
   );
   const [isDrilldownLoading, setIsDrilldownLoading] = useState(false);
   const [drilldownError, setDrilldownError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedRange(defaultRange);
+    setDrilldownType(null);
+    setDrilldown(null);
+    setDrilldownError(null);
+  }, [defaultRange, session.lenderId]);
 
   useEffect(() => {
     let isMounted = true;

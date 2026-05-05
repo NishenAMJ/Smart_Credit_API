@@ -7,13 +7,13 @@ import type { LenderSession } from "../lib/lender-session";
 import {
   fetchLoanLedgerDetails,
   type LoanLedgerDetailsResponse,
-  fetchRecentTransactions,
+  fetchPayments,
   recordInstallmentPayment,
-  type RecentTransactionItem,
-  type RecentTransactionsResponse,
-} from "../lib/recent-transactions-api";
+  type PaymentItem,
+  type PaymentsResponse,
+} from "../lib/payments-api";
 
-type RecentTransactionsPageProps = {
+type PaymentsPageProps = {
   session: LenderSession;
 };
 
@@ -77,10 +77,10 @@ function getStatusBadgeClass(value: string): string {
   return "badge-gray";
 }
 
-export default function RecentTransactionsPage({
+export default function PaymentsPage({
   session,
-}: RecentTransactionsPageProps) {
-  const [response, setResponse] = useState<RecentTransactionsResponse | null>(
+}: PaymentsPageProps) {
+  const [response, setResponse] = useState<PaymentsResponse | null>(
     null,
   );
   const [isListLoading, setIsListLoading] = useState(true);
@@ -88,14 +88,14 @@ export default function RecentTransactionsPage({
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summary, setSummary] = useState<
-    RecentTransactionsResponse["summary"] | null
+    PaymentsResponse["summary"] | null
   >(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
   const [selectedTransaction, setSelectedTransaction] =
-    useState<RecentTransactionItem | null>(null);
+    useState<PaymentItem | null>(null);
   const [detailSection, setDetailSection] = useState<DetailSection>("loan");
   const [borrowerDetails, setBorrowerDetails] =
     useState<BorrowerDetails | null>(null);
@@ -124,7 +124,7 @@ export default function RecentTransactionsPage({
 
     try {
       const normalizedSearch = options?.search ?? debouncedSearchQuery;
-      const data = await fetchRecentTransactions({
+      const data = await fetchPayments({
         pageSize: PAGE_SIZE,
         cursor: options?.cursor ?? activeCursor,
         includeSummary: false,
@@ -136,7 +136,7 @@ export default function RecentTransactionsPage({
       setListError(
         loadError instanceof Error
           ? loadError.message
-          : "Failed to load recent transactions.",
+          : "Failed to load payments.",
       );
     } finally {
       setIsListLoading(false);
@@ -173,7 +173,7 @@ export default function RecentTransactionsPage({
         setIsListLoading(true);
         setListError(null);
 
-        const data = await fetchRecentTransactions({
+        const data = await fetchPayments({
           pageSize: PAGE_SIZE,
           cursor: activeCursor,
           includeSummary: false,
@@ -189,7 +189,7 @@ export default function RecentTransactionsPage({
           setListError(
             loadError instanceof Error
               ? loadError.message
-              : "Failed to load recent transactions.",
+              : "Failed to load payments.",
           );
         }
       } finally {
@@ -218,7 +218,7 @@ export default function RecentTransactionsPage({
         setIsSummaryLoading(true);
         setSummaryError(null);
 
-        const data = await fetchRecentTransactions({
+        const data = await fetchPayments({
           pageSize: PAGE_SIZE,
           includeSummary: true,
           includeSearchCount: false,
@@ -300,7 +300,7 @@ export default function RecentTransactionsPage({
     };
   }, [selectedTransaction, session.lenderId]);
 
-  function openLoanSection(transaction: RecentTransactionItem) {
+  function openLoanSection(transaction: PaymentItem) {
     setSelectedTransaction(transaction);
     setDetailSection("loan");
     setBorrowerDetails(null);
@@ -317,7 +317,7 @@ export default function RecentTransactionsPage({
     });
   }
 
-  function openBorrowerSection(transaction: RecentTransactionItem) {
+  function openBorrowerSection(transaction: PaymentItem) {
     setSelectedTransaction(transaction);
     setDetailSection("borrower");
     setBorrowerDetails(null);
@@ -390,7 +390,7 @@ export default function RecentTransactionsPage({
       try {
         setIsSummaryLoading(true);
         setSummaryError(null);
-        const summaryData = await fetchRecentTransactions({
+        const summaryData = await fetchPayments({
           pageSize: PAGE_SIZE,
           includeSummary: true,
           includeSearchCount: false,
@@ -466,7 +466,7 @@ export default function RecentTransactionsPage({
         <header className="page-header">
           <div>
             <p className="eyebrow">Lender cash flow</p>
-            <h1 className="page-title">Loans</h1>
+            <h1 className="page-title">Payments</h1>
             <p className="page-subtitle">
               Review your loan activity ledger with lender-owned payments,
               installment progress, and remaining balances in one place.

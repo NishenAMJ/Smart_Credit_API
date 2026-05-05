@@ -4,7 +4,7 @@ import { SettingsIcon } from "lucide-react";
 
 type LenderView =
   | "dashboard"
-  | "recent-transactions"
+  | "payments"
   | "analytics"
   | "active-ads-requests"
   | "create-ad"
@@ -130,7 +130,7 @@ function SidebarSettingsIcon() {
 
 const navItems: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: DashboardIcon },
-  { id: "recent-transactions", label: "Payments", icon: TransactionsIcon },
+  { id: "payments", label: "Payments", icon: TransactionsIcon },
   { id: "analytics", label: "Analytics", icon: AnalyticsIcon },
   { id: "create-ad", label: "Create Ad", icon: CreateAdIcon },
   { id: "agreements", label: "Agreements", icon: AgreementsIcon },

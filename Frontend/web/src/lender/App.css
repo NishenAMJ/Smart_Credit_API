@@ -1440,6 +1440,89 @@
   gap: var(--spacing-4);
 }
 
+.settings-card--collapsible {
+  gap: var(--spacing-4);
+}
+
+.settings-card__toggle {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-card__toggle:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.35);
+  outline-offset: 6px;
+  border-radius: var(--radius-xl);
+}
+
+.settings-card__toggle-copy {
+  min-width: 0;
+}
+
+.settings-card__toggle-copy .section-title,
+.settings-card__toggle-copy .section-subtitle {
+  margin: 0;
+}
+
+.settings-card__toggle-copy .section-subtitle {
+  margin-top: 8px;
+}
+
+.settings-card__toggle-side {
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--spacing-3);
+  flex-shrink: 0;
+}
+
+.settings-card__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--color-text-secondary);
+  transition:
+    transform 180ms ease,
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.settings-card__toggle:hover .settings-card__chevron,
+.settings-card__toggle:focus-visible .settings-card__chevron {
+  color: var(--color-primary);
+  background: rgba(240, 253, 250, 0.96);
+  border-color: rgba(15, 118, 110, 0.18);
+}
+
+.settings-card__chevron--open {
+  transform: rotate(180deg);
+}
+
+.settings-card__chevron svg {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-card__body {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
 .settings-card__meta {
   margin: 0;
   color: var(--color-text-secondary);
@@ -3075,11 +3158,18 @@
   .analytics-card__header,
   .create-ad-preview-card__top,
   .settings-card__header,
+  .settings-card__toggle,
   .settings-toggle-row,
   .notifications-toolbar,
   .notifications-item {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .settings-card__toggle-side {
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .header-date {

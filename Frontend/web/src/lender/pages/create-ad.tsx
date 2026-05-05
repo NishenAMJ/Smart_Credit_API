@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { LenderSession } from "../lib/lender-session";
+import type { LenderSettings } from "../lib/lender-settings-api";
 import {
   createLenderAd,
   fetchLenderAds,
@@ -8,6 +9,7 @@ import {
 
 type CreateAdPageProps = {
   session: LenderSession;
+  settings: LenderSettings;
 };
 
 type AdDraft = {
@@ -42,7 +44,10 @@ function getStorageKey(lenderId: string): string {
   return `smart-credit:create-ad-draft:${lenderId}`;
 }
 
-function parseStoredDraft(value: string | null): AdDraft | null {
+function parseStoredDraft(
+  value: string | null,
+  fallbackDraft: AdDraft,
+): AdDraft | null {
   if (!value) {
     return null;
   }
@@ -58,43 +63,43 @@ function parseStoredDraft(value: string | null): AdDraft | null {
       headline:
         typeof parsed.headline === "string"
           ? parsed.headline
-          : DEFAULT_DRAFT.headline,
+          : fallbackDraft.headline,
       minAmount:
         typeof parsed.minAmount === "string"
           ? parsed.minAmount
-          : DEFAULT_DRAFT.minAmount,
+          : fallbackDraft.minAmount,
       maxAmount:
         typeof parsed.maxAmount === "string"
           ? parsed.maxAmount
-          : DEFAULT_DRAFT.maxAmount,
+          : fallbackDraft.maxAmount,
       interestRate:
         typeof parsed.interestRate === "string"
           ? parsed.interestRate
-          : DEFAULT_DRAFT.interestRate,
+          : fallbackDraft.interestRate,
       tenureMonths:
         typeof parsed.tenureMonths === "string"
           ? parsed.tenureMonths
-          : DEFAULT_DRAFT.tenureMonths,
+          : fallbackDraft.tenureMonths,
       borrowerFocus:
         typeof parsed.borrowerFocus === "string"
           ? parsed.borrowerFocus
-          : DEFAULT_DRAFT.borrowerFocus,
+          : fallbackDraft.borrowerFocus,
       processingTime:
         typeof parsed.processingTime === "string"
           ? parsed.processingTime
-          : DEFAULT_DRAFT.processingTime,
+          : fallbackDraft.processingTime,
       repaymentStyle:
         typeof parsed.repaymentStyle === "string"
           ? parsed.repaymentStyle
-          : DEFAULT_DRAFT.repaymentStyle,
+          : fallbackDraft.repaymentStyle,
       requirements:
         typeof parsed.requirements === "string"
           ? parsed.requirements
-          : DEFAULT_DRAFT.requirements,
+          : fallbackDraft.requirements,
       supportNote:
         typeof parsed.supportNote === "string"
           ? parsed.supportNote
-          : DEFAULT_DRAFT.supportNote,
+          : fallbackDraft.supportNote,
     };
   } catch {
     return null;
@@ -137,12 +142,48 @@ function buildOfferSummary(draft: AdDraft): string {
   return `${draft.processingTime}. ${draft.repaymentStyle}. ${draft.supportNote}`;
 }
 
-export default function CreateAdPage({ session }: CreateAdPageProps) {
+function formatStarterBorrowerFocus(settings: LenderSettings): string {
+  const purposes = settings.lendingDefaults.preferredPurposes.join(", ");
+  const regions = settings.lendingDefaults.preferredRegions.join(", ");
+
+  if (purposes && regions) {
+    return `Borrowers seeking ${purposes} support in ${regions} with stable monthly cash flow`;
+  }
+
+  if (purposes) {
+    return `Borrowers seeking ${purposes} support with stable monthly cash flow`;
+  }
+
+  if (regions) {
+    return `Borrowers based in ${regions} with stable monthly cash flow`;
+  }
+
+  return DEFAULT_DRAFT.borrowerFocus;
+}
+
+function buildStarterDraft(settings: LenderSettings): AdDraft {
+  return {
+    ...DEFAULT_DRAFT,
+    minAmount: String(settings.lendingDefaults.defaultMinAmount),
+    maxAmount: String(settings.lendingDefaults.defaultMaxAmount),
+    interestRate: String(settings.lendingDefaults.defaultInterestRate),
+    tenureMonths: String(settings.lendingDefaults.defaultMaxTenureMonths),
+    borrowerFocus: formatStarterBorrowerFocus(settings),
+    processingTime: `Approval review within ${settings.lendingDefaults.defaultResponseTimeHours} hour(s)`,
+  };
+}
+
+export default function CreateAdPage({
+  session,
+  settings,
+}: CreateAdPageProps) {
+  const starterDraft = useMemo(() => buildStarterDraft(settings), [settings]);
   const [draft, setDraft] = useState<AdDraft>(
     () =>
       parseStoredDraft(
         window.localStorage.getItem(getStorageKey(session.lenderId)),
-      ) ?? DEFAULT_DRAFT,
+        starterDraft,
+      ) ?? starterDraft,
   );
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
@@ -169,6 +210,15 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
     const timeout = window.setTimeout(() => setPublishMessage(null), 3200);
     return () => window.clearTimeout(timeout);
   }, [publishMessage]);
+
+  useEffect(() => {
+    setDraft(
+      parseStoredDraft(
+        window.localStorage.getItem(getStorageKey(session.lenderId)),
+        starterDraft,
+      ) ?? starterDraft,
+    );
+  }, [session.lenderId, starterDraft]);
 
   useEffect(() => {
     let isMounted = true;
@@ -224,9 +274,9 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
   }
 
   function handleResetDraft() {
-    setDraft(DEFAULT_DRAFT);
+    setDraft(starterDraft);
     window.localStorage.removeItem(getStorageKey(session.lenderId));
-    setSaveMessage("Draft reset to the starter version.");
+    setSaveMessage("Draft reset to your lender defaults.");
   }
 
   async function handlePublishAd() {
