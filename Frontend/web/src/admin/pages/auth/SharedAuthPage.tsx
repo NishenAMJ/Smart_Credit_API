@@ -107,8 +107,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   const [infoMessage, setInfoMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const registerRoleLabel =
-    registerForm.role === "borrower" ? "borrower" : "lender";
+  const registerRoleLabel = "lender";
 
   const sessionSummary = useMemo(() => {
     if (!session) {
@@ -308,13 +307,13 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
         email: registerForm.email.trim(),
         phone: registerForm.phone.trim(),
         password: registerForm.password,
-        role: registerForm.role,
+        role: "lender",
       });
 
       const authResponse = await loginWithRole(
         registerForm.email.trim(),
         registerForm.password,
-        registerForm.role === "lender" ? "lender" : undefined,
+        "lender",
       );
 
       await submitKyc(authResponse.accessToken, {
@@ -414,15 +413,15 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
           </h1>
           <p>
             Sign in with your credentials and let the backend confirm the right
-            access level for your account. Public signup stays available only
-            for lenders and borrowers.
+            access level for your account. Public signup on the web app is for
+            lenders only.
           </p>
         </div>
 
         <div className="shared-auth-stat-row">
           <div className="shared-auth-stat-card">
             <strong>Role based</strong>
-            <span>Admin, lender, or borrower</span>
+            <span>Admin and lender access</span>
           </div>
           <div className="shared-auth-stat-card">
             <strong>Step 2 KYC</strong>
@@ -600,31 +599,6 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                     <p>Submit identity evidence.</p>
                   </div>
                 </div>
-              </div>
-
-              <div className="shared-auth-field-card">
-                <label className="shared-auth-field">
-                  <span>Create account for</span>
-                  <div className="shared-auth-role-chip-row">
-                    {(["lender", "borrower"] as PublicSignupRole[]).map(
-                      (role) => (
-                        <button
-                          key={role}
-                          type="button"
-                          className={`shared-auth-role-chip ${registerForm.role === role ? "active" : ""}`}
-                          onClick={() =>
-                            setRegisterForm((current) => ({
-                              ...current,
-                              role,
-                            }))
-                          }
-                        >
-                          {role.charAt(0).toUpperCase() + role.slice(1)}
-                        </button>
-                      ),
-                    )}
-                  </div>
-                </label>
               </div>
 
               {registerStep === "account" ? (

@@ -1,5 +1,6 @@
 import { useEffect, useState, type JSX } from "react";
 import type { LenderSession } from "../../lib/lender-session";
+import { SettingsIcon } from "lucide-react";
 
 type LenderView =
   | "dashboard"
@@ -123,14 +124,20 @@ function AgreementsIcon() {
   );
 }
 
+function SidebarSettingsIcon() {
+  return <SettingsIcon size={20} strokeWidth={1.8} />;
+}
+
 const navItems: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: DashboardIcon },
   { id: "recent-transactions", label: "Payments", icon: TransactionsIcon },
   { id: "analytics", label: "Analytics", icon: AnalyticsIcon },
   { id: "create-ad", label: "Create Ad", icon: CreateAdIcon },
   { id: "agreements", label: "Agreements", icon: AgreementsIcon },
+  { id: "settings", label: "Settings", icon: SidebarSettingsIcon }, 
 ];
 
+//Used to save sidebar collapsed state, Persists even after refresh
 const SIDEBAR_COLLAPSE_STORAGE_KEY = "smart-credit:lender-sidebar-collapsed";
 
 function LogoutIcon() {
