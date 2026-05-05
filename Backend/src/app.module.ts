@@ -12,7 +12,7 @@ import { LenderNotificationsModule } from './modules/lender/lender-notifications
 import { LenderProfileModule } from './modules/lender/lender-profile/lender-profile.module';
 import { LenderSettingsModule } from './modules/lender/lender-settings/lender-settings.module';
 import { LoanRequestsModule } from './modules/lender/loan-requests/loan-requests.module';
-import { RecentTransactionsModule } from './modules/lender/recent-transactions/recent-transactions.module';
+import { PaymentsModule } from './modules/lender/payments/payments.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { LegalModule } from './modules/legal/legal.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
@@ -40,7 +40,7 @@ import { AdsModule } from './modules/ads/ads.module';
     LenderProfileModule,
     LenderSettingsModule,
     LoanRequestsModule,
-    RecentTransactionsModule,
+    PaymentsModule,
     AdminModule,
     LegalModule,
     TransactionsModule,

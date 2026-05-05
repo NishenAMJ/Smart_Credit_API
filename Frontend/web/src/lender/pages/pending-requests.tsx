@@ -11,9 +11,8 @@ import {
 
 type PendingRequestsPageProps = {
   session: LenderSession;
+  pageSize: number;
 };
-
-const API_LIMIT = 30;
 const currencyFormatter = new Intl.NumberFormat("en-LK", {
   style: "currency",
   currency: "LKR",
@@ -73,6 +72,7 @@ function getStatusBadgeClass(value: string): string {
 
 export default function PendingRequestsPage({
   session,
+  pageSize,
 }: PendingRequestsPageProps) {
   const [response, setResponse] = useState<PendingRequestsResponse | null>(
     null,
@@ -93,7 +93,7 @@ export default function PendingRequestsPage({
     try {
       setIsLoading(true);
       setError(null);
-      const data = await fetchPendingRequests(API_LIMIT);
+      const data = await fetchPendingRequests(pageSize);
       setResponse(data);
 
       if (typeof nextSelectedRequestId === "string") {
@@ -116,7 +116,7 @@ export default function PendingRequestsPage({
 
   useEffect(() => {
     void loadRequests();
-  }, [session.lenderId]);
+  }, [pageSize, session.lenderId]);
 
   useEffect(() => {
     setDecisionNotes("");

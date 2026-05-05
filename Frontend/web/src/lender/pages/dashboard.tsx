@@ -11,8 +11,6 @@ import {
   fetchDashboardSummary,
 } from "../lib/dashboard-api";
 import type { LenderSession } from "../lib/lender-session";
-
-const ITEMS_PER_PAGE = 8;
 const currencyFormatter = new Intl.NumberFormat("en-LK", {
   style: "currency",
   currency: "LKR",
@@ -61,6 +59,7 @@ function getMetricTone(index: number): string {
 type DashboardPageProps = {
   session: LenderSession;
   onNavigate: (view: LenderView) => void;
+  borrowerPageSize: number;
 };
 
 type DashboardQuickAction = {
@@ -139,6 +138,7 @@ function DashboardQuickActionIcon({
 export default function DashboardPage({
   session,
   onNavigate,
+  borrowerPageSize,
 }: DashboardPageProps) {
   const [borrowers, setBorrowers] = useState<DashboardBorrower[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -199,7 +199,7 @@ export default function DashboardPage({
     setPageCursors([null]);
     setBorrowers([]);
     setHasMoreBorrowers(false);
-  }, [session.lenderId]);
+  }, [borrowerPageSize, session.lenderId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -216,7 +216,7 @@ export default function DashboardPage({
         setIsBorrowersLoading(true);
         setBorrowersError(null);
         const borrowersData = await fetchDashboardBorrowers(
-          ITEMS_PER_PAGE,
+          borrowerPageSize,
           activeCursor,
           borrowerSearch,
         );
@@ -254,7 +254,7 @@ export default function DashboardPage({
     return () => {
       isMounted = false;
     };
-  }, [activeCursor, currentPage, borrowerSearch, session.lenderId]);
+  }, [activeCursor, borrowerPageSize, currentPage, borrowerSearch, session.lenderId]);
 
   useEffect(() => {
     if (!selectedBorrowerId) {

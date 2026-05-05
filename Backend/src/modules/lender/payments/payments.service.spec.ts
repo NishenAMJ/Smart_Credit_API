@@ -1,5 +1,5 @@
 import * as firestoreQueryUtils from '../../../firebase/firestore-query.utils';
-import { RecentTransactionsService } from './recent-transactions.service';
+import { PaymentsService } from './payments.service';
 
 function createDoc(id: string, data: Record<string, unknown>, path: string) {
   return {
@@ -40,7 +40,7 @@ function createContext(loanIds: string[]) {
   } as any;
 }
 
-describe('RecentTransactionsService', () => {
+describe('PaymentsService', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -81,7 +81,7 @@ describe('RecentTransactionsService', () => {
       collection: jest.fn(),
     };
     const firebaseService = { getDb: () => db } as any;
-    const service = new RecentTransactionsService(firebaseService);
+    const service = new PaymentsService(firebaseService);
 
     jest
       .spyOn(firestoreQueryUtils, 'orderByDateAndId')
@@ -131,7 +131,7 @@ describe('RecentTransactionsService', () => {
       collection: jest.fn(),
     };
     const firebaseService = { getDb: () => db } as any;
-    const service = new RecentTransactionsService(firebaseService);
+    const service = new PaymentsService(firebaseService);
 
     jest
       .spyOn(firestoreQueryUtils, 'orderByDateAndId')
@@ -183,7 +183,7 @@ describe('RecentTransactionsService', () => {
       collection: jest.fn(),
     };
     const firebaseService = { getDb: () => db } as any;
-    const service = new RecentTransactionsService(firebaseService);
+    const service = new PaymentsService(firebaseService);
 
     jest
       .spyOn(firestoreQueryUtils, 'orderByDateAndId')
@@ -250,7 +250,7 @@ describe('RecentTransactionsService', () => {
       }),
     };
     const firebaseService = { getDb: () => db } as any;
-    const service = new RecentTransactionsService(firebaseService);
+    const service = new PaymentsService(firebaseService);
 
     const result = await (service as any).getRecentPaymentsPage(
       createContext(['loan_9']),
@@ -315,7 +315,7 @@ describe('RecentTransactionsService', () => {
       }),
     };
     const firebaseService = { getDb: () => db } as any;
-    const service = new RecentTransactionsService(firebaseService);
+    const service = new PaymentsService(firebaseService);
 
     const result = await (service as any).getRecentPaymentsPage(
       createContext(['loan_seed']),
@@ -337,7 +337,7 @@ describe('RecentTransactionsService', () => {
   });
 
   it('reuses the cached summary instead of rescanning history on each request', async () => {
-    const service = new RecentTransactionsService({ getDb: () => ({}) } as any);
+    const service = new PaymentsService({ getDb: () => ({}) } as any);
     const getAllRecentPayments = jest
       .spyOn(service as any, 'getAllRecentPayments')
       .mockResolvedValue([
@@ -388,7 +388,7 @@ describe('RecentTransactionsService', () => {
   });
 
   it('counts all matching payments for a searched loan id', async () => {
-    const service = new RecentTransactionsService({ getDb: () => ({}) } as any);
+    const service = new PaymentsService({ getDb: () => ({}) } as any);
     jest.spyOn(service as any, 'getAllRecentPayments').mockResolvedValue([
       {
         id: 'payment_1',
@@ -438,7 +438,7 @@ describe('RecentTransactionsService', () => {
   });
 
   it('skips summary and search count work when both are disabled', async () => {
-    const service = new RecentTransactionsService({ getDb: () => ({}) } as any);
+    const service = new PaymentsService({ getDb: () => ({}) } as any);
     jest
       .spyOn(service as any, 'getLenderContext')
       .mockResolvedValue(createContext(['loan_1']));
@@ -481,7 +481,7 @@ describe('RecentTransactionsService', () => {
       'getSearchResultCount',
     );
 
-    const result = await service.getRecentTransactions(
+    const result = await service.getPayments(
       'lender_001',
       15,
       null,

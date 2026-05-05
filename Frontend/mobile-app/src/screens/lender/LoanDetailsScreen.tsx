@@ -11,7 +11,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader, AlertBanner } from "../../components/lender";
-import { RecentTransactionsService } from "../../services/lender.service";
+import { PaymentsService } from "../../services/lender.service";
 
 /**
  * getLoanLedger API returns: LoanLedgerDetailsResponse
@@ -36,7 +36,7 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
     }
     (async () => {
       try {
-        const data = await RecentTransactionsService.getLoanLedger(loanId);
+        const data = await PaymentsService.getLoanLedger(loanId);
         setLedger(data);
       } catch (e: any) {
         setError(e?.response?.data?.message ?? "Failed to load loan details");
