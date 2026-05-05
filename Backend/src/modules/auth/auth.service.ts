@@ -24,6 +24,7 @@ import {
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SessionResponseDto } from './dto/session-response.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { UserDocument, UserRole, KycStatus, USER_ROLES } from './auth.types';
 
 @Injectable()
@@ -292,6 +293,39 @@ export class AuthService {
       accountStatus: user.accountStatus,
       kycStatus: user.kycStatus,
       user: this.toSafeUser(user, resolvedRole),
+    };
+  }
+
+  // Verifies the existing password before writing a fresh hash back to Firestore.
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
+    const user = await this.getRequiredUser(userId);
+    const currentPasswordMatches = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!currentPasswordMatches) {
+      throw new UnauthorizedException('Current password is incorrect.');
+    }
+
+    if (changePasswordDto.currentPassword === changePasswordDto.newPassword) {
+      throw new BadRequestException(
+        'New password must be different from the current password.',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(changePasswordDto.newPassword, 10);
+
+    await this.usersCollection.doc(userId).update({
+      passwordHash,
+      updatedAt: Timestamp.now(),
+    });
+
+    return {
+      message: 'Password updated successfully.',
     };
   }
 

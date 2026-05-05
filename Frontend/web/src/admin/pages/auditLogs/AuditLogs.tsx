@@ -81,6 +81,11 @@ const SEVERITY_META: Record<AuditSeverity, { color: string; bg: string }> = {
   critical: { color: "#991B1B", bg: "#FEE2E2" },
 };
 
+type StyleValue =
+  | CSSProperties
+  | ((disabled: boolean) => CSSProperties)
+  | ((color: string, bg: string) => CSSProperties);
+
 function splitDateTime(dateTime: string) {
   if (!dateTime || dateTime === "N/A") {
     return { date: "N/A", time: "" };
@@ -91,6 +96,7 @@ function splitDateTime(dateTime: string) {
 }
 
 // Keeps audit filtering and export logic close to the data it operates on.
+// Renders the admin audit log feed with severity filters and export support.
 export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [search, setSearch] = useState("");
@@ -516,7 +522,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, any> = {
+const S = {
   errorCard: {
     marginBottom: 16,
     color: "#991B1B",
@@ -703,4 +709,4 @@ const S: Record<string, any> = {
     background: "#F3F4F6",
     borderRadius: 8,
   },
-};
+} satisfies Record<string, StyleValue>;

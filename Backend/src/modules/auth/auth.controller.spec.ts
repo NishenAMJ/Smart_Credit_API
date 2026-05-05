@@ -11,6 +11,7 @@ describe('AuthController', () => {
     login: jest.Mock;
     getMe: jest.Mock;
     getSessionStatus: jest.Mock;
+    changePassword: jest.Mock;
     getDashboard: jest.Mock;
     getAdminDashboard: jest.Mock;
   };
@@ -21,6 +22,7 @@ describe('AuthController', () => {
       login: jest.fn(),
       getMe: jest.fn(),
       getSessionStatus: jest.fn(),
+      changePassword: jest.fn(),
       getDashboard: jest.fn(),
       getAdminDashboard: jest.fn(),
     };
@@ -94,6 +96,24 @@ describe('AuthController', () => {
       'user-1',
       'lender',
     );
+  });
+
+  it('delegates password changes to the auth service for the authenticated user', async () => {
+    const req = {
+      user: {
+        sub: 'admin-1',
+        email: 'admin@example.com',
+        role: 'admin',
+      },
+    } as AuthenticatedRequest;
+    const payload = {
+      currentPassword: 'OldPass123',
+      newPassword: 'NewPass123',
+    };
+
+    await controller.changePassword(req, payload);
+
+    expect(authService.changePassword).toHaveBeenCalledWith('admin-1', payload);
   });
 
   it('forces borrower and admin role-specific endpoints to call the matching service methods', async () => {

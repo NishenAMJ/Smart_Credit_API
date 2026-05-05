@@ -65,6 +65,7 @@ function iconButton(color: string, bg: string): CSSProperties {
 }
 
 // Keeps KYC review state and moderation actions together on one page.
+// Renders the admin KYC review queue and moderation actions.
 export default function KYCApprovals() {
   const [records, setRecords] = useState<KycRow[]>([]);
   const [search, setSearch] = useState("");

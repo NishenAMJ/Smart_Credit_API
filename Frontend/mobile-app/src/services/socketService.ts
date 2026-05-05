@@ -16,6 +16,7 @@
 
 import { localDatabase } from "./localDatabase";
 import { getCurrentUserId } from "./api";
+import { getApiBaseUrl } from "../api/base-url";
 import type { Message } from "../types/chat.types";
 
 let io: any;
@@ -87,7 +88,7 @@ class ChatSocket {
     const resolvedUserId = userId ?? getCurrentUserId();
 
     // Backend WebSocket URL — same host as REST API, no /api prefix
-    const WS_URL = "http://192.168.120.219:3000";
+    const WS_URL = getApiBaseUrl().replace(/\/api$/, "");
 
     this.socket = io(WS_URL, {
       auth: {

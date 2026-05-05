@@ -1,8 +1,5 @@
 import { fetchLenderApi, parseApiError } from "./api-client";
-import type {
-  SharedLegalDocument,
-  AgreementsResponse,
-} from "../../legal/types";
+import type { AgreementsResponse } from "../../legal/types";
 
 export const LenderAgreementsApi = {
   getLegalAgreements: async (): Promise<AgreementsResponse> => {

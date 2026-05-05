@@ -31,7 +31,7 @@ type Props = {
 };
 
 export default function ChatInfoScreen({ navigation, route }: Props) {
-  const { conversationId, participant, isMuted: initialMuted } = route.params;
+  const { conversationId, participant, isMuted: initialMuted } = (route.params as any) || {};
 
   const [isMuted, setIsMuted] = useState(initialMuted);
   const [togglingMute, setTogglingMute] = useState(false);
@@ -101,14 +101,16 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
         {/* Profile section */}
         <View style={styles.profileSection}>
           <Avatar
-            name={participant.displayName}
-            avatarUrl={participant.avatarUrl}
+            name={participant?.displayName ?? "Unknown"}
+            avatarUrl={participant?.avatarUrl}
             size={80}
             showOnline
-            isOnline={participant.isOnline}
+            isOnline={participant?.isOnline}
           />
-          <Text style={styles.profileName}>{participant.displayName}</Text>
-          <Text style={styles.profileHandle}>@{participant.username}</Text>
+          <Text style={styles.profileName}>{participant?.displayName ?? "Unknown User"}</Text>
+          <Text style={styles.profileHandle}>
+            {participant?.username ? `@${participant.username}` : ""}
+          </Text>
           <View style={styles.onlineRow}>
             <View
               style={[
@@ -189,7 +191,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
       {/* Block confirmation modal */}
       <ConfirmModal
         visible={showBlockModal}
-        title={`Block ${participant.displayName}?`}
+        title={`Block ${participant?.displayName ?? "this user"}?`}
         body="They won't be able to send you messages. You can unblock them anytime."
         confirmLabel="Block"
         confirmDanger

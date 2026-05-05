@@ -5,7 +5,6 @@ import {
   Eye,
   Check,
   X,
-  RotateCcw,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -14,14 +13,23 @@ import {
   getAdStats,
   getAds,
   rejectAd,
-  updateAdStatus,
   type AdminAd,
   type AdStatus,
 } from "../../lib/api";
 import { formatFirestoreDate } from "../../lib/admin-format";
-import { DEFAULT_AD_REJECTION_REASON } from "../../constants/admin-actions";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+
+type StyleValue =
+  | CSSProperties
+  | ((disabled: boolean) => CSSProperties)
+  | ((color: string, bg: string) => CSSProperties);
+
+type AdSummaryCard = {
+  label: string;
+  count: number;
+  color: string;
+};
 
 type LenderAdRow = {
   id: string;
@@ -77,7 +85,27 @@ function StatusBadge({ status }: { status: AdStatus }) {
   return <span className={className}>{status}</span>;
 }
 
+// Builds the ad summary cards so the moderation header stays readable.
+function buildAdSummaryCards(stats: {
+  all: number;
+  active: number;
+  approved: number;
+  pending: number;
+  rejected: number;
+  closed: number;
+}): AdSummaryCard[] {
+  return [
+    { label: "All Lender Ads", count: stats.all, color: "#007AFF" },
+    { label: "Active", count: stats.active, color: "#10B981" },
+    { label: "Approved", count: stats.approved, color: "#10B981" },
+    { label: "Pending", count: stats.pending, color: "#F59E0B" },
+    { label: "Rejected", count: stats.rejected, color: "#EF4444" },
+    { label: "Closed", count: stats.closed, color: "#6B7280" },
+  ];
+}
+
 // Keeps ad moderation state and actions together on one screen.
+// Renders the admin lender ads moderation page with filtering, paging, and actions.
 export default function LenderAds() {
   const [ads, setAds] = useState<LenderAdRow[]>([]);
   const [stats, setStats] = useState({
@@ -217,36 +245,7 @@ export default function LenderAds() {
     }
   }
 
-  // Reopens an approved or active ad when it needs another review.
-  async function handleMoveToPending(adId: string) {
-    try {
-      await updateAdStatus(adId, "pending", {
-        notes: "Moved back to pending review by admin",
-      });
-      syncAdStatus(adId, "pending");
-      await loadAdStats();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to move ad to pending.",
-      );
-    }
-  }
-
-  // Rejects an approved or active ad after a later complaint or policy issue.
-  async function handleMoveToRejected(adId: string) {
-    try {
-      await updateAdStatus(adId, "rejected", {
-        reason: DEFAULT_AD_REJECTION_REASON,
-      });
-      syncAdStatus(adId, "rejected");
-      await loadAdStats();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to move ad to rejected.",
-      );
-    }
-  }
-
+  // Only pending ads are actionable; reviewed ads become view-only records.
   function renderActions(ad: LenderAdRow) {
     return (
       <>
@@ -293,31 +292,6 @@ export default function LenderAds() {
             </button>
           </>
         )}
-        {(ad.status === "approved" || ad.status === "active") && (
-          <>
-            <button
-              style={S.iconButton("#F59E0B", "#FFFBEB")}
-              onClick={() => void handleMoveToPending(ad.id)}
-              title="Move to pending"
-              aria-label="Move lender ad to pending"
-            >
-              <RotateCcw size={14} color="#F59E0B" />
-            </button>
-            <button
-              style={S.iconButton("#EF4444", "#FEF2F2")}
-              onClick={() => void handleMoveToRejected(ad.id)}
-              title="Move to rejected"
-              aria-label="Move lender ad to rejected"
-            >
-              <X
-                size={14}
-                color="#EF4444"
-                strokeWidth={2.2}
-                style={S.iconGraphic}
-              />
-            </button>
-          </>
-        )}
       </>
     );
   }
@@ -341,14 +315,7 @@ export default function LenderAds() {
       )}
 
       <div style={S.summaryGrid}>
-        {[
-          { label: "All Lender Ads", count: stats.all, color: "#007AFF" },
-          { label: "Active", count: stats.active, color: "#10B981" },
-          { label: "Approved", count: stats.approved, color: "#10B981" },
-          { label: "Pending", count: stats.pending, color: "#F59E0B" },
-          { label: "Rejected", count: stats.rejected, color: "#EF4444" },
-          { label: "Closed", count: stats.closed, color: "#6B7280" },
-        ].map((item) => (
+        {buildAdSummaryCards(stats).map((item) => (
           <div key={item.label} className="card">
             <p style={S.cardLabel}>{item.label}</p>
             <p style={{ ...S.cardValue, color: item.color }}>
@@ -828,4 +795,4 @@ const S = {
     background: "#F3F4F6",
     borderRadius: 8,
   },
-} satisfies Record<string, CSSProperties | ((...args: any[]) => CSSProperties)>;
+} satisfies Record<string, StyleValue>;

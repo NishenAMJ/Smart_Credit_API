@@ -23,6 +23,7 @@ import {
   type UsersReportResponse,
 } from "../../lib/api";
 
+// Renders the admin analytics dashboard with reports and trend charts.
 export default function Analytics() {
   const navigate = useNavigate();
   const [usersReport, setUsersReport] = useState<

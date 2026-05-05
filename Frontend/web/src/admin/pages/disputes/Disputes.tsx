@@ -21,6 +21,17 @@ import { formatFirestoreDate } from "../../lib/admin-format";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
+type StyleValue =
+  | CSSProperties
+  | ((disabled: boolean) => CSSProperties)
+  | ((color: string, bg: string) => CSSProperties);
+
+type DisputeSummaryCard = {
+  label: string;
+  count: number;
+  color: string;
+};
+
 type DisputeRow = {
   id: string;
   disputeCode: string;
@@ -99,6 +110,24 @@ function PriorityBadge({ priority }: { priority: DisputePriority }) {
   return <span style={style}>{priority}</span>;
 }
 
+// Builds the dispute summary cards so the queue header stays compact.
+function buildDisputeSummaryCards(counts: {
+  all: number;
+  open: number;
+  inProgress: number;
+  escalated: number;
+  resolved: number;
+}): DisputeSummaryCard[] {
+  return [
+    { label: "All Disputes", count: counts.all, color: "#007AFF" },
+    { label: "Open", count: counts.open, color: "#F59E0B" },
+    { label: "In Progress", count: counts.inProgress, color: "#8B5CF6" },
+    { label: "Escalated", count: counts.escalated, color: "#EF4444" },
+    { label: "Resolved", count: counts.resolved, color: "#10B981" },
+  ];
+}
+
+// Renders the admin dispute review queue and resolution workflow.
 export default function Disputes() {
   const [disputes, setDisputes] = useState<DisputeRow[]>([]);
   const [selectedDispute, setSelectedDispute] = useState<DisputeRow | null>(
@@ -273,13 +302,7 @@ export default function Disputes() {
       )}
 
       <div style={S.summaryGrid}>
-        {[
-          { label: "All Disputes", count: counts.all, color: "#007AFF" },
-          { label: "Open", count: counts.open, color: "#F59E0B" },
-          { label: "In Progress", count: counts.inProgress, color: "#8B5CF6" },
-          { label: "Escalated", count: counts.escalated, color: "#EF4444" },
-          { label: "Resolved", count: counts.resolved, color: "#10B981" },
-        ].map((item) => (
+        {buildDisputeSummaryCards(counts).map((item) => (
           <div key={item.label} className="card">
             <p style={S.cardLabel}>{item.label}</p>
             <p style={{ ...S.cardValue, color: item.color }}>
@@ -828,4 +851,4 @@ const S = {
     background: "#F3F4F6",
     borderRadius: 8,
   },
-} satisfies Record<string, CSSProperties | ((...args: any[]) => CSSProperties)>;
+} satisfies Record<string, StyleValue>;

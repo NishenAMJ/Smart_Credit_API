@@ -18,11 +18,15 @@ import {
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirebaseService } from '../../../firebase/firebase.service';
-import { COLLECTIONS, ConversationDoc } from '../common/types';
+import { COLLECTIONS, ConversationDoc, UserDoc } from '../common/types';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class ConversationsService {
-  constructor(private firebase: FirebaseService) { }
+  constructor(
+    private firebase: FirebaseService,
+    private users: UsersService,
+  ) { }
 
   /**
    * getOrCreate
@@ -43,7 +47,8 @@ export class ConversationsService {
 
     if (!existing.empty) {
       const d = existing.docs[0];
-      return { id: d.id, ...d.data() } as ConversationDoc;
+      const doc = { id: d.id, ...d.data() } as ConversationDoc;
+      return this.mapParticipant(doc, userA);
     }
 
     const ref = await this.firebase.collection(COLLECTIONS.CONVERSATIONS).add({
@@ -56,7 +61,8 @@ export class ConversationsService {
     });
 
     const snap = await ref.get();
-    return { id: snap.id, ...snap.data() } as ConversationDoc;
+    const doc = { id: snap.id, ...snap.data() } as ConversationDoc;
+    return this.mapParticipant(doc, userA);
   }
 
   /**
@@ -71,10 +77,12 @@ export class ConversationsService {
       .orderBy('createdAt', 'desc')
       .get();
 
-    return snap.docs.map((d) => ({
+    const docs = snap.docs.map((d) => ({
       id: d.id,
       ...d.data(),
     })) as ConversationDoc[];
+
+    return Promise.all(docs.map((c) => this.mapParticipant(c, userId)));
   }
 
   /**
@@ -98,7 +106,37 @@ export class ConversationsService {
       throw new ForbiddenException('Not a participant in this conversation');
     }
 
-    return { ...data, id: snap.id };
+    return this.mapParticipant({ ...data, id: snap.id }, userId);
+  }
+
+  /**
+   * mapParticipant
+   * Helper to attach the 'other' participant's user info to the conversation.
+   */
+  private async mapParticipant(
+    conv: ConversationDoc,
+    currentUserId: string,
+  ): Promise<ConversationDoc> {
+    const otherId = conv.participantIds.find((id) => id !== currentUserId);
+    if (!otherId) return conv;
+
+    try {
+      const user = await this.users.findById(otherId);
+      return {
+        ...conv,
+        participant: {
+          id: user.id,
+          username: user.username || user.email || 'unknown',
+          displayName:
+            user.displayName || user.fullName || user.name || 'Unknown User',
+          avatarUrl: user.avatarUrl || null,
+          isOnline: !!user.isOnline,
+        },
+        unreadCount: conv.unreadCounts?.[currentUserId] || 0,
+      } as any;
+    } catch (e) {
+      return conv;
+    }
   }
 
   /**
