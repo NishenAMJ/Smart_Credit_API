@@ -528,8 +528,8 @@ export class KycService {
         }
 
         const document = {
+          ...(snapshot.data() as Omit<DocumentRecord, 'id'>),
           id: snapshot.id,
-          ...(snapshot.data() as DocumentRecord),
         } as DocumentRecord;
 
         if (document.category !== 'kyc' || document.status === 'deleted') {
@@ -607,8 +607,8 @@ export class KycService {
         }
 
         const document = {
+          ...(snapshot.data() as Omit<DocumentRecord, 'id'>),
           id: snapshot.id,
-          ...(snapshot.data() as DocumentRecord),
         } as DocumentRecord;
 
         if (document.category !== 'kyc' || document.status === 'deleted') {
