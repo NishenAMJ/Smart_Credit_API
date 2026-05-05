@@ -136,14 +136,19 @@ export default function LenderDashboardScreen({ navigation }: any) {
                     ? profile.fullName[0].toUpperCase()
                     : profile?.name
                       ? profile.name[0].toUpperCase()
-                      : "L"}
+                      : summaryData?.lenderName
+                        ? summaryData.lenderName[0].toUpperCase()
+                        : "L"}
                 </Text>
               </View>
             </TouchableOpacity>
           </View>
           <Text style={styles.headerGreeting}>Welcome back</Text>
           <Text style={styles.headerName}>
-            {profile?.fullName ?? profile?.name ?? "Lender"}
+            {profile?.fullName ??
+              profile?.name ??
+              summaryData?.lenderName ??
+              "Lender"}
           </Text>
         </View>
 

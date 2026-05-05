@@ -72,7 +72,7 @@ export default function LoanDetailsScreen({
       <View style={{ marginBottom: SPACING.lg }}>
         <Button
           onPress={() =>
-            navigation.navigate("LoanAgreement", {
+            navigation.navigate("Agreement", {
               initialLoanId: loan?.loanId,
             })
           }

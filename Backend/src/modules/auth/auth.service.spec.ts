@@ -244,6 +244,51 @@ describe('AuthService', () => {
     );
   });
 
+  it('updates the stored password hash after verifying the current password', async () => {
+    const user = buildUser({
+      uid: 'admin-1',
+      role: ['admin'],
+      passwordHash: 'stored-hash',
+    });
+    setStoredUser(user);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+
+    const response = await service.changePassword('admin-1', {
+      currentPassword: 'OldPass123',
+      newPassword: 'NewPass123',
+    });
+
+    expect(bcrypt.compare).toHaveBeenCalledWith('OldPass123', 'stored-hash');
+    expect(bcrypt.hash).toHaveBeenCalledWith('NewPass123', 10);
+    expect(existingDocRefs.get('admin-1')?.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        passwordHash: 'new-hash',
+        updatedAt: expect.any(Object),
+      }),
+    );
+    expect(response).toEqual({
+      message: 'Password updated successfully.',
+    });
+  });
+
+  it('rejects password changes when the current password is wrong', async () => {
+    const user = buildUser({
+      uid: 'admin-1',
+      role: ['admin'],
+      passwordHash: 'stored-hash',
+    });
+    setStoredUser(user);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+    await expect(
+      service.changePassword('admin-1', {
+        currentPassword: 'WrongPass123',
+        newPassword: 'NewPass123',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('accepts a legacy string role and returns admin correctly', async () => {
     const user = buildUser({
       uid: 'admin-1',

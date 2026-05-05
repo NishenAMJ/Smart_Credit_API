@@ -19,6 +19,7 @@ import {
   type UsersReportResponse,
 } from "../../lib/api";
 
+// Renders the admin dashboard overview, charts, and summary cards.
 export default function Dashboard() {
   const [dashboard, setDashboard] = useState<
     DashboardAnalyticsResponse["data"] | null
@@ -381,6 +382,7 @@ const S: Record<string, React.CSSProperties> = {
   },
 };
 
+// Returns the small legend dot used by the chart key.
 function legendDot(color: string): React.CSSProperties {
   return {
     display: "inline-block",

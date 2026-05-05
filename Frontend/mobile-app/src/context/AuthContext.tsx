@@ -22,7 +22,7 @@ import {
   getMobileSession,
   saveMobileSession,
 } from "../utils/auth.storage";
-import { setCurrentUserId } from "../services/api";
+import { setCurrentUserId, setAuthToken as setLenderAuthToken } from "../services/api";
 import type {
   AuthResponse,
   DashboardResponse,
@@ -88,6 +88,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     user: AuthResponse["user"],
   ) {
     setAuthToken(accessToken);
+    setLenderAuthToken(accessToken);
     setCurrentUserId(user?.uid);
     const nextSessionStatus = await getSession();
     const dashboardPromise =
@@ -115,6 +116,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   function resetWorkspaceState() {
     setAuthToken(null);
+    setLenderAuthToken(null);
     setCurrentUserId(null);
     setSession(null);
     setSessionStatus(null);

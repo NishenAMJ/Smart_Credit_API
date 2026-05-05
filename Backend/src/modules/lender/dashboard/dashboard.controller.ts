@@ -30,6 +30,7 @@ export class DashboardController {
   getSummary(
     @Req() req: AuthenticatedRequest,
   ): Promise<DashboardSummaryResponse> {
+    console.log('[Dashboard] GET /summary - User:', req.user.sub);
     return this.dashboardService.getSummary(req.user.sub);
   }
 

@@ -6,6 +6,7 @@ import type {
   AuthResponse,
   DashboardResponse,
   KycSubmissionResponse,
+  LegalDocument,
   LegalDocumentResponse,
   LoginPayload,
   MyKycSubmissionResponse,

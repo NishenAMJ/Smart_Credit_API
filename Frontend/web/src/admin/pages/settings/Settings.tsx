@@ -10,6 +10,7 @@ import {
   EyeOff,
   AlertTriangle,
 } from "lucide-react";
+import { changeAdminPassword } from "../../lib/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SettingsTab = "profile" | "security" | "notifications" | "platform";
@@ -36,6 +37,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
 ];
 
 // ── Reusable field row ────────────────────────────────────────────────────────
+// Renders a labeled field row so settings sections stay aligned.
 function FieldRow({
   label,
   hint,
@@ -57,6 +59,7 @@ function FieldRow({
 }
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
+// Renders the on/off switch used in notification and platform settings.
 function Toggle({
   checked,
   onChange,
@@ -96,6 +99,7 @@ function Toggle({
 }
 
 // ── Save toast ────────────────────────────────────────────────────────────────
+// Shows a temporary confirmation toast after settings are saved.
 function SaveToast({ show }: { show: boolean }) {
   return (
     <div
@@ -126,6 +130,7 @@ function SaveToast({ show }: { show: boolean }) {
 }
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
+// Wraps each settings group with a consistent title and body layout.
 function Section({
   title,
   subtitle,
@@ -147,6 +152,7 @@ function Section({
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
+// Renders the admin settings page with profile, security, notification, and platform controls.
 export default function Settings() {
   const [activeTab, setTab] = useState<SettingsTab>("profile");
   const [toast, setToast] = useState(false);
@@ -156,6 +162,8 @@ export default function Settings() {
   const [showConf, setShowConf] = useState(false);
   const [passwords, setPasswords] = useState({ old: "", new: "", confirm: "" });
   const [passError, setPassError] = useState("");
+  const [passSuccess, setPassSuccess] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Notifications state ───────────────────────────────────────────────────
@@ -189,8 +197,9 @@ export default function Settings() {
   }
 
   // ── Password change ───────────────────────────────────────────────────────
-  function handlePasswordChange() {
+  async function handlePasswordChange() {
     setPassError("");
+    setPassSuccess("");
     if (!passwords.old || !passwords.new || !passwords.confirm) {
       setPassError("Please fill in all password fields.");
       return;
@@ -203,8 +212,22 @@ export default function Settings() {
       setPassError("New passwords do not match.");
       return;
     }
-    setPasswords({ old: "", new: "", confirm: "" });
-    handleSave();
+
+    try {
+      setPasswordSaving(true);
+      const response = await changeAdminPassword(passwords.old, passwords.new);
+      setPasswords({ old: "", new: "", confirm: "" });
+      setPassSuccess(response.message || "Password updated successfully.");
+      handleSave();
+    } catch (error) {
+      setPassError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update password.",
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
   }
 
   // ── Profile update ────────────────────────────────────────────────────────
@@ -454,6 +477,24 @@ export default function Settings() {
                     <AlertTriangle size={14} /> {passError}
                   </div>
                 )}
+                {passSuccess && (
+                  <div
+                    style={{
+                      background: "#ECFDF5",
+                      color: "#065F46",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      marginBottom: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <Check size={14} /> {passSuccess}
+                  </div>
+                )}
                 <FieldRow label="Current Password">
                   <div style={{ position: "relative" }}>
                     <input
@@ -535,9 +576,10 @@ export default function Settings() {
                 >
                   <button
                     className="btn-primary"
-                    onClick={handlePasswordChange}
+                    onClick={() => void handlePasswordChange()}
+                    disabled={passwordSaving}
                   >
-                    <Lock size={14} /> Update Password
+                    <Lock size={14} /> {passwordSaving ? "Updating..." : "Update Password"}
                   </button>
                 </div>
               </Section>

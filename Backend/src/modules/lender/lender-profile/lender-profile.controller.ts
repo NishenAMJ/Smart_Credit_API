@@ -29,6 +29,7 @@ export class LenderProfileController {
 
   @Get('me')
   getProfile(@Req() req: AuthenticatedRequest): Promise<LenderProfileResponse> {
+    console.log('[LenderProfile] GET /me - User:', req.user.sub);
     return this.lenderProfileService.getProfile(req.user.sub);
   }
 
@@ -36,6 +37,7 @@ export class LenderProfileController {
   getProfileById(
     @Param('lenderId') lenderId: string,
   ): Promise<LenderProfileResponse> {
+    console.log('[LenderProfile] GET /:lenderId - ID:', lenderId);
     return this.lenderProfileService.getProfile(lenderId);
   }
 
