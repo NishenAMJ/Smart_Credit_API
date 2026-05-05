@@ -10,8 +10,9 @@ export class KycMobileController {
 
   // Accepts the mobile app's profile photo and KYC document payloads for a new or existing user.
   @Post('submit')
-  async submit(@Body() dto: SubmitKycDto) {
-    return this.kycService.submitMobileKyc(dto);
+  @UseGuards(JwtAuthGuard)
+  async submit(@Body() dto: SubmitKycDto, @Req() req: AuthenticatedRequest) {
+    return this.kycService.submitMobileKyc(dto, req.user.sub);
   }
 
   // Returns the authenticated user's own uploaded KYC documents.

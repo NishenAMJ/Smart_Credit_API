@@ -117,7 +117,6 @@ export class LegalController {
     );
   }
 
-<<<<<<< HEAD
   @Get('documents/:documentId/pdf-access')
   @UseGuards(JwtAuthGuard)
   async getSignedPdfAccessUrl(
@@ -131,9 +130,7 @@ export class LegalController {
     );
   }
 
-=======
   // Streams the agreement PDF after resolving the user from either a bearer token or query token.
->>>>>>> f77b41fe (add comments)
   @Get('documents/:documentId/download')
   async downloadDocumentPdf(
     @Param('documentId') documentId: string,

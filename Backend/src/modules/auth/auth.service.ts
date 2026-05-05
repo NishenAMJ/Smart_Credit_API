@@ -302,7 +302,6 @@ export class AuthService {
     };
   }
 
-<<<<<<< HEAD
   // Verifies the existing password before writing a fresh hash back to Firestore.
   async changePassword(
     userId: string,
@@ -336,9 +335,7 @@ export class AuthService {
     };
   }
 
-=======
   // Shared helper used by other modules that need the full stored user record.
->>>>>>> f77b41fe (add comments)
   async getUserById(userId: string): Promise<UserDocument> {
     return this.getRequiredUser(userId);
   }

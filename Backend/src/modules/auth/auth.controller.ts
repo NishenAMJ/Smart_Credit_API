@@ -58,7 +58,6 @@ export class AuthController {
     return this.authService.getSessionStatus(req.user.sub, req.user.role);
   }
 
-<<<<<<< HEAD
   // Updates the authenticated user's password hash in Firestore after validating the current password.
   @Post('change-password')
   @UseGuards(JwtAuthGuard)
@@ -70,9 +69,7 @@ export class AuthController {
     return this.authService.changePassword(req.user.sub, changePasswordDto);
   }
 
-=======
   // Builds a dashboard response for the caller's active borrower or lender role.
->>>>>>> f77b41fe (add comments)
   @Get('dashboard')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('borrower', 'lender')

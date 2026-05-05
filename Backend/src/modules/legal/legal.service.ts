@@ -236,18 +236,12 @@ export class LegalService {
     merged.htmlContent = this.buildAgreementHtml(merged);
 
     if (merged.status === 'fully_accepted') {
-<<<<<<< HEAD
       const { documentId: pdfDocumentId, hash } = await this.persistSignedPdfToCloudinary(
         merged,
         userId,
         documentId, // outer param = Firestore legal-document ID
       );
       merged.signedPdfDocumentId = pdfDocumentId;
-=======
-      // Once both sides accept, freeze the agreement as a signed PDF and activate the loan.
-      const { storagePath, hash } = await this.persistSignedPdf(merged);
-      merged.signedPdfStoragePath = storagePath;
->>>>>>> f77b41fe (add comments)
       merged.signedPdfGeneratedAt = now;
       merged.pdfSha256Hash = hash;
 

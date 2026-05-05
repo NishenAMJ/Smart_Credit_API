@@ -39,6 +39,19 @@ export class KycController {
     return this.kycService.getUserDocuments(userId);
   }
 
+  // Returns a short-lived signed Cloudinary URL for admins to inspect a KYC file.
+  @Get(':documentId/access')
+  async getDocumentAccessUrl(
+    @Param('documentId') documentId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.kycService.getSignedDocumentAccessUrl(
+      documentId,
+      req.user.sub,
+      req.user.role,
+    );
+  }
+
   // Approves one KYC document and updates the user's overall KYC status.
   @Post(':documentId/approve')
   @HttpCode(HttpStatus.OK)

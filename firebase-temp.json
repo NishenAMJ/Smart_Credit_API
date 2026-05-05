@@ -1,5 +1,0 @@
-{
-  "firestore": {
-    "indexes": "Backend/scripts/firestore.indexes.json"
-  }
-}

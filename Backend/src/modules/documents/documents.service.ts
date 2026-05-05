@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 
+import { removeUndefinedDeep } from '../../common/remove-undefined.deep';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
 import type { UploadedMedia } from '../media/media.types';
@@ -15,6 +16,10 @@ import type {
 type CreateDocumentRecordInput = {
   id?: string;
   userId: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  userKycStatus?: string;
   category: DocumentCategory;
   documentType: string;
   originalFilename: string;
@@ -60,6 +65,10 @@ export class DocumentsService {
       const record: DocumentRecord = {
         id: docRef.id,
         userId: input.userId,
+        fullName: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        userKycStatus: input.userKycStatus,
         category: input.category,
         documentType: input.documentType,
         originalFilename: input.originalFilename,
@@ -79,12 +88,15 @@ export class DocumentsService {
         relatedEntityType: input.relatedEntityType,
         relatedEntityId: input.relatedEntityId,
         displayName: input.displayName,
+        reviewerId: undefined,
+        reviewTimestamp: undefined,
+        reviewNotes: undefined,
         uploadedAt: timestamp,
         createdAt: timestamp,
         updatedAt: timestamp,
       };
 
-      await docRef.set(record, { merge: true });
+      await docRef.set(removeUndefinedDeep(record), { merge: true });
       return record;
     } catch (error) {
       rethrowFirebaseError(error, 'Failed to create document record');

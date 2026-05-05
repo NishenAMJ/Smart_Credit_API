@@ -34,45 +34,61 @@ export class SubmitKycDto {
   @IsNotEmpty()
   passwordHash: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  nicFrontDocumentId: string;
+  nicFrontDataUrl?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  nicBackDocumentId: string;
+  nicBackDataUrl?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  addressProofNumber: string;
+  documentFrontUrl?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  addressProofDocumentId: string;
+  documentBackUrl?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  bankAccountNumber: string;
+  addressProofNumber?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  bankName: string;
+  addressProofDataUrl?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  branchCode: string;
+  bankAccountNumber?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  accountType: string;
+  bankName?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  bankDocumentId: string;
+  branchCode?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  profilePhotoUrl: string; // This should now be the final secure URL or an asset ID
+  accountType?: string;
+
+  @IsOptional()
+  @IsString()
+  bankDocumentDataUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  profilePhotoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  profilePictureUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  selfieUrl?: string;
 
   @IsOptional()
   userId?: string;
