@@ -38,6 +38,7 @@ export class KycService {
     return this.firebaseService.db;
   }
 
+  // Converts the generic document record shape into the smaller KYC response format.
   private mapDocumentToKycDocument(document: DocumentRecord): KycDocument {
     return {
       id: document.id,
@@ -58,6 +59,7 @@ export class KycService {
     };
   }
 
+  // Applies min/max paging rules so the endpoint stays predictable and safe.
   private parseLimit(limit?: string) {
     const parsed = Number(limit ?? KycService.DEFAULT_PAGE_SIZE);
     if (!Number.isFinite(parsed)) {
@@ -71,6 +73,7 @@ export class KycService {
     return email.trim().toLowerCase();
   }
 
+  // Reuses the same phone normalization approach as auth so lookups stay consistent.
   private normalizePhone(phone: string): string {
     const raw = phone.trim();
     const digitsAndPlus = raw.replace(/[^\d+]/g, '');
@@ -99,6 +102,7 @@ export class KycService {
     return normalized;
   }
 
+  // Defines the KYC files the mobile flow expects and how each one is labeled in storage.
   private buildUploadFields(dto: SubmitKycDto): KycUploadField[] {
     return [
       {
@@ -124,6 +128,7 @@ export class KycService {
     ];
   }
 
+  // Non-admins may only access their own KYC files.
   private assertDocumentAccess(
     document: DocumentRecord,
     requesterId: string,
@@ -140,6 +145,7 @@ export class KycService {
     throw new ForbiddenException('You do not have access to this KYC document.');
   }
 
+  // Ensures the requested document exists, belongs to the KYC category, and has not been deleted.
   private async getRequiredKycDocument(documentId: string) {
     const document = await this.documentsService.getById(documentId);
 
@@ -154,6 +160,7 @@ export class KycService {
     return document;
   }
 
+  // Handles the mobile onboarding flow: uploads media, stores document metadata, and creates/updates the user profile.
   async submitMobileKyc(dto: SubmitKycDto) {
     try {
       this.mediaService.ensureCloudinaryConfigured();
@@ -166,6 +173,7 @@ export class KycService {
       const documentRefs: Record<string, string> = {};
 
       for (const field of this.buildUploadFields(dto)) {
+<<<<<<< HEAD
         const docRecord = await this.documentsService.getById(field.documentId);
         
         if (!docRecord || docRecord.category !== 'kyc' || docRecord.status === 'deleted') {
@@ -186,6 +194,30 @@ export class KycService {
 
       if (dto.profilePhotoUrl.startsWith('data:')) {
         const profileUpload = await this.mediaService.uploadProfilePictureFromDataUrl(
+=======
+        // Validate and hash before upload so duplicate sensitive files can be blocked.
+        const prepared = this.mediaService.decodeDataUrl(field.dataUrl, field.label);
+        this.mediaService.validateSensitiveDocument(
+          prepared.mimeType,
+          prepared.buffer.length,
+        );
+        const fileHash = this.mediaService.computeSha256(prepared.buffer);
+
+        const duplicate = await this.documentsService.findDuplicate(
+          userId,
+          fileHash,
+          'kyc',
+        );
+
+        if (duplicate) {
+          throw new BadRequestException(
+            `Duplicate KYC document detected for ${field.documentType}.`,
+          );
+        }
+
+        // Upload the raw file first, then persist the reviewable metadata in Firestore.
+        const uploaded = await this.mediaService.uploadSensitiveDocumentFromDataUrl(
+>>>>>>> f77b41fe (add comments)
           userId,
           dto.profilePhotoUrl,
         );
@@ -256,6 +288,7 @@ export class KycService {
     }
   }
 
+  // Returns the admin review queue for KYC documents.
   async getPendingKyc(limit?: string, cursor?: string) {
     try {
       const pageSize = this.parseLimit(limit);
@@ -274,6 +307,7 @@ export class KycService {
     }
   }
 
+  // Lists all KYC documents submitted by a specific user.
   async getUserDocuments(userId: string) {
     try {
       const documents = await this.documentsService.listByUser(userId, 'kyc');
@@ -289,6 +323,7 @@ export class KycService {
     }
   }
 
+  // Approves a document and mirrors that result back onto the user's profile.
   async approveDocument(documentId: string, reviewedBy?: string, notes?: string) {
     try {
       const document = await this.getRequiredKycDocument(documentId);
@@ -322,6 +357,7 @@ export class KycService {
     }
   }
 
+  // Rejects a document and stores the rejection reason on both the document and user profile.
   async rejectDocument(documentId: string, reason: string, reviewedBy?: string) {
     try {
       const document = await this.getRequiredKycDocument(documentId);
@@ -354,6 +390,7 @@ export class KycService {
     }
   }
 
+  // Generates a signed delivery URL so documents stay private while still being viewable when authorized.
   async getSignedDocumentAccessUrl(
     documentId: string,
     requesterId: string,

@@ -50,6 +50,7 @@ export class LegalService {
     ) as CollectionReference<LegalDocument>;
   }
 
+  // Creates or refreshes the legal agreement snapshot for a loan using the latest borrower, lender, and loan data.
   async generateLoanAgreement(
     loanId: string,
     userId: string,
@@ -63,6 +64,7 @@ export class LegalService {
       this.authService.getUserById(loan.lenderId),
     ]);
 
+    // Reuse the latest document record so signatures are preserved when the agreement is regenerated.
     const existing = await this.getLatestLoanDocumentRecord(loanId);
     const legalRef = existing
       ? this.legalCollection.doc(existing.id)
@@ -111,6 +113,7 @@ export class LegalService {
     return this.toDto(document);
   }
 
+  // Returns a single document only if the caller belongs to that agreement or is an admin.
   async getDocumentById(
     documentId: string,
     userId: string,
@@ -127,6 +130,7 @@ export class LegalService {
     return this.toDto(document);
   }
 
+  // Gets the newest legal document created for a loan, if one exists.
   async getLatestLoanDocument(
     loanId: string,
     userId: string,
@@ -138,6 +142,7 @@ export class LegalService {
     return document ? this.toDto(document) : null;
   }
 
+  // Lists documents scoped to the current party, while admins can review everything.
   async listDocuments(
     userId: string,
     userRole: UserRole,
@@ -155,6 +160,7 @@ export class LegalService {
     return snapshot.docs.map((doc) => this.toDto(doc.data() as LegalDocument));
   }
 
+  // Marks the borrower's or lender's acceptance and generates the signed PDF once both parties agree.
   async acceptDocument(
     documentId: string,
     userId: string,
@@ -230,12 +236,18 @@ export class LegalService {
     merged.htmlContent = this.buildAgreementHtml(merged);
 
     if (merged.status === 'fully_accepted') {
+<<<<<<< HEAD
       const { documentId: pdfDocumentId, hash } = await this.persistSignedPdfToCloudinary(
         merged,
         userId,
         documentId, // outer param = Firestore legal-document ID
       );
       merged.signedPdfDocumentId = pdfDocumentId;
+=======
+      // Once both sides accept, freeze the agreement as a signed PDF and activate the loan.
+      const { storagePath, hash } = await this.persistSignedPdf(merged);
+      merged.signedPdfStoragePath = storagePath;
+>>>>>>> f77b41fe (add comments)
       merged.signedPdfGeneratedAt = now;
       merged.pdfSha256Hash = hash;
 
@@ -270,6 +282,7 @@ export class LegalService {
     };
   }
 
+  // Reads the loan record and normalizes field names because seeded data may use slightly different keys.
   private async getLoanById(loanId: string): Promise<LoanRecord> {
     const doc = await this.firebaseService.db
       .collection('loans')
@@ -296,6 +309,7 @@ export class LegalService {
     };
   }
 
+  // Finds the most recently updated agreement for a loan so the system has a single latest version to work with.
   private async getLatestLoanDocumentRecord(
     loanId: string,
   ): Promise<LegalDocument | null> {
@@ -315,6 +329,7 @@ export class LegalService {
     return documents[0];
   }
 
+  // Allows only the borrower, lender, or admin to work with the loan's legal documents.
   private async assertLoanAccess(
     loan: LoanRecord,
     userId: string,
@@ -337,6 +352,7 @@ export class LegalService {
     );
   }
 
+  // Applies the same access rules after a document has already been created.
   private assertDocumentAccess(
     document: LegalDocument,
     userId: string,

@@ -37,6 +37,7 @@ export class DocumentsService {
     return this.firebaseService.db.collection('documents');
   }
 
+  // Fetches one stored document metadata record by id.
   async getById(documentId: string) {
     try {
       const snapshot = await this.collection.doc(documentId).get();
@@ -48,6 +49,7 @@ export class DocumentsService {
     }
   }
 
+  // Persists document metadata after the actual file has already been uploaded to Cloudinary.
   async createRecord(input: CreateDocumentRecordInput) {
     try {
       const docRef = input.id
@@ -89,6 +91,7 @@ export class DocumentsService {
     }
   }
 
+  // Lists a user's documents and hides soft-deleted records from normal reads.
   async listByUser(userId: string, category?: DocumentCategory) {
     try {
       let query: FirebaseFirestore.Query = this.collection.where(
@@ -110,6 +113,7 @@ export class DocumentsService {
     }
   }
 
+  // Prevents saving the same uploaded file twice by comparing stored SHA-256 hashes.
   async findDuplicate(
     userId: string,
     fileHash: string,
@@ -137,6 +141,7 @@ export class DocumentsService {
     }
   }
 
+  // Returns paginated KYC documents that are still waiting for admin review.
   async getPendingReview(limit: number, cursor?: string) {
     try {
       let query: FirebaseFirestore.Query = this.collection
@@ -167,6 +172,7 @@ export class DocumentsService {
     }
   }
 
+  // Stores the outcome of an admin review on the document record itself.
   async updateReviewStatus(
     documentId: string,
     status: Extract<DocumentStatus, 'approved' | 'rejected'>,
@@ -192,6 +198,7 @@ export class DocumentsService {
     }
   }
 
+  // Soft delete keeps the history for audit purposes while hiding the file from regular lists.
   async softDelete(documentId: string, deletedBy?: string, reason?: string) {
     try {
       await this.collection.doc(documentId).update({

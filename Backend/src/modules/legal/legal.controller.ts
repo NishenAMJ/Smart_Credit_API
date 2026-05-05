@@ -32,6 +32,7 @@ export class LegalController {
     private readonly jwtService: JwtService,
   ) {}
 
+  // Generates or refreshes the latest agreement document for a loan the user can access.
   @Post('documents/generate/:loanId')
   @UseGuards(JwtAuthGuard)
   async generateLoanAgreement(
@@ -50,6 +51,7 @@ export class LegalController {
     };
   }
 
+  // Lists legal documents visible to the authenticated borrower, lender, or admin.
   @Get('documents')
   @UseGuards(JwtAuthGuard)
   async listDocuments(
@@ -63,6 +65,7 @@ export class LegalController {
     return { documents };
   }
 
+  // Fetches one legal document after checking role-based ownership access.
   @Get('documents/:documentId')
   @UseGuards(JwtAuthGuard)
   async getDocumentById(
@@ -78,6 +81,7 @@ export class LegalController {
     return { document };
   }
 
+  // Returns the newest agreement document generated for a specific loan.
   @Get('documents/loan/:loanId/latest')
   @UseGuards(JwtAuthGuard)
   async getLatestLoanDocument(
@@ -93,6 +97,7 @@ export class LegalController {
     return { document };
   }
 
+  // Records a party's acceptance details and signature audit metadata.
   @Post('documents/:documentId/accept')
   @UseGuards(JwtAuthGuard)
   async acceptDocument(
@@ -112,6 +117,7 @@ export class LegalController {
     );
   }
 
+<<<<<<< HEAD
   @Get('documents/:documentId/pdf-access')
   @UseGuards(JwtAuthGuard)
   async getSignedPdfAccessUrl(
@@ -125,6 +131,9 @@ export class LegalController {
     );
   }
 
+=======
+  // Streams the agreement PDF after resolving the user from either a bearer token or query token.
+>>>>>>> f77b41fe (add comments)
   @Get('documents/:documentId/download')
   async downloadDocumentPdf(
     @Param('documentId') documentId: string,
@@ -145,6 +154,7 @@ export class LegalController {
     res.send(buffer);
   }
 
+  // Supports both browser downloads with a token query param and API requests with Authorization headers.
   private async resolveAuthenticatedUser(
     req: Request,
     token?: string,
