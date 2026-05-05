@@ -17,6 +17,7 @@ export class AdsService {
 
   constructor(private readonly firebaseService: FirebaseService) {}
 
+  // Convert a Firestore ad document into the admin-friendly Ad shape.
   private mapAd(
     doc:
       | FirebaseFirestore.QueryDocumentSnapshot
@@ -32,10 +33,12 @@ export class AdsService {
     } as Ad;
   }
 
+  // Check whether the status should be treated as approved in admin logic.
   private isApprovedLikeStatus(status: unknown): boolean {
     return status === 'approved' || status === 'active';
   }
 
+  // Decide what status the admin should see for this ad.
   private deriveAdminAdStatus(
     adId: string,
     data: FirebaseFirestore.DocumentData,
@@ -58,6 +61,7 @@ export class AdsService {
     return 'pending';
   }
 
+  // Find ads that are already used by loans so they can be counted as active.
   private async getLoanBackedAdIds(adIds: string[]): Promise<Set<string>> {
     if (adIds.length === 0) {
       return new Set<string>();
@@ -82,6 +86,7 @@ export class AdsService {
     );
   }
 
+  // Fetch ads that are approved or active and still belong to a lender.
   private async getApprovedLikeAds(): Promise<
     FirebaseFirestore.QueryDocumentSnapshot[]
   > {
@@ -93,6 +98,7 @@ export class AdsService {
     return snapshot.docs.filter((doc) => Boolean(doc.data()?.lenderId));
   }
 
+  // Load one lender ad and reject missing or invalid records.
   private async getLenderAdDoc(adId: string) {
     const db = this.firebaseService.db;
     const adDoc = await db.collection('ads').doc(adId).get();
@@ -104,6 +110,7 @@ export class AdsService {
     return adDoc;
   }
 
+  // Keep the page size within a safe range.
   private parseLimit(limit?: string) {
     const parsed = Number(limit ?? AdsService.DEFAULT_PAGE_SIZE);
     if (!Number.isFinite(parsed)) {
@@ -113,6 +120,7 @@ export class AdsService {
     return Math.min(Math.max(Math.trunc(parsed), 1), AdsService.MAX_PAGE_SIZE);
   }
 
+  // Build the summary numbers shown on the admin stats screen.
   async getAdStats(): Promise<{
     success: boolean;
     stats: {
@@ -160,6 +168,7 @@ export class AdsService {
     }
   }
 
+  // Return all lender ads for admin review, with paging.
   async getAllAds(
     limit?: string,
     cursor?: string,
@@ -207,6 +216,7 @@ export class AdsService {
     }
   }
 
+  // Return only ads that are waiting for review the admin.
   async getPendingAds(
     limit?: string,
     cursor?: string,
@@ -251,6 +261,7 @@ export class AdsService {
     }
   }
 
+  // Return a single ad and show its derived admin status.
   async getAdById(adId: string): Promise<Ad> {
     try {
       const adDoc = await this.getLenderAdDoc(adId);
@@ -264,6 +275,7 @@ export class AdsService {
     }
   }
 
+  // Mark an ad as approved and save the review note if present.
   async approveAd(
     adId: string,
     notes?: string,
@@ -299,6 +311,7 @@ export class AdsService {
     }
   }
 
+  // Mark an ad as rejected and store the rejection reason.
   async rejectAd(
     adId: string,
     reason: string,
@@ -329,6 +342,7 @@ export class AdsService {
     }
   }
 
+  // Move an ad between moderation states and update the related fields.
   async updateAdStatus(
     adId: string,
     status: ModerationStatus,
@@ -396,6 +410,7 @@ export class AdsService {
     }
   }
 
+  // Permanently delete an ad from Firestore.
   async deleteAd(adId: string): Promise<{ success: boolean; message: string }> {
     try {
       const db = this.firebaseService.db;

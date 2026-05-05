@@ -15,6 +15,7 @@ export class TransactionsService {
 
   constructor(private readonly firebaseService: FirebaseService) {}
 
+  // Fetch a page of transactions for the admin table.
   async getTransactions(
     limit = 25,
     cursor?: string,
@@ -45,6 +46,7 @@ export class TransactionsService {
     }
   }
 
+  // Keep sending transaction updates whenever the collection changes.
   streamTransactions(limit = 100): Observable<{ data: TransactionsResponse }> {
     return new Observable((subscriber) => {
       const query = this.firebaseService.db
@@ -87,6 +89,7 @@ export class TransactionsService {
     });
   }
 
+  // Build the final response object for one transaction page.
   private async buildTransactionsResponse(
     snapshot: QuerySnapshot,
     limit = snapshot.size,
@@ -112,6 +115,7 @@ export class TransactionsService {
     };
   }
 
+  // Load related users so lender and borrower names can be shown.
   private async getUsersById(
     docs: Array<{ data(): DocumentData }>,
   ): Promise<Record<string, UserSummary>> {
@@ -150,6 +154,7 @@ export class TransactionsService {
     }, {});
   }
 
+  // Convert one Firestore transaction document into a response row.
   private toTransactionRecord(
     id: string,
     transaction: DocumentData,
@@ -187,6 +192,7 @@ export class TransactionsService {
     };
   }
 
+  // Decide which status should be shown in the admin list.
   private getTransactionStatus(transaction: DocumentData): TransactionStatus {
     const status = this.asString(transaction.status);
 
@@ -197,6 +203,7 @@ export class TransactionsService {
     return transaction.verifiedByLender === true ? 'completed' : 'pending';
   }
 
+  // Pick the best available display name for a user.
   private getUserName(user: DocumentData, fallback: string): string {
     const fullName = this.asString(user.fullName);
     const firstName = this.asString(user.firstName);
@@ -213,15 +220,18 @@ export class TransactionsService {
     return this.asString(user.email) ?? fallback;
   }
 
+  // Safely convert any value into a number.
   private asNumber(value: unknown): number {
     const numberValue = Number(value ?? 0);
     return Number.isFinite(numberValue) ? numberValue : 0;
   }
 
+  // Safely convert any value into a trimmed string.
   private asString(value: unknown): string | undefined {
     return typeof value === 'string' && value.trim() ? value.trim() : undefined;
   }
 
+  // Convert Firestore timestamps or date-like values into ISO strings.
   private toIsoDate(value: unknown): string | undefined {
     if (!value) {
       return undefined;
@@ -250,6 +260,7 @@ export class TransactionsService {
     return undefined;
   }
 
+  // Turn any thrown error into a readable SSE fallback message.
   private getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
   }

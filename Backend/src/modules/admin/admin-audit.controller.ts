@@ -10,7 +10,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 export class AdminAuditController {
   constructor(private readonly adminAuditService: AdminAuditService) {}
 
-  // Returns the latest admin-facing activity feed generated from stored records.
+  // Returns the admin activity feed built from user and ad updates.
   @Get()
   async getAuditLogs(
     @Query('limit') limit?: string,

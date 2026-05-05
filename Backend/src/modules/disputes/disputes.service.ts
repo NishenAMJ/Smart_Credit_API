@@ -9,6 +9,7 @@ export class DisputesService {
 
   constructor(private readonly firebaseService: FirebaseService) {}
 
+  // Keep the page size within a safe range.
   private parseLimit(limit?: string) {
     const parsed = Number(limit ?? DisputesService.DEFAULT_PAGE_SIZE);
     if (!Number.isFinite(parsed)) {
@@ -21,6 +22,7 @@ export class DisputesService {
     );
   }
 
+  // Return a paginated list of all disputes for admins.
   async getAllDisputes(
     limit?: string,
     cursor?: string,
@@ -71,6 +73,7 @@ export class DisputesService {
     }
   }
 
+  // Return one dispute record by id.
   async getDisputeById(disputeId: string): Promise<Dispute> {
     try {
       const db = this.firebaseService.db;
@@ -92,6 +95,7 @@ export class DisputesService {
     }
   }
 
+  // Mark a dispute as resolved and save the resolution note.
   async resolveDispute(
     disputeId: string,
     resolution: string,
@@ -132,6 +136,7 @@ export class DisputesService {
     }
   }
 
+  // Mark a dispute as escalated and save the escalation reason.
   async escalateDispute(
     disputeId: string,
     reason: string,
