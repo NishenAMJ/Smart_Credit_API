@@ -7,6 +7,7 @@ import { FirebaseModule } from '../../firebase/firebase.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
+  // Wire the admin user management and audit endpoints into the app.
   imports: [FirebaseModule, AuthModule],
   controllers: [AdminController, AdminAuditController],
   providers: [AdminService, AdminAuditService],

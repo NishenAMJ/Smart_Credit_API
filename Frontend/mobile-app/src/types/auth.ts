@@ -33,10 +33,20 @@ export type SubmitKycPayload = {
   fullName: string;
   issuingCountry?: string;
   expiryDate?: string;
+  nicFrontDataUrl?: string;
+  nicBackDataUrl?: string;
+  addressProofDataUrl?: string;
+  bankDocumentDataUrl?: string;
+  profilePhotoUrl?: string;
   documentFrontUrl?: string;
   documentBackUrl?: string;
   selfieUrl?: string;
   profilePictureUrl?: string;
+  addressProofNumber?: string;
+  bankAccountNumber?: string;
+  bankName?: string;
+  branchCode?: string;
+  accountType?: string;
 };
 
 export type RegisterResponse = {

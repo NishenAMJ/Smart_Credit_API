@@ -276,13 +276,21 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
     try {
       setLoading(true);
 
-      await register({
-        fullName: signUpForm.fullName.trim(),
-        email: signUpForm.email.trim(),
-        phone: signUpForm.phone.trim(),
-        password: signUpForm.password,
-        role: "lender",
-      });
+      try {
+        await register({
+          fullName: signUpForm.fullName.trim(),
+          email: signUpForm.email.trim(),
+          phone: signUpForm.phone.trim(),
+          password: signUpForm.password,
+          role: "lender",
+        });
+      } catch (registerError) {
+        const message =
+          registerError instanceof Error ? registerError.message : "";
+        if (!message.toLowerCase().includes("already exists")) {
+          throw registerError;
+        }
+      }
 
       const data = await login({
         identifier: signUpForm.email.trim(),

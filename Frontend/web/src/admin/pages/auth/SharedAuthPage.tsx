@@ -306,13 +306,21 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
     try {
       setLoading(true);
 
-      await registerPublicUser({
-        fullName: registerForm.fullName.trim(),
-        email: registerForm.email.trim(),
-        phone: registerForm.phone.trim(),
-        password: registerForm.password,
-        role: "lender",
-      });
+      try {
+        await registerPublicUser({
+          fullName: registerForm.fullName.trim(),
+          email: registerForm.email.trim(),
+          phone: registerForm.phone.trim(),
+          password: registerForm.password,
+          role: "lender",
+        });
+      } catch (registerError) {
+        const message =
+          registerError instanceof Error ? registerError.message : "";
+        if (!message.toLowerCase().includes("already exists")) {
+          throw registerError;
+        }
+      }
 
       const authResponse = await loginWithRole(
         registerForm.email.trim(),
