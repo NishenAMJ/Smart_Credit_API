@@ -1,3 +1,4 @@
+// Lender settings workspace for notification preferences, default lending values, and account maintenance.
 import {
   useEffect,
   useState,
@@ -70,6 +71,7 @@ const TABS: Array<{
   description: string;
   icon: ElementType;
 }> = [
+  // The settings navigation is data-driven so labels and icons stay aligned with the rendered sidebar.
   {
     id: "notifications",
     label: "Notifications",
@@ -97,6 +99,7 @@ const TABS: Array<{
 ];
 
 const notificationPreferences = [
+  // Each preference exposes the paired in-app and email toggle keys used by the settings API.
   {
     title: "New loan requests",
     description:
@@ -152,6 +155,7 @@ function SettingsSection({
   children: ReactNode;
   actions?: ReactNode;
 }) {
+  // Shared section shell keeps settings panels visually consistent while allowing custom actions.
   return (
     <article className="settings-panel">
       <div className="settings-panel__header">
@@ -177,6 +181,7 @@ function FieldRow({
   hint?: string;
   children: ReactNode;
 }) {
+  // Standard label/control row used throughout the lending and workspace settings forms.
   return (
     <div className="settings-field-row">
       <div className="settings-field-row__copy">
@@ -189,6 +194,7 @@ function FieldRow({
 }
 
 function toFormState(settings: LenderSettings): SettingsFormState {
+  // Converts numeric and array-based settings into controlled string inputs for editing.
   return {
     notifications: { ...settings.notifications },
     lendingDefaults: {
@@ -257,6 +263,7 @@ function getInitials(value: string): string {
 }
 
 function countEnabledChannels(notifications: LenderSettingsNotifications): number {
+  // Used for sidebar summary copy so the lender can see how many channels are active at a glance.
   return Object.values(notifications).filter(Boolean).length;
 }
 
@@ -287,10 +294,12 @@ export default function SettingsPage({
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    // External settings updates, including the initial bootstrap, always replace the editable form state.
     setFormState(toFormState(settings));
   }, [settings]);
 
   useEffect(() => {
+    // Changing lenders clears transient settings and password feedback tied to the previous account.
     setError(null);
     setSuccessMessage(null);
     setPasswordError(null);
@@ -360,6 +369,7 @@ export default function SettingsPage({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    // Convert the string-based form model back into the typed API payload expected by lender settings.
     try {
       setIsSaving(true);
       setError(null);
@@ -412,6 +422,7 @@ export default function SettingsPage({
   }
 
   function handleReset() {
+    // Reset restores the last saved server values rather than the original mount-time defaults.
     setFormState(toFormState(settings));
     setError(null);
     setSuccessMessage("Changes reset to the last saved version.");
@@ -429,6 +440,7 @@ export default function SettingsPage({
   }
 
   async function handlePasswordChange() {
+    // Password changes are handled separately from settings saves so failure states stay isolated.
     setPasswordError(null);
     setPasswordSuccess(null);
 

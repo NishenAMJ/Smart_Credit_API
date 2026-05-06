@@ -1,5 +1,6 @@
+// Lender inbox for categorized notifications, unread management, and action-based navigation.
 import { useEffect, useMemo, useState } from "react";
-import type { LenderView } from "../components/common/LenderSidebar";
+import type { LenderView } from "../config/lender-views";
 import type { LenderSession } from "../lib/lender-session";
 import {
   fetchLenderNotificationSummary,
@@ -115,6 +116,7 @@ function NotificationCategoryIcon({
 }: {
   category: NotificationCategory;
 }) {
+  // Keeps icon selection close to the inbox page so category styling and copy evolve together.
   if (category === "loan_request") {
     return (
       <svg
@@ -218,6 +220,7 @@ export default function NotificationsPage({
   const [error, setError] = useState<string | null>(null);
 
   async function loadNotifications() {
+    // Reused after bulk actions so the page can resync both header counts and the visible notification list.
     const [summaryResponse, listResponse] = await Promise.all([
       fetchLenderNotificationSummary(),
       fetchLenderNotifications(selectedCategory, selectedState, 80),
@@ -230,6 +233,7 @@ export default function NotificationsPage({
   useEffect(() => {
     let isMounted = true;
 
+    // Summary and list are fetched together because the filters affect both the visible items and unread counts.
     const run = async () => {
       try {
         setIsLoading(true);
@@ -266,6 +270,7 @@ export default function NotificationsPage({
   }, [selectedCategory, selectedState, session.lenderId]);
 
   async function handleNotificationAction(notification: LenderNotification) {
+    // Actions first reconcile unread state locally, then navigate if the notification points to another view.
     try {
       if (!notification.isRead) {
         const updated = await markNotificationAsRead(notification.id);
@@ -297,6 +302,7 @@ export default function NotificationsPage({
   }
 
   async function handleMarkAllVisibleAsRead() {
+    // Bulk mark-as-read applies to the current filters, then performs one fresh reload for consistency.
     try {
       setIsMarkingAll(true);
       setError(null);
@@ -314,6 +320,7 @@ export default function NotificationsPage({
   }
 
   const summaryCards = useMemo(() => {
+    // Precompute summary card presentation from the raw counts returned by the notifications summary API.
     if (!summary) {
       return [];
     }

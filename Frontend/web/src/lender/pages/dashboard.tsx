@@ -1,5 +1,6 @@
+// Lender dashboard with summary cards, borrower search, pagination, and borrower detail modal.
 import { type FormEvent, useEffect, useState } from "react";
-import type { LenderView } from "../components/common/LenderSidebar";
+import type { LenderView } from "../config/lender-views";
 import type {
   BorrowerDetails,
   DashboardBorrower,
@@ -69,6 +70,7 @@ type DashboardQuickAction = {
 };
 
 const quickActions: DashboardQuickAction[] = [
+  // These quick actions intentionally link to hidden or secondary views outside the main sidebar.
   {
     id: "pending-requests",
     icon: "requests",
@@ -163,6 +165,7 @@ export default function DashboardPage({
   useEffect(() => {
     let isMounted = true;
 
+    // Summary metrics are loaded independently from the borrower table so each section can fail or recover on its own.
     const loadSummary = async () => {
       try {
         setIsSummaryLoading(true);
@@ -195,6 +198,7 @@ export default function DashboardPage({
   }, [session.lenderId]);
 
   useEffect(() => {
+    // Pagination state resets whenever the lender or page size changes.
     setCurrentPage(1);
     setPageCursors([null]);
     setBorrowers([]);
@@ -202,6 +206,7 @@ export default function DashboardPage({
   }, [borrowerPageSize, session.lenderId]);
 
   useEffect(() => {
+    // Search runs off a submitted query so typing does not refetch the borrower list on every keystroke.
     setCurrentPage(1);
     setPageCursors([null]);
     setBorrowers([]);
@@ -211,6 +216,7 @@ export default function DashboardPage({
   useEffect(() => {
     let isMounted = true;
 
+    // Cursor pagination is maintained locally so next-page fetches can reuse backend cursors without a router state.
     const loadBorrowers = async () => {
       try {
         setIsBorrowersLoading(true);
@@ -263,6 +269,7 @@ export default function DashboardPage({
 
     let isMounted = true;
 
+    // Borrower details are fetched lazily when the lender opens the modal from the table.
     const loadBorrower = async () => {
       try {
         setIsBorrowerLoading(true);
@@ -339,6 +346,7 @@ export default function DashboardPage({
   ];
 
   const detailFields = selectedBorrower
+    // Detail fields are assembled as label/value pairs so the modal markup can stay generic.
     ? [
         { label: "Borrower ID", value: selectedBorrower.id },
         { label: "Full Name", value: selectedBorrower.fullName },
@@ -393,6 +401,7 @@ export default function DashboardPage({
     : [];
 
   function handleOpenBorrowerModal(borrowerId: string) {
+    // Opening a new borrower clears the previous modal payload so loading and error states are accurate.
     setSelectedBorrowerId(borrowerId);
     setSelectedBorrower(null);
     setBorrowerError(null);
@@ -405,6 +414,7 @@ export default function DashboardPage({
   }
 
   function handleBorrowerSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    // Commit the current search draft into the applied query only when the form is submitted.
     event.preventDefault();
     setBorrowerSearch(borrowerSearchDraft.trim());
   }

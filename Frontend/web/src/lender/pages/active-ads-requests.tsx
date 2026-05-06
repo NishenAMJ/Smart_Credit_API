@@ -1,5 +1,6 @@
+// Cross-links active ads from analytics drilldowns with the requests attached to a selected ad.
 import { useEffect, useState } from "react";
-import type { LenderView } from "../components/common/LenderSidebar";
+import type { LenderView } from "../config/lender-views";
 import {
   fetchAnalyticsDrilldown,
   type AnalyticsDrilldownItem,
@@ -75,6 +76,7 @@ export default function ActiveAdsRequestsPage({
   const requests = requestsResponse?.requests ?? [];
 
   useEffect(() => {
+    // Reset both panes when the lender changes so stale ad/request selections are cleared.
     setCurrentPage(1);
     setPageCursors([null]);
     setAdsResponse(null);
@@ -87,6 +89,7 @@ export default function ActiveAdsRequestsPage({
   useEffect(() => {
     let isMounted = true;
 
+    // Active ads are sourced from the analytics drilldown API so this page stays consistent with analytics.
     const loadAds = async () => {
       try {
         setIsAdsLoading(true);
@@ -143,6 +146,7 @@ export default function ActiveAdsRequestsPage({
 
     let isMounted = true;
 
+    // Request data is fetched only for the currently selected ad to avoid unnecessary marketplace queries.
     const loadRequests = async () => {
       try {
         setIsRequestsLoading(true);

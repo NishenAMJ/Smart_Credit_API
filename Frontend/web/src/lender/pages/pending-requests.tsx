@@ -1,3 +1,4 @@
+// Review queue for lender pending requests, including search, filters, and decision actions.
 import { useEffect, useMemo, useState } from "react";
 import type { LenderSession } from "../lib/lender-session";
 import {
@@ -90,6 +91,7 @@ export default function PendingRequestsPage({
   const [isDecisionSaving, setIsDecisionSaving] = useState(false);
 
   async function loadRequests(nextSelectedRequestId?: string | null) {
+    // Reloads the queue and optionally reselects the updated request after an approve/reject/review action.
     try {
       setIsLoading(true);
       setError(null);
@@ -115,10 +117,12 @@ export default function PendingRequestsPage({
   }
 
   useEffect(() => {
+    // Refresh the queue when the page size or current lender changes.
     void loadRequests();
   }, [pageSize, session.lenderId]);
 
   useEffect(() => {
+    // Decision form state is tied to the selected request, so it resets every time the selection changes.
     setDecisionNotes("");
     setDecisionError(null);
     setDecisionSuccess(null);
@@ -147,6 +151,7 @@ export default function PendingRequestsPage({
   const summary = response?.summary;
 
   const filteredRequests = useMemo(() => {
+    // Client-side filtering keeps the detail panel responsive while the backend remains focused on queue retrieval.
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     return requests.filter((request) => {
@@ -221,6 +226,7 @@ export default function PendingRequestsPage({
     selectedRequestStatus !== "rejected";
 
   async function handleDecision(action: "approve" | "reject" | "review") {
+    // A single handler coordinates the three request decision endpoints and their shared UI feedback.
     if (!selectedRequest) {
       return;
     }

@@ -1,3 +1,4 @@
+// API helpers for the lender ad composer and recent ad list.
 import {
   fetchLenderApi,
   fetchLenderApiWithQuery,
@@ -59,6 +60,7 @@ export type CreateLenderAdPayload = {
 export async function createLenderAd(
   payload: CreateLenderAdPayload,
 ): Promise<LenderAd> {
+  // Publishes the current draft and returns the created ad so the UI can refresh optimistically.
   const response = await fetchLenderApi("/lender-ads", {
     method: "POST",
     headers: {
@@ -75,6 +77,7 @@ export async function createLenderAd(
 }
 
 export async function fetchLenderAds(limit = 4): Promise<LenderAd[]> {
+  // The page only needs the ad array, so this helper unwraps the paged response body.
   const response = await fetchLenderApiWithQuery(
     "/lender-ads",
     new URLSearchParams({

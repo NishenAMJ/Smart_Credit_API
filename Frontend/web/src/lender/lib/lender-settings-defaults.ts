@@ -1,3 +1,4 @@
+// Local fallback defaults used before lender settings load or when the API is unavailable.
 import type { LenderSettings } from "./lender-settings-api";
 
 const DEFAULT_NOTIFICATION_SETTINGS = {
@@ -33,6 +34,7 @@ const DEFAULT_WORKSPACE_SETTINGS = {
 } as const;
 
 export function createDefaultLenderSettings(lenderId: string): LenderSettings {
+  // Clones array-backed defaults so form updates never mutate shared constants.
   return {
     lenderId,
     notifications: { ...DEFAULT_NOTIFICATION_SETTINGS },

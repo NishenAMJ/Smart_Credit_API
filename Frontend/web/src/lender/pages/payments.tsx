@@ -1,3 +1,4 @@
+// Lender payments workspace for transaction history, loan ledgers, and manual payment recording.
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchBorrowerDetails,
@@ -119,6 +120,7 @@ export default function PaymentsPage({
     cursor?: string | null;
     search?: string;
   }) {
+    // Shared list loader used after mutations so the transaction table can be refreshed without reloading the page.
     setIsListLoading(true);
     setListError(null);
 
@@ -144,6 +146,7 @@ export default function PaymentsPage({
   }
 
   useEffect(() => {
+    // Reset payment-specific state when the authenticated lender changes.
     setCurrentPage(1);
     setPageCursors([null]);
     setResponse(null);
@@ -153,6 +156,7 @@ export default function PaymentsPage({
   }, [session.lenderId]);
 
   useEffect(() => {
+    // Debounce the text search so backend filtering does not fire on every keypress.
     const handle = window.setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
     }, 250);
@@ -161,6 +165,7 @@ export default function PaymentsPage({
   }, [searchQuery]);
 
   useEffect(() => {
+    // Starting a new search always returns the cursor stack to the first page.
     setCurrentPage(1);
     setPageCursors([null]);
   }, [debouncedSearchQuery]);
@@ -168,6 +173,7 @@ export default function PaymentsPage({
   useEffect(() => {
     let isMounted = true;
 
+    // The list query omits summary data to keep paged fetches lighter than the initial metrics load.
     const loadTransactions = async () => {
       try {
         setIsListLoading(true);
@@ -213,6 +219,7 @@ export default function PaymentsPage({
 
     let isMounted = true;
 
+    // Summary data loads once after the first list payload so the header can appear even if detail state changes later.
     const loadSummary = async () => {
       try {
         setIsSummaryLoading(true);
@@ -256,6 +263,7 @@ export default function PaymentsPage({
 
     let isMounted = true;
 
+    // Opening a transaction detail panel fetches both borrower and loan ledger data in parallel.
     const loadDetails = async () => {
       try {
         setIsDetailLoading(true);
@@ -338,6 +346,7 @@ export default function PaymentsPage({
   }
 
   async function handleRecordPayment(installmentId: string) {
+    // Recording a payment updates the open ledger first, then refreshes list and summary data to keep all views aligned.
     if (!selectedTransaction) {
       return;
     }

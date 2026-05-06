@@ -1,3 +1,4 @@
+// Dashboard API models for summary metrics, borrower tables, and borrower detail modals.
 import {
   fetchLenderApi,
   fetchLenderApiWithQuery,
@@ -73,6 +74,7 @@ export type BorrowerLoan = {
 };
 
 export async function fetchDashboardSummary(): Promise<DashboardSummaryResponse> {
+  // Returns a small summary block that powers the dashboard metric cards.
   const response = await fetchLenderApi("/dashboard/summary");
 
   if (!response.ok) {
@@ -87,6 +89,7 @@ export async function fetchDashboardBorrowers(
   cursor?: string | null,
   search?: string,
 ): Promise<DashboardBorrowersResponse> {
+  // The borrower table supports cursor pagination and optional keyword filtering in one endpoint.
   const searchParams = new URLSearchParams({
     pageSize: String(pageSize),
   });
@@ -114,6 +117,7 @@ export async function fetchDashboardBorrowers(
 export async function fetchBorrowerDetails(
   borrowerId: string,
 ): Promise<BorrowerDetails> {
+  // Borrower details are loaded lazily when the dashboard modal opens.
   const response = await fetchLenderApi(
     `/dashboard/borrowers/${encodeURIComponent(borrowerId)}`,
   );

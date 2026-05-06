@@ -1,3 +1,4 @@
+// Combined lender sign-in and sign-up flow, including the client-side KYC step.
 import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import type { LenderSession } from "../lib/lender-session";
 import {
@@ -30,6 +31,7 @@ type SignUpForm = {
 };
 
 const initialSignUpForm: SignUpForm = {
+  // The signup form keeps account details and KYC payload together because submission spans both steps.
   fullName: "",
   email: "",
   phone: "",
@@ -61,6 +63,7 @@ function getDocumentLabel(documentType: string) {
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
+  // Uploaded KYC files are converted to data URLs because the current API accepts inline payload strings.
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () =>
@@ -92,6 +95,7 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
         : "NIC number";
 
   const authCopy = useMemo(() => {
+    // Derives copy from the active auth mode so the JSX stays mostly declarative.
     return activeMode === "login"
       ? {
           eyebrow: "Lender",
@@ -124,6 +128,7 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
   }
 
   function validateAccountStep() {
+    // The first step only validates account creation fields before KYC becomes visible.
     if (!signUpForm.fullName.trim()) {
       setError("Full name is required.");
       return false;
@@ -156,6 +161,7 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
   }
 
   function validateKycStep() {
+    // KYC validation is intentionally limited to the fields required by the current onboarding API.
     if (
       !signUpForm.kyc.documentNumber.trim() ||
       !signUpForm.kyc.fullName.trim()
@@ -191,6 +197,7 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
     field: UploadFieldKey,
     event: ChangeEvent<HTMLInputElement>,
   ) {
+    // Each upload writes into the nested KYC payload and stores the chosen filename for visual feedback.
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -224,6 +231,7 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
     event.preventDefault();
     setError(null);
 
+    // Login is deliberately simple: validate the two required fields, then hand the session back to the shell.
     if (!loginIdentifier.trim() || !loginPassword.trim()) {
       setError("Please enter your email or phone together with your password.");
       return;
@@ -259,6 +267,7 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
     event.preventDefault();
     setError(null);
 
+    // The signup flow is two-stage: validate account data first, then create the account and immediately submit KYC.
     if (registerStep === "account") {
       if (!validateAccountStep()) {
         return;

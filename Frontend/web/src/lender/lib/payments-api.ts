@@ -1,3 +1,4 @@
+// Payments API layer for transaction history, loan ledgers, and manual installment posting.
 import {
   fetchLenderApi,
   fetchLenderApiWithQuery,
@@ -100,6 +101,7 @@ export type FetchPaymentsOptions = {
 export async function fetchPayments(
   options: FetchPaymentsOptions = {},
 ): Promise<PaymentsResponse> {
+  // One endpoint powers both the paged list and the summary cards via feature flags in the query string.
   const params = new URLSearchParams({
     pageSize: String(options.pageSize ?? 15),
   });
@@ -135,6 +137,7 @@ export async function fetchPayments(
 export async function fetchLoanLedgerDetails(
   loanId: string,
 ): Promise<LoanLedgerDetailsResponse> {
+  // Loan ledger details are fetched lazily when a transaction detail drawer opens.
   const response = await fetchLenderApi(
     `/payments/loans/${encodeURIComponent(loanId)}`,
   );
@@ -151,6 +154,7 @@ export async function recordInstallmentPayment(
   installmentId: string,
   input: RecordInstallmentPaymentInput,
 ): Promise<LoanLedgerDetailsResponse> {
+  // Posting a payment returns the updated ledger so installment status can refresh without another round trip.
   const response = await fetchLenderApi(
     `/payments/loans/${encodeURIComponent(
       loanId,

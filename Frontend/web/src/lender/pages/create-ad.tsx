@@ -1,3 +1,4 @@
+// Ad composer for lender offer drafts, local draft persistence, and recent ad snapshots.
 import { useEffect, useMemo, useState } from "react";
 import type { LenderSession } from "../lib/lender-session";
 import type { LenderSettings } from "../lib/lender-settings-api";
@@ -39,6 +40,7 @@ const DEFAULT_DRAFT: AdDraft = {
 };
 
 function getStorageKey(lenderId: string): string {
+  // Drafts are stored per lender so shared browsers do not mix multiple lenders' ad data.
   return `smart-credit:create-ad-draft:${lenderId}`;
 }
 
@@ -46,6 +48,7 @@ function parseStoredDraft(
   value: string | null,
   fallbackDraft: AdDraft,
 ): AdDraft | null {
+  // Stored drafts are merged with a fallback shape so newly added fields still get safe defaults.
   if (!value) {
     return null;
   }
@@ -155,6 +158,7 @@ function getAdStatusBadgeClass(value: string): string {
 }
 
 function buildOfferSummary(draft: AdDraft): string {
+  // Creates the short offer copy shown in preview cards from the core lender messaging fields.
   return `${draft.processingTime}. ${draft.repaymentStyle}. ${draft.supportNote}`;
 }
 
@@ -178,6 +182,7 @@ function formatStarterBorrowerFocus(settings: LenderSettings): string {
 }
 
 function buildStarterDraft(settings: LenderSettings): AdDraft {
+  // Builds a first-pass draft from lender defaults so the form reflects saved preferences immediately.
   return {
     ...DEFAULT_DRAFT,
     minAmount: String(settings.lendingDefaults.defaultMinAmount),
@@ -193,6 +198,7 @@ export default function CreateAdPage({
   session,
   settings,
 }: CreateAdPageProps) {
+  // starterDraft changes whenever lender defaults change, but the current draft remains locally editable.
   const starterDraft = useMemo(() => buildStarterDraft(settings), [settings]);
   const [draft, setDraft] = useState<AdDraft>(
     () =>
@@ -210,6 +216,7 @@ export default function CreateAdPage({
   const [adsError, setAdsError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Save feedback is transient so the page can reuse the same banner area without manual dismissal.
     if (!saveMessage) {
       return;
     }
@@ -219,6 +226,7 @@ export default function CreateAdPage({
   }, [saveMessage]);
 
   useEffect(() => {
+    // Publish feedback lasts slightly longer because it usually follows a multi-field save operation.
     if (!publishMessage) {
       return;
     }
@@ -228,6 +236,7 @@ export default function CreateAdPage({
   }, [publishMessage]);
 
   useEffect(() => {
+    // When either the lender or settings defaults change, reload the best available local draft for that lender.
     setDraft(
       parseStoredDraft(
         window.localStorage.getItem(getStorageKey(session.lenderId)),
@@ -239,6 +248,7 @@ export default function CreateAdPage({
   useEffect(() => {
     let isMounted = true;
 
+    // The recent ads panel is independent from the local draft and is refreshed from the API on page load.
     const loadRecentAds = async () => {
       try {
         setIsRecentAdsLoading(true);
@@ -282,6 +292,7 @@ export default function CreateAdPage({
   }
 
   function handleSaveDraft() {
+    // Draft saves are local-only until the lender explicitly publishes the ad.
     window.localStorage.setItem(
       getStorageKey(session.lenderId),
       JSON.stringify(draft),
@@ -290,12 +301,14 @@ export default function CreateAdPage({
   }
 
   function handleResetDraft() {
+    // Reset removes the stored draft and repopulates the form from current lender defaults.
     setDraft(starterDraft);
     window.localStorage.removeItem(getStorageKey(session.lenderId));
     setSaveMessage("Draft reset.");
   }
 
   async function handlePublishAd() {
+    // Publishing persists the current draft and then refreshes the recent ads snapshot from the server copy.
     try {
       setIsPublishing(true);
       setPublishError(null);

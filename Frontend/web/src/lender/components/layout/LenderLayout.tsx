@@ -1,6 +1,7 @@
+// Shared lender shell that keeps the sidebar persistent while page content swaps by view.
 import type { ReactNode } from "react";
 import LenderSidebar from "../common/LenderSidebar";
-import type { LenderView } from "../common/LenderSidebar";
+import type { LenderView } from "../../config/lender-views";
 import type { LenderSession } from "../../lib/lender-session";
 
 type LenderLayoutProps = {

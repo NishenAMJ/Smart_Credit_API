@@ -1,86 +1,10 @@
-import { useEffect, useState, type JSX } from "react";
+// Renders the lender navigation, mobile menu, and account actions.
+import { useEffect, useState } from "react";
 import type { LenderSession } from "../../lib/lender-session";
-import { SettingsIcon } from "lucide-react";
-
-type LenderView =
-  | "dashboard"
-  | "payments"
-  | "analytics"
-  | "active-ads-requests"
-  | "create-ad"
-  | "pending-requests"
-  | "settings"
-  | "notifications"
-  | "agreements";
-
-type NavItem = {
-  id: LenderView;
-  label: string;
-  icon: () => JSX.Element;
-};
-
-function DashboardIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <rect x="4.5" y="4.5" width="6.5" height="6.5" rx="1.5" />
-      <rect x="13" y="4.5" width="6.5" height="6.5" rx="1.5" />
-      <rect x="4.5" y="13" width="6.5" height="6.5" rx="1.5" />
-      <rect x="13" y="13" width="6.5" height="6.5" rx="1.5" />
-    </svg>
-  );
-}
-
-function TransactionsIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <rect x="4" y="5.5" width="16" height="13" rx="2.5" />
-      <path d="M4 10h16" />
-      <path d="M8 14h3.5" />
-      <path d="M14.5 14H16" />
-    </svg>
-  );
-}
-
-function AnalyticsIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <path d="M5 19.5h14" />
-      <path d="M8 17V11" />
-      <path d="M12 17V7" />
-      <path d="M16 17v-4" />
-    </svg>
-  );
-}
-
-function CreateAdIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-      <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
-    </svg>
-  );
-}
+import {
+  lenderViewRegistry,
+  type LenderView,
+} from "../../config/lender-views";
 
 function SidebarToggleIcon() {
   return (
@@ -105,39 +29,7 @@ function SidebarToggleIcon() {
   );
 }
 
-function AgreementsIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-      <polyline points="14 2 14 8 20 8"></polyline>
-      <line x1="16" y1="13" x2="8" y2="13"></line>
-      <line x1="16" y1="17" x2="8" y2="17"></line>
-      <polyline points="10 9 9 9 8 9"></polyline>
-    </svg>
-  );
-}
-
-function SidebarSettingsIcon() {
-  return <SettingsIcon size={20} strokeWidth={1.8} />;
-}
-
-const navItems: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: DashboardIcon },
-  { id: "payments", label: "Payments", icon: TransactionsIcon },
-  { id: "analytics", label: "Analytics", icon: AnalyticsIcon },
-  { id: "create-ad", label: "Create Ad", icon: CreateAdIcon },
-  { id: "agreements", label: "Agreements", icon: AgreementsIcon },
-  { id: "settings", label: "Settings", icon: SidebarSettingsIcon }, 
-];
-
-//Used to save sidebar collapsed state, Persists even after refresh
+// Persists the desktop collapse preference across reloads.
 const SIDEBAR_COLLAPSE_STORAGE_KEY = "smart-credit:lender-sidebar-collapsed";
 
 function LogoutIcon() {
@@ -170,6 +62,8 @@ export default function LenderSidebar({
   onOpenProfile,
   onLogout,
 }: LenderSidebarProps) {
+  // Hidden lender views still exist in the app, but only marked entries appear in the sidebar.
+  const navItems = lenderViewRegistry.filter((item) => item.showInSidebar);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(() => {
     if (typeof window === "undefined") {
@@ -180,6 +74,7 @@ export default function LenderSidebar({
   });
 
   useEffect(() => {
+    // Persist the collapse state so the desktop shell reopens the way the lender left it.
     window.localStorage.setItem(
       SIDEBAR_COLLAPSE_STORAGE_KEY,
       String(isDesktopCollapsed),
@@ -329,5 +224,3 @@ export default function LenderSidebar({
     </>
   );
 }
-
-export type { LenderView };

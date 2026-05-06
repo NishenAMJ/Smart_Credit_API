@@ -1,3 +1,4 @@
+// Lender analytics dashboard with range switching and drilldown overlays for deeper investigation.
 import { useEffect, useMemo, useState } from "react";
 import type {
   AnalyticsDrilldownResponse,
@@ -66,6 +67,7 @@ function TrendBars({
   data: AnalyticsTrendPoint[];
   colorClassName: string;
 }) {
+  // Bars are scaled against the largest visible value so trends stay readable across different ranges.
   const maxValue = Math.max(...data.map((point) => point.value), 1);
 
   return (
@@ -89,6 +91,7 @@ function TrendBars({
 }
 
 function StatusBreakdown({ data }: { data: AnalyticsBreakdownPoint[] }) {
+  // The breakdown list computes its own proportions locally so the API only needs to send raw counts.
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   return (
@@ -143,6 +146,7 @@ export default function AnalyticsPage({
   const [drilldownError, setDrilldownError] = useState<string | null>(null);
 
   useEffect(() => {
+    // When the saved default range changes, reset both the selected range and any open drilldown modal.
     setSelectedRange(defaultRange);
     setDrilldownType(null);
     setDrilldown(null);
@@ -152,6 +156,7 @@ export default function AnalyticsPage({
   useEffect(() => {
     let isMounted = true;
 
+    // Overview data powers every top-level analytics card, chart, and KPI.
     const loadAnalytics = async () => {
       try {
         setIsLoading(true);
@@ -190,6 +195,7 @@ export default function AnalyticsPage({
 
     let isMounted = true;
 
+    // Drilldowns are fetched lazily only after the lender opens one of the drilldown entry points.
     const loadDrilldown = async () => {
       try {
         setIsDrilldownLoading(true);
@@ -240,6 +246,7 @@ export default function AnalyticsPage({
   }, [drilldownType]);
 
   const summaryCards = useMemo(() => {
+    // Build presentation-ready summary cards once so the render tree stays declarative.
     if (!overview) {
       return [];
     }
@@ -277,12 +284,14 @@ export default function AnalyticsPage({
   }, [overview]);
 
   function handleOpenDrilldown(type: string) {
+    // Opening a new drilldown clears the previous payload so the modal can show a clean loading state.
     setDrilldownType(type);
     setDrilldown(null);
     setDrilldownError(null);
   }
 
   function handleCloseDrilldown() {
+    // Closing the modal also clears its payload so stale drilldown data is not reused accidentally.
     setDrilldownType(null);
     setDrilldown(null);
     setDrilldownError(null);
