@@ -22,7 +22,6 @@ import {
   TextInput,
   ActivityIndicator,
   SafeAreaView,
-  StatusBar,
 } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from "../../constants";
@@ -211,8 +210,9 @@ export default function NewChatScreen({ navigation }: Props) {
   );
 
   return (
+    // ✅ SafeAreaView handles top inset — no StatusBar component here
+    // so this screen never affects the global status bar style
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
 
       <View style={styles.header}>
         <TouchableOpacity

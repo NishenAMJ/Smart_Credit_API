@@ -49,7 +49,7 @@ export default function QRScannerScreen({ navigation }: any) {
     typeof MOCK_SCANNED_DATA | null
   >(null);
 
-  // ── Animated scan line ───────────────────────────
+  
   // This creates the moving red scan line effect
   const scanLineAnim = new Animated.Value(0);
 
@@ -75,39 +75,39 @@ export default function QRScannerScreen({ navigation }: any) {
     }
   }, [scanState]);
 
-  // ── Scan line Y position ─────────────────────────
+  
   // Moves from top to bottom of scan box
   const scanLineY = scanLineAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, SCAN_SIZE - 4],
   });
 
-  // ── Simulate scan ────────────────────────────────
+  
   // In real app this is triggered by camera detecting QR
   const simulateScan = () => {
     setScanState("scanned");
     setScannedData(MOCK_SCANNED_DATA);
   };
 
-  // ── Simulate error ───────────────────────────────
+  
   const simulateError = () => {
     setScanState("error");
   };
 
-  // ── Reset to scanning ────────────────────────────
+  
   const resetScan = () => {
     setScanState("scanning");
     setScannedData(null);
   };
 
-  // ── Go to verify payment ─────────────────────────
+  
   const handleVerify = () => {
     navigation.navigate("VerifyPayment", {
       borrower: scannedData,
     });
   };
 
-  // ── Scanned success screen ───────────────────────
+  
   if (scanState === "scanned" && scannedData) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -190,7 +190,7 @@ export default function QRScannerScreen({ navigation }: any) {
     );
   }
 
-  // ── Error screen ─────────────────────────────────
+  
   if (scanState === "error") {
     return (
       <SafeAreaView style={styles.safe}>
@@ -247,10 +247,10 @@ export default function QRScannerScreen({ navigation }: any) {
     );
   }
 
-  // ── Main scanner screen ──────────────────────────
+
   return (
     <SafeAreaView style={styles.safe}>
-      {/* ── HEADER ──────────────────────────────── */}
+      
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -272,7 +272,7 @@ export default function QRScannerScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* ── CAMERA AREA ─────────────────────────── */}
+      {/* CAMERA AREA */}
       <View style={styles.cameraArea}>
         {/* Dark overlay — top */}
         <View style={styles.overlayTop} />
@@ -316,7 +316,7 @@ export default function QRScannerScreen({ navigation }: any) {
         <View style={styles.overlayBottom} />
       </View>
 
-      {/* ── INSTRUCTIONS ────────────────────────── */}
+      {/*  INSTRUCTIONS  */}
       <View style={styles.instructions}>
         <Text style={styles.instructTitle}>
           Position QR code within the frame
@@ -359,7 +359,7 @@ export default function QRScannerScreen({ navigation }: any) {
   );
 }
 
-// ── ScannedRow component ──────────────────────────────
+// ScannedRow component 
 const ScannedRow = ({
   label,
   value,
@@ -382,7 +382,7 @@ const ScannedRow = ({
   </View>
 );
 
-// ── ErrorTip component ────────────────────────────────
+// ErrorTip component 
 const ErrorTip = ({ icon, text }: { icon: string; text: string }) => (
   <View style={errorTipStyles.wrap}>
     <View style={errorTipStyles.iconWrap}>
@@ -392,7 +392,7 @@ const ErrorTip = ({ icon, text }: { icon: string; text: string }) => (
   </View>
 );
 
-// ── Step component ────────────────────────────────────
+//  Step component 
 const Step = ({ number, text }: { number: string; text: string }) => (
   <View style={stepStyles.wrap}>
     <View style={stepStyles.numWrap}>
@@ -402,7 +402,7 @@ const Step = ({ number, text }: { number: string; text: string }) => (
   </View>
 );
 
-// ── Styles ────────────────────────────────────────────
+// Styles 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
@@ -732,7 +732,7 @@ const scannedRowStyles = StyleSheet.create({
   },
 });
 
-// ── ErrorTip styles ───────────────────────────────────
+//  ErrorTip styles
 const errorTipStyles = StyleSheet.create({
   wrap: {
     flexDirection: "row",
@@ -755,7 +755,7 @@ const errorTipStyles = StyleSheet.create({
   },
 });
 
-// ── Step styles ───────────────────────────────────────
+//  Step styles 
 const stepStyles = StyleSheet.create({
   wrap: {
     flexDirection: "row",

@@ -1,16 +1,4 @@
-/**
- * chat.module.ts
- * 
- * Root module for the entire chat feature.
- *
- * LOCAL-FIRST NOTE:
- * MessagesModule (HTTP endpoints for fetching messages) is still included
- * so the app can do an initial sync on first install or after re-install.
- * After the first sync, the app reads from local SQLite — not the backend.
- *
- * FirebaseModule is @Global() so it does not need to be imported here —
- * it is imported once in AppModule and injected everywhere automatically.
- */
+
 import { Module } from '@nestjs/common';
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';

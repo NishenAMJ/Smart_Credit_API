@@ -218,7 +218,7 @@ export default function AdAnalyticsScreen({ route, navigation }: any) {
         <View style={commonStyles.card}>
           <View style={[commonStyles.rowSpaceBetween, { marginBottom: 12 }]}>
             <Text style={commonStyles.textPrimary}>Amount Spent</Text>
-            {/* ✅ null-safe fix: boostAmount defaults to 0 */}
+            
             <Text style={commonStyles.textPrimary}>
               LKR {(data.boostAmount ?? 0).toLocaleString()}
             </Text>

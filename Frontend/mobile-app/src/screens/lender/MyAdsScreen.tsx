@@ -48,10 +48,7 @@ export default function MyAdsScreen({ navigation }: any) {
       await AdService.activateAd(adId);
       loadAds();
     } catch (e: any) {
-      Alert.alert(
-        "Error",
-        e?.response?.data?.message || "Failed to activate ad",
-      );
+      Alert.alert("Error", e?.response?.data?.message || "Failed to activate ad");
     }
   };
 
@@ -66,10 +63,7 @@ export default function MyAdsScreen({ navigation }: any) {
             await AdService.deleteAd(adId);
             loadAds();
           } catch (e: any) {
-            Alert.alert(
-              "Error",
-              e?.response?.data?.message || "Failed to delete ad",
-            );
+            Alert.alert("Error", e?.response?.data?.message || "Failed to delete ad");
           }
         },
       },
@@ -83,39 +77,24 @@ export default function MyAdsScreen({ navigation }: any) {
   });
 
   const renderFilterBar = () => (
-    <View
-      style={{
-        flexDirection: "row",
-        paddingHorizontal: 16,
-        gap: 8,
-        marginBottom: 12,
-        marginTop: 12,
-      }}
-    >
+    <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 8, marginBottom: 12, marginTop: 12 }}>
       {["all", "active", "paused"].map((f) => (
         <TouchableOpacity
           key={f}
           onPress={() => setFilter(f)}
           style={[
-            {
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 8,
-              flex: 1,
-            },
+            { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, flex: 1 },
             filter === f
               ? { backgroundColor: COLORS.primary }
               : { backgroundColor: COLORS.border },
           ]}
         >
-          <Text
-            style={{
-              textAlign: "center",
-              fontWeight: "600",
-              fontSize: 12,
-              color: filter === f ? "#fff" : COLORS.textPrimary,
-            }}
-          >
+          <Text style={{
+            textAlign: "center",
+            fontWeight: "600",
+            fontSize: 12,
+            color: filter === f ? "#fff" : COLORS.textPrimary,
+          }}>
             {f.charAt(0).toUpperCase() + f.slice(1)}
           </Text>
         </TouchableOpacity>
@@ -124,43 +103,30 @@ export default function MyAdsScreen({ navigation }: any) {
   );
 
   const renderAd = ({ item }: any) => (
-    <View
-      style={[commonStyles.card, { marginHorizontal: 16, marginBottom: 12 }]}
-    >
+    <View style={[commonStyles.card, { marginHorizontal: 16, marginBottom: 12 }]}>
+
+      {/* ── Title + Status ── */}
       <View style={commonStyles.rowSpaceBetween}>
-        <View style={{ flex: 1 }}>
-          <Text style={commonStyles.textPrimary}>{item.title}</Text>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={commonStyles.textPrimary} numberOfLines={1}>
+            {item.title}
+          </Text>
           <Text style={[commonStyles.textSecondary, { marginTop: 4 }]}>
             {item.location}
           </Text>
         </View>
         <View style={{ alignItems: "flex-end" }}>
           {item.isBoosted && (
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: COLORS.warning,
-                marginBottom: 4,
-              }}
-            >
+            <Text style={{ fontSize: 11, fontWeight: "600", color: COLORS.warning, marginBottom: 4 }}>
               ⚡ Boosted
             </Text>
           )}
-          <Text
-            style={[
-              {
-                fontSize: 12,
-                fontWeight: "600",
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                borderRadius: 12,
-              },
-              item.status === "active"
-                ? { backgroundColor: "#D1F9E6", color: COLORS.success }
-                : { backgroundColor: "#FEF2F2", color: COLORS.danger },
-            ]}
-          >
+          <Text style={[
+            { fontSize: 11, fontWeight: "600", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+            item.status === "active"
+              ? { backgroundColor: "#D1F9E6", color: COLORS.success }
+              : { backgroundColor: "#FEF2F2", color: COLORS.danger },
+          ]}>
             {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
           </Text>
         </View>
@@ -168,24 +134,23 @@ export default function MyAdsScreen({ navigation }: any) {
 
       <View style={commonStyles.divider} />
 
+      {/* ── Loan Terms ── */}
       <View style={commonStyles.rowSpaceBetween}>
         <View>
           <Text style={commonStyles.textSmall}>Amount Range</Text>
           <Text style={commonStyles.textPrimary}>
-            LKR {item.minAmount.toLocaleString()} –{" "}
-            {item.maxAmount.toLocaleString()}
+            LKR {item.minAmount.toLocaleString()} – {item.maxAmount.toLocaleString()}
           </Text>
         </View>
         <View>
           <Text style={commonStyles.textSmall}>Interest</Text>
-          <Text style={commonStyles.textPrimary}>
-            {item.preferredInterestRate}% p.a.
-          </Text>
+          <Text style={commonStyles.textPrimary}>{item.preferredInterestRate}% p.a.</Text>
         </View>
       </View>
 
       <View style={commonStyles.spacer12} />
 
+      {/* ── Stats ── */}
       <View style={commonStyles.rowSpaceBetween}>
         <View>
           <Text style={commonStyles.textSmall}>Views</Text>
@@ -203,119 +168,121 @@ export default function MyAdsScreen({ navigation }: any) {
 
       <View style={commonStyles.spacer12} />
 
-      <View style={commonStyles.row}>
+      {/* ── Action Buttons: icon on top, label below — no text overflow ── */}
+      <View style={{ flexDirection: "row", gap: 6 }}>
+
         <TouchableOpacity
-          style={[commonStyles.secondaryButton, { flex: 1, marginRight: 6 }]}
           onPress={() => navigation.navigate("EditAd", { ad: item })}
+          style={{
+            flex: 1,
+            alignItems: "center",
+            paddingVertical: 8,
+            borderRadius: 8,
+            backgroundColor: COLORS.border,
+          }}
         >
-          <View style={commonStyles.row}>
-            <Feather name="edit-2" size={14} color={COLORS.textPrimary} />
-            <Text
-              style={{
-                marginLeft: 4,
-                color: COLORS.textPrimary,
-                fontWeight: "600",
-              }}
-            >
-              Edit
-            </Text>
-          </View>
+          <Feather name="edit-2" size={16} color={COLORS.textPrimary} />
+          <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>
+            Edit
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[commonStyles.secondaryButton, { flex: 1, marginRight: 6 }]}
-          onPress={() =>
-            navigation.navigate("AdAnalytics", { adId: item.adId })
-          }
+          onPress={() => navigation.navigate("AdAnalytics", { adId: item.adId })}
+          style={{
+            flex: 1,
+            alignItems: "center",
+            paddingVertical: 8,
+            borderRadius: 8,
+            backgroundColor: COLORS.border,
+          }}
         >
-          <View style={commonStyles.row}>
-            <Feather name="bar-chart-2" size={14} color={COLORS.textPrimary} />
-            <Text
-              style={{
-                marginLeft: 4,
-                color: COLORS.textPrimary,
-                fontWeight: "600",
-              }}
-            >
-              Stats
-            </Text>
-          </View>
+          <Feather name="bar-chart-2" size={16} color={COLORS.textPrimary} />
+          <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>
+            Stats
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[commonStyles.secondaryButton, { flex: 1, marginRight: 6 }]}
           onPress={() => navigation.navigate("BoostAd", { ad: item })}
+          style={{
+            flex: 1,
+            alignItems: "center",
+            paddingVertical: 8,
+            borderRadius: 8,
+            backgroundColor: COLORS.border,
+          }}
         >
-          <View style={commonStyles.row}>
-            <Feather name="trending-up" size={14} color={COLORS.textPrimary} />
-            <Text
-              style={{
-                marginLeft: 4,
-                color: COLORS.textPrimary,
-                fontWeight: "600",
-              }}
-            >
-              Boost
-            </Text>
-          </View>
+          <Feather name="trending-up" size={16} color={COLORS.textPrimary} />
+          <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>
+            Boost
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={commonStyles.secondaryButton}
           onPress={() =>
             item.status === "active"
               ? handlePause(item.adId)
               : handleActivate(item.adId)
           }
+          style={{
+            flex: 1,
+            alignItems: "center",
+            paddingVertical: 8,
+            borderRadius: 8,
+            backgroundColor: COLORS.border,
+          }}
         >
-          <View style={commonStyles.row}>
-            <Feather
-              name={item.status === "active" ? "pause-circle" : "play-circle"}
-              size={14}
-              color={COLORS.textPrimary}
-            />
-          </View>
+          <Feather
+            name={item.status === "active" ? "pause-circle" : "play-circle"}
+            size={16}
+            color={COLORS.textPrimary}
+          />
+          <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>
+            {item.status === "active" ? "Pause" : "Resume"}
+          </Text>
         </TouchableOpacity>
+
       </View>
 
+      {/* ── Delete — full width below ── */}
       <TouchableOpacity
-        style={[
-          commonStyles.secondaryButton,
-          { marginTop: 8, backgroundColor: "#FEF2F2" },
-        ]}
         onPress={() => handleDelete(item.adId)}
+        style={{
+          marginTop: 8,
+          paddingVertical: 9,
+          borderRadius: 8,
+          backgroundColor: "#FEF2F2",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
       >
-        <View style={commonStyles.row}>
-          <Feather name="trash-2" size={14} color={COLORS.danger} />
-          <Text
-            style={{ marginLeft: 6, color: COLORS.danger, fontWeight: "600" }}
-          >
-            Delete
-          </Text>
-        </View>
+        <Feather name="trash-2" size={14} color={COLORS.danger} />
+        <Text style={{ marginLeft: 6, color: COLORS.danger, fontWeight: "600", fontSize: 13 }}>
+          Delete
+        </Text>
       </TouchableOpacity>
+
     </View>
   );
 
-  if (loading)
-    return (
-      <SafeAreaView style={commonStyles.safe}>
-        <View style={commonStyles.header}>
-          <View style={commonStyles.headerFlexRow}>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Feather name="arrow-left" size={22} color="#fff" />
-            </TouchableOpacity>
-            <Text style={commonStyles.headerTitle}>My Ads</Text>
-            <View style={{ width: 22 }} />
-          </View>
+  if (loading) return (
+    <SafeAreaView style={commonStyles.safe}>
+      <View style={commonStyles.header}>
+        <View style={commonStyles.headerFlexRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Feather name="arrow-left" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={commonStyles.headerTitle}>My Ads</Text>
+          <View style={{ width: 22 }} />
         </View>
-        <View
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-        >
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      </SafeAreaView>
-    );
+      </View>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    </SafeAreaView>
+  );
 
   return (
     <SafeAreaView style={commonStyles.safe}>

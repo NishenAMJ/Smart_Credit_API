@@ -26,7 +26,7 @@ import {
 
 const { width } = Dimensions.get("window");
 
-// ── Main Component ────────────────────────────────────────
+
 export default function LenderDashboardScreen({ navigation }: any) {
   const [activeSlide, setActiveSlide] = useState(0);
   const [summary, setSummary] = useState<any>(null);

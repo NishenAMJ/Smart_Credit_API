@@ -1,48 +1,28 @@
-import React, { useState } from "react";
+import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
-import { Feather } from "@expo/vector-icons";
-import { commonStyles, COLORS } from "../../styles/lender.styles";
-import { AdService } from "../../services/advertisement.service";
+  View, Text, TextInput, TouchableOpacity,
+  ScrollView, SafeAreaView, Alert, ActivityIndicator, StatusBar,
+} from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { commonStyles, COLORS } from '../../styles/lender.styles';
+import { AdService } from '../../services/advertisement.service';
 
-const PURPOSES = [
-  "education",
-  "business",
-  "medical",
-  "personal",
-  "vehicle",
-  "home",
-];
-const LOCATIONS = [
-  "Colombo",
-  "Kandy",
-  "Galle",
-  "Negombo",
-  "Kurunegala",
-  "Jaffna",
-];
+const PURPOSES  = ['education', 'business', 'medical', 'personal', 'vehicle', 'home'];
+const LOCATIONS = ['Colombo', 'Kandy', 'Galle', 'Negombo', 'Kurunegala', 'Jaffna'];
 
 export default function CreateAdScreen({ navigation }: any) {
-  const [loading, setLoading] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [minAmount, setMinAmount] = useState("");
-  const [maxAmount, setMaxAmount] = useState("");
-  const [rate, setRate] = useState("");
-  const [minTenure, setMinTenure] = useState("");
-  const [maxTenure, setMaxTenure] = useState("");
-  const [capital, setCapital] = useState("");
-  const [responseHrs, setResponseHrs] = useState("");
-  const [location, setLocation] = useState("Colombo");
-  const [purposes, setPurposes] = useState<string[]>([]);
+  const [loading,     setLoading]     = useState(false);
+  const [title,       setTitle]       = useState('');
+  const [description, setDescription] = useState('');
+  const [minAmount,   setMinAmount]   = useState('');
+  const [maxAmount,   setMaxAmount]   = useState('');
+  const [rate,        setRate]        = useState('');
+  const [minTenure,   setMinTenure]   = useState('');
+  const [maxTenure,   setMaxTenure]   = useState('');
+  const [capital,     setCapital]     = useState('');
+  const [responseHrs, setResponseHrs] = useState('');
+  const [location,    setLocation]    = useState('Colombo');
+  const [purposes,    setPurposes]    = useState<string[]>([]);
 
   const togglePurpose = (p: string) => {
     setPurposes((prev) =>
@@ -52,28 +32,22 @@ export default function CreateAdScreen({ navigation }: any) {
 
   const handleSubmit = async () => {
     if (!title || !description || !minAmount || !maxAmount || !rate) {
-      Alert.alert("Validation Error", "Please fill all required fields (*)");
+      Alert.alert('Validation Error', 'Please fill all required fields (*)');
       return;
     }
 
     if (purposes.length === 0) {
-      Alert.alert("Validation Error", "Select at least one loan purpose");
+      Alert.alert('Validation Error', 'Select at least one loan purpose');
       return;
     }
 
     if (Number(minAmount) >= Number(maxAmount)) {
-      Alert.alert(
-        "Validation Error",
-        "Maximum amount must be greater than minimum amount",
-      );
+      Alert.alert('Validation Error', 'Maximum amount must be greater than minimum amount');
       return;
     }
 
     if (minTenure && maxTenure && Number(minTenure) > Number(maxTenure)) {
-      Alert.alert(
-        "Validation Error",
-        "Maximum tenure must be >= minimum tenure",
-      );
+      Alert.alert('Validation Error', 'Maximum tenure must be >= minimum tenure');
       return;
     }
 
@@ -86,23 +60,23 @@ export default function CreateAdScreen({ navigation }: any) {
       await AdService.createAd({
         title,
         description,
-        minAmount: Number(minAmount),
-        maxAmount: Number(maxAmount),
+        minAmount:             Number(minAmount),
+        maxAmount:             Number(maxAmount),
         preferredInterestRate: Number(rate),
-        minTenureMonths: Number(minTenure) || 6,
-        maxTenureMonths: Number(maxTenure) || 12,
-        availableCapital: Number(capital) || 0,
-        responseTimeHours: Number(responseHrs) || 24,
+        minTenureMonths:       Number(minTenure) || 6,
+        maxTenureMonths:       Number(maxTenure) || 12,
+        availableCapital:      Number(capital) || 0,
+        responseTimeHours:     Number(responseHrs) || 24,
         location,
-        preferredPurposes: purposes,
-        expiresAt: expiresAt.toISOString(),
+        preferredPurposes:     purposes,
+        expiresAt:             expiresAt.toISOString(),
       });
 
-      Alert.alert("Success", "Ad created successfully!", [
-        { text: "OK", onPress: () => navigation.navigate("MyAds") },
+      Alert.alert('Success', 'Ad created successfully!', [
+        { text: 'OK', onPress: () => navigation.navigate('MyAds') },
       ]);
     } catch (e: any) {
-      Alert.alert("Error", e?.response?.data?.message || "Failed to create ad");
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to create ad');
     } finally {
       setLoading(false);
     }
@@ -110,6 +84,7 @@ export default function CreateAdScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={commonStyles.safe}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       <View style={commonStyles.header}>
         <View style={commonStyles.headerFlexRow}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -120,7 +95,13 @@ export default function CreateAdScreen({ navigation }: any) {
         </View>
       </View>
 
-      <ScrollView style={commonStyles.scrollContainer}>
+      {/* ✅ contentContainerStyle adds bottom padding so button clears phone nav bar */}
+      <ScrollView
+        style={commonStyles.scrollContainer}
+        contentContainerStyle={{ paddingBottom: 48 }}
+        showsVerticalScrollIndicator={false}
+      >
+
         <Text style={commonStyles.sectionTitle}>Ad Details</Text>
         <View style={commonStyles.card}>
           <Text style={commonStyles.textPrimary}>Title *</Text>
@@ -240,18 +221,15 @@ export default function CreateAdScreen({ navigation }: any) {
               style={[commonStyles.row, { paddingVertical: 8 }]}
               onPress={() => setLocation(loc)}
             >
-              <View
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  borderWidth: 2,
-                  borderColor: COLORS.primary,
-                  backgroundColor:
-                    location === loc ? COLORS.primary : "transparent",
-                  marginRight: 8,
-                }}
-              />
+              <View style={{
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                borderWidth: 2,
+                borderColor: COLORS.primary,
+                backgroundColor: location === loc ? COLORS.primary : 'transparent',
+                marginRight: 8,
+              }} />
               <Text style={commonStyles.textPrimary}>{loc}</Text>
             </TouchableOpacity>
           ))}
@@ -265,19 +243,15 @@ export default function CreateAdScreen({ navigation }: any) {
               style={[commonStyles.row, { paddingVertical: 8 }]}
               onPress={() => togglePurpose(p)}
             >
-              <View
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  borderWidth: 2,
-                  borderColor: COLORS.primary,
-                  backgroundColor: purposes.includes(p)
-                    ? COLORS.primary
-                    : "transparent",
-                  marginRight: 8,
-                }}
-              />
+              <View style={{
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                borderWidth: 2,
+                borderColor: COLORS.primary,
+                backgroundColor: purposes.includes(p) ? COLORS.primary : 'transparent',
+                marginRight: 8,
+              }} />
               <Text style={commonStyles.textPrimary}>
                 {p.charAt(0).toUpperCase() + p.slice(1)}
               </Text>
@@ -288,17 +262,14 @@ export default function CreateAdScreen({ navigation }: any) {
         <TouchableOpacity
           onPress={handleSubmit}
           disabled={loading}
-          style={[
-            commonStyles.primaryButton,
-            { marginVertical: 24, opacity: loading ? 0.7 : 1 },
-          ]}
+          style={[commonStyles.primaryButton, { marginVertical: 24, opacity: loading ? 0.7 : 1 }]}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={commonStyles.buttonText}>Publish Ad</Text>
-          )}
+          {loading
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={commonStyles.buttonText}>Publish Ad</Text>
+          }
         </TouchableOpacity>
+
       </ScrollView>
     </SafeAreaView>
   );

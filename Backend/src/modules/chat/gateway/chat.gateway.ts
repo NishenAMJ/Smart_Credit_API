@@ -52,8 +52,7 @@ interface DeliveredPayload {
 @UseFilters(WsExceptionFilter)
 @WebSocketGateway({
   cors: {
-    // In dev: allow the local network IP your phone connects to.
-    // In prod: set this to your actual domain.
+
     origin: '*',
     credentials: true,
   },
@@ -73,9 +72,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Offline message queue.
    * userId → array of message payloads waiting to be delivered.
    * Flushed when the user reconnects.
-   *
-   * NOTE: This is in-memory only. If the server restarts, queued messages
-   * are lost. For production, replace with a Redis queue or Firebase RTDB.
+   
    */
   private offlineQueue = new Map<string, SendMessagePayload[]>();
 
@@ -87,10 +84,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   //  Connection lifecycle 
 
   async handleConnection(client: Socket) {
-    /**
-     * Auth: the mobile app sends userId in socket handshake.
-     * When real JWT auth is wired up, verify the token here.
-     */
+
     const userId =
       client.handshake.auth?.userId ??
       (client.handshake.headers['x-user-id'] as string);

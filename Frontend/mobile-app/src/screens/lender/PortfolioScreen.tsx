@@ -13,15 +13,7 @@ import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader, StatCard } from "../../components/lender";
 import { AnalyticsService } from "../../services/lender.service";
 
-/**
- * AnalyticsSummaryResponse shape:
- * {
- *   summary:     { totalLent, totalCollected, activeLoans, repaymentSuccessRate }
- *   performance: { activeAds, requestsReceived, acceptedRequests, requestToLoanConversionRate }
- *   portfolio:   { outstandingAmount, averageLoanSize, averageInterestRate, averageTenureMonths }
- *   risk:        { overdueLoans, defaultedLoans, openDisputes, averageBorrowerCreditScore }
- * }
- */
+
 
 export default function PortfolioScreen({ navigation }: any) {
   const [expandedId, setExpandedId] = useState<string | null>(null);

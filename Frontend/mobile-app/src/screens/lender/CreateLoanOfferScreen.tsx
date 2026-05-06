@@ -10,6 +10,7 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
+  StatusBar,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
@@ -62,11 +63,18 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={commonStyles.safe}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       <LenderHeader
         title="Create Loan Offer"
         onBackPress={() => navigation.goBack()}
       />
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+
+      {/* ✅ contentContainerStyle adds bottom padding so button clears phone nav bar */}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 48 }}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={commonStyles.card}>
           <Text style={commonStyles.sectionTitle}>Select Loan Type</Text>
           <View style={styles.typeGrid}>
@@ -164,20 +172,22 @@ export default function CreateLoanOfferScreen({ navigation }: any) {
           </View>
         </View>
 
-        {submitting ? (
-          <ActivityIndicator
-            style={{ marginVertical: 20 }}
-            color={COLORS.primary}
-          />
-        ) : (
-          <TouchableOpacity
-            style={commonStyles.primaryButton}
-            onPress={handleCreate}
-          >
-            <Feather name="plus" size={18} color="#fff" />
-            <Text style={commonStyles.buttonText}>Create Offer</Text>
-          </TouchableOpacity>
-        )}
+        {/* ✅ Button always rendered, spinner shown inside when submitting */}
+        <TouchableOpacity
+          style={[commonStyles.primaryButton, { marginVertical: 24, opacity: submitting ? 0.7 : 1 }]}
+          onPress={handleCreate}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Feather name="plus" size={18} color="#fff" />
+              <Text style={commonStyles.buttonText}>Create Offer</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
       </ScrollView>
     </SafeAreaView>
   );

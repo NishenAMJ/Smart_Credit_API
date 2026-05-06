@@ -92,7 +92,7 @@ export default function LenderProfileScreen({ navigation }: any) {
         setEditEmail(data?.email ?? "");
         setEditPhone(data?.phone ?? "");
       } catch (err: any) {
-        // Silent fail: profile renders with empty fields rather than blocking with an alert
+        
         console.warn(
           "Profile load failed:",
           err?.response?.data?.message ?? err?.message,

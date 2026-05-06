@@ -1,6 +1,6 @@
 /**
  * ChatListScreen.tsx
- * ─────────────────────────────────────────────────────────────────────────────
+
  * Shows all conversations for the current user.
  *
  * LOCAL-FIRST:
@@ -61,7 +61,7 @@ export default function ChatListScreen({ navigation }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // ── Load conversations ────────────────────────────────────────────────────
+  //  Load conversations 
 
   const loadConversations = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -100,7 +100,7 @@ export default function ChatListScreen({ navigation }: Props) {
     }, [loadConversations]),
   );
 
-  // ── Real-time updates ─────────────────────────────────────────────────────
+  //  Real-time updates 
 
   useEffect(() => {
     const onMessage = (msg: Message) => {
@@ -125,7 +125,7 @@ export default function ChatListScreen({ navigation }: Props) {
     return () => chatSocket.off("receiveMessage", onMessage);
   }, []);
 
-  // ── Search ────────────────────────────────────────────────────────────────
+  // Search
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
@@ -143,7 +143,7 @@ export default function ChatListScreen({ navigation }: Props) {
     );
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  //  Render 
 
   const renderItem = ({ item }: { item: Conversation }) => (
     <TouchableOpacity

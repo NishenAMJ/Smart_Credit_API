@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   ScrollView,
   View,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader, AlertBanner } from "../../components/lender";
 import { LoanOffersService } from "../../services/lender.service";
@@ -21,20 +22,23 @@ export default function MyOffersScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await LoanOffersService.getMyOffers();
-        // Backend returns an array directly from GET /api/lender/:id/offers
-        setOffers(Array.isArray(data) ? data : (data?.offers ?? []));
-      } catch (e: any) {
-        setError(e?.response?.data?.message ?? "Failed to load offers");
-        setOffers([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  // ✅ useFocusEffect re-fetches every time this screen comes into focus
+  // so newly created offers always appear without needing to restart the app
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      setError(null);
+      LoanOffersService.getMyOffers()
+        .then((data) => {
+          setOffers(Array.isArray(data) ? data : (data?.offers ?? []));
+        })
+        .catch((e: any) => {
+          setError(e?.response?.data?.message ?? "Failed to load offers");
+          setOffers([]);
+        })
+        .finally(() => setLoading(false));
+    }, []),
+  );
 
   const filtered = offers.filter(
     (o) => filter === "all" || (o.status ?? "active") === filter,
@@ -73,7 +77,11 @@ export default function MyOffersScreen({ navigation }: any) {
     <SafeAreaView style={commonStyles.safe}>
       <LenderHeader title="My Offers" onBackPress={() => navigation.goBack()} />
 
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 48 }}
+        showsVerticalScrollIndicator={false}
+      >
         {error && <AlertBanner type="error" title="Error" message={error} />}
 
         <View style={styles.filters}>

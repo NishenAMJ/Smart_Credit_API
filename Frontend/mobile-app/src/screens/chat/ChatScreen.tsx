@@ -1,6 +1,6 @@
 /**
  * ChatScreen.tsx
- * ─────────────────────────────────────────────────────────────────────────────
+ 
  * LOCAL-FIRST chat screen.
  *
  * On mount:
@@ -24,7 +24,6 @@ import {
   TextInput,
   ActivityIndicator,
   SafeAreaView,
-  StatusBar,
   KeyboardAvoidingView,
   Platform,
   Keyboard,
@@ -79,7 +78,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const flatRef = useRef<FlatList>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Mount ─────────────────────────────────────────────────────────────────
+  //  Mount 
 
   useEffect(() => {
     // 1. Load from local SQLite immediately (no loading spinner needed)
@@ -106,7 +105,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
 
     // 3. Reset unread count
-    conversationService.markAsRead(conversationId).catch(() => {});
+    conversationService.markAsRead(conversationId).catch(() => { });
 
     // 4. Socket subscriptions — defined as named functions for proper cleanup
     const onMessage = (msg: Message) => {
@@ -117,7 +116,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         return [msg, ...prev];
       });
       // Mark as read since user is actively in the screen
-      conversationService.markAsRead(conversationId).catch(() => {});
+      conversationService.markAsRead(conversationId).catch(() => { });
       // Send read receipt to the sender
       chatSocket.markMessageRead(conversationId, msg.id, msg.senderId);
     };
@@ -160,7 +159,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     chatSocket.on("messageRead", onRead);
 
     return () => {
-      // Clean up exact handlers — does NOT remove other screens' listeners
       chatSocket.off("receiveMessage", onMessage);
       chatSocket.off("messageDelivered", onDelivered);
       chatSocket.off("userTyping", onTyping);
@@ -169,7 +167,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     };
   }, [conversationId, currentUserId]);
 
-  // ── Load more (older messages) ────────────────────────────────────────────
+  //  Load more (older messages)
 
   const handleLoadMore = () => {
     if (!hasMore || loadingMore) return;
@@ -185,7 +183,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     setLoadingMore(false);
   };
 
-  // ── Send ──────────────────────────────────────────────────────────────────
+  //  Send 
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -214,7 +212,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
   };
 
-  // ── Typing indicator ──────────────────────────────────────────────────────
+  //  Typing indicator 
 
   const handleTyping = (val: string) => {
     setText(val);
@@ -225,7 +223,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     }, 1500);
   };
 
-  // ── Render bubble ─────────────────────────────────────────────────────────
+  //  Render bubble 
 
   const renderItem = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
@@ -288,8 +286,9 @@ export default function ChatScreen({ navigation, route }: Props) {
   );
 
   return (
+    // ✅ SafeAreaView handles top inset — no StatusBar component here
+    // so this screen never affects the global status bar style
     <SafeAreaView style={commonChatStyles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
 
       {/* Header */}
       <View style={commonChatStyles.header}>

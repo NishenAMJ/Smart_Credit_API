@@ -1,18 +1,4 @@
-/**
- * users.controller.ts
 
- * CRITICAL FIX: Previously UsersController and BlocksController BOTH used
- * @Controller('users') as the base path. NestJS loads them in unpredictable
- * order and GET /users/search was being caught by GET /users/blocked or
- * GET /users/:id before reaching the search handler.
- *
- * Fix: merge everything into ONE controller so route order is guaranteed.
- *
- * Route order matters in NestJS (and Express):
- *   GET /users/search   ← must be declared BEFORE /users/:id
- *   GET /users/blocked  ← must be declared BEFORE /users/:id
- *   GET /users/:id      ← catch-all, must be LAST
- */
 
 import {
   Controller,
@@ -44,7 +30,7 @@ export class UsersController {
     private blocksService: BlocksService,
   ) { }
 
-  //  Search — MUST be first, before any :param routes ─
+
 
   /**
    * GET /users/search?q=fathima
@@ -89,7 +75,7 @@ export class UsersController {
     return this.usersService.updateFcmToken(userId, dto.fcmToken);
   }
 
-  //  Single user — MUST be last (catches anything that didn't match above) 
+
 
   /** GET /users/:id — get a single user's public profile */
   @Get(':id')

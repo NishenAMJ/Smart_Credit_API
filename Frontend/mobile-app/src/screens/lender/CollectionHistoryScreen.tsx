@@ -13,15 +13,7 @@ import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader } from "../../components/lender";
 import { RecentTransactionsService } from "../../services/lender.service";
 
-/**
- * RecentTransactionListItem fields (from backend types):
- *   transactionId, loanId, installmentId, borrowerId, borrowerName,
- *   borrowerEmail, amount, type, status, createdAt, loanStatus,
- *   remainingAmount, source, installmentSummary
- *
- * RecentTransactionsSummary:
- *   totalTransactions, totalCollected, loansWithActivity, overdueInstallments
- */
+
 
 export default function CollectionHistoryScreen({ navigation }: any) {
   const [history, setHistory] = useState<any[]>([]);

@@ -13,14 +13,7 @@ import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader, AlertBanner } from "../../components/lender";
 import { RecentTransactionsService } from "../../services/lender.service";
 
-/**
- * getLoanLedger API returns: LoanLedgerDetailsResponse
- * {
- *   lenderId: string,
- *   loan: { id, borrowerId, status, amount, remainingAmount, interestRate, tenureMonths, createdAt }
- *   installments: [{ id, status, dueDate, amount, paidAmount, payments: [...] }]
- * }
- */
+
 
 export default function LoanDetailsScreen({ navigation, route }: any) {
   const loanId = route?.params?.loanId;

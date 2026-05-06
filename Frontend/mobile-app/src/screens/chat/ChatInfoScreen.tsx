@@ -40,7 +40,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
   const [blocking, setBlocking] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // ── Mute ─────────────────────────────────────────────────────────────────────
+  //  Mute 
   const handleToggleMute = async () => {
     try {
       setTogglingMute(true);
@@ -54,7 +54,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
     }
   };
 
-  // ── Block ─────────────────────────────────────────────────────────────────────
+  // Block 
   const handleConfirmBlock = async () => {
     try {
       setBlocking(true);
@@ -68,7 +68,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
     }
   };
 
-  // ── Delete conversation ───────────────────────────────────────────────────────
+  //  Delete conversation 
   const handleConfirmDelete = async () => {
     try {
       setDeleting(true);
@@ -127,11 +127,11 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
                 ? "Online"
                 : participant.lastSeen
                   ? `Last seen ${new Date(
-                      participant.lastSeen,
-                    ).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}`
+                    participant.lastSeen,
+                  ).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}`
                   : "Offline"}
             </Text>
           </View>
@@ -215,7 +215,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
   );
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// Sub-components
 
 function InfoRow({
   label,

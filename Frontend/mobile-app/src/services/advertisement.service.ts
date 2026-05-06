@@ -1,9 +1,9 @@
 import { api, getCurrentUserId } from './api';
 
-// 
+
 
 // The shared auth layer in api.ts now owns the current user id.
-// 
+
 
 
 export const setLenderId = (id: string) => {
@@ -24,9 +24,9 @@ export const AdService = {
     maxAmount?: number;
   }) => {
     const params = new URLSearchParams();
-    if (filters?.location)  params.append('location',  filters.location);
-    if (filters?.purpose)   params.append('purpose',   filters.purpose);
-    if (filters?.search)    params.append('search',    filters.search);
+    if (filters?.location) params.append('location', filters.location);
+    if (filters?.purpose) params.append('purpose', filters.purpose);
+    if (filters?.search) params.append('search', filters.search);
     if (filters?.minAmount) params.append('minAmount', String(filters.minAmount));
     if (filters?.maxAmount) params.append('maxAmount', String(filters.maxAmount));
 
