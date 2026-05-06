@@ -29,6 +29,10 @@ export class AdminService {
   }
 
   private getDerivedStatus(data: FirebaseFirestore.DocumentData): UserStatus {
+    if (data.status === 'inactive') {
+      return 'suspended';
+    }
+
     if (data.status) {
       return data.status as UserStatus;
     }
@@ -147,7 +151,6 @@ export class AdminService {
       totalUsers,
       pendingUsers,
       suspendedUsers,
-      inactiveUsers,
       admins,
       borrowers,
       lenders,
@@ -155,7 +158,6 @@ export class AdminService {
       this.getCount(usersCollection),
       this.getCount(usersCollection.where('accountStatus', '==', 'pending')),
       this.getCount(usersCollection.where('status', '==', 'suspended')),
-      this.getCount(usersCollection.where('status', '==', 'inactive')),
       this.getCount(usersCollection.where('role', 'array-contains', 'admin')),
       this.getCount(usersCollection.where('role', 'array-contains', 'borrower')),
       this.getCount(usersCollection.where('role', 'array-contains', 'lender')),
@@ -165,7 +167,6 @@ export class AdminService {
       totalUsers,
       pendingUsers,
       suspendedUsers,
-      inactiveUsers,
       admins,
       borrowers,
       lenders,
@@ -270,14 +271,13 @@ export class AdminService {
         totalUsers,
         pendingUsers,
         suspendedUsers,
-        inactiveUsers,
         admins,
         borrowers,
         lenders,
       } = await this.getUserCounts();
 
       const activeUsers = Math.max(
-        totalUsers - pendingUsers - suspendedUsers - inactiveUsers,
+        totalUsers - pendingUsers - suspendedUsers,
         0,
       );
 

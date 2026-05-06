@@ -13,7 +13,7 @@ export const LENDER_APP_URL = import.meta.env.VITE_LENDER_APP_URL ?? "/lender";
 
 export type FirestoreTimestamp = { _seconds?: number };
 export type AdminUserRole = "admin" | "borrower" | "lender";
-export type AdminUserStatus = "active" | "pending" | "suspended" | "inactive";
+export type AdminUserStatus = "active" | "pending" | "suspended";
 export type AuditSeverity = "info" | "warning" | "critical" | "success";
 export type AuditTargetType = "user" | "ad" | "system" | "report";
 export type AdStatus =
