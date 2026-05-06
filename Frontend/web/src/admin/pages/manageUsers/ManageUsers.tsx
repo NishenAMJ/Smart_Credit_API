@@ -88,7 +88,6 @@ function StatusBadge({ status }: { status: AdminUserStatus }) {
     active: "badge badge-success",
     pending: "badge badge-warning",
     suspended: "badge badge-gray",
-    inactive: "badge badge-gray",
   }[status];
 
   return <span className={className}>{status}</span>;
@@ -185,7 +184,13 @@ export default function ManageUsers() {
       setLoading(true);
       try {
         const [usersResponse, statsResponse] = await Promise.all([
-          getUsers({ limit: pageSize, cursor }),
+          getUsers({
+            limit: pageSize,
+            cursor,
+            search,
+            status: filterStatus,
+            role: filterRole,
+          }),
           !cursor ? getUserStats() : Promise.resolve(null),
         ]);
 
@@ -210,7 +215,7 @@ export default function ManageUsers() {
         setLoading(false);
       }
     },
-    [pageSize],
+    [filterRole, filterStatus, pageSize, search],
   );
 
   useEffect(() => {
@@ -230,18 +235,8 @@ export default function ManageUsers() {
   }, [currentPage, cursorStack, loadUsers]);
 
   const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
-      const searchValue = search.toLowerCase();
-      const matchesSearch =
-        user.name.toLowerCase().includes(searchValue) ||
-        user.email.toLowerCase().includes(searchValue) ||
-        user.id.toLowerCase().includes(searchValue);
-      const matchesStatus =
-        filterStatus === "all" || user.status === filterStatus;
-      const matchesRole = filterRole === "all" || user.role === filterRole;
-      return matchesSearch && matchesStatus && matchesRole;
-    });
-  }, [filterRole, filterStatus, search, users]);
+    return users;
+  }, [users]);
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;
@@ -346,7 +341,7 @@ export default function ManageUsers() {
         </div>
 
         <div className="tabs">
-          {(["all", "active", "pending", "suspended", "inactive"] as const).map(
+          {(["all", "active", "pending", "suspended"] as const).map(
             (status) => (
               <button
                 key={status}
