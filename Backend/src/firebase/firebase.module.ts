@@ -11,13 +11,18 @@ import { FirebaseService } from './firebase.service';
       useFactory: () => {
         try {
           console.log('Initializing Firebase...');
+          const projectId =
+            (firebaseConfig as any).project_id ??
+            (firebaseConfig as any).projectId;
+          const storageBucket =
+            process.env.FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`;
           const app = admin.initializeApp({
             credential: admin.credential.cert(firebaseConfig),
+            storageBucket,
           });
           console.log('✓ Firebase initialized successfully');
-          // Access project_id from the raw config object
-          const projectId = (firebaseConfig as any).project_id;
           console.log('Project ID:', projectId);
+          console.log('Storage Bucket:', storageBucket);
           return app;
         } catch (error) {
           console.error('✗ Firebase initialization failed:', error.message);

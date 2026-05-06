@@ -1,9 +1,15 @@
 import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
+import { AdminAuditController } from './admin-audit.controller';
+import { AdminAuditService } from './admin-audit.service';
+import { FirebaseModule } from '../../firebase/firebase.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  controllers: [AdminController],
-  providers: [AdminService]
+  // Wire the admin user management and audit endpoints into the app.
+  imports: [FirebaseModule, AuthModule],
+  controllers: [AdminController, AdminAuditController],
+  providers: [AdminService, AdminAuditService],
 })
 export class AdminModule {}
