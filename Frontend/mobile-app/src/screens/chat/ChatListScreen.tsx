@@ -1,15 +1,4 @@
-/**
- * ChatListScreen.tsx
 
- * Shows all conversations for the current user.
- *
- * LOCAL-FIRST:
- *   - First renders from local SQLite (instant, works offline)
- *   - Then syncs from backend in background
- *   - Socket 'receiveMessage' event updates the list in real-time
- *
- * @format
- */
 
 import React, { useState, useCallback, useEffect } from "react";
 import {

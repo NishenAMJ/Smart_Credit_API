@@ -1,16 +1,4 @@
-/**
- * NewChatScreen.tsx — DIAGNOSTIC VERSION
- *
- * Added detailed console.log at every step so we can see EXACTLY
- * where it breaks in the React Native / Expo console:
- *
- *   [Search] firing for "fathima"        ← debounce fired
- *   [Search] raw response: [...]          ← what came back from api.get()
- *   [Search] data length: 1              ← how many results
- *   [Search] setting state to: results   ← or 'empty' if data=[])
- *
- * Share these logs and we will know the exact line that's wrong.
- */
+
 
 import React, { useState, useRef, useCallback } from "react";
 import {

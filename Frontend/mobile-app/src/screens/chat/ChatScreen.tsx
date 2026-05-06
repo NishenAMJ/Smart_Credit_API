@@ -1,18 +1,4 @@
-/**
- * ChatScreen.tsx
- 
- * LOCAL-FIRST chat screen.
- *
- * On mount:
- *   1. Reads messages instantly from local SQLite (no loading spinner)
- *   2. Resets unread count locally and on backend
- *   3. Subscribes to real-time socket events for new messages / typing / read
- *
- * Sending a message:
- *   1. Optimistically renders it immediately with status:'sending'
- *   2. messageService.send() saves to SQLite + emits via WebSocket
- *   3. On 'messageDelivered' ack → status updates to 'sent'/'delivered'
- */
+
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
