@@ -527,15 +527,6 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                     Enter the credentials stored for your Smart Credit account.
                   </span>
                 </div>
-
-                <div className="shared-auth-note-box">
-                  <strong>Backend-resolved access</strong>
-                  <span>
-                    Your session is issued with the role stored on the backend,
-                    so the login form stays focused on identity and password
-                    only.
-                  </span>
-                </div>
               </div>
 
               <div className="shared-auth-field-card shared-auth-field-card-soft">

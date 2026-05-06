@@ -173,26 +173,19 @@ function App() {
           <section className="dashboard-panel">
             <header className="page-header">
               <div>
-                <p className="eyebrow">Lender module</p>
+                <p className="eyebrow">Lender</p>
                 <h1 className="page-title">{fallbackViewLabel}</h1>
-                <p className="page-subtitle">
-                  This lender page is reserved in the new app shell. We can
-                  build this module next using the same sidebar layout and
-                  style-audit tokens.
-                </p>
+                <p className="page-subtitle">Page unavailable.</p>
                 <p className="dashboard-context-pill">
-                  Signed in as {session.displayName} - {session.lenderId}
+                  Signed in as {session.displayName}
                 </p>
               </div>
             </header>
 
             <section className="card placeholder-card">
-              <p className="placeholder-card__eyebrow">Coming next</p>
-              <h2 className="section-title">Module scaffolding is ready</h2>
-              <p className="section-subtitle">
-                The shared lender sidebar and layout are now in place, so we can
-                build this screen without changing the app structure again.
-              </p>
+              <p className="placeholder-card__eyebrow">Unavailable</p>
+              <h2 className="section-title">Page not ready</h2>
+              <p className="section-subtitle">Check back later.</p>
             </section>
           </section>
         )}

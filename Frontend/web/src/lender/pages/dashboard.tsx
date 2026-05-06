@@ -315,25 +315,25 @@ export default function DashboardPage({
     {
       label: "Total Borrowers",
       value: summary ? String(summary.totalBorrowers) : "--",
-      caption: "Borrowers who already borrowed from you",
+      caption: "Borrowers linked to you",
       accent: "BR",
     },
     {
       label: "Today's Collection",
       value: summary ? formatCurrency(summary.todaysCollection) : "--",
-      caption: "Repayments recorded today from your loans",
+      caption: "Collected today",
       accent: "LKR",
     },
     {
       label: "Overdue Payments",
       value: summary ? String(summary.overduePayments) : "--",
-      caption: "Overdue installments inside your loan book",
+      caption: "Currently overdue",
       accent: "OD",
     },
     {
       label: "Active Ads",
       value: summary ? String(summary.activeAds) : "--",
-      caption: "Approved ads owned by this lender",
+      caption: "Live ads",
       accent: "AD",
     },
   ];
@@ -414,15 +414,10 @@ export default function DashboardPage({
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Lender overview</p>
+            <p className="eyebrow">Overview</p>
             <h1 className="page-title">Dashboard</h1>
-            <p className="page-subtitle">
-              Lender workspace for collections, portfolio health, borrower
-              activity, and ad performance from Firebase.
-            </p>
-            <p className="dashboard-context-pill">
-              Temporary session: {session.displayName} - {session.lenderId}
-            </p>
+            <p className="page-subtitle">Borrowers, collections, and ads.</p>
+            <p className="dashboard-context-pill">{session.displayName}</p>
           </div>
           <div className="dashboard-header-tools">
             <div
@@ -462,12 +457,8 @@ export default function DashboardPage({
           </section>
         ) : summaryError ? (
           <section className="card error-card">
-            <h2>Dashboard data is not available yet</h2>
+            <h2>Dashboard unavailable</h2>
             <p>{summaryError}</p>
-            <p>
-              Check whether the Nest API is running, Firebase credentials are
-              valid, and the lender has loan records.
-            </p>
           </section>
         ) : (
           <>
@@ -494,9 +485,7 @@ export default function DashboardPage({
                 <div>
                   <h2 className="section-title">Borrowers Linked To You</h2>
                   <p className="section-subtitle">
-                    These borrowers have taken at least one loan from this
-                    lender. If they also borrowed from another lender, those
-                    loans stay out of this view.
+                    Borrowers with at least one loan from you.
                   </p>
                 </div>
                 <form
@@ -602,7 +591,7 @@ export default function DashboardPage({
                         <td className="table-empty" colSpan={6}>
                           {borrowerSearch
                             ? "No borrowers matched your search."
-                            : "No lender-linked borrower data available yet."}
+                            : "No borrowers found."}
                         </td>
                       </tr>
                     )}
@@ -612,8 +601,8 @@ export default function DashboardPage({
 
               <div className="table-footer">
                 <p>
-                  Showing {visibleBorrowers.length} lender-linked borrowers on
-                  page {currentPage}
+                  Showing {visibleBorrowers.length} borrowers on page{" "}
+                  {currentPage}
                   {borrowerSearch ? ` for "${borrowerSearch}"` : ""}
                 </p>
 
@@ -665,10 +654,7 @@ export default function DashboardPage({
                 <h2 className="section-title" id="borrower-modal-title">
                   {selectedBorrower?.fullName ?? "Loading borrower..."}
                 </h2>
-                <p className="section-subtitle">
-                  Review the borrower profile and only the loans connected to
-                  this lender.
-                </p>
+                <p className="section-subtitle">Borrower profile and loans.</p>
               </div>
               <button
                 type="button"
@@ -713,10 +699,6 @@ export default function DashboardPage({
                         <h3 className="section-title">
                           Loans With This Lender
                         </h3>
-                        <p className="section-subtitle">
-                          Only this lender&apos;s loans are shown, even if the
-                          borrower has loans elsewhere.
-                        </p>
                       </div>
                     </div>
 

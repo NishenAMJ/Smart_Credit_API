@@ -308,9 +308,7 @@ export default function LenderSidebar({
                 <div className="lender-sidebar__admin-name">
                   {session.displayName}
                 </div>
-                <div className="lender-sidebar__admin-role">
-                  {session.lenderId}
-                </div>
+                <div className="lender-sidebar__admin-role">Lender</div>
               </div>
             </button>
 

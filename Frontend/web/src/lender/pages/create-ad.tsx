@@ -26,18 +26,16 @@ type AdDraft = {
 };
 
 const DEFAULT_DRAFT: AdDraft = {
-  headline: "Fast working-capital support for reliable borrowers",
+  headline: "Working capital loans for eligible borrowers",
   minAmount: "50000",
   maxAmount: "250000",
   interestRate: "14.5",
   tenureMonths: "12",
-  borrowerFocus: "Small business owners with stable monthly cash flow",
-  processingTime: "Approval review within 24 hours",
+  borrowerFocus: "Small business owners",
+  processingTime: "Review within 24 hours",
   repaymentStyle: "Monthly installments",
-  requirements:
-    "NIC, bank statements, business or salary proof, and a clear repayment plan.",
-  supportNote:
-    "Friendly review, transparent pricing, and updates at every step of approval.",
+  requirements: "NIC, bank statements, and income proof.",
+  supportNote: "Transparent terms and timely updates.",
 };
 
 function getStorageKey(lenderId: string): string {
@@ -138,6 +136,24 @@ function formatShortDate(value: string | null): string {
   }).format(parsed);
 }
 
+function formatLabel(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getAdStatusBadgeClass(value: string): string {
+  if (value === "active" || value === "approved") {
+    return "badge-success";
+  }
+
+  if (value === "rejected" || value === "closed") {
+    return "badge-danger";
+  }
+
+  return "badge-gray";
+}
+
 function buildOfferSummary(draft: AdDraft): string {
   return `${draft.processingTime}. ${draft.repaymentStyle}. ${draft.supportNote}`;
 }
@@ -147,15 +163,15 @@ function formatStarterBorrowerFocus(settings: LenderSettings): string {
   const regions = settings.lendingDefaults.preferredRegions.join(", ");
 
   if (purposes && regions) {
-    return `Borrowers seeking ${purposes} support in ${regions} with stable monthly cash flow`;
+    return `${purposes} in ${regions}`;
   }
 
   if (purposes) {
-    return `Borrowers seeking ${purposes} support with stable monthly cash flow`;
+    return purposes;
   }
 
   if (regions) {
-    return `Borrowers based in ${regions} with stable monthly cash flow`;
+    return regions;
   }
 
   return DEFAULT_DRAFT.borrowerFocus;
@@ -169,7 +185,7 @@ function buildStarterDraft(settings: LenderSettings): AdDraft {
     interestRate: String(settings.lendingDefaults.defaultInterestRate),
     tenureMonths: String(settings.lendingDefaults.defaultMaxTenureMonths),
     borrowerFocus: formatStarterBorrowerFocus(settings),
-    processingTime: `Approval review within ${settings.lendingDefaults.defaultResponseTimeHours} hour(s)`,
+    processingTime: `Review within ${settings.lendingDefaults.defaultResponseTimeHours} hour(s)`,
   };
 }
 
@@ -270,13 +286,13 @@ export default function CreateAdPage({
       getStorageKey(session.lenderId),
       JSON.stringify(draft),
     );
-    setSaveMessage("Draft saved locally for this lender.");
+    setSaveMessage("Draft saved.");
   }
 
   function handleResetDraft() {
     setDraft(starterDraft);
     window.localStorage.removeItem(getStorageKey(session.lenderId));
-    setSaveMessage("Draft reset to your lender defaults.");
+    setSaveMessage("Draft reset.");
   }
 
   async function handlePublishAd() {
@@ -334,54 +350,52 @@ export default function CreateAdPage({
   const amountRange = `${formatCurrency(draft.minAmount)} - ${formatCurrency(draft.maxAmount)}`;
   const previewStatus = recentAds[0]?.status ?? "preview only";
   const qualitySignals = [
-    draft.headline.trim().length >= 18
-      ? "Clear value headline"
-      : "Strengthen your headline",
-    Number(draft.interestRate) > 0 ? "Pricing is visible" : "Add interest rate",
+    draft.headline.trim().length >= 18 ? "Headline added" : "Add headline",
+    Number(draft.interestRate) > 0 ? "Rate added" : "Add interest rate",
     draft.requirements.trim().length >= 24
-      ? "Borrower requirements are clear"
-      : "Explain borrower requirements",
+      ? "Requirements added"
+      : "Add requirements",
     draft.supportNote.trim().length >= 20
-      ? "Human trust note included"
-      : "Add a trust-building note",
+      ? "Trust note added"
+      : "Add trust note",
   ];
+  const activeAdsCount = recentAds.filter((ad) =>
+    ["active", "approved"].includes(ad.status),
+  ).length;
+  const totalApplications = recentAds.reduce(
+    (sum, ad) => sum + ad.applicationCount,
+    0,
+  );
+  const totalFundedLoans = recentAds.reduce(
+    (sum, ad) => sum + ad.fundedLoansCount,
+    0,
+  );
 
   return (
     <section className="dashboard-panel">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Lender growth tool</p>
+          <p className="eyebrow">Ads</p>
           <h1 className="page-title">Create Ad</h1>
-          <p className="page-subtitle">
-            Build a simple lending offer that feels trustworthy, attractive, and
-            easy for the right borrower to understand.
-          </p>
-          <p className="dashboard-context-pill">
-            Draft owner: {session.displayName} - {session.lenderId}
-          </p>
+          <p className="page-subtitle">Create and publish a lender ad.</p>
+          <p className="dashboard-context-pill">{session.displayName}</p>
         </div>
       </header>
 
       <section className="create-ad-hero">
         <article className="card create-ad-hero__story">
-          <div className="create-ad-hero__badge">Offer quality</div>
-          <h2 className="section-title">
-            A strong ad should feel clear, trustworthy, and easy to act on
-          </h2>
-          <p className="section-subtitle">
-            Borrowers usually decide in seconds whether a lender looks safe and
-            professional. A clean offer with visible numbers and stable terms
-            wins more trust than a complicated ad.
-          </p>
+          <div className="create-ad-hero__badge">Ad setup</div>
+          <h2 className="section-title">Create a clear offer</h2>
+          <p className="section-subtitle">Set the main terms before publishing.</p>
           <div className="create-ad-hero__chips">
-            <span className="create-ad-chip">Transparent pricing</span>
-            <span className="create-ad-chip">Fast review promise</span>
-            <span className="create-ad-chip">Human support tone</span>
+            <span className="create-ad-chip">Amounts</span>
+            <span className="create-ad-chip">Rate</span>
+            <span className="create-ad-chip">Documents</span>
           </div>
         </article>
 
         <article className="card create-ad-hero__score">
-          <p className="create-ad-score__label">Ad quality signals</p>
+          <p className="create-ad-score__label">Checklist</p>
           <div className="create-ad-score__value">
             {
               qualitySignals.filter(
@@ -407,10 +421,7 @@ export default function CreateAdPage({
           <div className="create-ad-form-card__header">
             <div>
               <h2 className="section-title">Ad Builder</h2>
-              <p className="section-subtitle">
-                Keep it simple. Say what you offer, who it is for, and why the
-                borrower should trust the process.
-              </p>
+              <p className="section-subtitle">Enter the main offer details.</p>
             </div>
           </div>
 
@@ -560,7 +571,7 @@ export default function CreateAdPage({
                   updateDraft("supportNote", event.target.value)
                 }
                 rows={3}
-                placeholder="What makes your process feel safe, fair, and professional?"
+                placeholder="Add a short trust note."
               />
             </label>
           </div>
@@ -600,7 +611,7 @@ export default function CreateAdPage({
             <div className="create-ad-preview-card__top">
               <div>
                 <p className="create-ad-preview-card__eyebrow">Live preview</p>
-                <h2 className="section-title">Borrower-facing ad</h2>
+                <h2 className="section-title">Preview</h2>
               </div>
               <span className="badge badge-gray">{previewStatus}</span>
             </div>
@@ -614,9 +625,7 @@ export default function CreateAdPage({
                   <p className="create-ad-preview__name">
                     {session.displayName}
                   </p>
-                  <p className="create-ad-preview__meta">
-                    Verified lender profile
-                  </p>
+                  <p className="create-ad-preview__meta">Lender</p>
                 </div>
               </div>
 
@@ -643,22 +652,19 @@ export default function CreateAdPage({
                 <p className="create-ad-preview__label">Best for</p>
                 <p>
                   {draft.borrowerFocus ||
-                    "Describe the borrower segment you want to attract."}
+                    "Add borrower type."}
                 </p>
               </div>
 
               <div className="create-ad-preview__section">
-                <p className="create-ad-preview__label">
-                  Why borrowers feel safe
-                </p>
+                <p className="create-ad-preview__label">Offer summary</p>
                 <p>{buildOfferSummary(draft)}</p>
               </div>
 
               <div className="create-ad-preview__section">
                 <p className="create-ad-preview__label">Requirements</p>
                 <p>
-                  {draft.requirements ||
-                    "Explain the documents and checks clearly."}
+                  {draft.requirements || "Add required documents."}
                 </p>
               </div>
             </div>
@@ -670,10 +676,7 @@ export default function CreateAdPage({
         <div className="create-ad-form-card__header">
           <div>
             <h2 className="section-title">Existing Ads</h2>
-            <p className="section-subtitle">
-              Your published offers live here so you can compare active terms,
-              spot gaps, and see what borrowers already see.
-            </p>
+            <p className="section-subtitle">Recent ad portfolio.</p>
           </div>
           <span className="dashboard-context-pill">
             {recentAds.length} loaded
@@ -682,51 +685,143 @@ export default function CreateAdPage({
         {adsError ? (
           <p className="create-ad-banner create-ad-banner--error">{adsError}</p>
         ) : null}
-        <div className="create-ad-tips-card__list create-ad-tips-card__list--detailed">
+        <div className="create-ad-portfolio">
           {isRecentAdsLoading ? (
-            <article className="create-ad-tip">
-              <p>Loading existing ads...</p>
+            <article className="create-ad-portfolio-state">
+              <strong>Loading ads...</strong>
+              <p>Please wait while we load your recent ads.</p>
             </article>
           ) : recentAds.length > 0 ? (
-            recentAds.map((ad) => (
-              <article
-                className="create-ad-tip create-ad-tip--detailed"
-                key={ad.id}
-              >
-                <div className="create-ad-tip__header">
-                  <strong>{ad.title}</strong>
-                  <span className="badge badge-gray">{ad.status}</span>
-                </div>
-                <p>{ad.description}</p>
-                <div className="create-ad-tip__grid">
-                  <span>
-                    Amount: {formatCurrency(String(ad.minAmount))} -{" "}
-                    {formatCurrency(String(ad.maxAmount))}
+            <>
+              <div className="create-ad-portfolio__summary">
+                <article className="create-ad-portfolio-stat">
+                  <span className="create-ad-portfolio-stat__label">
+                    Active Ads
                   </span>
-                  <span>Interest: {ad.preferredInterestRate}%</span>
-                  <span>Tenure: {ad.maxTenureMonths} months</span>
-                  <span>
-                    Capital: {formatCurrency(String(ad.availableCapital))}
+                  <strong className="create-ad-portfolio-stat__value">
+                    {activeAdsCount}
+                  </strong>
+                </article>
+                <article className="create-ad-portfolio-stat">
+                  <span className="create-ad-portfolio-stat__label">
+                    Applications
                   </span>
-                  <span>Applications: {ad.applicationCount}</span>
-                  <span>Funded: {ad.fundedLoansCount}</span>
-                  <span>Response: {ad.responseTimeHours} hrs</span>
-                  <span>Expires: {formatShortDate(ad.expiresAt)}</span>
-                </div>
-                <p className="create-ad-tip__meta">
-                  Created {formatShortDate(ad.createdAt)} | Updated{" "}
-                  {formatShortDate(ad.updatedAt)} |{" "}
-                  {ad.preferredPurposes.join(", ") || "No preferred purposes"}
-                </p>
-              </article>
-            ))
+                  <strong className="create-ad-portfolio-stat__value">
+                    {totalApplications}
+                  </strong>
+                </article>
+                <article className="create-ad-portfolio-stat">
+                  <span className="create-ad-portfolio-stat__label">
+                    Funded Loans
+                  </span>
+                  <strong className="create-ad-portfolio-stat__value">
+                    {totalFundedLoans}
+                  </strong>
+                </article>
+              </div>
+
+              <div className="create-ad-portfolio__grid">
+                {recentAds.map((ad) => (
+                  <article className="create-ad-portfolio-card" key={ad.id}>
+                    <div className="create-ad-portfolio-card__top">
+                      <div className="create-ad-portfolio-card__title-wrap">
+                        <p className="create-ad-portfolio-card__eyebrow">
+                          {ad.adId || ad.id}
+                        </p>
+                        <h3 className="create-ad-portfolio-card__title">
+                          {ad.title}
+                        </h3>
+                        <p className="create-ad-portfolio-card__description">
+                          {ad.description}
+                        </p>
+                      </div>
+
+                      <div className="create-ad-portfolio-card__status">
+                        <span
+                          className={`badge ${getAdStatusBadgeClass(ad.status)}`}
+                        >
+                          {formatLabel(ad.status)}
+                        </span>
+                        {ad.isBoosted ? (
+                          <span className="create-ad-portfolio-card__flag">
+                            Boosted
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="create-ad-portfolio-card__metrics">
+                      <article className="create-ad-portfolio-metric">
+                        <span>Amount</span>
+                        <strong>
+                          {formatCurrency(String(ad.minAmount))} -{" "}
+                          {formatCurrency(String(ad.maxAmount))}
+                        </strong>
+                      </article>
+                      <article className="create-ad-portfolio-metric">
+                        <span>Interest</span>
+                        <strong>{ad.preferredInterestRate}%</strong>
+                      </article>
+                      <article className="create-ad-portfolio-metric">
+                        <span>Tenure</span>
+                        <strong>{ad.maxTenureMonths} months</strong>
+                      </article>
+                      <article className="create-ad-portfolio-metric">
+                        <span>Capital</span>
+                        <strong>
+                          {formatCurrency(String(ad.availableCapital))}
+                        </strong>
+                      </article>
+                    </div>
+
+                    <div className="create-ad-portfolio-card__stats">
+                      <div className="create-ad-portfolio-card__stat">
+                        <span>Applications</span>
+                        <strong>{ad.applicationCount}</strong>
+                      </div>
+                      <div className="create-ad-portfolio-card__stat">
+                        <span>Funded</span>
+                        <strong>{ad.fundedLoansCount}</strong>
+                      </div>
+                      <div className="create-ad-portfolio-card__stat">
+                        <span>Response</span>
+                        <strong>{ad.responseTimeHours} hrs</strong>
+                      </div>
+                      <div className="create-ad-portfolio-card__stat">
+                        <span>Expires</span>
+                        <strong>{formatShortDate(ad.expiresAt)}</strong>
+                      </div>
+                    </div>
+
+                    <div className="create-ad-portfolio-card__footer">
+                      <div className="create-ad-portfolio-card__tags">
+                        {(ad.preferredPurposes.length > 0
+                          ? ad.preferredPurposes
+                          : ["No purpose"]
+                        )
+                          .slice(0, 3)
+                          .map((purpose) => (
+                            <span
+                              className="create-ad-portfolio-card__tag"
+                              key={`${ad.id}-${purpose}`}
+                            >
+                              {purpose}
+                            </span>
+                          ))}
+                      </div>
+                      <p className="create-ad-portfolio-card__meta">
+                        Created {formatShortDate(ad.createdAt)} • Updated{" "}
+                        {formatShortDate(ad.updatedAt)}
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
           ) : (
-            <article className="create-ad-tip">
-              <strong>No ads published yet</strong>
-              <p>
-                Publish your first lender ad from this page and it will appear
-                here after Firestore saves it.
-              </p>
+            <article className="create-ad-portfolio-state">
+              <strong>No ads yet</strong>
+              <p>Create your first ad to build your portfolio.</p>
             </article>
           )}
         </div>

@@ -465,15 +465,10 @@ export default function PaymentsPage({
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Lender cash flow</p>
+            <p className="eyebrow">Payments</p>
             <h1 className="page-title">Payments</h1>
-            <p className="page-subtitle">
-              Review your loan activity ledger with lender-owned payments,
-              installment progress, and remaining balances in one place.
-            </p>
-            <p className="dashboard-context-pill">
-              Loan ledger: {session.displayName} - {session.lenderId}
-            </p>
+            <p className="page-subtitle">Payments, balances, and installments.</p>
+            <p className="dashboard-context-pill">{session.displayName}</p>
           </div>
         </header>
 
@@ -483,12 +478,8 @@ export default function PaymentsPage({
           </section>
         ) : listError && !response ? (
           <section className="card error-card">
-            <h2>Loan activity ledger is not available yet</h2>
+            <h2>Payments unavailable</h2>
             <p>{listError}</p>
-            <p>
-              Check the lender loan ledger API, lender-linked loan data, and
-              whether payment or transaction records exist in Firestore.
-            </p>
           </section>
         ) : (
           <>
@@ -511,8 +502,7 @@ export default function PaymentsPage({
                       : String(displaySummary.totalTransactions)}
                   </p>
                   <p className="metric-caption">
-                    {summaryError ??
-                      "Completed lender-linked payment rows across your loan book"}
+                    {summaryError ?? "Recorded payments"}
                   </p>
                 </div>
               </article>
@@ -530,9 +520,7 @@ export default function PaymentsPage({
                       ? "..."
                       : formatCurrency(displaySummary.totalCollected)}
                   </p>
-                  <p className="metric-caption">
-                    Repayments collected across all linked loans
-                  </p>
+                  <p className="metric-caption">Collected amount</p>
                 </div>
               </article>
               <article className="card metric-card">
@@ -549,9 +537,7 @@ export default function PaymentsPage({
                       ? "..."
                       : String(displaySummary.loansWithActivity)}
                   </p>
-                  <p className="metric-caption">
-                    Loans with at least one recorded repayment
-                  </p>
+                  <p className="metric-caption">Loans with payments</p>
                 </div>
               </article>
               <article className="card metric-card">
@@ -568,9 +554,7 @@ export default function PaymentsPage({
                       ? "..."
                       : String(displaySummary.overdueInstallments)}
                   </p>
-                  <p className="metric-caption">
-                    Overdue installments in your current portfolio
-                  </p>
+                  <p className="metric-caption">Overdue installments</p>
                 </div>
               </article>
             </section>
@@ -580,11 +564,7 @@ export default function PaymentsPage({
                 <div>
                   <h2 className="section-title">Loan Activity Ledger</h2>
                   <p className="section-subtitle">
-                    Every row is a lender-linked payment record. The page loads
-                    the latest {PAGE_SIZE} first, then fetches the next{" "}
-                    {PAGE_SIZE} when you move forward. Search runs on the
-                    server, so loan and installment lookups can match beyond the
-                    current page.
+                    Recent payment activity.
                   </p>
                 </div>
 
@@ -620,8 +600,7 @@ export default function PaymentsPage({
                         {isListLoading ? "..." : String(matchedPaymentsCount)}
                       </p>
                       <p className="metric-caption">
-                        Total matched payment rows across all pages for this
-                        search
+                        Matched payment rows
                       </p>
                     </div>
                   </article>
@@ -644,7 +623,7 @@ export default function PaymentsPage({
                     {isListLoading ? (
                       <tr>
                         <td className="table-empty" colSpan={6}>
-                          Loading lender-linked payment activity...
+                          Loading payment activity...
                         </td>
                       </tr>
                     ) : listError ? (
@@ -759,8 +738,8 @@ export default function PaymentsPage({
                       <tr>
                         <td className="table-empty" colSpan={6}>
                           {searchQuery
-                            ? "No loan ledger entries match the current search."
-                            : "No recent lender-linked payment activity is available yet."}
+                            ? "No payments matched your search."
+                            : "No payment activity found."}
                         </td>
                       </tr>
                     )}
@@ -771,8 +750,8 @@ export default function PaymentsPage({
               <div className="table-footer">
                 <p>
                   {isSearchActive
-                    ? `Showing ${visibleStart}-${visibleEnd} of ${matchedPaymentsCount} matched payment row(s) on page ${currentPage}.`
-                    : `Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
+                    ? `Showing ${visibleStart}-${visibleEnd} of ${matchedPaymentsCount} matched payments on page ${currentPage}.`
+                    : `Showing ${visibleStart}-${visibleEnd} payments on page ${currentPage}.`}
                 </p>
 
                 <div className="pagination">
@@ -1196,8 +1175,7 @@ export default function PaymentsPage({
                                   ))
                                 ) : (
                                   <p className="section-subtitle">
-                                    No payment records are linked to this
-                                    installment yet.
+                                    No payment records yet.
                                   </p>
                                 )}
                               </div>
@@ -1205,8 +1183,7 @@ export default function PaymentsPage({
                           ))
                         ) : (
                           <div className="borrower-modal__state">
-                            No installment details are available for this loan
-                            yet.
+                            No installment details found.
                           </div>
                         )}
                       </div>
@@ -1284,10 +1261,7 @@ export default function PaymentsPage({
                           <h3 className="section-title">
                             Borrower loan summary
                           </h3>
-                          <p className="section-subtitle">
-                            Loans this borrower has with you as the current
-                            lender.
-                          </p>
+                          <p className="section-subtitle">Loans with you.</p>
                         </div>
                       </div>
 
@@ -1351,7 +1325,7 @@ export default function PaymentsPage({
                   </div>
                 ) : (
                   <div className="borrower-modal__state">
-                    Borrower details are not available yet.
+                    Borrower details unavailable.
                   </div>
                 )}
               </div>

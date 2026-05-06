@@ -1,3 +1,5 @@
+import { fetchLenderApi, parseApiError } from "./api-client";
+
 const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
     /\/$/,
@@ -51,6 +53,10 @@ export type AuthResponse = {
   };
 };
 
+export type ChangePasswordResponse = {
+  message: string;
+};
+
 async function parseError(
   response: Response,
   fallbackMessage: string,
@@ -101,4 +107,26 @@ export async function submitKyc(
   if (!response.ok) {
     return parseError(response, "KYC submission failed");
   }
+}
+
+export async function changeLenderPassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordResponse> {
+  const response = await fetchLenderApi("/auth/change-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      currentPassword,
+      newPassword,
+    }),
+  });
+
+  if (!response.ok) {
+    return parseApiError(response, "Failed to update password.");
+  }
+
+  return response.json();
 }

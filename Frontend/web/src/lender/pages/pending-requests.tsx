@@ -182,25 +182,25 @@ export default function PendingRequestsPage({
     {
       label: "Pending Requests",
       value: summary ? String(summary.totalPendingRequests) : "--",
-      caption: "Requests currently waiting in your pipeline",
+      caption: "Waiting for review",
       accent: "RQ",
     },
     {
       label: "Targeted Requests",
       value: summary ? String(summary.targetedRequests) : "--",
-      caption: "Requests that came directly through your ad",
+      caption: "From your ads",
       accent: "TG",
     },
     {
       label: "Marketplace Matches",
       value: summary ? String(summary.marketplaceMatches) : "--",
-      caption: "Requests surfaced to you through marketplace matching",
+      caption: "Marketplace matches",
       accent: "MP",
     },
     {
       label: "High Urgency",
       value: summary ? String(summary.highUrgencyRequests) : "--",
-      caption: "Requests marked high or critical urgency",
+      caption: "High priority",
       accent: "HI",
     },
   ];
@@ -269,15 +269,10 @@ export default function PendingRequestsPage({
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Lender pipeline</p>
+            <p className="eyebrow">Requests</p>
             <h1 className="page-title">Pending Requests</h1>
-            <p className="page-subtitle">
-              Review incoming loan requests linked to this lender, whether they
-              came directly through your ads or through marketplace matching.
-            </p>
-            <p className="dashboard-context-pill">
-              Request desk: {session.displayName} - {session.lenderId}
-            </p>
+            <p className="page-subtitle">Requests from ads and matches.</p>
+            <p className="dashboard-context-pill">{session.displayName}</p>
           </div>
         </header>
 
@@ -287,12 +282,8 @@ export default function PendingRequestsPage({
           </section>
         ) : error ? (
           <section className="card error-card">
-            <h2>Pending requests are not available yet</h2>
+            <h2>Requests unavailable</h2>
             <p>{error}</p>
-            <p>
-              Check the backend API, the lender ID, and whether request data is
-              seeded in Firestore.
-            </p>
           </section>
         ) : (
           <>
@@ -324,10 +315,7 @@ export default function PendingRequestsPage({
               <div className="pending-requests-toolbar">
                 <div>
                   <h2 className="section-title">Incoming Request Queue</h2>
-                  <p className="section-subtitle">
-                    Click a request to review borrower, pricing, and routing
-                    details in one place.
-                  </p>
+                  <p className="section-subtitle">Select a request to review.</p>
                 </div>
 
                 <div className="pending-requests-toolbar__controls">
@@ -478,10 +466,7 @@ export default function PendingRequestsPage({
                 <h2 className="section-title" id="pending-request-title">
                   {selectedRequest.borrowerName}
                 </h2>
-                <p className="section-subtitle">
-                  Review the borrower profile, requested terms, and how this
-                  request entered your pipeline.
-                </p>
+                <p className="section-subtitle">Borrower and request details.</p>
               </div>
               <button
                 type="button"
@@ -600,8 +585,7 @@ export default function PendingRequestsPage({
                       </div>
                     </div>
                     <p className="pending-request-notes">
-                      {selectedRequest.notes ||
-                        "No borrower note was attached to this request."}
+                      {selectedRequest.notes || "No note added."}
                     </p>
                   </article>
 
@@ -614,19 +598,11 @@ export default function PendingRequestsPage({
                         </h4>
                       </div>
                     </div>
-                    <div className="pending-request-match-list">
-                      {selectedRequest.matchedLenderIds.length > 0 ? (
-                        selectedRequest.matchedLenderIds.map((lenderId) => (
-                          <span className="badge badge-gray" key={lenderId}>
-                            {lenderId}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="pending-request-notes">
-                          No matched lender IDs were stored for this request.
-                        </p>
-                      )}
-                    </div>
+                    <p className="pending-request-notes">
+                      {selectedRequest.adTitle ??
+                        selectedRequest.adId ??
+                        formatLabel(selectedRequest.targetType)}
+                    </p>
                   </article>
                 </section>
 
@@ -637,7 +613,7 @@ export default function PendingRequestsPage({
                         Lender decision
                       </p>
                       <h4 className="borrower-loan-card__title">
-                        Review and update request status
+                        Update status
                       </h4>
                     </div>
                     <span
@@ -656,7 +632,7 @@ export default function PendingRequestsPage({
                     <textarea
                       className="input pending-request-decision-card__textarea"
                       rows={4}
-                      placeholder="Add a note for this decision. Rejection requires a reason."
+                      placeholder="Add a note. Rejection requires a reason."
                       value={decisionNotes}
                       onChange={(event) => setDecisionNotes(event.target.value)}
                       disabled={isDecisionSaving}

@@ -322,28 +322,28 @@ export default function NotificationsPage({
       {
         label: "Unread Total",
         value: String(summary.unreadCount),
-        caption: "Notifications still waiting for lender action",
+        caption: "Unread items",
         accent: "UN",
         tone: "primary",
       },
       {
         label: "High Priority",
         value: String(summary.highPriorityCount),
-        caption: "Warning or critical items across the inbox",
+        caption: "Priority items",
         accent: "HP",
         tone: "danger",
       },
       {
         label: "Today's Activity",
         value: String(summary.todaysCount),
-        caption: "Notifications created today",
+        caption: "Created today",
         accent: "TD",
         tone: "warning",
       },
       {
         label: "Top Category",
         value: formatCategoryLabel(summary.topCategory),
-        caption: "Category with the most current activity",
+        caption: "Most active category",
         accent: "TC",
         tone: "success",
       },
@@ -359,12 +359,9 @@ export default function NotificationsPage({
     <section className="dashboard-panel">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Lender inbox</p>
+          <p className="eyebrow">Inbox</p>
           <h1 className="page-title">Notifications</h1>
-          <p className="page-subtitle">
-            Review operational alerts first, then quieter system notices that
-            can wait until later.
-          </p>
+          <p className="page-subtitle">Lender alerts and updates.</p>
         </div>
 
         <div className="analytics-header-tools">
@@ -380,12 +377,8 @@ export default function NotificationsPage({
         </section>
       ) : error && !summary ? (
         <section className="card error-card">
-          <h2>Notifications are not available yet</h2>
+          <h2>Notifications unavailable</h2>
           <p>{error}</p>
-          <p>
-            Check the lender notifications API, Firestore connection, and lender
-            data sources used for backfill.
-          </p>
         </section>
       ) : (
         <>
@@ -418,10 +411,7 @@ export default function NotificationsPage({
             <div className="notifications-toolbar">
               <div>
                 <h2 className="section-title">Inbox</h2>
-                <p className="section-subtitle">
-                  Clicking an item marks it as read and takes the lender to the
-                  relevant page when an action is available.
-                </p>
+                <p className="section-subtitle">Open an item to view it.</p>
               </div>
 
               <div className="notifications-toolbar__actions">
@@ -541,7 +531,7 @@ export default function NotificationsPage({
                 ))
               ) : (
                 <div className="borrower-modal__state">
-                  No notifications match the current filters yet.
+                  No notifications found.
                 </div>
               )}
             </div>

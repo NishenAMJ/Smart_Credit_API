@@ -38,8 +38,8 @@ export default function LenderAgreements({ session }: AgreementsPageProps) {
       role="lender"
       fetcher={fetcher}
       onDownload={handleDownload}
-      title="My Agreements"
-      subtitle="View and download legal agreements for loans you've funded."
+      title="Agreements"
+      subtitle="View and download your agreements."
     />
   );
 }
