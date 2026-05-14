@@ -1,0 +1,136 @@
+/** @format */
+
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
+
+type CreditScoreWidgetProps = {
+  score?: number;
+  creditLimit?: number;
+  onPress?: () => void;
+};
+
+export default function CreditScoreWidget({
+  score = 0,
+  creditLimit = 0,
+  onPress,
+}: CreditScoreWidgetProps) {
+  const getScoreLevel = (value: number) => {
+    if (value >= 750) return { text: "EXCELLENT", color: "#10B981" };
+    if (value >= 650) return { text: "GOOD", color: "#3B82F6" };
+    if (value >= 550) return { text: "FAIR", color: "#F59E0B" };
+    return { text: "POOR", color: "#EF4444" };
+  };
+
+  const scoreLevel = getScoreLevel(score);
+
+  return (
+    <TouchableOpacity style={styles.container} onPress={onPress}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Smart Credit Score</Text>
+        <Feather name='chevron-right' size={20} color='#6B7280' />
+      </View>
+
+      <View style={styles.scoreContainer}>
+        <View style={styles.scoreCircle}>
+          <Text style={styles.scoreNumber}>{score}</Text>
+          <Text style={[styles.scoreLevel, { color: scoreLevel.color }]}>
+            {scoreLevel.text}
+          </Text>
+        </View>
+
+        <View style={styles.stars}>
+          {[1, 2, 3, 4].map((star) => (
+            <Feather
+              key={star}
+              name='star'
+              size={16}
+              color={score >= star * 200 ? "#F59E0B" : "#E5E7EB"}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.footer}>
+        <Text style={styles.limitLabel}>Credit Limit</Text>
+        <Text style={styles.limitAmount}>
+          LKR {creditLimit.toLocaleString()}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1A1A1A",
+  },
+  scoreContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  scoreCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  scoreNumber: {
+    fontSize: 36,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 4,
+  },
+  scoreLevel: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  stars: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#F3F4F6",
+    marginBottom: 15,
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  limitLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  limitAmount: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1A1A1A",
+  },
+});
