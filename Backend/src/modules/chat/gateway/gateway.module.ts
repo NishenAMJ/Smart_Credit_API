@@ -1,16 +1,19 @@
-/**
- * gateway.module.ts
- * Registers ChatGateway and injects its service dependencies.
- */
 import { Module } from '@nestjs/common';
 import { ChatGateway } from './chat.gateway';
 import { UsersModule } from '../users/users.module';
 import { BlocksModule } from '../users/blocks.module';
+import { AuthModule } from '../../auth/auth.module';
 
+/**
+ * AuthModule is imported so JwtService is available for injection
+ * into ChatGateway.handleConnection() to verify the token on WS connect.
+ * AuthModule exports JwtModule which exports JwtService.
+ */
 @Module({
   imports: [
-    UsersModule, // provides UsersService (online status, FCM token)
-    BlocksModule, // provides BlocksService (block checks)
+    AuthModule,
+    UsersModule,
+    BlocksModule,
   ],
   providers: [ChatGateway],
   exports: [ChatGateway],
