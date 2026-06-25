@@ -1,16 +1,3 @@
-/**
- * conversations.controller.ts
- * Base path: /conversations
- *
- * Used by the frontend for:
- *   GET  /conversations        — load conversation list on app start
- *   POST /conversations        — start a new chat (from NewChatScreen)
- *   PATCH /:id/read            — reset unread count
- *   PATCH /:id/mute            — toggle mute
- *   DELETE /:id                — delete conversation
- *
- * Auth: Uses the @CurrentUser() decorator to extract identity.
- */
 import {
   Controller,
   Get,
@@ -19,26 +6,33 @@ import {
   Patch,
   Param,
   Body,
+  UseGuards,
 } from '@nestjs/common';
 import { IsString, IsBoolean } from 'class-validator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { ConversationsService } from './conversations.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 class StartConversationDto {
-  @IsString()
-  targetUserId!: string;
+  @IsString() targetUserId!: string;
 }
 
 class MuteDto {
-  @IsBoolean()
-  muted!: boolean;
+  @IsBoolean() muted!: boolean;
 }
 
+/**
+ * All routes protected by JwtAuthGuard.
+ * @CurrentUser() reads req.user.sub from the verified JWT payload —
+ * so every query is automatically scoped to the logged-in user.
+ * A user can never see another user's conversations.
+ */
+@UseGuards(JwtAuthGuard)
 @Controller('conversations')
 export class ConversationsController {
   constructor(private conversations: ConversationsService) {}
 
-  /** GET /conversations — list all conversations for logged-in user */
+  /** GET /conversations — only returns conversations this user participates in */
   @Get()
   list(@CurrentUser() userId: string) {
     return this.conversations.listForUser(userId);
@@ -50,19 +44,19 @@ export class ConversationsController {
     return this.conversations.getOrCreate(userId, dto.targetUserId);
   }
 
-  /** GET /conversations/:id — get single conversation */
+  /** GET /conversations/:id — throws 403 if user is not a participant */
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() userId: string) {
     return this.conversations.findOne(id, userId);
   }
 
-  /** PATCH /conversations/:id/read — reset unread count */
+  /** PATCH /conversations/:id/read — reset this user's unread count */
   @Patch(':id/read')
   markRead(@Param('id') id: string, @CurrentUser() userId: string) {
     return this.conversations.markAsRead(id, userId);
   }
 
-  /** PATCH /conversations/:id/mute — toggle mute notifications */
+  /** PATCH /conversations/:id/mute — mute/unmute for this user only */
   @Patch(':id/mute')
   mute(
     @Param('id') id: string,
@@ -72,7 +66,7 @@ export class ConversationsController {
     return this.conversations.setMuted(id, userId, dto.muted);
   }
 
-  /** DELETE /conversations/:id — delete conversation permanently */
+  /** DELETE /conversations/:id — only a participant can delete */
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() userId: string) {
     return this.conversations.delete(id, userId);
