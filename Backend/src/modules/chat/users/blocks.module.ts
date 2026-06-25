@@ -1,17 +1,12 @@
-/**
- * blocks.module.ts
- 
- * BlocksController has been REMOVED and merged into UsersController.
- * This module now only provides BlocksService for injection elsewhere.
- *
- * If you import BlocksModule somewhere, it still works — BlocksService is
- * exported. But route handling is now exclusively in UsersController.
- */
 import { Module } from '@nestjs/common';
 import { BlocksService } from './blocks.service';
 
+/**
+ * BlocksController has been intentionally merged into UsersController.
+ * This module only provides BlocksService for injection by GatewayModule.
+ */
 @Module({
   providers: [BlocksService],
   exports: [BlocksService],
 })
-export class BlocksModule { }
+export class BlocksModule {}
