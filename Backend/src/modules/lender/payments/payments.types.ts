@@ -4,14 +4,14 @@ export interface CursorPageInfo {
   nextCursor: string | null;
 }
 
-export interface RecentTransactionsSummary {
+export interface PaymentsSummary {
   totalTransactions: number;
   totalCollected: number;
   loansWithActivity: number;
   overdueInstallments: number;
 }
 
-export interface RecentTransactionInstallmentSummary {
+export interface PaymentInstallmentSummary {
   totalInstallments: number;
   paidInstallments: number;
   overdueInstallments: number;
@@ -19,7 +19,7 @@ export interface RecentTransactionInstallmentSummary {
   latestInstallmentStatus: string;
 }
 
-export interface RecentTransactionListItem {
+export interface PaymentListItem {
   transactionId: string;
   loanId: string;
   installmentId: string | null;
@@ -33,14 +33,14 @@ export interface RecentTransactionListItem {
   loanStatus: string;
   remainingAmount: number;
   source: 'payment' | 'transaction';
-  installmentSummary: RecentTransactionInstallmentSummary;
+  installmentSummary: PaymentInstallmentSummary;
 }
 
-export interface RecentTransactionsResponse {
+export interface PaymentsResponse {
   lenderId: string;
-  summary: RecentTransactionsSummary;
+  summary: PaymentsSummary;
   searchResultCount: number | null;
-  transactions: RecentTransactionListItem[];
+  transactions: PaymentListItem[];
   pageInfo: CursorPageInfo;
   generatedAt: string;
 }

@@ -38,6 +38,7 @@ export class AdminAuditService {
 
   constructor(private readonly firebaseService: FirebaseService) {}
 
+  // Pick the first role when the stored role is an array.
   private getPrimaryRole(role?: string | string[]) {
     if (Array.isArray(role)) {
       return role[0];

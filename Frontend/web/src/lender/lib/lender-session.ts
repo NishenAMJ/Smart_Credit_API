@@ -1,3 +1,4 @@
+// Browser session persistence for the lender experience, including handoff flows.
 export type LenderSession = {
   lenderId: string;
   displayName: string;
@@ -9,12 +10,14 @@ const SESSION_STORAGE_KEY = "smart-credit:lender-session";
 const ACCOUNTS_STORAGE_KEY = "smart-credit:lender-accounts";
 
 function canUseStorage(): boolean {
+  // Guards browser-only storage access for hydration-safe initial state code.
   return (
     typeof window !== "undefined" && typeof window.localStorage !== "undefined"
   );
 }
 
 function safeParseAccounts(value: string | null): LenderSession[] {
+  // Treats corrupted or unexpected localStorage data as empty state instead of crashing app boot.
   if (!value) {
     return [];
   }
@@ -62,6 +65,7 @@ function writeStoredAccounts(accounts: LenderSession[]) {
 }
 
 export function getStoredSession(): LenderSession | null {
+  // The active session is stored separately from the recent-account list for simpler app bootstrapping.
   if (!canUseStorage()) {
     return null;
   }
@@ -77,6 +81,7 @@ export function getStoredSession(): LenderSession | null {
 }
 
 export function getSessionFromSearchParams(): LenderSession | null {
+  // Supports login handoff via query params and removes them immediately after they are consumed.
   if (typeof window === "undefined") {
     return null;
   }
@@ -135,6 +140,7 @@ export function clearStoredSession() {
 }
 
 export function updateStoredSession(session: LenderSession) {
+  // Keeps the current lender first in the multi-account list while refreshing the active session copy.
   setStoredSession(session);
 
   const existingAccounts = readStoredAccounts();

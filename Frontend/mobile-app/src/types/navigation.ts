@@ -36,6 +36,7 @@ export type BorrowerStackParamList = {
   HelpCenter: undefined;
   ContactSupport: { initialCategory?: string } | undefined;
   Notifications: undefined;
+  LoanAgreement: { initialLoanId?: string } | undefined;
 };
 
 export type BorrowerNavigation =

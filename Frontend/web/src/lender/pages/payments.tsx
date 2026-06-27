@@ -1,3 +1,4 @@
+// Lender payments workspace for transaction history, loan ledgers, and manual payment recording.
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchBorrowerDetails,
@@ -7,13 +8,13 @@ import type { LenderSession } from "../lib/lender-session";
 import {
   fetchLoanLedgerDetails,
   type LoanLedgerDetailsResponse,
-  fetchRecentTransactions,
+  fetchPayments,
   recordInstallmentPayment,
-  type RecentTransactionItem,
-  type RecentTransactionsResponse,
-} from "../lib/recent-transactions-api";
+  type PaymentItem,
+  type PaymentsResponse,
+} from "../lib/payments-api";
 
-type RecentTransactionsPageProps = {
+type PaymentsPageProps = {
   session: LenderSession;
 };
 
@@ -77,10 +78,10 @@ function getStatusBadgeClass(value: string): string {
   return "badge-gray";
 }
 
-export default function RecentTransactionsPage({
+export default function PaymentsPage({
   session,
-}: RecentTransactionsPageProps) {
-  const [response, setResponse] = useState<RecentTransactionsResponse | null>(
+}: PaymentsPageProps) {
+  const [response, setResponse] = useState<PaymentsResponse | null>(
     null,
   );
   const [isListLoading, setIsListLoading] = useState(true);
@@ -88,14 +89,14 @@ export default function RecentTransactionsPage({
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summary, setSummary] = useState<
-    RecentTransactionsResponse["summary"] | null
+    PaymentsResponse["summary"] | null
   >(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
   const [selectedTransaction, setSelectedTransaction] =
-    useState<RecentTransactionItem | null>(null);
+    useState<PaymentItem | null>(null);
   const [detailSection, setDetailSection] = useState<DetailSection>("loan");
   const [borrowerDetails, setBorrowerDetails] =
     useState<BorrowerDetails | null>(null);
@@ -119,12 +120,13 @@ export default function RecentTransactionsPage({
     cursor?: string | null;
     search?: string;
   }) {
+    // Shared list loader used after mutations so the transaction table can be refreshed without reloading the page.
     setIsListLoading(true);
     setListError(null);
 
     try {
       const normalizedSearch = options?.search ?? debouncedSearchQuery;
-      const data = await fetchRecentTransactions({
+      const data = await fetchPayments({
         pageSize: PAGE_SIZE,
         cursor: options?.cursor ?? activeCursor,
         includeSummary: false,
@@ -136,7 +138,7 @@ export default function RecentTransactionsPage({
       setListError(
         loadError instanceof Error
           ? loadError.message
-          : "Failed to load recent transactions.",
+          : "Failed to load payments.",
       );
     } finally {
       setIsListLoading(false);
@@ -144,6 +146,7 @@ export default function RecentTransactionsPage({
   }
 
   useEffect(() => {
+    // Reset payment-specific state when the authenticated lender changes.
     setCurrentPage(1);
     setPageCursors([null]);
     setResponse(null);
@@ -153,6 +156,7 @@ export default function RecentTransactionsPage({
   }, [session.lenderId]);
 
   useEffect(() => {
+    // Debounce the text search so backend filtering does not fire on every keypress.
     const handle = window.setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
     }, 250);
@@ -161,6 +165,7 @@ export default function RecentTransactionsPage({
   }, [searchQuery]);
 
   useEffect(() => {
+    // Starting a new search always returns the cursor stack to the first page.
     setCurrentPage(1);
     setPageCursors([null]);
   }, [debouncedSearchQuery]);
@@ -168,12 +173,13 @@ export default function RecentTransactionsPage({
   useEffect(() => {
     let isMounted = true;
 
+    // The list query omits summary data to keep paged fetches lighter than the initial metrics load.
     const loadTransactions = async () => {
       try {
         setIsListLoading(true);
         setListError(null);
 
-        const data = await fetchRecentTransactions({
+        const data = await fetchPayments({
           pageSize: PAGE_SIZE,
           cursor: activeCursor,
           includeSummary: false,
@@ -189,7 +195,7 @@ export default function RecentTransactionsPage({
           setListError(
             loadError instanceof Error
               ? loadError.message
-              : "Failed to load recent transactions.",
+              : "Failed to load payments.",
           );
         }
       } finally {
@@ -213,12 +219,13 @@ export default function RecentTransactionsPage({
 
     let isMounted = true;
 
+    // Summary data loads once after the first list payload so the header can appear even if detail state changes later.
     const loadSummary = async () => {
       try {
         setIsSummaryLoading(true);
         setSummaryError(null);
 
-        const data = await fetchRecentTransactions({
+        const data = await fetchPayments({
           pageSize: PAGE_SIZE,
           includeSummary: true,
           includeSearchCount: false,
@@ -256,6 +263,7 @@ export default function RecentTransactionsPage({
 
     let isMounted = true;
 
+    // Opening a transaction detail panel fetches both borrower and loan ledger data in parallel.
     const loadDetails = async () => {
       try {
         setIsDetailLoading(true);
@@ -300,7 +308,7 @@ export default function RecentTransactionsPage({
     };
   }, [selectedTransaction, session.lenderId]);
 
-  function openLoanSection(transaction: RecentTransactionItem) {
+  function openLoanSection(transaction: PaymentItem) {
     setSelectedTransaction(transaction);
     setDetailSection("loan");
     setBorrowerDetails(null);
@@ -317,7 +325,7 @@ export default function RecentTransactionsPage({
     });
   }
 
-  function openBorrowerSection(transaction: RecentTransactionItem) {
+  function openBorrowerSection(transaction: PaymentItem) {
     setSelectedTransaction(transaction);
     setDetailSection("borrower");
     setBorrowerDetails(null);
@@ -338,6 +346,7 @@ export default function RecentTransactionsPage({
   }
 
   async function handleRecordPayment(installmentId: string) {
+    // Recording a payment updates the open ledger first, then refreshes list and summary data to keep all views aligned.
     if (!selectedTransaction) {
       return;
     }
@@ -390,7 +399,7 @@ export default function RecentTransactionsPage({
       try {
         setIsSummaryLoading(true);
         setSummaryError(null);
-        const summaryData = await fetchRecentTransactions({
+        const summaryData = await fetchPayments({
           pageSize: PAGE_SIZE,
           includeSummary: true,
           includeSearchCount: false,
@@ -465,15 +474,10 @@ export default function RecentTransactionsPage({
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Lender cash flow</p>
-            <h1 className="page-title">Loans</h1>
-            <p className="page-subtitle">
-              Review your loan activity ledger with lender-owned payments,
-              installment progress, and remaining balances in one place.
-            </p>
-            <p className="dashboard-context-pill">
-              Loan ledger: {session.displayName} - {session.lenderId}
-            </p>
+            <p className="eyebrow">Payments</p>
+            <h1 className="page-title">Payments</h1>
+            <p className="page-subtitle">Payments, balances, and installments.</p>
+            <p className="dashboard-context-pill">{session.displayName}</p>
           </div>
         </header>
 
@@ -483,12 +487,8 @@ export default function RecentTransactionsPage({
           </section>
         ) : listError && !response ? (
           <section className="card error-card">
-            <h2>Loan activity ledger is not available yet</h2>
+            <h2>Payments unavailable</h2>
             <p>{listError}</p>
-            <p>
-              Check the lender loan ledger API, lender-linked loan data, and
-              whether payment or transaction records exist in Firestore.
-            </p>
           </section>
         ) : (
           <>
@@ -511,8 +511,7 @@ export default function RecentTransactionsPage({
                       : String(displaySummary.totalTransactions)}
                   </p>
                   <p className="metric-caption">
-                    {summaryError ??
-                      "Completed lender-linked payment rows across your loan book"}
+                    {summaryError ?? "Recorded payments"}
                   </p>
                 </div>
               </article>
@@ -530,9 +529,7 @@ export default function RecentTransactionsPage({
                       ? "..."
                       : formatCurrency(displaySummary.totalCollected)}
                   </p>
-                  <p className="metric-caption">
-                    Repayments collected across all linked loans
-                  </p>
+                  <p className="metric-caption">Collected amount</p>
                 </div>
               </article>
               <article className="card metric-card">
@@ -549,9 +546,7 @@ export default function RecentTransactionsPage({
                       ? "..."
                       : String(displaySummary.loansWithActivity)}
                   </p>
-                  <p className="metric-caption">
-                    Loans with at least one recorded repayment
-                  </p>
+                  <p className="metric-caption">Loans with payments</p>
                 </div>
               </article>
               <article className="card metric-card">
@@ -568,9 +563,7 @@ export default function RecentTransactionsPage({
                       ? "..."
                       : String(displaySummary.overdueInstallments)}
                   </p>
-                  <p className="metric-caption">
-                    Overdue installments in your current portfolio
-                  </p>
+                  <p className="metric-caption">Overdue installments</p>
                 </div>
               </article>
             </section>
@@ -580,11 +573,7 @@ export default function RecentTransactionsPage({
                 <div>
                   <h2 className="section-title">Loan Activity Ledger</h2>
                   <p className="section-subtitle">
-                    Every row is a lender-linked payment record. The page loads
-                    the latest {PAGE_SIZE} first, then fetches the next{" "}
-                    {PAGE_SIZE} when you move forward. Search runs on the
-                    server, so loan and installment lookups can match beyond the
-                    current page.
+                    Recent payment activity.
                   </p>
                 </div>
 
@@ -620,8 +609,7 @@ export default function RecentTransactionsPage({
                         {isListLoading ? "..." : String(matchedPaymentsCount)}
                       </p>
                       <p className="metric-caption">
-                        Total matched payment rows across all pages for this
-                        search
+                        Matched payment rows
                       </p>
                     </div>
                   </article>
@@ -644,7 +632,7 @@ export default function RecentTransactionsPage({
                     {isListLoading ? (
                       <tr>
                         <td className="table-empty" colSpan={6}>
-                          Loading lender-linked payment activity...
+                          Loading payment activity...
                         </td>
                       </tr>
                     ) : listError ? (
@@ -759,8 +747,8 @@ export default function RecentTransactionsPage({
                       <tr>
                         <td className="table-empty" colSpan={6}>
                           {searchQuery
-                            ? "No loan ledger entries match the current search."
-                            : "No recent lender-linked payment activity is available yet."}
+                            ? "No payments matched your search."
+                            : "No payment activity found."}
                         </td>
                       </tr>
                     )}
@@ -771,8 +759,8 @@ export default function RecentTransactionsPage({
               <div className="table-footer">
                 <p>
                   {isSearchActive
-                    ? `Showing ${visibleStart}-${visibleEnd} of ${matchedPaymentsCount} matched payment row(s) on page ${currentPage}.`
-                    : `Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
+                    ? `Showing ${visibleStart}-${visibleEnd} of ${matchedPaymentsCount} matched payments on page ${currentPage}.`
+                    : `Showing ${visibleStart}-${visibleEnd} payments on page ${currentPage}.`}
                 </p>
 
                 <div className="pagination">
@@ -1196,8 +1184,7 @@ export default function RecentTransactionsPage({
                                   ))
                                 ) : (
                                   <p className="section-subtitle">
-                                    No payment records are linked to this
-                                    installment yet.
+                                    No payment records yet.
                                   </p>
                                 )}
                               </div>
@@ -1205,8 +1192,7 @@ export default function RecentTransactionsPage({
                           ))
                         ) : (
                           <div className="borrower-modal__state">
-                            No installment details are available for this loan
-                            yet.
+                            No installment details found.
                           </div>
                         )}
                       </div>
@@ -1284,10 +1270,7 @@ export default function RecentTransactionsPage({
                           <h3 className="section-title">
                             Borrower loan summary
                           </h3>
-                          <p className="section-subtitle">
-                            Loans this borrower has with you as the current
-                            lender.
-                          </p>
+                          <p className="section-subtitle">Loans with you.</p>
                         </div>
                       </div>
 
@@ -1351,7 +1334,7 @@ export default function RecentTransactionsPage({
                   </div>
                 ) : (
                   <div className="borrower-modal__state">
-                    Borrower details are not available yet.
+                    Borrower details unavailable.
                   </div>
                 )}
               </div>

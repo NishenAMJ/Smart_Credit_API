@@ -1,3 +1,4 @@
+// Analytics API contracts used by the lender overview and drilldown screens.
 import { fetchLenderApiWithQuery } from "./api-client";
 
 export type AnalyticsRange = {
@@ -83,6 +84,7 @@ export type AnalyticsDrilldownResponse = {
 export async function fetchAnalyticsOverview(
   range: string,
 ): Promise<AnalyticsOverviewResponse> {
+  // Fetches the summary payload that drives the top-level analytics dashboard cards and charts.
   const response = await fetchLenderApiWithQuery(
     "/analytics/overview",
     new URLSearchParams({
@@ -105,6 +107,7 @@ export async function fetchAnalyticsDrilldown(
     cursor?: string | null;
   },
 ): Promise<AnalyticsDrilldownResponse> {
+  // Drilldowns reuse cursor pagination so modal detail views can grow without loading everything.
   const searchParams = new URLSearchParams({
     type,
     range,

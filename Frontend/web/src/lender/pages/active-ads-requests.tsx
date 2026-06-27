@@ -1,5 +1,6 @@
+// Cross-links active ads from analytics drilldowns with the requests attached to a selected ad.
 import { useEffect, useState } from "react";
-import type { LenderView } from "../components/common/LenderSidebar";
+import type { LenderView } from "../config/lender-views";
 import {
   fetchAnalyticsDrilldown,
   type AnalyticsDrilldownItem,
@@ -75,6 +76,7 @@ export default function ActiveAdsRequestsPage({
   const requests = requestsResponse?.requests ?? [];
 
   useEffect(() => {
+    // Reset both panes when the lender changes so stale ad/request selections are cleared.
     setCurrentPage(1);
     setPageCursors([null]);
     setAdsResponse(null);
@@ -87,6 +89,7 @@ export default function ActiveAdsRequestsPage({
   useEffect(() => {
     let isMounted = true;
 
+    // Active ads are sourced from the analytics drilldown API so this page stays consistent with analytics.
     const loadAds = async () => {
       try {
         setIsAdsLoading(true);
@@ -143,6 +146,7 @@ export default function ActiveAdsRequestsPage({
 
     let isMounted = true;
 
+    // Request data is fetched only for the currently selected ad to avoid unnecessary marketplace queries.
     const loadRequests = async () => {
       try {
         setIsRequestsLoading(true);
@@ -184,15 +188,10 @@ export default function ActiveAdsRequestsPage({
     <section className="dashboard-panel">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Ad performance</p>
+          <p className="eyebrow">Ads</p>
           <h1 className="page-title">Active Ads Requests</h1>
-          <p className="page-subtitle">
-            Open one active ad at a time and review the borrower requests coming
-            through that specific ad.
-          </p>
-          <p className="dashboard-context-pill">
-            Ads desk: {session.displayName} - {session.lenderId}
-          </p>
+          <p className="page-subtitle">Active ads and linked requests.</p>
+          <p className="dashboard-context-pill">{session.displayName}</p>
         </div>
 
         <div className="analytics-header-tools">
@@ -214,9 +213,7 @@ export default function ActiveAdsRequestsPage({
           <div className="metric-copy">
             <p className="metric-label">Ads Per Page</p>
             <p className="metric-value">{ADS_PAGE_SIZE}</p>
-            <p className="metric-caption">
-              Loads smaller batches for faster review
-            </p>
+            <p className="metric-caption">Ads shown per page</p>
           </div>
         </article>
         <article className="card metric-card">
@@ -226,9 +223,7 @@ export default function ActiveAdsRequestsPage({
           <div className="metric-copy">
             <p className="metric-label">Current Page</p>
             <p className="metric-value">{currentPage}</p>
-            <p className="metric-caption">
-              Only the current ad batch is requested
-            </p>
+            <p className="metric-caption">Current result page</p>
           </div>
         </article>
       </section>
@@ -238,9 +233,7 @@ export default function ActiveAdsRequestsPage({
           <div className="analytics-card__header">
             <div>
               <h2 className="section-title">Active Ads</h2>
-              <p className="section-subtitle">
-                Click an ad to load only the borrower requests linked to it.
-              </p>
+              <p className="section-subtitle">Select an ad to view requests.</p>
             </div>
           </div>
 
@@ -280,7 +273,7 @@ export default function ActiveAdsRequestsPage({
             </div>
           ) : (
             <div className="borrower-modal__state">
-              No active ads are available for this lender right now.
+              No active ads found.
             </div>
           )}
 
@@ -317,21 +310,19 @@ export default function ActiveAdsRequestsPage({
           <div className="analytics-card__header">
             <div>
               <h2 className="section-title">
-                {selectedAd
-                  ? "Borrower Requests For Selected Ad"
-                  : "Borrower Requests"}
+                {selectedAd ? "Borrower Requests" : "Borrower Requests"}
               </h2>
               <p className="section-subtitle">
                 {selectedAd
-                  ? `Review borrower requests linked to ${selectedAd.title}.`
-                  : "Choose an active ad first to inspect its borrower requests."}
+                  ? selectedAd.title
+                  : "Select an ad to continue."}
               </p>
             </div>
           </div>
 
           {!selectedAd ? (
             <div className="borrower-modal__state">
-              Select an active ad from the left to load its borrower requests.
+              Select an ad to view requests.
             </div>
           ) : requestsError ? (
             <div className="borrower-modal__state borrower-modal__state--error">
@@ -376,7 +367,7 @@ export default function ActiveAdsRequestsPage({
             </div>
           ) : (
             <div className="borrower-modal__state">
-              No borrower requests have reached this ad yet.
+              No requests for this ad yet.
             </div>
           )}
         </article>

@@ -1,5 +1,6 @@
+// Lender dashboard with summary cards, borrower search, pagination, and borrower detail modal.
 import { type FormEvent, useEffect, useState } from "react";
-import type { LenderView } from "../components/common/LenderSidebar";
+import type { LenderView } from "../config/lender-views";
 import type {
   BorrowerDetails,
   DashboardBorrower,
@@ -11,8 +12,6 @@ import {
   fetchDashboardSummary,
 } from "../lib/dashboard-api";
 import type { LenderSession } from "../lib/lender-session";
-
-const ITEMS_PER_PAGE = 8;
 const currencyFormatter = new Intl.NumberFormat("en-LK", {
   style: "currency",
   currency: "LKR",
@@ -61,6 +60,7 @@ function getMetricTone(index: number): string {
 type DashboardPageProps = {
   session: LenderSession;
   onNavigate: (view: LenderView) => void;
+  borrowerPageSize: number;
 };
 
 type DashboardQuickAction = {
@@ -70,6 +70,7 @@ type DashboardQuickAction = {
 };
 
 const quickActions: DashboardQuickAction[] = [
+  // These quick actions intentionally link to hidden or secondary views outside the main sidebar.
   {
     id: "pending-requests",
     icon: "requests",
@@ -139,6 +140,7 @@ function DashboardQuickActionIcon({
 export default function DashboardPage({
   session,
   onNavigate,
+  borrowerPageSize,
 }: DashboardPageProps) {
   const [borrowers, setBorrowers] = useState<DashboardBorrower[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -163,6 +165,7 @@ export default function DashboardPage({
   useEffect(() => {
     let isMounted = true;
 
+    // Summary metrics are loaded independently from the borrower table so each section can fail or recover on its own.
     const loadSummary = async () => {
       try {
         setIsSummaryLoading(true);
@@ -195,13 +198,15 @@ export default function DashboardPage({
   }, [session.lenderId]);
 
   useEffect(() => {
+    // Pagination state resets whenever the lender or page size changes.
     setCurrentPage(1);
     setPageCursors([null]);
     setBorrowers([]);
     setHasMoreBorrowers(false);
-  }, [session.lenderId]);
+  }, [borrowerPageSize, session.lenderId]);
 
   useEffect(() => {
+    // Search runs off a submitted query so typing does not refetch the borrower list on every keystroke.
     setCurrentPage(1);
     setPageCursors([null]);
     setBorrowers([]);
@@ -211,12 +216,13 @@ export default function DashboardPage({
   useEffect(() => {
     let isMounted = true;
 
+    // Cursor pagination is maintained locally so next-page fetches can reuse backend cursors without a router state.
     const loadBorrowers = async () => {
       try {
         setIsBorrowersLoading(true);
         setBorrowersError(null);
         const borrowersData = await fetchDashboardBorrowers(
-          ITEMS_PER_PAGE,
+          borrowerPageSize,
           activeCursor,
           borrowerSearch,
         );
@@ -254,7 +260,7 @@ export default function DashboardPage({
     return () => {
       isMounted = false;
     };
-  }, [activeCursor, currentPage, borrowerSearch, session.lenderId]);
+  }, [activeCursor, borrowerPageSize, currentPage, borrowerSearch, session.lenderId]);
 
   useEffect(() => {
     if (!selectedBorrowerId) {
@@ -263,6 +269,7 @@ export default function DashboardPage({
 
     let isMounted = true;
 
+    // Borrower details are fetched lazily when the lender opens the modal from the table.
     const loadBorrower = async () => {
       try {
         setIsBorrowerLoading(true);
@@ -315,30 +322,31 @@ export default function DashboardPage({
     {
       label: "Total Borrowers",
       value: summary ? String(summary.totalBorrowers) : "--",
-      caption: "Borrowers who already borrowed from you",
+      caption: "Borrowers linked to you",
       accent: "BR",
     },
     {
       label: "Today's Collection",
       value: summary ? formatCurrency(summary.todaysCollection) : "--",
-      caption: "Repayments recorded today from your loans",
+      caption: "Collected today",
       accent: "LKR",
     },
     {
       label: "Overdue Payments",
       value: summary ? String(summary.overduePayments) : "--",
-      caption: "Overdue installments inside your loan book",
+      caption: "Currently overdue",
       accent: "OD",
     },
     {
       label: "Active Ads",
       value: summary ? String(summary.activeAds) : "--",
-      caption: "Approved ads owned by this lender",
+      caption: "Live ads",
       accent: "AD",
     },
   ];
 
   const detailFields = selectedBorrower
+    // Detail fields are assembled as label/value pairs so the modal markup can stay generic.
     ? [
         { label: "Borrower ID", value: selectedBorrower.id },
         { label: "Full Name", value: selectedBorrower.fullName },
@@ -393,6 +401,7 @@ export default function DashboardPage({
     : [];
 
   function handleOpenBorrowerModal(borrowerId: string) {
+    // Opening a new borrower clears the previous modal payload so loading and error states are accurate.
     setSelectedBorrowerId(borrowerId);
     setSelectedBorrower(null);
     setBorrowerError(null);
@@ -405,6 +414,7 @@ export default function DashboardPage({
   }
 
   function handleBorrowerSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    // Commit the current search draft into the applied query only when the form is submitted.
     event.preventDefault();
     setBorrowerSearch(borrowerSearchDraft.trim());
   }
@@ -414,15 +424,10 @@ export default function DashboardPage({
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Lender overview</p>
+            <p className="eyebrow">Overview</p>
             <h1 className="page-title">Dashboard</h1>
-            <p className="page-subtitle">
-              Lender workspace for collections, portfolio health, borrower
-              activity, and ad performance from Firebase.
-            </p>
-            <p className="dashboard-context-pill">
-              Temporary session: {session.displayName} - {session.lenderId}
-            </p>
+            <p className="page-subtitle">Borrowers, collections, and ads.</p>
+            <p className="dashboard-context-pill">{session.displayName}</p>
           </div>
           <div className="dashboard-header-tools">
             <div
@@ -462,12 +467,8 @@ export default function DashboardPage({
           </section>
         ) : summaryError ? (
           <section className="card error-card">
-            <h2>Dashboard data is not available yet</h2>
+            <h2>Dashboard unavailable</h2>
             <p>{summaryError}</p>
-            <p>
-              Check whether the Nest API is running, Firebase credentials are
-              valid, and the lender has loan records.
-            </p>
           </section>
         ) : (
           <>
@@ -494,9 +495,7 @@ export default function DashboardPage({
                 <div>
                   <h2 className="section-title">Borrowers Linked To You</h2>
                   <p className="section-subtitle">
-                    These borrowers have taken at least one loan from this
-                    lender. If they also borrowed from another lender, those
-                    loans stay out of this view.
+                    Borrowers with at least one loan from you.
                   </p>
                 </div>
                 <form
@@ -602,7 +601,7 @@ export default function DashboardPage({
                         <td className="table-empty" colSpan={6}>
                           {borrowerSearch
                             ? "No borrowers matched your search."
-                            : "No lender-linked borrower data available yet."}
+                            : "No borrowers found."}
                         </td>
                       </tr>
                     )}
@@ -612,8 +611,8 @@ export default function DashboardPage({
 
               <div className="table-footer">
                 <p>
-                  Showing {visibleBorrowers.length} lender-linked borrowers on
-                  page {currentPage}
+                  Showing {visibleBorrowers.length} borrowers on page{" "}
+                  {currentPage}
                   {borrowerSearch ? ` for "${borrowerSearch}"` : ""}
                 </p>
 
@@ -665,10 +664,7 @@ export default function DashboardPage({
                 <h2 className="section-title" id="borrower-modal-title">
                   {selectedBorrower?.fullName ?? "Loading borrower..."}
                 </h2>
-                <p className="section-subtitle">
-                  Review the borrower profile and only the loans connected to
-                  this lender.
-                </p>
+                <p className="section-subtitle">Borrower profile and loans.</p>
               </div>
               <button
                 type="button"
@@ -713,10 +709,6 @@ export default function DashboardPage({
                         <h3 className="section-title">
                           Loans With This Lender
                         </h3>
-                        <p className="section-subtitle">
-                          Only this lender&apos;s loans are shown, even if the
-                          borrower has loans elsewhere.
-                        </p>
                       </div>
                     </div>
 

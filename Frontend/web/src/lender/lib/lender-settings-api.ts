@@ -1,3 +1,4 @@
+// Settings contracts shared by lender app bootstrapping and the settings page.
 import { fetchLenderApi, parseApiError } from "./api-client";
 
 export type DefaultLandingPage = "dashboard" | "analytics";
@@ -50,6 +51,7 @@ export type UpdateLenderSettingsPayload = {
 };
 
 export async function fetchLenderSettings(): Promise<LenderSettings> {
+  // Settings drive both startup defaults and per-page behavior such as pagination and analytics range.
   const response = await fetchLenderApi("/lender-settings/me");
 
   if (!response.ok) {
@@ -62,6 +64,7 @@ export async function fetchLenderSettings(): Promise<LenderSettings> {
 export async function updateLenderSettings(
   payload: UpdateLenderSettingsPayload,
 ): Promise<LenderSettings> {
+  // Returns the saved settings payload so the page can immediately resync local form state.
   const response = await fetchLenderApi("/lender-settings/me", {
     method: "PATCH",
     headers: {

@@ -28,6 +28,10 @@ export type DeleteInfo = {
 export interface DocumentRecord {
   id: string;
   userId: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  userKycStatus?: string;
   category: DocumentCategory;
   documentType: string;
   originalFilename: string;
@@ -55,6 +59,9 @@ export interface DocumentRecord {
   createdAt: unknown;
   updatedAt: unknown;
   deletedAt?: unknown;
+  reviewerId?: string;
+  reviewTimestamp?: unknown;
+  reviewNotes?: string;
   review?: ReviewInfo;
   deletion?: DeleteInfo;
 }

@@ -36,7 +36,9 @@ function normalizeApplication(
   const normalizedStatus =
     rawStatus === "draft" || rawStatus === "open" || rawStatus === "pending"
       ? "under_review"
-      : rawStatus;
+      : rawStatus === "accepted"
+        ? "approved"
+        : rawStatus;
 
   return {
     ...application,

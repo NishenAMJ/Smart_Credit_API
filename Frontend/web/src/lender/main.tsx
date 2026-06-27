@@ -1,3 +1,4 @@
+// Standalone Vite entrypoint for the lender app during local development and deployment.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";

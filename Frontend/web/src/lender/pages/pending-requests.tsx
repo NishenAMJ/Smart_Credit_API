@@ -1,3 +1,4 @@
+// Review queue for lender pending requests, including search, filters, and decision actions.
 import { useEffect, useMemo, useState } from "react";
 import type { LenderSession } from "../lib/lender-session";
 import {
@@ -11,9 +12,8 @@ import {
 
 type PendingRequestsPageProps = {
   session: LenderSession;
+  pageSize: number;
 };
-
-const API_LIMIT = 30;
 const currencyFormatter = new Intl.NumberFormat("en-LK", {
   style: "currency",
   currency: "LKR",
@@ -73,6 +73,7 @@ function getStatusBadgeClass(value: string): string {
 
 export default function PendingRequestsPage({
   session,
+  pageSize,
 }: PendingRequestsPageProps) {
   const [response, setResponse] = useState<PendingRequestsResponse | null>(
     null,
@@ -90,10 +91,11 @@ export default function PendingRequestsPage({
   const [isDecisionSaving, setIsDecisionSaving] = useState(false);
 
   async function loadRequests(nextSelectedRequestId?: string | null) {
+    // Reloads the queue and optionally reselects the updated request after an approve/reject/review action.
     try {
       setIsLoading(true);
       setError(null);
-      const data = await fetchPendingRequests(API_LIMIT);
+      const data = await fetchPendingRequests(pageSize);
       setResponse(data);
 
       if (typeof nextSelectedRequestId === "string") {
@@ -115,10 +117,12 @@ export default function PendingRequestsPage({
   }
 
   useEffect(() => {
+    // Refresh the queue when the page size or current lender changes.
     void loadRequests();
-  }, [session.lenderId]);
+  }, [pageSize, session.lenderId]);
 
   useEffect(() => {
+    // Decision form state is tied to the selected request, so it resets every time the selection changes.
     setDecisionNotes("");
     setDecisionError(null);
     setDecisionSuccess(null);
@@ -147,6 +151,7 @@ export default function PendingRequestsPage({
   const summary = response?.summary;
 
   const filteredRequests = useMemo(() => {
+    // Client-side filtering keeps the detail panel responsive while the backend remains focused on queue retrieval.
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     return requests.filter((request) => {
@@ -182,25 +187,25 @@ export default function PendingRequestsPage({
     {
       label: "Pending Requests",
       value: summary ? String(summary.totalPendingRequests) : "--",
-      caption: "Requests currently waiting in your pipeline",
+      caption: "Waiting for review",
       accent: "RQ",
     },
     {
       label: "Targeted Requests",
       value: summary ? String(summary.targetedRequests) : "--",
-      caption: "Requests that came directly through your ad",
+      caption: "From your ads",
       accent: "TG",
     },
     {
       label: "Marketplace Matches",
       value: summary ? String(summary.marketplaceMatches) : "--",
-      caption: "Requests surfaced to you through marketplace matching",
+      caption: "Marketplace matches",
       accent: "MP",
     },
     {
       label: "High Urgency",
       value: summary ? String(summary.highUrgencyRequests) : "--",
-      caption: "Requests marked high or critical urgency",
+      caption: "High priority",
       accent: "HI",
     },
   ];
@@ -221,6 +226,7 @@ export default function PendingRequestsPage({
     selectedRequestStatus !== "rejected";
 
   async function handleDecision(action: "approve" | "reject" | "review") {
+    // A single handler coordinates the three request decision endpoints and their shared UI feedback.
     if (!selectedRequest) {
       return;
     }
@@ -269,15 +275,10 @@ export default function PendingRequestsPage({
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Lender pipeline</p>
+            <p className="eyebrow">Requests</p>
             <h1 className="page-title">Pending Requests</h1>
-            <p className="page-subtitle">
-              Review incoming loan requests linked to this lender, whether they
-              came directly through your ads or through marketplace matching.
-            </p>
-            <p className="dashboard-context-pill">
-              Request desk: {session.displayName} - {session.lenderId}
-            </p>
+            <p className="page-subtitle">Requests from ads and matches.</p>
+            <p className="dashboard-context-pill">{session.displayName}</p>
           </div>
         </header>
 
@@ -287,12 +288,8 @@ export default function PendingRequestsPage({
           </section>
         ) : error ? (
           <section className="card error-card">
-            <h2>Pending requests are not available yet</h2>
+            <h2>Requests unavailable</h2>
             <p>{error}</p>
-            <p>
-              Check the backend API, the lender ID, and whether request data is
-              seeded in Firestore.
-            </p>
           </section>
         ) : (
           <>
@@ -324,10 +321,7 @@ export default function PendingRequestsPage({
               <div className="pending-requests-toolbar">
                 <div>
                   <h2 className="section-title">Incoming Request Queue</h2>
-                  <p className="section-subtitle">
-                    Click a request to review borrower, pricing, and routing
-                    details in one place.
-                  </p>
+                  <p className="section-subtitle">Select a request to review.</p>
                 </div>
 
                 <div className="pending-requests-toolbar__controls">
@@ -478,10 +472,7 @@ export default function PendingRequestsPage({
                 <h2 className="section-title" id="pending-request-title">
                   {selectedRequest.borrowerName}
                 </h2>
-                <p className="section-subtitle">
-                  Review the borrower profile, requested terms, and how this
-                  request entered your pipeline.
-                </p>
+                <p className="section-subtitle">Borrower and request details.</p>
               </div>
               <button
                 type="button"
@@ -600,8 +591,7 @@ export default function PendingRequestsPage({
                       </div>
                     </div>
                     <p className="pending-request-notes">
-                      {selectedRequest.notes ||
-                        "No borrower note was attached to this request."}
+                      {selectedRequest.notes || "No note added."}
                     </p>
                   </article>
 
@@ -614,19 +604,11 @@ export default function PendingRequestsPage({
                         </h4>
                       </div>
                     </div>
-                    <div className="pending-request-match-list">
-                      {selectedRequest.matchedLenderIds.length > 0 ? (
-                        selectedRequest.matchedLenderIds.map((lenderId) => (
-                          <span className="badge badge-gray" key={lenderId}>
-                            {lenderId}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="pending-request-notes">
-                          No matched lender IDs were stored for this request.
-                        </p>
-                      )}
-                    </div>
+                    <p className="pending-request-notes">
+                      {selectedRequest.adTitle ??
+                        selectedRequest.adId ??
+                        formatLabel(selectedRequest.targetType)}
+                    </p>
                   </article>
                 </section>
 
@@ -637,7 +619,7 @@ export default function PendingRequestsPage({
                         Lender decision
                       </p>
                       <h4 className="borrower-loan-card__title">
-                        Review and update request status
+                        Update status
                       </h4>
                     </div>
                     <span
@@ -656,7 +638,7 @@ export default function PendingRequestsPage({
                     <textarea
                       className="input pending-request-decision-card__textarea"
                       rows={4}
-                      placeholder="Add a note for this decision. Rejection requires a reason."
+                      placeholder="Add a note. Rejection requires a reason."
                       value={decisionNotes}
                       onChange={(event) => setDecisionNotes(event.target.value)}
                       disabled={isDecisionSaving}

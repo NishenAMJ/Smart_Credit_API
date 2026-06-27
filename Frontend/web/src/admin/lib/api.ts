@@ -13,7 +13,7 @@ export const LENDER_APP_URL = import.meta.env.VITE_LENDER_APP_URL ?? "/lender";
 
 export type FirestoreTimestamp = { _seconds?: number };
 export type AdminUserRole = "admin" | "borrower" | "lender";
-export type AdminUserStatus = "active" | "pending" | "suspended" | "inactive";
+export type AdminUserStatus = "active" | "pending" | "suspended";
 export type AuditSeverity = "info" | "warning" | "critical" | "success";
 export type AuditTargetType = "user" | "ad" | "system" | "report";
 export type AdStatus =
@@ -30,9 +30,20 @@ export type SubmitKycPayload = {
   fullName: string;
   issuingCountry?: string;
   expiryDate?: string;
+  nicFrontDataUrl?: string;
+  nicBackDataUrl?: string;
+  addressProofDataUrl?: string;
+  bankDocumentDataUrl?: string;
+  profilePhotoUrl?: string;
   documentFrontUrl?: string;
   documentBackUrl?: string;
   selfieUrl?: string;
+  profilePictureUrl?: string;
+  addressProofNumber?: string;
+  bankAccountNumber?: string;
+  bankName?: string;
+  branchCode?: string;
+  accountType?: string;
 };
 
 export function getApiBaseUrl() {
@@ -146,19 +157,31 @@ export interface KycDocument {
   email?: string;
   phone?: string;
   documentType: string;
+  originalFilename?: string;
   documentUrl?: string;
   status: "pending" | "approved" | "rejected";
+  documentStatus?: "pending_review" | "approved" | "rejected" | "expired" | "deleted";
   submittedAt?: FirestoreTimestamp;
   reviewedAt?: FirestoreTimestamp;
   reviewedBy?: string;
+  reviewerId?: string;
+  reviewTimestamp?: FirestoreTimestamp;
+  reviewNotes?: string;
   rejectionReason?: string;
   notes?: string;
+  userKycStatus?: string;
 }
 
 export interface KycPendingResponse {
   success: boolean;
   count: number;
   documents: KycDocument[];
+}
+
+export interface KycDocumentAccessResponse {
+  success: boolean;
+  documentId: string;
+  accessUrl: string;
 }
 
 export interface DashboardAnalyticsResponse {
@@ -553,6 +576,15 @@ export function rejectKyc(
     auth: true,
     body: JSON.stringify({ reason }),
   });
+}
+
+export function getKycDocumentAccess(documentId: string) {
+  return apiRequest<KycDocumentAccessResponse>(
+    `/admin/kyc/${documentId}/access`,
+    {
+      auth: true,
+    },
+  );
 }
 
 // Keeps report-fetching logic consistent across reporting pages.

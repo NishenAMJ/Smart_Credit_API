@@ -11,7 +11,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader } from "../../components/lender";
-import { RecentTransactionsService } from "../../services/lender.service";
+import { PaymentsService } from "../../services/lender.service";
 
 /**
  * RecentTransactionListItem fields (from backend types):
@@ -19,7 +19,7 @@ import { RecentTransactionsService } from "../../services/lender.service";
  *   borrowerEmail, amount, type, status, createdAt, loanStatus,
  *   remainingAmount, source, installmentSummary
  *
- * RecentTransactionsSummary:
+ * PaymentsSummary:
  *   totalTransactions, totalCollected, loansWithActivity, overdueInstallments
  */
 
@@ -35,7 +35,7 @@ export default function CollectionHistoryScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const data = await RecentTransactionsService.getTransactions({
+        const data = await PaymentsService.getTransactions({
           pageSize: 100,
         });
         const txns: any[] = data?.transactions ?? [];

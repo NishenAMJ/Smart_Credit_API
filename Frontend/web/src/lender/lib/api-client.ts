@@ -1,3 +1,4 @@
+// Shared authenticated fetch helpers for lender-only API calls.
 import { getStoredSession } from "./lender-session";
 
 export const API_BASE_URL =
@@ -10,6 +11,7 @@ export async function parseApiError(
   response: Response,
   fallback: string,
 ): Promise<never> {
+  // Normalizes array or string API error payloads into one thrown Error for page-level handlers.
   try {
     const body = (await response.json()) as { message?: string | string[] };
     const message = Array.isArray(body.message)
@@ -29,6 +31,7 @@ export function buildApiUrl(
   path: string,
   searchParams?: URLSearchParams,
 ): string {
+  // Accepts relative paths from feature modules and attaches the configured API base consistently.
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
   if (!searchParams || Array.from(searchParams.keys()).length === 0) {
@@ -42,6 +45,7 @@ export async function fetchLenderApi(
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
+  // Every lender API request requires the current access token from browser storage.
   const session = getStoredSession();
   const accessToken = session?.accessToken?.trim();
 
@@ -63,6 +67,7 @@ export async function fetchLenderApiWithQuery(
   searchParams: URLSearchParams,
   init?: RequestInit,
 ): Promise<Response> {
+  // Mirrors fetchLenderApi while ensuring encoded query params are preserved in the request URL.
   const session = getStoredSession();
   const accessToken = session?.accessToken?.trim();
 

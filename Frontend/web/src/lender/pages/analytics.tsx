@@ -1,3 +1,4 @@
+// Lender analytics dashboard with range switching and drilldown overlays for deeper investigation.
 import { useEffect, useMemo, useState } from "react";
 import type {
   AnalyticsDrilldownResponse,
@@ -10,6 +11,7 @@ import {
   fetchAnalyticsOverview,
 } from "../lib/analytics-api";
 import type { LenderSession } from "../lib/lender-session";
+import type { DefaultAnalyticsRange } from "../lib/lender-settings-api";
 
 const RANGE_OPTIONS = [
   { key: "30d", label: "30 Days" },
@@ -65,6 +67,7 @@ function TrendBars({
   data: AnalyticsTrendPoint[];
   colorClassName: string;
 }) {
+  // Bars are scaled against the largest visible value so trends stay readable across different ranges.
   const maxValue = Math.max(...data.map((point) => point.value), 1);
 
   return (
@@ -88,6 +91,7 @@ function TrendBars({
 }
 
 function StatusBreakdown({ data }: { data: AnalyticsBreakdownPoint[] }) {
+  // The breakdown list computes its own proportions locally so the API only needs to send raw counts.
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   return (
@@ -120,11 +124,15 @@ function StatusBreakdown({ data }: { data: AnalyticsBreakdownPoint[] }) {
 
 type AnalyticsPageProps = {
   session: LenderSession;
+  defaultRange: DefaultAnalyticsRange;
 };
 
-export default function AnalyticsPage({ session }: AnalyticsPageProps) {
+export default function AnalyticsPage({
+  session,
+  defaultRange,
+}: AnalyticsPageProps) {
   const [selectedRange, setSelectedRange] =
-    useState<(typeof RANGE_OPTIONS)[number]["key"]>("90d");
+    useState<(typeof RANGE_OPTIONS)[number]["key"]>(defaultRange);
   const [overview, setOverview] = useState<AnalyticsOverviewResponse | null>(
     null,
   );
@@ -138,8 +146,17 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
   const [drilldownError, setDrilldownError] = useState<string | null>(null);
 
   useEffect(() => {
+    // When the saved default range changes, reset both the selected range and any open drilldown modal.
+    setSelectedRange(defaultRange);
+    setDrilldownType(null);
+    setDrilldown(null);
+    setDrilldownError(null);
+  }, [defaultRange, session.lenderId]);
+
+  useEffect(() => {
     let isMounted = true;
 
+    // Overview data powers every top-level analytics card, chart, and KPI.
     const loadAnalytics = async () => {
       try {
         setIsLoading(true);
@@ -178,6 +195,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
 
     let isMounted = true;
 
+    // Drilldowns are fetched lazily only after the lender opens one of the drilldown entry points.
     const loadDrilldown = async () => {
       try {
         setIsDrilldownLoading(true);
@@ -228,6 +246,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
   }, [drilldownType]);
 
   const summaryCards = useMemo(() => {
+    // Build presentation-ready summary cards once so the render tree stays declarative.
     if (!overview) {
       return [];
     }
@@ -236,28 +255,28 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
       {
         label: "Total Lent",
         value: formatCurrency(overview.summary.totalLent),
-        caption: "Lending volume in selected period",
+        caption: "Lent in this range",
         tone: "primary",
         drilldownType: "total-lent",
       },
       {
         label: "Total Collected",
         value: formatCurrency(overview.summary.totalCollected),
-        caption: "Repayments captured in selected period",
+        caption: "Collected in this range",
         tone: "success",
         drilldownType: "total-collected",
       },
       {
         label: "Active Loans",
         value: String(overview.summary.activeLoans),
-        caption: "Loans currently in active status",
+        caption: "Open loans",
         tone: "warning",
         drilldownType: "active-loans",
       },
       {
         label: "Repayment Success",
         value: formatPercent(overview.summary.repaymentSuccessRate),
-        caption: "Completed vs defaulted closed loans",
+        caption: "Closed loan success rate",
         tone: "danger",
         drilldownType: null,
       },
@@ -265,12 +284,14 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
   }, [overview]);
 
   function handleOpenDrilldown(type: string) {
+    // Opening a new drilldown clears the previous payload so the modal can show a clean loading state.
     setDrilldownType(type);
     setDrilldown(null);
     setDrilldownError(null);
   }
 
   function handleCloseDrilldown() {
+    // Closing the modal also clears its payload so stale drilldown data is not reused accidentally.
     setDrilldownType(null);
     setDrilldown(null);
     setDrilldownError(null);
@@ -281,17 +302,14 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Lender analytics</p>
+            <p className="eyebrow">Analytics</p>
             <h1 className="page-title">Analytics</h1>
-            <p className="page-subtitle">
-              Track lending growth, repayment quality, request conversion, and
-              portfolio risk from a lender business perspective.
-            </p>
+            <p className="page-subtitle">Lending, collections, and risk.</p>
           </div>
 
           <div className="analytics-header-tools">
             <div className="analytics-lender-pill">
-              {session.displayName} • {session.lenderId}
+              {session.displayName}
             </div>
             <div
               className="analytics-range-tabs"
@@ -322,12 +340,8 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
           </section>
         ) : error ? (
           <section className="card error-card">
-            <h2>Analytics data is not available yet</h2>
+            <h2>Analytics unavailable</h2>
             <p>{error}</p>
-            <p>
-              Check the analytics API, the lender ID, and whether lender-linked
-              data exists in Firebase.
-            </p>
           </section>
         ) : overview ? (
           <>
@@ -525,9 +539,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                 <div className="analytics-card__header">
                   <div>
                     <h2 className="section-title">Risk Watch</h2>
-                    <p className="section-subtitle">
-                      Keep an eye on repayment stress and borrower quality.
-                    </p>
+                    <p className="section-subtitle">Risk indicators.</p>
                   </div>
                 </div>
                 <div className="analytics-mini-grid">
@@ -581,10 +593,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
               <div className="analytics-card__header">
                 <div>
                   <h2 className="section-title">Business Insights</h2>
-                  <p className="section-subtitle">
-                    Quick plain-English takeaways for lender growth and
-                    portfolio quality.
-                  </p>
+                  <p className="section-subtitle">Key takeaways.</p>
                 </div>
               </div>
               <div className="analytics-insights">
@@ -600,7 +609,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   ))
                 ) : (
                   <p className="analytics-empty-copy">
-                    Insights will appear when enough lender data is available.
+                    No insights yet.
                   </p>
                 )}
               </div>
@@ -629,8 +638,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   {drilldown?.title ?? "Loading details..."}
                 </h2>
                 <p className="section-subtitle">
-                  {drilldown?.description ??
-                    "Review the underlying lender records behind this metric."}
+                  {drilldown?.description ?? "Metric details."}
                 </p>
               </div>
               <button
@@ -689,7 +697,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   </div>
                 ) : (
                   <div className="borrower-modal__state">
-                    No records were found for this metric in the selected range.
+                    No records found for this range.
                   </div>
                 )
               ) : null}

@@ -97,6 +97,7 @@ export default function Dashboard() {
       color: "#8B5CF6",
       bg: "#F5F3FF",
     },
+    
   ];
 
   const pieData = [
@@ -192,11 +193,12 @@ export default function Dashboard() {
               <span style={legendDot("#10B981")} /> Borrowers
               <span style={{ width: 16 }} />
               <span style={legendDot("#8B5CF6")} /> Admins
+              
             </div>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={roleBreakdown} barSize={32} barGap={10}>
+              <BarChart data={roleBreakdown} barSize={50} barGap={10}>
                 <CartesianGrid
                   strokeDasharray="3 3"
                   stroke="#F3F4F6"
@@ -223,7 +225,9 @@ export default function Dashboard() {
                           ? "#007AFF"
                           : entry.label === "Borrowers"
                             ? "#10B981"
-                            : "#8B5CF6"
+                            : entry.label === "Admins"
+                              ? "#8B5CF6"
+                              : "#9CA3AF"
                       }
                     />
                   ))}
