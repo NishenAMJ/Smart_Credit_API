@@ -5,30 +5,52 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { BorrowerModule } from './modules/borrower/borrower.module';
-import { LenderModule } from './modules/lender/lender.module';
+import { AnalyticsModule } from './modules/lender/analytics/analytics.module';
+import { DashboardModule } from './modules/lender/dashboard/dashboard.module';
+import { LenderAdsModule } from './modules/lender/lender-ads/lender-ads.module';
+import { LenderNotificationsModule } from './modules/lender/lender-notifications/lender-notifications.module';
+import { LenderProfileModule } from './modules/lender/lender-profile/lender-profile.module';
+import { LenderSettingsModule } from './modules/lender/lender-settings/lender-settings.module';
+import { LoanRequestsModule } from './modules/lender/loan-requests/loan-requests.module';
+import { RecentTransactionsModule } from './modules/lender/recent-transactions/recent-transactions.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { LegalModule } from './modules/legal/legal.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { KycModule } from './modules/kyc/kyc.module';
+import { LoansModule } from './modules/loans/loans.module';
+import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { DisputesModule } from './modules/disputes/disputes.module';
+import { AdsModule } from './modules/ads/ads.module';
 
 @Module({
   imports: [
-    // 1. Load environment variables globally
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
     }),
-    // 2. Import your custom Firebase module
     FirebaseModule,
-    // 3. Import feature modules
     AuthModule,
     BorrowerModule,
-    LenderModule,
+    DashboardModule,
+    AnalyticsModule,
+    LenderAdsModule,
+    LenderNotificationsModule,
+    LenderProfileModule,
+    LenderSettingsModule,
+    LoanRequestsModule,
+    RecentTransactionsModule,
     AdminModule,
     LegalModule,
     TransactionsModule,
     ChatModule,
     KycModule,
+    LoansModule,
+    LenderMobileModule,
+    ReportsModule,
+    DisputesModule,
+    AdsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

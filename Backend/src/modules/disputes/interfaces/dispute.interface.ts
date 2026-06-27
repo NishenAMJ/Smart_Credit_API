@@ -1,0 +1,40 @@
+export interface Dispute {
+  id: string;
+  disputeId?: string;
+  disputeCode?: string;
+  transactionId: string;
+  loanId?: string;
+  lenderId?: string;
+  borrowerId?: string;
+  lenderName?: string;
+  borrowerName?: string;
+  lenderPhotoURL?: string;
+  borrowerPhotoURL?: string;
+  raisedBy: string;
+  raisedByUserId?: string;
+  raisedByRole?: 'borrower' | 'lender';
+  againstUser: string;
+  againstUserId?: string;
+  againstUserRole?: 'borrower' | 'lender';
+  title?: string;
+  description: string;
+  category: 'payment' | 'fraud' | 'service' | 'other';
+  status: 'open' | 'in-progress' | 'resolved' | 'escalated' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  disputedAmount?: number;
+  evidenceUrls?: string[];
+  statusHistory?: Array<{
+    status: string;
+    note: string;
+    at: FirebaseFirestore.Timestamp;
+    by: string;
+  }>;
+  createdAt: FirebaseFirestore.Timestamp;
+  updatedAt?: FirebaseFirestore.Timestamp;
+  resolvedAt?: FirebaseFirestore.Timestamp;
+  resolution?: string;
+  escalatedAt?: FirebaseFirestore.Timestamp;
+  escalationReason?: string;
+  notes?: string;
+  assignedTo?: string;
+}

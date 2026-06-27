@@ -29,7 +29,7 @@ export class AppController {
       const testData = {
         timestamp: new Date(),
         status: 'connected',
-      };.
+      };
 
       return {
         status: 'ok',

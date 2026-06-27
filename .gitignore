@@ -1,0 +1,30 @@
+node_modules/
+dist/
+build/
+.env
+.DS_Store
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Firebase
+firebase-service-account*.json
+key/
+
+# Local env files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Local scripts and Firebase keys (DO NOT PUSH)
+scripts/
+firebase-service-account*.json
+firebase.json
+firestore.rules
+firestore.indexes.json
+Backend/seed-mock-data.js
+package-lock.json
