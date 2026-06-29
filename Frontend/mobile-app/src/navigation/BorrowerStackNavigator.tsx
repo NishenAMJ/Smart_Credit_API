@@ -14,6 +14,7 @@ import CreditHistoryScreen from "../screens/borrower/CreditHistoryScreen";
 import HelpCenterScreen from "../screens/borrower/HelpCenterScreen";
 import ContactSupportScreen from "../screens/borrower/ContactSupportScreen";
 import NotificationsScreen from "../screens/borrower/NotificationsScreen";
+import NearbyLendersMapScreen from "../screens/borrower/NearbyLendersMapScreen";
 import AgreementsListScreen from "../screens/shared/AgreementsListScreen";
 import LegalAgreementScreen from "../screens/shared/LegalAgreementScreen";
 
@@ -40,6 +41,7 @@ export default function BorrowerStackNavigator() {
       <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
       <Stack.Screen name="ContactSupport" component={ContactSupportScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="NearbyLendersMap" component={NearbyLendersMapScreen} />
       <Stack.Screen name="AgreementsList" component={AgreementsListScreen} />
       <Stack.Screen name="LoanAgreement">
         {(props) => <LegalAgreementScreen {...props} role="borrower" />}

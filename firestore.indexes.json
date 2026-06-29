@@ -118,6 +118,14 @@
         { "fieldPath": "lenderId", "order": "ASCENDING" },
         { "fieldPath": "latestLoanCreatedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "userLocations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "geohash", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -1,0 +1,51 @@
+[
+  {
+    "userId": "lender_001",
+    "city": "Colombo",
+    "district": "Colombo",
+    "latitude": 6.9271,
+    "longitude": 79.8612
+  },
+  {
+    "userId": "lender_002",
+    "city": "Nugegoda",
+    "district": "Colombo",
+    "latitude": 6.8649,
+    "longitude": 79.8997
+  },
+  {
+    "userId": "lender_003",
+    "city": "Dehiwala",
+    "district": "Colombo",
+    "latitude": 6.8513,
+    "longitude": 79.8656
+  },
+  {
+    "userId": "lender_004",
+    "city": "Battaramulla",
+    "district": "Colombo",
+    "latitude": 6.9006,
+    "longitude": 79.9187
+  },
+  {
+    "userId": "lender_005",
+    "city": "Maharagama",
+    "district": "Colombo",
+    "latitude": 6.848,
+    "longitude": 79.9265
+  },
+  {
+    "userId": "lender_006",
+    "city": "Wattala",
+    "district": "Gampaha",
+    "latitude": 6.9895,
+    "longitude": 79.8937
+  },
+  {
+    "userId": "lender_007",
+    "city": "Kadawatha",
+    "district": "Gampaha",
+    "latitude": 7.0036,
+    "longitude": 79.9541
+  }
+]
