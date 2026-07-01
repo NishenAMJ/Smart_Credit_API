@@ -8,33 +8,25 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { FirebaseService } from '../../firebase/firebase.service';
-import { CreateBorrowerProfileDto } from './dto/create-profile.dto';
-import { UpdateBorrowerProfileDto } from './dto/update-profile.dto';
-import {
-  CreateLoanApplicationDto,
-  UpdateLoanApplicationDto,
-  LoanApplicationStatus,
-} from './dto/loan-application.dto';
-import { MakeRepaymentDto } from './dto/make-repayment.dto';
+import { FirebaseService } from '../../../firebase/firebase.service';
+import { CreateBorrowerProfileDto } from '../profile/dto/create-profile.dto';
+import { UpdateBorrowerProfileDto } from '../profile/dto/update-profile.dto';
+import { MakeRepaymentDto } from '../payments/dto/make-repayment.dto';
 import {
   BorrowerProfile,
-  LoanApplication,
   Loan,
   LoanStatus,
   Repayment,
   RepaymentStatus,
   RepaymentMethod,
-  BorrowerDashboard,
-} from './interfaces/borrower.interface';
+} from '../types/borrower.types';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { instanceToPlain } from 'class-transformer';
 import {
   BORROWER_DEFAULTS,
-  BORROWER_FLOW,
   BORROWER_MONEY,
-} from './borrower.constants';
-import { CreditScoreService } from './credit-score/credit-score.service';
+} from '../shared/borrower.constants';
+import { CreditScoreService } from '../credit-score/credit-score.service';
 import { randomBytes, scrypt } from 'crypto';
 import { promisify } from 'util';
 
@@ -67,8 +59,7 @@ export type BorrowerInstallmentSummary = {
 };
 
 /**
- * Core borrower service — covers profiles, loans, applications, repayments, QR tokens,
- * and dashboard aggregation.
+ * Core borrower service covers shared borrower profile, loan, repayment, and QR flows.
  */
 @Injectable()
 export class BorrowerService {
@@ -92,127 +83,6 @@ export class BorrowerService {
 
   private get db() {
     return this.firebaseService.db;
-  }
-
-  // DASHBOARD
-
-  /**
-   * Returns aggregated dashboard metrics for the borrower home screen.
-   */
-  async getDashboard(borrowerId: string) {
-    const metrics = await this.fetchBorrowerMetrics(borrowerId);
-
-    return {
-      statusCode: 200,
-      message: 'Dashboard data retrieved successfully',
-      data: {
-        profile: metrics.profile,
-        activeLoans: metrics.activeLoansCount,
-        pendingApplications: metrics.pendingApplications,
-        totalOutstanding: metrics.totalOutstanding,
-        nextDueDate: this.toTimestamp(metrics.nextDueDate),
-        nextPaymentAmount: metrics.nextPaymentAmount,
-        creditScore: metrics.profile?.creditScore || 0,
-        totalBorrowed: metrics.totalBorrowed,
-        totalRepaid: metrics.totalRepaid,
-      },
-    };
-  }
-
-  /**
-   * Internal helper to aggregate profile, loan, and application metrics.
-   * Ensures consistent logic across all dashboard-style endpoints.
-   */
-  private async fetchBorrowerMetrics(borrowerId: string) {
-    if (!borrowerId) {
-      throw new BadRequestException('Borrower ID is required');
-    }
-
-    const profile = await this.getProfile(borrowerId);
-
-    // Single query for all loans; active loans are derived by filtering to avoid
-    // a redundant Firestore read.
-    const allLoans = await this.getLoans(borrowerId);
-    const activeLoans = allLoans.filter(
-      (l) =>
-        l.status === LoanStatus.ACTIVE &&
-        (l.outstandingBalance || 0) > BORROWER_MONEY.ROUNDING_DUST_THRESHOLD,
-    );
-
-    // Pending applications count uses the shared helper to keep status lists in sync.
-    const pendingApplications =
-      await this.getPendingApplicationsCount(borrowerId);
-
-    let totalOutstanding = 0;
-    let totalBorrowed = 0;
-    let totalRepaid = 0;
-    let nextPaymentAmount = 0;
-    let nextDueDate: TimestampLike = null;
-
-    // Aggregate metrics across all loans owned by borrower.
-    allLoans.forEach((loan) => {
-      totalBorrowed += loan.principalAmount || 0;
-
-      // Calculate total repaid (Original principal + interest - current outstanding).
-      const totalRepayable =
-        (loan.principalAmount || 0) + this.toNumber((loan as any).totalInterest);
-      const repaidOnThisLoan = Math.max(
-        0,
-        totalRepayable - (loan.outstandingBalance || 0),
-      );
-      totalRepaid += repaidOnThisLoan;
-
-      if (loan.status === LoanStatus.ACTIVE) {
-        totalOutstanding += loan.outstandingBalance || 0;
-      }
-    });
-
-    // Find the nearest next payment from active loans.
-    const sortedByNextPayment = [...activeLoans].sort((a, b) => {
-      const aTime = this.timestampToMillis(a.nextDueDate);
-      const bTime = this.timestampToMillis(b.nextDueDate);
-      return aTime - bTime;
-    });
-
-    const nextLoan = sortedByNextPayment[0];
-    if (nextLoan) {
-      nextDueDate = nextLoan.nextDueDate;
-      nextPaymentAmount = Math.min(
-        nextLoan.monthlyInstallment || 0,
-        this.clearRoundingDust(nextLoan.outstandingBalance || 0),
-      );
-    }
-
-    return {
-      profile,
-      activeLoansCount: activeLoans.length,
-      pendingApplications,
-      totalOutstanding: Math.round(totalOutstanding * 100) / 100,
-      totalBorrowed: Math.round(totalBorrowed * 100) / 100,
-      totalRepaid: Math.round(totalRepaid * 100) / 100,
-      nextDueDate,
-      nextPaymentAmount,
-    };
-  }
-
-  /**
-   * Counts pending and draft applications without pulling full documents.
-   * Single source of truth for the status list used by all dashboard queries.
-   */
-  private async getPendingApplicationsCount(
-    borrowerId: string,
-  ): Promise<number> {
-    const statuses = [
-      LoanApplicationStatus.DRAFT,
-      LoanApplicationStatus.PENDING,
-      LoanApplicationStatus.UNDER_REVIEW,
-      'open', 
-    ];
-    const query = this.db
-      .collection(this.LOAN_APPS_COL)
-      .where('borrowerId', '==', borrowerId)
-      .where('status', 'in', statuses);
-    return this.getCountForQuery(query);
   }
 
   /**
@@ -718,217 +588,6 @@ export class BorrowerService {
     }
 
     return this.getProfile(userId);
-  }
-
-  /**
-   * Creates a new draft loan application for a KYC-verified borrower.
-   */
-  async createLoanApplication(
-    dto: CreateLoanApplicationDto,
-  ): Promise<LoanApplication> {
-    const plainDto = this.removeUndefinedDeep(
-      instanceToPlain(dto) as CreateLoanApplicationDto,
-    );
-
-    // Verify borrower profile exists
-    const profileDoc = await this.db
-      .collection(this.BORROWERS_COL)
-      .doc(plainDto.borrowerId)
-      .get();
-
-    if (!profileDoc.exists) {
-      throw new NotFoundException(
-        `Borrower profile not found. Please complete your profile first.`,
-      );
-    }
-
-    const profile = profileDoc.data() as BorrowerProfile;
-    if (!profile.kycVerified) {
-      throw new ForbiddenException(
-        'KYC verification required before submitting a loan application.',
-      );
-    }
-
-    const scoreSummary = await this.creditScoreService.getSummary(
-      plainDto.borrowerId,
-    );
-    const now = FieldValue.serverTimestamp();
-    const appRef = this.db.collection(this.LOAN_APPS_COL).doc();
-
-    // Destructure loanPurpose so it isn't spread twice — purpose is the canonical
-    // field name stored on the document; loanPurpose is the DTO input name.
-    const { loanPurpose, ...restPlainDto } = plainDto;
-
-    const applicationData = {
-      requestId: appRef.id,
-      ...restPlainDto,
-      purpose: loanPurpose,
-
-      borrowerName: profile.fullName || 'Unknown',
-      borrowerPhotoURL: (profile as any).photoURL || '',
-      borrowerRating: (profile as any).rating || 0,
-      smartScore: scoreSummary.score,
-      borrowerCreditScore: scoreSummary.score,
-      scoreRating: scoreSummary.rating,
-      scoreBreakdown: scoreSummary.breakdown,
-      scoreSnapshotAt: now,
-
-      // Start as draft so mobile can save first and submit explicitly.
-      status: LoanApplicationStatus.DRAFT,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await appRef.set(applicationData);
-
-    const created = await appRef.get();
-    return { ...created.data() } as LoanApplication;
-  }
-
-  /**
-   * Lists borrower loan applications, optionally filtered by application status.
-   */
-  async getLoanApplications(
-    borrowerId: string,
-    status?: LoanApplicationStatus,
-  ): Promise<LoanApplication[]> {
-    let query = this.db
-      .collection(this.LOAN_APPS_COL)
-      .where('borrowerId', '==', borrowerId) as FirebaseFirestore.Query;
-
-    if (status) {
-      query = query.where('status', '==', status);
-    }
-
-    const snapshot = await query.get();
-    const applications = snapshot.docs.map(
-      (doc) => ({ ...doc.data() }) as LoanApplication,
-    );
-
-    return applications.sort(
-      (a, b) =>
-        this.timestampToMillis(b.createdAt) -
-        this.timestampToMillis(a.createdAt),
-    );
-  }
-
-  /**
-   * Returns one loan application after confirming borrower ownership.
-   */
-  async getLoanApplicationById(
-    applicationId: string,
-    borrowerId: string,
-  ): Promise<LoanApplication> {
-    const doc = await this.db
-      .collection(this.LOAN_APPS_COL)
-      .doc(applicationId)
-      .get();
-
-    if (!doc.exists) {
-      throw new NotFoundException(
-        `Loan application ${applicationId} not found`,
-      );
-    }
-
-    const application = doc.data() as LoanApplication;
-
-    // Ensure the application belongs to the requesting borrower
-    if (application.borrowerId !== borrowerId) {
-      throw new ForbiddenException('Access denied to this loan application');
-    }
-
-    return application;
-  }
-
-  /**
-   * Updates an editable draft loan application.
-   */
-  async updateLoanApplication(
-    applicationId: string,
-    borrowerId: string,
-    dto: UpdateLoanApplicationDto,
-  ): Promise<LoanApplication> {
-    const application = await this.getLoanApplicationById(
-      applicationId,
-      borrowerId,
-    );
-
-    if (application.status !== LoanApplicationStatus.DRAFT) {
-      throw new BadRequestException(
-        `Only DRAFT applications can be edited. Current status: ${application.status}`,
-      );
-    }
-
-    const plainDto = this.removeUndefinedDeep(
-      instanceToPlain(dto) as UpdateLoanApplicationDto,
-    );
-
-    await this.db
-      .collection(this.LOAN_APPS_COL)
-      .doc(applicationId)
-      .update({
-        ...plainDto,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-    return this.getLoanApplicationById(applicationId, borrowerId);
-  }
-
-  /**
-   * Deletes a draft application before it enters review.
-   */
-  async deleteLoanApplication(
-    applicationId: string,
-    borrowerId: string,
-  ): Promise<{ message: string }> {
-    const application = await this.getLoanApplicationById(
-      applicationId,
-      borrowerId,
-    );
-
-    if (application.status !== LoanApplicationStatus.DRAFT) {
-      throw new BadRequestException('Only DRAFT applications can be deleted.');
-    }
-
-    await this.db.collection(this.LOAN_APPS_COL).doc(applicationId).delete();
-
-    return {
-      message: `Loan application ${applicationId} deleted successfully`,
-    };
-  }
-
-  /**
-   * Moves a draft application into the lender review queue.
-   */
-  async submitLoanApplication(
-    applicationId: string,
-    borrowerId: string,
-  ): Promise<LoanApplication> {
-    const application = await this.getLoanApplicationById(
-      applicationId,
-      borrowerId,
-    );
-
-    if (application.status !== LoanApplicationStatus.DRAFT) {
-      throw new BadRequestException(
-        `Only DRAFT applications can be submitted. Current status: ${application.status}`,
-      );
-    }
-
-    const scoreSummary = await this.creditScoreService.getSummary(borrowerId);
-
-    await this.db.collection(this.LOAN_APPS_COL).doc(applicationId).update({
-      status: LoanApplicationStatus.OPEN,
-      smartScore: scoreSummary.score,
-      borrowerCreditScore: scoreSummary.score,
-      scoreRating: scoreSummary.rating,
-      scoreBreakdown: scoreSummary.breakdown,
-      scoreSnapshotAt: FieldValue.serverTimestamp(),
-      submittedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-
-    return this.getLoanApplicationById(applicationId, borrowerId);
   }
 
   /**
@@ -1454,96 +1113,5 @@ export class BorrowerService {
             this.timestampToMillis(a.createdAt as TimestampLike),
       );
   }
-
-  /**
-   * Returns aggregated borrower profile, loan, and recent activity data.
-   */
-  async getDashboardDetailed(userId: string): Promise<BorrowerDashboard> {
-    const metrics = await this.fetchBorrowerMetrics(userId);
-
-    // Detailed dashboard includes the latest activity list
-    const recentRepaymentsSnapshot = await this.db
-      .collection(this.REPAYMENTS_COL)
-      .where('borrowerId', '==', userId)
-      .get();
-
-    const recentRepayments = recentRepaymentsSnapshot.docs
-      .map((doc) => doc.data() as Repayment)
-      .sort(
-        (a, b) =>
-          this.timestampToMillis(b.createdAt) -
-          this.timestampToMillis(a.createdAt),
-      )
-      .slice(0, BORROWER_FLOW.RECENT_ACTIVITY_LIMIT);
-
-    const recentActivity = recentRepayments.map((r) => ({
-      type: 'repayment' as const,
-      description: `Repayment of LKR ${r.amount.toLocaleString()} for loan ${r.loanId}`,
-      amount: r.amount,
-      date: r.paidAt!,
-    }));
-
-    return {
-      profile: {
-        userId: metrics.profile.userId,
-        fullName: metrics.profile.fullName,
-        email: metrics.profile.email,
-        phone: metrics.profile.phone,
-        kycVerified: metrics.profile.kycVerified,
-        profileComplete: metrics.profile.profileComplete,
-      },
-      activeLoans: metrics.activeLoansCount,
-      pendingApplications: metrics.pendingApplications,
-      totalOutstanding: metrics.totalOutstanding,
-      nextDueDate: this.toTimestamp(metrics.nextDueDate),
-      nextPaymentAmount: metrics.nextPaymentAmount,
-      creditScore: metrics.profile.creditScore,
-      totalBorrowed: metrics.totalBorrowed,
-      totalRepaid: metrics.totalRepaid,
-      recentActivity,
-    };
-  }
-
-  /**
-   * Uses Firestore count() to avoid loading full documents.
-   * Falls back to a full snapshot.size if the count API throws.
-   */
-  private async getCountForQuery(
-    query: FirebaseFirestore.Query,
-  ): Promise<number> {
-    try {
-      const snapshot = await query.count().get();
-      return snapshot.data().count;
-    } catch {
-      const snapshot = await query.get();
-      return snapshot.size;
-    }
-  }
-
-  /**
-   * Returns mock support ticket statuses for the borrower.
-   */
-  async getSupportStatus(borrowerId: string) {
-    // In a real application, this would query a tickets collection.
-    // ticket/reply numbers are generated once per call so id and value stay in sync.
-    const ticketNum = Math.floor(Math.random() * 90000) + 10000;
-    const replyNum = Math.floor(Math.random() * 90000) + 10000;
-
-    return [
-      {
-        id: `TCK-${ticketNum}`,
-        title: 'Open Ticket',
-        value: `TCK-${ticketNum}`,
-        subtitle: 'In Progress - Payment verification',
-        color: '#F59E0B',
-      },
-      {
-        id: `RPL-${replyNum}`,
-        title: 'Expected Reply',
-        value: 'Within 2 hours',
-        subtitle: 'Average first response time',
-        color: '#0EA5E9',
-      },
-    ];
-  }
 }
+

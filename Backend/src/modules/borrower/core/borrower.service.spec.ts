@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BorrowerService } from './borrower.service';
-import { FirebaseService } from '../../firebase/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
-import { LoanStatus } from './interfaces/borrower.interface';
+import { LoanStatus } from '../types/borrower.types';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { CreditScoreService } from './credit-score/credit-score.service';
+import { CreditScoreService } from '../credit-score/credit-score.service';
 
 /**
  * Baseline wiring tests for `BorrowerService`.
@@ -219,3 +219,4 @@ describe('BorrowerService', () => {
     });
   });
 });
+

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { resolveBorrowerId } from '../borrower-request.utils';
-import { LoanStatus } from '../interfaces/borrower.interface';
+import { resolveBorrowerId } from '../shared/borrower-request.utils';
+import { LoanStatus } from '../types/borrower.types';
 import { BorrowerLoansService } from './borrower-loans.service';
 
 @Controller('borrower/loans')
@@ -65,3 +65,4 @@ export class BorrowerLoansController {
     };
   }
 }
+

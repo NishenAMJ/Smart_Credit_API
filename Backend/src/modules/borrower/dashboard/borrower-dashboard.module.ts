@@ -10,3 +10,4 @@ import { BorrowerDashboardService } from './borrower-dashboard.service';
   exports: [BorrowerDashboardService],
 })
 export class BorrowerDashboardModule {}
+

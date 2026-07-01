@@ -11,3 +11,4 @@ import { BorrowerApplicationsService } from './borrower-applications.service';
   exports: [BorrowerApplicationsService],
 })
 export class BorrowerApplicationsModule {}
+

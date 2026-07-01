@@ -1,11 +1,13 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { resolveBorrowerId } from '../borrower-request.utils';
-import { RepaymentMethod } from '../dto/loan-application.dto';
+import { resolveBorrowerId } from '../shared/borrower-request.utils';
+import { RepaymentMethod } from '../applications/dto/loan-application.dto';
 import { BorrowerPaymentsService } from './borrower-payments.service';
 
 @Controller('borrower')
 export class BorrowerPaymentsController {
-  constructor(private readonly borrowerPaymentsService: BorrowerPaymentsService) {}
+  constructor(
+    private readonly borrowerPaymentsService: BorrowerPaymentsService,
+  ) {}
 
   @Get('payments')
   async getMyPayments(@Query('borrowerId') borrowerId?: string) {
@@ -63,7 +65,7 @@ export class BorrowerPaymentsController {
   }
 
   @Post('payments/upload-receipt')
-  async uploadReceipt(@Body() payload: Record<string, unknown>) {
+  uploadReceipt(@Body() payload: Record<string, unknown>) {
     return {
       success: true,
       data: this.borrowerPaymentsService.uploadReceipt(payload),

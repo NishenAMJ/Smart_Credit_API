@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { resolveBorrowerId } from '../borrower-request.utils';
+import { resolveBorrowerId } from '../shared/borrower-request.utils';
 import { BorrowerSupportService } from './borrower-support.service';
 
 @Controller('borrower/support')
@@ -16,3 +16,4 @@ export class BorrowerSupportController {
     };
   }
 }
+

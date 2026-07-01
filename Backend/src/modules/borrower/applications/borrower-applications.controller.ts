@@ -14,8 +14,8 @@ import {
   LoanApplicationStatus,
   LoanPurpose,
   RepaymentMethod,
-} from '../dto/loan-application.dto';
-import { resolveBorrowerId } from '../borrower-request.utils';
+} from './dto/loan-application.dto';
+import { resolveBorrowerId } from '../shared/borrower-request.utils';
 import { BorrowerApplicationsService } from './borrower-applications.service';
 
 @Controller('borrower/applications')
@@ -139,3 +139,4 @@ export class BorrowerApplicationsController {
     };
   }
 }
+

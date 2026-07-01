@@ -11,11 +11,11 @@ import {
   CreateLoanApplicationDto,
   LoanApplicationStatus,
   UpdateLoanApplicationDto,
-} from '../dto/loan-application.dto';
+} from './dto/loan-application.dto';
 import {
   BorrowerProfile,
   LoanApplication,
-} from '../interfaces/borrower.interface';
+} from '../types/borrower.types';
 import { CreditScoreService } from '../credit-score/credit-score.service';
 
 type TimestampLike =
@@ -287,3 +287,4 @@ export class BorrowerApplicationsService {
     return this.getLoanApplicationById(applicationId, borrowerId);
   }
 }
+

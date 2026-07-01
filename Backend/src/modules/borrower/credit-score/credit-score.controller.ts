@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Query } from '@nestjs/common';
-import { resolveBorrowerId } from '../borrower-request.utils';
+import { resolveBorrowerId } from '../shared/borrower-request.utils';
 import { CreditScoreService } from './credit-score.service';
 
 @Controller('borrower/credit-score')
@@ -42,3 +42,4 @@ export class CreditScoreController {
     };
   }
 }
+
