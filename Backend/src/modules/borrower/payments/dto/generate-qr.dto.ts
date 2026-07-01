@@ -1,13 +1,15 @@
-import { IsString, IsNumber, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class GenerateQrDto {
   @IsString()
   loanId!: string;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  amount!: number;
+  amount?: number;
 
+  @IsOptional()
   @IsString()
-  borrowerId!: string;
+  borrowerId?: string;
 }
