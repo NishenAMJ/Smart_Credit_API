@@ -5,24 +5,19 @@ import {
   TouchableOpacity,
   StyleSheet,
   Switch,
-  Alert,
   ScrollView,
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
   Modal,
+  Alert,
 } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
-import {
-  COLORS,
-  TYPOGRAPHY,
-  SPACING,
-  BORDER_RADIUS,
-  SHADOWS,
-} from "../../constants";
-import { ChatStackParamList } from "../../types";
-import { conversationService, userService } from "../../services";
+import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from "../../constants";
+import { ChatStackParamList } from "../../types/chat.types";
+import { conversationService } from "../../services/conversationService";
+import { userService } from "../../services/userService";
 import Avatar from "../../components/common/Avatar";
 
 type Props = {
@@ -31,7 +26,8 @@ type Props = {
 };
 
 export default function ChatInfoScreen({ navigation, route }: Props) {
-  const { conversationId, participant, isMuted: initialMuted } = (route.params as any) || {};
+  const { conversationId, participant, isMuted: initialMuted } =
+    (route.params as any) || {};
 
   const [isMuted, setIsMuted] = useState(initialMuted);
   const [togglingMute, setTogglingMute] = useState(false);
@@ -40,7 +36,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
   const [blocking, setBlocking] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  //  Mute 
+  // ── Mute ──────────────────────────────────────────────────────────────────
   const handleToggleMute = async () => {
     try {
       setTogglingMute(true);
@@ -48,36 +44,58 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
       await conversationService.mute(conversationId, next);
       setIsMuted(next);
     } catch {
-      // revert
+      // revert silently
     } finally {
       setTogglingMute(false);
     }
   };
 
-  // Block 
+  // ── Block ──────────────────────────────────────────────────────────────────
   const handleConfirmBlock = async () => {
+    setShowBlockModal(false);
     try {
       setBlocking(true);
       await userService.blockUser(participant.id);
-      setShowBlockModal(false);
-      // Navigate back to chat list after blocking
+      // Success — navigate away
       navigation.navigate("ChatList");
-    } catch {
+    } catch (err: any) {
       setBlocking(false);
-      setShowBlockModal(false);
+      const message = err?.response?.data?.message ?? err?.message ?? "";
+
+      if (message.toLowerCase().includes("already blocked")) {
+        // Already blocked is fine — treat as success and navigate away
+        Alert.alert(
+          "Already blocked",
+          `${participant?.displayName ?? "This user"} is already blocked.`,
+          [{ text: "OK", onPress: () => navigation.navigate("ChatList") }],
+        );
+      } else {
+        Alert.alert("Could not block user", message || "Please try again.");
+      }
     }
   };
 
-  //  Delete conversation 
+  // ── Delete ─────────────────────────────────────────────────────────────────
   const handleConfirmDelete = async () => {
+    setShowDeleteModal(false);
     try {
       setDeleting(true);
       await conversationService.delete(conversationId);
-      setShowDeleteModal(false);
       navigation.navigate("ChatList");
-    } catch {
+    } catch (err: any) {
       setDeleting(false);
-      setShowDeleteModal(false);
+      const message = err?.response?.data?.message ?? err?.message ?? "";
+
+      if (
+        message.toLowerCase().includes("invalid structure") ||
+        message.toLowerCase().includes("not found") ||
+        message.toLowerCase().includes("forbidden")
+      ) {
+        // Corrupt or missing document — navigate away since it's effectively gone
+        navigation.navigate("ChatList");
+      } else {
+        Alert.alert("Could not delete conversation", message || "Please try again.");
+      }
     }
   };
 
@@ -85,12 +103,8 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
 
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chat info</Text>
@@ -98,7 +112,6 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profile section */}
         <View style={styles.profileSection}>
           <Avatar
             name={participant?.displayName ?? "Unknown"}
@@ -107,7 +120,9 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
             showOnline
             isOnline={participant?.isOnline}
           />
-          <Text style={styles.profileName}>{participant?.displayName ?? "Unknown User"}</Text>
+          <Text style={styles.profileName}>
+            {participant?.displayName ?? "Unknown User"}
+          </Text>
           <Text style={styles.profileHandle}>
             {participant?.username ? `@${participant.username}` : ""}
           </Text>
@@ -116,28 +131,25 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
               style={[
                 styles.onlineDot,
                 {
-                  backgroundColor: participant.isOnline
+                  backgroundColor: participant?.isOnline
                     ? COLORS.success
                     : COLORS.textSecondary,
                 },
               ]}
             />
             <Text style={styles.onlineText}>
-              {participant.isOnline
+              {participant?.isOnline
                 ? "Online"
-                : participant.lastSeen
-                  ? `Last seen ${new Date(
-                    participant.lastSeen,
-                  ).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}`
-                  : "Offline"}
+                : participant?.lastSeen
+                ? `Last seen ${new Date(participant.lastSeen).toLocaleTimeString(
+                    [],
+                    { hour: "2-digit", minute: "2-digit" },
+                  )}`
+                : "Offline"}
             </Text>
           </View>
         </View>
 
-        {/* Settings section */}
         <View style={styles.section}>
           <InfoRow
             label="Notifications"
@@ -155,16 +167,8 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
               )
             }
           />
-          <InfoRow
-            label="Media & files"
-            showChevron
-            onPress={() => {
-              /* navigate to media screen when built */
-            }}
-          />
         </View>
 
-        {/* Blocked users shortcut */}
         <View style={styles.section}>
           <InfoRow
             label="Blocked users"
@@ -173,22 +177,12 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
           />
         </View>
 
-        {/* Danger zone */}
         <View style={styles.section}>
-          <InfoRow
-            label="Block user"
-            showChevron
-            onPress={() => setShowBlockModal(true)}
-          />
-          <InfoRow
-            label="Delete conversation"
-            danger
-            onPress={() => setShowDeleteModal(true)}
-          />
+          <InfoRow label="Block user" showChevron onPress={() => setShowBlockModal(true)} />
+          <InfoRow label="Delete conversation" danger onPress={() => setShowDeleteModal(true)} />
         </View>
       </ScrollView>
 
-      {/* Block confirmation modal */}
       <ConfirmModal
         visible={showBlockModal}
         title={`Block ${participant?.displayName ?? "this user"}?`}
@@ -200,7 +194,6 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
         onCancel={() => setShowBlockModal(false)}
       />
 
-      {/* Delete confirmation modal */}
       <ConfirmModal
         visible={showDeleteModal}
         title="Delete conversation?"
@@ -215,90 +208,42 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
   );
 }
 
-// Sub-components
-
-function InfoRow({
-  label,
-  right,
-  showChevron,
-  danger,
-  onPress,
-}: {
-  label: string;
-  right?: React.ReactNode;
-  showChevron?: boolean;
-  danger?: boolean;
-  onPress?: () => void;
+function InfoRow({ label, right, showChevron, danger, onPress }: {
+  label: string; right?: React.ReactNode;
+  showChevron?: boolean; danger?: boolean; onPress?: () => void;
 }) {
   return (
     <TouchableOpacity
-      style={styles.infoRow}
-      onPress={onPress}
-      activeOpacity={onPress ? 0.7 : 1}
-      disabled={!onPress}
+      style={styles.infoRow} onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}
     >
-      <Text style={[styles.infoLabel, danger && styles.infoLabelDanger]}>
-        {label}
-      </Text>
+      <Text style={[styles.infoLabel, danger && styles.infoLabelDanger]}>{label}</Text>
       {right ?? (showChevron && <Text style={styles.chevron}>›</Text>)}
     </TouchableOpacity>
   );
 }
 
-function ConfirmModal({
-  visible,
-  title,
-  body,
-  confirmLabel,
-  confirmDanger,
-  loading,
-  onConfirm,
-  onCancel,
-}: {
-  visible: boolean;
-  title: string;
-  body: string;
-  confirmLabel: string;
-  confirmDanger?: boolean;
-  loading: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
+function ConfirmModal({ visible, title, body, confirmLabel, confirmDanger, loading, onConfirm, onCancel }: {
+  visible: boolean; title: string; body: string; confirmLabel: string;
+  confirmDanger?: boolean; loading: boolean; onConfirm: () => void; onCancel: () => void;
 }) {
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onCancel}
-    >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={onCancel}
-      >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
+      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onCancel}>
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>{title}</Text>
           <Text style={styles.sheetBody}>{body}</Text>
           <TouchableOpacity
-            style={[
-              styles.sheetConfirm,
-              confirmDanger && styles.sheetConfirmDanger,
-            ]}
-            onPress={onConfirm}
-            disabled={loading}
+            style={[styles.sheetConfirm, confirmDanger && styles.sheetConfirmDanger]}
+            onPress={onConfirm} disabled={loading}
           >
-            {loading ? (
-              <ActivityIndicator size="small" color={COLORS.surface} />
-            ) : (
-              <Text style={styles.sheetConfirmText}>{confirmLabel}</Text>
-            )}
+            {loading
+              ? <ActivityIndicator size="small" color={COLORS.surface} />
+              : <Text style={styles.sheetConfirmText}>{confirmLabel}</Text>
+            }
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.sheetCancel}
-            onPress={onCancel}
-            disabled={loading}
-          >
+          <TouchableOpacity style={styles.sheetCancel} onPress={onCancel} disabled={loading}>
             <Text style={styles.sheetCancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -309,136 +254,66 @@ function ConfirmModal({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-
-  // Header
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.surface,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: COLORS.surface, paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md, borderBottomWidth: 0.5, borderBottomColor: COLORS.border,
   },
   backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.background,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 32, height: 32, borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.background, alignItems: "center", justifyContent: "center",
   },
   backIcon: { fontSize: 22, color: COLORS.primary, lineHeight: 26 },
   headerTitle: { ...TYPOGRAPHY.subtitle, color: COLORS.textPrimary },
-
-  // Profile
   profileSection: {
-    alignItems: "center",
-    paddingVertical: SPACING.xxl,
-    paddingHorizontal: SPACING.lg,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
-    gap: SPACING.xs,
+    alignItems: "center", paddingVertical: SPACING.xxl, paddingHorizontal: SPACING.lg,
+    backgroundColor: COLORS.surface, borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border, gap: SPACING.xs,
   },
-  profileName: {
-    ...TYPOGRAPHY.heading,
-    color: COLORS.textPrimary,
-    marginTop: SPACING.md,
-  },
-  profileHandle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  onlineRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-    marginTop: 2,
-  },
+  profileName: { ...TYPOGRAPHY.heading, color: COLORS.textPrimary, marginTop: SPACING.md },
+  profileHandle: { fontSize: 14, color: COLORS.textSecondary },
+  onlineRow: { flexDirection: "row", alignItems: "center", gap: SPACING.xs, marginTop: 2 },
   onlineDot: { width: 7, height: 7, borderRadius: 4 },
   onlineText: { fontSize: 13, color: COLORS.textSecondary },
-
-  // Sections
   section: {
-    marginTop: SPACING.lg,
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 0.5,
-    borderTopColor: COLORS.border,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
+    marginTop: SPACING.lg, backgroundColor: COLORS.surface,
+    borderTopWidth: 0.5, borderTopColor: COLORS.border,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.border,
   },
   infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: 14,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: SPACING.lg, paddingVertical: 14,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.border,
   },
-  infoLabel: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textPrimary,
-  },
+  infoLabel: { ...TYPOGRAPHY.body, color: COLORS.textPrimary },
   infoLabelDanger: { color: "#EF4444" },
   chevron: { fontSize: 20, color: COLORS.textSecondary, lineHeight: 22 },
-
-  // Modal / sheet
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   sheet: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: 40,
-    paddingTop: SPACING.md,
+    backgroundColor: COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: SPACING.xl, paddingBottom: 40, paddingTop: SPACING.md,
   },
   sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.border,
-    alignSelf: "center",
-    marginBottom: SPACING.lg,
+    width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.border,
+    alignSelf: "center", marginBottom: SPACING.lg,
   },
   sheetTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-    textAlign: "center",
-    marginBottom: SPACING.sm,
+    fontSize: 16, fontWeight: "600", color: COLORS.textPrimary,
+    textAlign: "center", marginBottom: SPACING.sm,
   },
   sheetBody: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    lineHeight: 19,
-    marginBottom: SPACING.xl,
+    fontSize: 13, color: COLORS.textSecondary,
+    textAlign: "center", lineHeight: 19, marginBottom: SPACING.xl,
   },
   sheetConfirm: {
-    backgroundColor: COLORS.primary,
-    borderRadius: BORDER_RADIUS.medium,
-    paddingVertical: 13,
-    alignItems: "center",
-    marginBottom: SPACING.sm,
+    backgroundColor: COLORS.primary, borderRadius: BORDER_RADIUS.medium,
+    paddingVertical: 13, alignItems: "center", marginBottom: SPACING.sm,
   },
   sheetConfirmDanger: { backgroundColor: "#EF4444" },
   sheetConfirmText: { fontSize: 15, fontWeight: "600", color: COLORS.surface },
   sheetCancel: {
-    backgroundColor: COLORS.background,
-    borderRadius: BORDER_RADIUS.medium,
-    paddingVertical: 13,
-    alignItems: "center",
+    backgroundColor: COLORS.background, borderRadius: BORDER_RADIUS.medium,
+    paddingVertical: 13, alignItems: "center",
   },
-  sheetCancelText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-  },
+  sheetCancelText: { fontSize: 15, fontWeight: "600", color: COLORS.textPrimary },
 });

@@ -1,10 +1,7 @@
-/** @format */
-
 import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  type TextStyle,
   FlatList,
   TouchableOpacity,
   StyleSheet,
@@ -12,12 +9,13 @@ import {
   SafeAreaView,
   StatusBar,
   Modal,
+  Alert,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from "../../constants";
-import { BlockedUser, ChatStackParamList } from "../../types";
-import { userService } from "../../services";
+import { BlockedUser, ChatStackParamList } from "../../types/chat.types";
+import { userService } from "../../services/userService";
 import Avatar from "../../components/common/Avatar";
 
 type Props = {
@@ -25,11 +23,13 @@ type Props = {
 };
 
 function formatBlockedDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      month: "short", day: "numeric", year: "numeric",
+    });
+  } catch {
+    return "";
+  }
 }
 
 export default function BlockedUsersScreen({ navigation }: Props) {
@@ -39,7 +39,6 @@ export default function BlockedUsersScreen({ navigation }: Props) {
   const [selectedUser, setSelectedUser] = useState<BlockedUser | null>(null);
   const [unblocking, setUnblocking] = useState<string | null>(null);
 
-  // Refresh every time screen comes into focus
   useFocusEffect(
     useCallback(() => {
       fetchBlockedUsers();
@@ -52,7 +51,8 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       setError(null);
       const data = await userService.getBlockedUsers();
       setBlockedUsers(data);
-    } catch {
+    } catch (err: any) {
+      console.error("[BlockedUsers] load error:", err?.message);
       setError("Could not load blocked users.");
     } finally {
       setLoading(false);
@@ -61,17 +61,23 @@ export default function BlockedUsersScreen({ navigation }: Props) {
 
   const handleConfirmUnblock = async () => {
     if (!selectedUser) return;
-    const targetId = selectedUser.id;
+    const target = selectedUser;
     setSelectedUser(null);
 
     try {
-      setUnblocking(targetId);
-      await userService.unblockUser(targetId);
-      // Optimistic remove
-      setBlockedUsers((prev) => prev.filter((u) => u.id !== targetId));
-    } catch {
-      // Re-fetch to restore actual state on failure
-      fetchBlockedUsers();
+      setUnblocking(target.id);
+      await userService.unblockUser(target.id);
+      // Remove from list optimistically
+      setBlockedUsers((prev) => prev.filter((u) => u.id !== target.id));
+    } catch (err: any) {
+      const message = err?.response?.data?.message ?? err?.message ?? "";
+      if (message.toLowerCase().includes("not found")) {
+        // Block document already gone — remove from list anyway
+        setBlockedUsers((prev) => prev.filter((u) => u.id !== target.id));
+      } else {
+        Alert.alert("Could not unblock", message || "Please try again.");
+        fetchBlockedUsers(); // re-sync
+      }
     } finally {
       setUnblocking(null);
     }
@@ -79,11 +85,18 @@ export default function BlockedUsersScreen({ navigation }: Props) {
 
   const renderItem = ({ item }: { item: BlockedUser }) => (
     <View style={styles.userCard}>
-      <Avatar name={item.displayName} avatarUrl={item.avatarUrl} size={46} />
+      <Avatar
+        name={item.displayName ?? item.id}
+        avatarUrl={item.avatarUrl || undefined}
+        size={46}
+      />
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.displayName}</Text>
+        <Text style={styles.userName}>
+          {item.displayName ?? item.id}
+        </Text>
         <Text style={styles.userSub}>
-          Blocked · {formatBlockedDate(item.blockedAt)}
+          {item.username ? `@${item.username}` : ""}
+          {item.blockedAt ? `  ·  Blocked ${formatBlockedDate(item.blockedAt)}` : ""}
         </Text>
       </View>
       <TouchableOpacity
@@ -120,19 +133,14 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
 
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Blocked users</Text>
         <View style={{ width: 32 }} />
       </View>
 
-      {/* Content */}
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -166,7 +174,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         </>
       )}
 
-      {/* Unblock confirmation bottom sheet */}
+      {/* Unblock confirmation sheet */}
       <Modal
         visible={!!selectedUser}
         transparent
@@ -180,14 +188,13 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         >
           <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>{selectedUser?.displayName}</Text>
+            <Text style={styles.sheetTitle}>
+              {selectedUser?.displayName ?? "This user"}
+            </Text>
             <Text style={styles.sheetBody}>
               Unblocking will allow them to message you again.
             </Text>
-            <TouchableOpacity
-              style={styles.sheetConfirm}
-              onPress={handleConfirmUnblock}
-            >
+            <TouchableOpacity style={styles.sheetConfirm} onPress={handleConfirmUnblock}>
               <Text style={styles.sheetConfirmText}>Unblock</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -205,175 +212,83 @@ export default function BlockedUsersScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-
-  // Header
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.surface,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: COLORS.surface, paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md, borderBottomWidth: 0.5, borderBottomColor: COLORS.border,
   },
   backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.background,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 32, height: 32, borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.background, alignItems: "center", justifyContent: "center",
   },
   backIcon: { fontSize: 22, color: COLORS.primary, lineHeight: 26 },
-  headerTitle: {
-    ...(TYPOGRAPHY.subtitle as TextStyle),
-    color: COLORS.textPrimary,
-  },
-
-  // Count
+  headerTitle: { ...TYPOGRAPHY.subtitle, color: COLORS.textPrimary },
   countLabel: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
-    fontSize: 12,
-    fontWeight: "500",
-    color: COLORS.textSecondary,
+    paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, paddingBottom: SPACING.sm,
+    fontSize: 12, fontWeight: "500", color: COLORS.textSecondary,
   },
-
-  // User row
   userCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    flexDirection: "row", alignItems: "center", gap: SPACING.md,
+    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
     backgroundColor: COLORS.surface,
   },
   separator: { height: 0.5, backgroundColor: COLORS.border },
   userInfo: { flex: 1, minWidth: 0 },
-  userName: {
-    ...(TYPOGRAPHY.bodyMedium as TextStyle),
-    color: COLORS.textPrimary,
-  },
+  userName: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary },
   userSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 1 },
   unblockBtn: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.small,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    minWidth: 74,
-    alignItems: "center",
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.small, borderWidth: 1.5,
+    borderColor: COLORS.primary, minWidth: 74, alignItems: "center",
   },
   unblockBtnDisabled: { opacity: 0.5 },
   unblockBtnText: { fontSize: 13, fontWeight: "600", color: COLORS.primary },
-
-  // Empty state
   flatListEmpty: { flex: 1 },
   emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 40,
-    gap: 10,
+    flex: 1, alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 40, gap: 10,
   },
   emptyIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.sm,
+    width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.border,
+    alignItems: "center", justifyContent: "center", marginBottom: SPACING.sm,
   },
-  emptyTitle: {
-    ...(TYPOGRAPHY.bodyMedium as TextStyle),
-    color: COLORS.textPrimary,
-    textAlign: "center",
-  },
+  emptyTitle: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, textAlign: "center" },
   emptySub: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    lineHeight: 19,
-    fontWeight: "400",
+    fontSize: 13, color: COLORS.textSecondary,
+    textAlign: "center", lineHeight: 19, fontWeight: "400",
   },
-
-  // Error
-  errorText: {
-    ...(TYPOGRAPHY.body as TextStyle),
-    color: COLORS.textSecondary,
-    textAlign: "center",
-  },
+  errorText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, textAlign: "center" },
   retryBtn: {
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.medium,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
+    paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.medium, borderWidth: 1.5, borderColor: COLORS.primary,
   },
-  retryText: { ...(TYPOGRAPHY.bodyMedium as TextStyle), color: COLORS.primary },
-
-  // Bottom sheet
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
+  retryText: { ...TYPOGRAPHY.bodyMedium, color: COLORS.primary },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   sheet: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: 40,
-    paddingTop: SPACING.md,
+    backgroundColor: COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: SPACING.xl, paddingBottom: 40, paddingTop: SPACING.md,
   },
   sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.border,
-    alignSelf: "center",
-    marginBottom: SPACING.lg,
+    width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.border,
+    alignSelf: "center", marginBottom: SPACING.lg,
   },
   sheetTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-    textAlign: "center",
-    marginBottom: SPACING.sm,
+    fontSize: 16, fontWeight: "600", color: COLORS.textPrimary,
+    textAlign: "center", marginBottom: SPACING.sm,
   },
   sheetBody: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    lineHeight: 19,
-    marginBottom: SPACING.xl,
+    fontSize: 13, color: COLORS.textSecondary,
+    textAlign: "center", lineHeight: 19, marginBottom: SPACING.xl,
   },
   sheetConfirm: {
-    backgroundColor: COLORS.primary,
-    borderRadius: BORDER_RADIUS.medium,
-    paddingVertical: 13,
-    alignItems: "center",
-    marginBottom: SPACING.sm,
+    backgroundColor: COLORS.primary, borderRadius: BORDER_RADIUS.medium,
+    paddingVertical: 13, alignItems: "center", marginBottom: SPACING.sm,
   },
   sheetConfirmText: { fontSize: 15, fontWeight: "600", color: COLORS.surface },
   sheetCancel: {
-    backgroundColor: COLORS.background,
-    borderRadius: BORDER_RADIUS.medium,
-    paddingVertical: 13,
-    alignItems: "center",
+    backgroundColor: COLORS.background, borderRadius: BORDER_RADIUS.medium,
+    paddingVertical: 13, alignItems: "center",
   },
-  sheetCancelText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-  },
+  sheetCancelText: { fontSize: 15, fontWeight: "600", color: COLORS.textPrimary },
 });

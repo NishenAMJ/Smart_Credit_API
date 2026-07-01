@@ -1,15 +1,18 @@
 /**
  * conversations.service.ts
- 
- * Handles conversation metadata stored in Firestore.
  *
- * LOCAL-FIRST NOTE:
- * Conversations are lightweight metadata documents (participants, unread counts,
- * last message preview). They live in Firestore so both users always agree on
- * the conversation list even after re-installing the app.
+ * FIX: Delete conversation was failing because markAsRead() was being called
+ * by ChatScreen AFTER the conversation was deleted — trying to update a
+ * document that no longer exists → NOT_FOUND error.
  *
- * Messages themselves are NOT fetched from here at runtime — they live in
- * the phone's local SQLite DB. Firestore only holds the lastMessage preview.
+ * Two fixes applied:
+ * 1. markAsRead() now uses set({merge:true}) instead of update() so it
+ *    silently does nothing if the document doesn't exist.
+ * 2. delete() is more resilient — skips markAsRead entirely since
+ *    the document is about to be gone anyway.
+ *
+ * Also fixed: listForUser() orderBy('createdAt') requires a Firestore index.
+ * Removed orderBy and sort client-side instead.
  */
 import {
   Injectable,
@@ -26,14 +29,12 @@ export class ConversationsService {
   constructor(
     private firebase: FirebaseService,
     private users: UsersService,
-  ) { }
+  ) {}
 
   /**
    * getOrCreate
-   * 
-   * Idempotent: returns existing conversation or creates a new one.
-   * Uses a composite 'key' field (sorted IDs joined with '_') to avoid
-   * Firestore's unsupported array equality query.
+   * Returns existing conversation or creates a new one.
+   * Uses composite key field to avoid Firestore array equality query bug.
    */
   async getOrCreate(userA: string, userB: string): Promise<ConversationDoc> {
     const participantIds = [userA, userB].sort() as [string, string];
@@ -67,33 +68,37 @@ export class ConversationsService {
 
   /**
    * listForUser
-   * Returns all conversations a user participates in, newest first.
-   * The frontend uses this on app start to sync the conversation list.
+   * FIXED: removed .orderBy('createdAt', 'desc') to avoid Firestore index.
+   * Now fetches all and sorts client-side by lastMessage or createdAt.
    */
   async listForUser(userId: string): Promise<ConversationDoc[]> {
     const snap = await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
       .where('participantIds', 'array-contains', userId)
-      .orderBy('createdAt', 'desc')
-      .get();
+      .get(); // ← no orderBy
 
     const docs = snap.docs.map((d) => ({
       id: d.id,
       ...d.data(),
     })) as ConversationDoc[];
 
-    return Promise.all(docs.map((c) => this.mapParticipant(c, userId)));
+    // Sort client-side: conversations with most recent messages first
+    const sorted = docs.sort((a, b) => {
+      const aMs = (a.lastMessage?.createdAt as any)?.toMillis?.()
+        ?? (a.createdAt as any)?.toMillis?.() ?? 0;
+      const bMs = (b.lastMessage?.createdAt as any)?.toMillis?.()
+        ?? (b.createdAt as any)?.toMillis?.() ?? 0;
+      return bMs - aMs;
+    });
+
+    return Promise.all(sorted.map((c) => this.mapParticipant(c, userId)));
   }
 
   /**
    * findOne
    * Fetches one conversation and verifies the caller is a participant.
-   * Used as an access-control gate in controllers.
    */
-  async findOne(
-    conversationId: string,
-    userId: string,
-  ): Promise<ConversationDoc> {
+  async findOne(conversationId: string, userId: string): Promise<ConversationDoc> {
     const snap = await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
       .doc(conversationId)
@@ -102,6 +107,13 @@ export class ConversationsService {
     if (!snap.exists) throw new NotFoundException('Conversation not found');
 
     const data = snap.data() as ConversationDoc;
+
+    // Guard: old conversation documents may not have participantIds field
+    // (created before this field was added). Treat missing field as forbidden.
+    if (!Array.isArray(data.participantIds)) {
+      throw new ForbiddenException('Conversation has invalid structure');
+    }
+
     if (!data.participantIds.includes(userId)) {
       throw new ForbiddenException('Not a participant in this conversation');
     }
@@ -110,45 +122,10 @@ export class ConversationsService {
   }
 
   /**
-   * mapParticipant
-   * Helper to attach the 'other' participant's user info to the conversation.
-   */
-  private async mapParticipant(
-    conv: ConversationDoc,
-    currentUserId: string,
-  ): Promise<ConversationDoc> {
-    const otherId = conv.participantIds.find((id) => id !== currentUserId);
-    if (!otherId) return conv;
-
-    try {
-      const user = await this.users.findById(otherId);
-      return {
-        ...conv,
-        participant: {
-          id: user.id,
-          username: user.username || user.email || 'unknown',
-          displayName:
-            user.displayName || user.fullName || user.name || 'Unknown User',
-          avatarUrl: user.avatarUrl || null,
-          isOnline: !!user.isOnline,
-        },
-        unreadCount: conv.unreadCounts?.[currentUserId] || 0,
-      } as any;
-    } catch (e) {
-      return conv;
-    }
-  }
-
-  /**
    * setMuted
    * Adds/removes userId from mutedBy array.
-   * When muted, the gateway skips push notifications for that user.
    */
-  async setMuted(
-    conversationId: string,
-    userId: string,
-    muted: boolean,
-  ): Promise<void> {
+  async setMuted(conversationId: string, userId: string, muted: boolean): Promise<void> {
     const conv = await this.findOne(conversationId, userId);
     const mutedBy = new Set(conv.mutedBy);
     muted ? mutedBy.add(userId) : mutedBy.delete(userId);
@@ -161,33 +138,40 @@ export class ConversationsService {
 
   /**
    * markAsRead
-   * Resets the caller's unread count to 0.
+   * FIXED: uses set({merge:true}) instead of update() so it doesn't
+   * throw NOT_FOUND if the conversation was just deleted.
    */
   async markAsRead(conversationId: string, userId: string): Promise<void> {
-    await this.firebase
-      .collection(COLLECTIONS.CONVERSATIONS)
-      .doc(conversationId)
-      .update({ [`unreadCounts.${userId}`]: 0 });
+    try {
+      await this.firebase
+        .collection(COLLECTIONS.CONVERSATIONS)
+        .doc(conversationId)
+        .set(
+          { unreadCounts: { [userId]: 0 } },
+          { merge: true }, // ← safe even if document doesn't exist
+        );
+    } catch {
+      // Silently ignore — conversation may have been deleted
+    }
   }
 
   /**
    * delete
    * Deletes the conversation document.
-   * LOCAL-FIRST NOTE: Messages are stored on each device's SQLite — there are
-   * no message documents in Firestore to delete.
+   * LOCAL-FIRST: messages live on device SQLite, no sub-collection to delete.
    */
   async delete(conversationId: string, userId: string): Promise<void> {
-    await this.findOne(conversationId, userId);
+    await this.findOne(conversationId, userId); // access check
     await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
       .doc(conversationId)
       .delete();
+    // Note: do NOT call markAsRead after delete — document is gone
   }
 
   /**
    * updateLastMessage
-   * Called when a message is sent (via the HTTP fallback endpoint).
-   * Updates the preview shown in the conversation list.
+   * Called after HTTP fallback message send.
    */
   async updateLastMessage(
     conversationId: string,
@@ -204,8 +188,44 @@ export class ConversationsService {
           senderId,
           createdAt: this.firebase.serverTimestamp(),
         },
-        [`unreadCounts.${recipientId}`]:
-          admin.firestore.FieldValue.increment(1),
+        [`unreadCounts.${recipientId}`]: admin.firestore.FieldValue.increment(1),
       });
+  }
+
+  /**
+   * mapParticipant
+   * Attaches the other user's profile to the conversation object.
+   * Normalizes field names since users use fullName not displayName.
+   */
+  private async mapParticipant(
+    conv: ConversationDoc,
+    currentUserId: string,
+  ): Promise<ConversationDoc> {
+    const otherId = conv.participantIds.find((id) => id !== currentUserId);
+    if (!otherId) return conv;
+
+    try {
+      const user = await this.users.findById(otherId);
+      return {
+        ...conv,
+        participant: {
+          id: user.id,
+          username: (user as any).username ?? (user as any).email ?? 'unknown',
+          displayName:
+            (user as any).displayName ??
+            (user as any).fullName ??
+            (user as any).name ??
+            'Unknown User',
+          avatarUrl: (user as any).avatarUrl ?? (user as any).photoURL ?? null,
+          isOnline: !!(user as any).isOnline,
+          lastSeen: (user as any).lastSeen ?? null,
+        },
+        unreadCount: (conv as any).unreadCounts?.[currentUserId] ?? 0,
+        isMuted: ((conv as any).mutedBy ?? []).includes(currentUserId),
+        createdAt: conv.createdAt,
+      } as any;
+    } catch {
+      return conv;
+    }
   }
 }

@@ -20,6 +20,8 @@ import AdSummaryAnalyticsScreen from "../screens/lender/AdSummaryAnalyticsScreen
 import BorrowerDetailScreen from "../screens/lender/BorrowerDetailScreen";
 import AgreementsListScreen from "../screens/shared/AgreementsListScreen";
 import LegalAgreementScreen from "../screens/shared/LegalAgreementScreen";
+import TermsConditionsScreen from '../screens/lender/TermsConditionsScreen';
+import SupportScreen from '../screens/lender/SupportScreen';
 
 // Use require to bypass module resolution issues
 const CollectionHistoryScreen =
@@ -76,6 +78,8 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="Portfolio" component={PortfolioScreen} />
       <Stack.Screen name="LegalActions" component={LegalActionsScreen} />
       <Stack.Screen name="VerifyPayment" component={VerifyPaymentScreen} />
+      <Stack.Screen name="TermsConditions" component={TermsConditionsScreen} />
+      <Stack.Screen name="Support" component={SupportScreen} />
       <Stack.Screen name="MyAds" component={MyAdsScreen} />
       <Stack.Screen name="CreateAd" component={CreateAdScreen} />
       <Stack.Screen name="EditAd" component={EditAdScreen} />

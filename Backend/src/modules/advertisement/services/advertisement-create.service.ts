@@ -1,6 +1,3 @@
-// This service handles creating new lending ads
-// It validates the input, creates search keywords for finding ads, and saves to Firebase
-
 import { Injectable, BadRequestException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -17,21 +14,20 @@ export class AdvertisementCreateService {
     dto: CreateAdDto,
   ): Promise<AdvertisementResponse> {
 
-    // Check that minimum amount is less than maximum amount
+    // ── Validate amounts ────────────────────────────
     if (dto.minAmount >= dto.maxAmount) {
       throw new BadRequestException(
         'Maximum amount must be greater than minimum amount',
       );
     }
 
-    // Check that minimum tenure is less than maximum tenure
     if (dto.minTenureMonths > dto.maxTenureMonths) {
       throw new BadRequestException(
         'Maximum tenure must be greater than or equal to minimum tenure',
       );
     }
 
-    // Get lender's info from the users collection
+    // ── Get lender info ─────────────────────────────
     const lenderDoc = await this.db
       .collection('users')
       .doc(lenderId)
@@ -43,16 +39,15 @@ export class AdvertisementCreateService {
 
     const lenderData = lenderDoc.data()!;
 
-    // Make sure user actually has lender role
     if (!lenderData.role?.includes('lender')) {
       throw new BadRequestException('User is not a lender');
     }
 
-    // Build search keywords so ads can be found easily
-    const keywords = dto.searchKeywords || [];
+    // ── Build search keywords ────────────────────────
+    const keywords        = dto.searchKeywords || [];
     const locationKeyword = dto.location.toLowerCase();
     const purposeKeywords = dto.preferredPurposes.map((p) => p.toLowerCase());
-    const nameKeywords = lenderData.fullName
+    const nameKeywords    = lenderData.fullName
       .toLowerCase()
       .split(' ')
       .filter((w: string) => w.length > 2);
@@ -66,8 +61,8 @@ export class AdvertisementCreateService {
       ]),
     ];
 
-    // Create the ad document with all details
-    const now = admin.firestore.Timestamp.now();
+    // ── Build ad document ────────────────────────────
+    const now       = admin.firestore.Timestamp.now();
     const expiresAt = admin.firestore.Timestamp.fromDate(
       new Date(dto.expiresAt),
     );
@@ -78,11 +73,11 @@ export class AdvertisementCreateService {
       adId:                  adRef.id,
       lenderId,
       lenderName:            lenderData.fullName,
-      lenderPhotoURL:        lenderData.photoURL || '',
-      lenderRating:          lenderData.rating   || 0,
+      lenderPhotoURL:        lenderData.photoURL   || '',
+      lenderRating:          lenderData.rating     || 0,
       title:                 dto.title,
       description:           dto.description,
-      imageUrl:              dto.imageUrl || '',
+      imageUrl:              dto.imageUrl          || '',
       minAmount:             dto.minAmount,
       maxAmount:             dto.maxAmount,
       preferredInterestRate: dto.preferredInterestRate,
@@ -93,7 +88,10 @@ export class AdvertisementCreateService {
       responseTimeHours:     dto.responseTimeHours,
       location:              dto.location,
       searchKeywords:        allKeywords,
-      status:                'active',
+
+      // ✅ CHANGED: starts as 'pending' — admin must approve before it goes live
+      status:                'pending',
+
       isBoosted:             false,
       boostExpiry:           null,
       boostPaidAt:           null,
@@ -108,13 +106,12 @@ export class AdvertisementCreateService {
       source:                'lender_created',
     };
 
-    // Save to Firestore database
     await adRef.set(adData);
 
     return this.toResponse(adData);
   }
 
-  // Convert database document to format we send to users
+  // ── Convert Firestore doc to API response ─────────
   toResponse(data: Advertisement): AdvertisementResponse {
     return {
       adId:                  data.adId,

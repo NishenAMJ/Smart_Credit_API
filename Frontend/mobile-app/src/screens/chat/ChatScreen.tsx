@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -45,6 +43,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const currentUserId = getCurrentUserId();
 
+  // ── Debug logs ─────────────────────────────────────────────────────────────
+  console.log("[ChatScreen] currentUserId:", currentUserId);
+  console.log("[ChatScreen] participant.id:", participant?.id);
+  console.log("[ChatScreen] conversationId:", conversationId);
+
   if (!participant) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -55,27 +58,22 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
-  const [isTyping, setIsTyping] = useState(false); // other user typing
+  const [isTyping, setIsTyping] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [seeding, setSeeding] = useState(false); // initial backend seed
+  const [seeding, setSeeding] = useState(false);
 
   const flatRef = useRef<FlatList>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  //  Mount 
+  // ── Mount ─────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    // 1. Load from local SQLite immediately (no loading spinner needed)
-    const local = messageService.list(conversationId, {
-      page: 0,
-      limit: PAGE_SIZE,
-    });
+    const local = messageService.list(conversationId, { page: 0, limit: PAGE_SIZE });
     setMessages(local);
     setHasMore(local.length === PAGE_SIZE);
 
-    // 2. If no local messages — first install or re-install — seed from backend
     if (local.length === 0) {
       setSeeding(true);
       messageService
@@ -84,26 +82,19 @@ export default function ChatScreen({ navigation, route }: Props) {
           setMessages(seeded);
           setHasMore(seeded.length === PAGE_SIZE);
         })
-        .catch(() => {
-          /* seed silently fails — user can still chat */
-        })
+        .catch(() => {})
         .finally(() => setSeeding(false));
     }
 
-    // 3. Reset unread count
-    conversationService.markAsRead(conversationId).catch(() => { });
+    conversationService.markAsRead(conversationId).catch(() => {});
 
-    // 4. Socket subscriptions — defined as named functions for proper cleanup
     const onMessage = (msg: Message) => {
       if (msg.conversationId !== conversationId) return;
       setMessages((prev) => {
-        // Avoid duplicates (socket may redeliver on reconnect)
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [msg, ...prev];
       });
-      // Mark as read since user is actively in the screen
-      conversationService.markAsRead(conversationId).catch(() => { });
-      // Send read receipt to the sender
+      conversationService.markAsRead(conversationId).catch(() => {});
       chatSocket.markMessageRead(conversationId, msg.id, msg.senderId);
     };
 
@@ -153,52 +144,65 @@ export default function ChatScreen({ navigation, route }: Props) {
     };
   }, [conversationId, currentUserId]);
 
-  //  Load more (older messages)
+  // ── Load more ─────────────────────────────────────────────────────────────
 
   const handleLoadMore = () => {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
     const nextPage = page + 1;
-    const older = messageService.list(conversationId, {
-      page: nextPage,
-      limit: PAGE_SIZE,
-    });
+    const older = messageService.list(conversationId, { page: nextPage, limit: PAGE_SIZE });
     setMessages((prev) => [...prev, ...older]);
     setHasMore(older.length === PAGE_SIZE);
     setPage(nextPage);
     setLoadingMore(false);
   };
 
-  //  Send 
+  // ── Send ──────────────────────────────────────────────────────────────────
 
   const handleSend = async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+
+    // ── DEBUG ─────────────────────────────────────────────────────────────
+    console.log("[Send] button tapped");
+    console.log("[Send] text value:", JSON.stringify(text));
+    console.log("[Send] trimmed:", JSON.stringify(trimmed));
+    console.log("[Send] socket connected:", chatSocket.isConnected);
+    console.log("[Send] currentUserId:", currentUserId);
+    console.log("[Send] recipientId:", participant.id);
+    console.log("[Send] conversationId:", conversationId);
+    // ─────────────────────────────────────────────────────────────────────
+
+    if (!trimmed) {
+      console.log("[Send] BLOCKED — text is empty after trim");
+      return;
+    }
+
+    if (!currentUserId) {
+      console.error("[Send] BLOCKED — currentUserId is empty, user not authenticated");
+      return;
+    }
 
     setText("");
     Keyboard.dismiss();
 
-    // Stop typing indicator
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     chatSocket.sendTyping(conversationId, participant.id, false);
 
     try {
-      const msg = await messageService.send(
-        conversationId,
-        participant.id,
-        trimmed,
-      );
-      // Optimistically add to the list
+      console.log("[Send] calling messageService.send...");
+      const msg = await messageService.send(conversationId, participant.id, trimmed);
+      console.log("[Send] message created:", msg.id, "status:", msg.status);
+
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [msg, ...prev];
       });
-    } catch {
-      // messageService handles fallback internally
+    } catch (err: any) {
+      console.error("[Send] messageService.send threw:", err?.message ?? err);
     }
   };
 
-  //  Typing indicator 
+  // ── Typing ────────────────────────────────────────────────────────────────
 
   const handleTyping = (val: string) => {
     setText(val);
@@ -209,7 +213,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     }, 1500);
   };
 
-  //  Render bubble 
+  // ── Render bubble ─────────────────────────────────────────────────────────
 
   const renderItem = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
@@ -218,9 +222,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       const showAvatar = !isMe && prevMsg?.senderId !== item.senderId;
 
       return (
-        <View
-          style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowThem]}
-        >
+        <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowThem]}>
           {!isMe && (
             <View style={styles.avatarSlot}>
               {showAvatar && (
@@ -232,9 +234,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               )}
             </View>
           )}
-          <View
-            style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}
-          >
+          <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
             <Text
               style={[
                 styles.bubbleText,
@@ -257,10 +257,10 @@ export default function ChatScreen({ navigation, route }: Props) {
                   {item.status === "sending"
                     ? "○"
                     : item.status === "failed"
-                      ? "✕"
-                      : item.status === "read"
-                        ? "✓✓"
-                        : "✓"}
+                    ? "✕"
+                    : item.status === "read"
+                    ? "✓✓"
+                    : "✓"}
                 </Text>
               )}
             </View>
@@ -271,9 +271,11 @@ export default function ChatScreen({ navigation, route }: Props) {
     [messages, participant, currentUserId],
   );
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const isTextEmpty = !text.trim();
+
   return (
-    // ✅ SafeAreaView handles top inset — no StatusBar component here
-    // so this screen never affects the global status bar style
     <SafeAreaView style={commonChatStyles.container}>
 
       {/* Header */}
@@ -309,8 +311,8 @@ export default function ChatScreen({ navigation, route }: Props) {
               {participant.isOnline
                 ? "Online"
                 : participant.lastSeen
-                  ? `Last seen ${formatBubbleTime(participant.lastSeen)}`
-                  : "Offline"}
+                ? `Last seen ${formatBubbleTime(participant.lastSeen)}`
+                : "Offline"}
             </Text>
           </View>
         </TouchableOpacity>
@@ -338,13 +340,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         {seeding && messages.length === 0 ? (
           <View style={commonChatStyles.centered}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text
-              style={{
-                color: COLORS.textSecondary,
-                marginTop: 8,
-                fontSize: 13,
-              }}
-            >
+            <Text style={{ color: COLORS.textSecondary, marginTop: 8, fontSize: 13 }}>
               Loading messages…
             </Text>
           </View>
@@ -393,10 +389,13 @@ export default function ChatScreen({ navigation, route }: Props) {
             maxLength={2000}
             returnKeyType="default"
           />
+          {/* 
+            DEBUG: using onPress with no disabled prop first to confirm
+            the button tap registers at all. We log inside handleSend. 
+          */}
           <TouchableOpacity
-            style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
+            style={[styles.sendBtn, isTextEmpty && styles.sendBtnDisabled]}
             onPress={handleSend}
-            disabled={!text.trim()}
             activeOpacity={0.8}
           >
             <Text style={styles.sendIcon}>↑</Text>
@@ -475,11 +474,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: COLORS.border,
   },
-  typingText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    fontStyle: "italic",
-  },
+  typingText: { fontSize: 13, color: COLORS.textSecondary, fontStyle: "italic" },
 
   inputBar: {
     flexDirection: "row",

@@ -1,8 +1,9 @@
-import {Timestamp}from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 
-export type AdStatus = 'active' | 'paused' | 'expired' | 'pending';
+// ✅ Added 'rejected' to AdStatus
+export type AdStatus = 'active' | 'paused' | 'expired' | 'pending' | 'rejected';
 
-export interface Advertisement{
+export interface Advertisement {
   adId: string;
   lenderId: string;
 
@@ -33,6 +34,15 @@ export interface Advertisement{
   // Status
   status: AdStatus;
 
+  // ✅ Rejection info — set by admin when rejecting
+  rejectionReason?: string;
+  rejectedAt?: Timestamp;
+  rejectedBy?: string;
+
+  // ✅ Approval info — set by admin when approving
+  approvedAt?: Timestamp;
+  approvedBy?: string;
+
   // Boost info
   isBoosted: boolean;
   boostExpiry: Timestamp | null;
@@ -55,8 +65,7 @@ export interface Advertisement{
   seedBatchId?: string;
 }
 
-
-export interface AdvertisementResponse{
+export interface AdvertisementResponse {
   adId: string;
   lenderId: string;
   lenderName: string;
@@ -76,6 +85,8 @@ export interface AdvertisementResponse{
   location: string;
   searchKeywords: string[];
   status: AdStatus;
+  // ✅ Rejection reason visible to lender
+  rejectionReason?: string | null;
   isBoosted: boolean;
   boostExpiry: string | null;
   boostAmount: number;

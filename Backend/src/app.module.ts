@@ -24,6 +24,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { AdsModule } from './modules/ads/ads.module';
 import { AdvertisementModule } from './modules/advertisement/advertisement.module';
+import { QrScannerModule } from './modules/qrScanner/qr-scanner.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { AdvertisementModule } from './modules/advertisement/advertisement.modul
     DisputesModule,
     AdsModule,
     AdvertisementModule,
+    QrScannerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

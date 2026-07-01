@@ -22,7 +22,11 @@ import {
   getMobileSession,
   saveMobileSession,
 } from "../utils/auth.storage";
-import { setCurrentUserId, setAuthToken as setLenderAuthToken } from "../services/api";
+import {
+  setCurrentUserId,
+  setAuthToken as setLenderAuthToken,
+} from "../services/api";
+import { chatSocket } from "../services/socketService";
 import type {
   AuthResponse,
   DashboardResponse,
@@ -63,22 +67,14 @@ type AuthContextValue = {
   refreshWorkspace: () => Promise<void>;
 };
 
-export const AuthContext = createContext<AuthContextValue | undefined>(
-  undefined,
-);
-
-// Also export for direct useContext usage if needed
+export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export default AuthContext;
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<MobileSession | null>(null);
-  const [sessionStatus, setSessionStatus] = useState<SessionResponse | null>(
-    null,
-  );
+  const [sessionStatus, setSessionStatus] = useState<SessionResponse | null>(null);
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
-  const [kycSubmission, setKycSubmission] = useState<KycSubmission | null>(
-    null,
-  );
+  const [kycSubmission, setKycSubmission] = useState<KycSubmission | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -90,6 +86,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setAuthToken(accessToken);
     setLenderAuthToken(accessToken);
     setCurrentUserId(user?.uid);
+
+    // Connect WebSocket with JWT token
+    // Wrapped in try/catch so a socket error never breaks login
+    try {
+      chatSocket.connect(accessToken);
+    } catch (e) {
+      console.warn("[Auth] chatSocket.connect failed:", e);
+    }
+
     const nextSessionStatus = await getSession();
     const dashboardPromise =
       nextSessionStatus.activeRole === "lender"
@@ -97,15 +102,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         : nextSessionStatus.activeRole === "borrower"
           ? getDashboard("borrower")
           : Promise.resolve<DashboardResponse | null>(null);
+
     const [nextDashboard, nextKyc] = await Promise.all([
       dashboardPromise,
       getMyKycSubmission().catch(() => ({ submission: null })),
     ]);
 
-    const nextSession = {
-      accessToken,
-      user: nextSessionStatus.user ?? user,
-    };
+    const nextSession = { accessToken, user: nextSessionStatus.user ?? user };
 
     setSession(nextSession);
     setSessionStatus(nextSessionStatus);
@@ -118,6 +121,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setAuthToken(null);
     setLenderAuthToken(null);
     setCurrentUserId(null);
+
+    // Disconnect socket safely
+    try {
+      chatSocket.disconnect();
+    } catch (e) {
+      console.warn("[Auth] chatSocket.disconnect failed:", e);
+    }
+
+    // NOTE: intentionally NOT calling localDatabase.clearAll() here.
+    // Clearing the local DB on every auth reset wipes chat history.
+    // Only clear on explicit sign-out (see signOut below).
+
     setSession(null);
     setSessionStatus(null);
     setDashboard(null);
@@ -130,19 +145,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     async function restoreSession() {
       try {
         const storedSession = await getMobileSession();
-
         if (!storedSession.accessToken || !storedSession.user) {
-          if (active) {
-            setAuthLoading(false);
-          }
+          if (active) setAuthLoading(false);
           return;
         }
-
         await hydrateWorkspace(storedSession.accessToken, storedSession.user);
       } catch (nextError) {
         await clearAuthStorage();
         resetWorkspaceState();
-
         if (active) {
           setError(
             nextError instanceof Error
@@ -151,36 +161,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
           );
         }
       } finally {
-        if (active) {
-          setAuthLoading(false);
-        }
+        if (active) setAuthLoading(false);
       }
     }
 
     void restoreSession();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   async function signIn(payload: LoginPayload) {
-    try {
-      setAuthLoading(true);
-      setError("");
-      const response = await login(payload);
-      await hydrateWorkspace(response.accessToken, response.user);
-    } catch (nextError) {
-      await clearAuthStorage();
-      resetWorkspaceState();
-      setError(
-        nextError instanceof Error ? nextError.message : "Sign in failed.",
-      );
-      throw nextError;
-    } finally {
-      setAuthLoading(false);
-    }
+  try {
+    setAuthLoading(true);
+    setError("");
+    console.log("[signIn] calling login API with:", payload.identifier);
+    const response = await login(payload);
+    console.log("[signIn] login success, uid:", response.user?.uid);
+    await hydrateWorkspace(response.accessToken, response.user);
+  } catch (nextError) {
+    console.error("[signIn] error:", nextError); 
+    
   }
+}
 
   async function signUp(payload: SignUpPayload) {
     try {
@@ -192,7 +193,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
         password: payload.account.password,
         role: payload.account.role,
       });
-
       setAuthToken(loginResponse.accessToken);
       const kycResponse = await submitKyc(payload.kyc);
       setKycSubmission(kycResponse.submission);
@@ -210,10 +210,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   async function refreshWorkspace() {
-    if (!session) {
-      return;
-    }
-
+    if (!session) return;
     try {
       setRefreshing(true);
       setError("");
@@ -232,33 +229,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
   function signOut() {
     void clearAuthStorage();
     resetWorkspaceState();
+    // Only clear local chat data on explicit logout
+    try {
+      const { localDatabase } = require("../services/localDatabase");
+      localDatabase.clearAll();
+    } catch (e) {
+      console.warn("[Auth] localDatabase.clearAll failed:", e);
+    }
     setError("");
     setAuthLoading(false);
   }
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      session,
-      sessionStatus,
-      dashboard,
-      kycSubmission,
-      authLoading,
-      refreshing,
-      error,
-      signIn,
-      signUp,
-      signOut,
-      refreshWorkspace,
+      session, sessionStatus, dashboard, kycSubmission,
+      authLoading, refreshing, error,
+      signIn, signUp, signOut, refreshWorkspace,
     }),
-    [
-      authLoading,
-      dashboard,
-      error,
-      kycSubmission,
-      refreshing,
-      session,
-      sessionStatus,
-    ],
+    [authLoading, dashboard, error, kycSubmission, refreshing, session, sessionStatus],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -266,10 +254,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 }
