@@ -1,10 +1,11 @@
+// Payments API layer for transaction history, loan ledgers, and manual installment posting.
 import {
   fetchLenderApi,
   fetchLenderApiWithQuery,
   parseApiError,
 } from "./api-client";
 
-export type RecentTransactionsSummary = {
+export type PaymentsSummary = {
   totalTransactions: number;
   totalCollected: number;
   loansWithActivity: number;
@@ -17,7 +18,7 @@ export type CursorPageInfo = {
   nextCursor: string | null;
 };
 
-export type RecentTransactionItem = {
+export type PaymentItem = {
   transactionId: string;
   loanId: string;
   installmentId: string | null;
@@ -40,11 +41,11 @@ export type RecentTransactionItem = {
   };
 };
 
-export type RecentTransactionsResponse = {
+export type PaymentsResponse = {
   lenderId: string;
-  summary: RecentTransactionsSummary;
+  summary: PaymentsSummary;
   searchResultCount: number | null;
-  transactions: RecentTransactionItem[];
+  transactions: PaymentItem[];
   pageInfo: CursorPageInfo;
   generatedAt: string;
 };
@@ -89,7 +90,7 @@ export type RecordInstallmentPaymentInput = {
   note?: string | null;
 };
 
-export type FetchRecentTransactionsOptions = {
+export type FetchPaymentsOptions = {
   pageSize?: number;
   cursor?: string | null;
   includeSummary?: boolean;
@@ -97,9 +98,10 @@ export type FetchRecentTransactionsOptions = {
   search?: string | null;
 };
 
-export async function fetchRecentTransactions(
-  options: FetchRecentTransactionsOptions = {},
-): Promise<RecentTransactionsResponse> {
+export async function fetchPayments(
+  options: FetchPaymentsOptions = {},
+): Promise<PaymentsResponse> {
+  // One endpoint powers both the paged list and the summary cards via feature flags in the query string.
   const params = new URLSearchParams({
     pageSize: String(options.pageSize ?? 15),
   });
@@ -121,12 +123,12 @@ export async function fetchRecentTransactions(
   }
 
   const response = await fetchLenderApiWithQuery(
-    "/recent-transactions",
+    "/payments",
     params,
   );
 
   if (!response.ok) {
-    return parseApiError(response, "Failed to load recent transactions.");
+    return parseApiError(response, "Failed to load payments.");
   }
 
   return response.json();
@@ -135,8 +137,9 @@ export async function fetchRecentTransactions(
 export async function fetchLoanLedgerDetails(
   loanId: string,
 ): Promise<LoanLedgerDetailsResponse> {
+  // Loan ledger details are fetched lazily when a transaction detail drawer opens.
   const response = await fetchLenderApi(
-    `/recent-transactions/loans/${encodeURIComponent(loanId)}`,
+    `/payments/loans/${encodeURIComponent(loanId)}`,
   );
 
   if (!response.ok) {
@@ -151,8 +154,9 @@ export async function recordInstallmentPayment(
   installmentId: string,
   input: RecordInstallmentPaymentInput,
 ): Promise<LoanLedgerDetailsResponse> {
+  // Posting a payment returns the updated ledger so installment status can refresh without another round trip.
   const response = await fetchLenderApi(
-    `/recent-transactions/loans/${encodeURIComponent(
+    `/payments/loans/${encodeURIComponent(
       loanId,
     )}/installments/${encodeURIComponent(installmentId)}/payments`,
     {

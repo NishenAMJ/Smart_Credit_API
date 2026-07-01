@@ -11,9 +11,21 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader } from "../../components/lender";
-import { RecentTransactionsService } from "../../services/lender.service";
+import { PaymentsService } from "../../services/lender.service";
 
+<<<<<<< HEAD
 
+=======
+/**
+ * RecentTransactionListItem fields (from backend types):
+ *   transactionId, loanId, installmentId, borrowerId, borrowerName,
+ *   borrowerEmail, amount, type, status, createdAt, loanStatus,
+ *   remainingAmount, source, installmentSummary
+ *
+ * PaymentsSummary:
+ *   totalTransactions, totalCollected, loansWithActivity, overdueInstallments
+ */
+>>>>>>> 33a52046a849f1138c25336fe41c157713bf94e2
 
 export default function CollectionHistoryScreen({ navigation }: any) {
   const [history, setHistory] = useState<any[]>([]);
@@ -27,7 +39,7 @@ export default function CollectionHistoryScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const data = await RecentTransactionsService.getTransactions({
+        const data = await PaymentsService.getTransactions({
           pageSize: 100,
         });
         const txns: any[] = data?.transactions ?? [];

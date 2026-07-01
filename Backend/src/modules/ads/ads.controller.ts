@@ -23,11 +23,13 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 export class AdsController {
   constructor(private readonly adsService: AdsService) {}
 
+  // Returns the summary counts for the admin dashboard.
   @Get('stats')
   async getAdStats() {
     return this.adsService.getAdStats();
   }
 
+  // Returns a paginated list of lender ads for admin review.
   @Get()
   async getAllAds(
     @Query('limit') limit?: string,
@@ -36,6 +38,7 @@ export class AdsController {
     return this.adsService.getAllAds(limit, cursor);
   }
 
+  // Returns only ads that are still waiting for review of the admin.
   @Get('pending')
   async getPendingAds(
     @Query('limit') limit?: string,
@@ -44,11 +47,13 @@ export class AdsController {
     return this.adsService.getPendingAds(limit, cursor);
   }
 
+  // Returns one ad so the admin can inspect it.
   @Get(':adId')
   async getAdById(@Param('adId') adId: string) {
     return this.adsService.getAdById(adId);
   }
 
+  // Marks an ad as approved and stores review notes.
   @Post(':adId/approve')
   async approveAd(
     @Param('adId') adId: string,
@@ -57,6 +62,7 @@ export class AdsController {
     return this.adsService.approveAd(adId, approveAdDto.notes);
   }
 
+  // Marks an ad as rejected and stores the rejection reason.
   @Post(':adId/reject')
   async rejectAd(
     @Param('adId') adId: string,
@@ -65,6 +71,7 @@ export class AdsController {
     return this.adsService.rejectAd(adId, rejectAdDto.reason);
   }
 
+  // Moves an ad between moderation states.
   @Patch(':adId/status')
   async updateAdStatus(
     @Param('adId') adId: string,
@@ -76,6 +83,7 @@ export class AdsController {
     });
   }
 
+  // Permanently deletes an ad from Firestore.
   @Delete(':adId')
   async deleteAd(@Param('adId') adId: string) {
     return this.adsService.deleteAd(adId);

@@ -13,7 +13,7 @@ export const LENDER_APP_URL = import.meta.env.VITE_LENDER_APP_URL ?? "/lender";
 
 export type FirestoreTimestamp = { _seconds?: number };
 export type AdminUserRole = "admin" | "borrower" | "lender";
-export type AdminUserStatus = "active" | "pending" | "suspended" | "inactive";
+export type AdminUserStatus = "active" | "pending" | "suspended";
 export type AuditSeverity = "info" | "warning" | "critical" | "success";
 export type AuditTargetType = "user" | "ad" | "system" | "report";
 export type AdStatus =
@@ -30,9 +30,20 @@ export type SubmitKycPayload = {
   fullName: string;
   issuingCountry?: string;
   expiryDate?: string;
+  nicFrontDataUrl?: string;
+  nicBackDataUrl?: string;
+  addressProofDataUrl?: string;
+  bankDocumentDataUrl?: string;
+  profilePhotoUrl?: string;
   documentFrontUrl?: string;
   documentBackUrl?: string;
   selfieUrl?: string;
+  profilePictureUrl?: string;
+  addressProofNumber?: string;
+  bankAccountNumber?: string;
+  bankName?: string;
+  branchCode?: string;
+  accountType?: string;
 };
 
 export function getApiBaseUrl() {
@@ -44,6 +55,7 @@ type ApiOptions = RequestInit & {
 };
 
 // Centralizes request setup so auth handling and JSON parsing stay consistent across pages.
+// Sends authenticated admin requests and normalizes JSON error handling in one place.
 async function apiRequest<T>(
   path: string,
   options: ApiOptions = {},
@@ -145,19 +157,31 @@ export interface KycDocument {
   email?: string;
   phone?: string;
   documentType: string;
+  originalFilename?: string;
   documentUrl?: string;
   status: "pending" | "approved" | "rejected";
+  documentStatus?: "pending_review" | "approved" | "rejected" | "expired" | "deleted";
   submittedAt?: FirestoreTimestamp;
   reviewedAt?: FirestoreTimestamp;
   reviewedBy?: string;
+  reviewerId?: string;
+  reviewTimestamp?: FirestoreTimestamp;
+  reviewNotes?: string;
   rejectionReason?: string;
   notes?: string;
+  userKycStatus?: string;
 }
 
 export interface KycPendingResponse {
   success: boolean;
   count: number;
   documents: KycDocument[];
+}
+
+export interface KycDocumentAccessResponse {
+  success: boolean;
+  documentId: string;
+  accessUrl: string;
 }
 
 export interface DashboardAnalyticsResponse {
@@ -554,6 +578,15 @@ export function rejectKyc(
   });
 }
 
+export function getKycDocumentAccess(documentId: string) {
+  return apiRequest<KycDocumentAccessResponse>(
+    `/admin/kyc/${documentId}/access`,
+    {
+      auth: true,
+    },
+  );
+}
+
 // Keeps report-fetching logic consistent across reporting pages.
 export function getUsersReport() {
   return apiRequest<UsersReportResponse>("/admin/reports/users", {
@@ -619,6 +652,21 @@ export function subscribeToTransactions(
 export function getRevenueReport() {
   return apiRequest<RevenueReportResponse>("/admin/reports/revenue", {
     auth: true,
+  });
+}
+
+// Persists an authenticated admin password change immediately through the backend.
+export function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string,
+) {
+  return apiRequest<{ message: string }>("/auth/change-password", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({
+      currentPassword,
+      newPassword,
+    }),
   });
 }
 
@@ -727,7 +775,7 @@ export function escalateDispute(
   });
 }
 
-import { SharedLegalDocument, AgreementsResponse } from "../../legal/types";
+import type { AgreementsResponse } from "../../legal/types";
 
 export function getLegalAgreements() {
   return apiRequest<AgreementsResponse>("/legal/documents", {

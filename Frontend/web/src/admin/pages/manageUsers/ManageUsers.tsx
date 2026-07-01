@@ -43,6 +43,19 @@ type UserRow = {
   suspensionReason?: string;
 };
 
+type StyleValue =
+  | CSSProperties
+  | ((disabled: boolean) => CSSProperties)
+  | ((color: string, bg: string) => CSSProperties);
+
+type SummaryCard = {
+  label: string;
+  count: number;
+  color: string;
+  bg: string;
+  icon: React.ElementType;
+};
+
 // Converts backend user records into stable table rows so rendering stays simple.
 function mapApiUser(user: AdminUser): UserRow {
   const name =
@@ -75,7 +88,6 @@ function StatusBadge({ status }: { status: AdminUserStatus }) {
     active: "badge badge-success",
     pending: "badge badge-warning",
     suspended: "badge badge-gray",
-    inactive: "badge badge-gray",
   }[status];
 
   return <span className={className}>{status}</span>;
@@ -123,7 +135,23 @@ function iconButton(color: string, bg: string): CSSProperties {
   };
 }
 
+// Builds the user summary cards so the page body stays focused on layout.
+function buildSummaryCards(stats: {
+  totalUsers: number;
+  activeUsers: number;
+  borrowers: number;
+  suspendedUsers: number;
+}): SummaryCard[] {
+  return [
+    { label: "Total Users", count: stats.totalUsers, color: "#007AFF", bg: "#EFF6FF", icon: Users },
+    { label: "Active", count: stats.activeUsers, color: "#10B981", bg: "#ECFDF5", icon: UserCheck },
+    { label: "Borrowers", count: stats.borrowers, color: "#8B5CF6", bg: "#F5F3FF", icon: Users },
+    { label: "Suspended", count: stats.suspendedUsers, color: "#6B7280", bg: "#F3F4F6", icon: Shield },
+  ];
+}
+
 // Keeps user moderation logic and view state together on a single screen.
+// Renders the admin user management page and keeps moderation actions together.
 export default function ManageUsers() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
@@ -156,7 +184,13 @@ export default function ManageUsers() {
       setLoading(true);
       try {
         const [usersResponse, statsResponse] = await Promise.all([
-          getUsers({ limit: pageSize, cursor }),
+          getUsers({
+            limit: pageSize,
+            cursor,
+            search,
+            status: filterStatus,
+            role: filterRole,
+          }),
           !cursor ? getUserStats() : Promise.resolve(null),
         ]);
 
@@ -181,7 +215,7 @@ export default function ManageUsers() {
         setLoading(false);
       }
     },
-    [pageSize],
+    [filterRole, filterStatus, pageSize, search],
   );
 
   useEffect(() => {
@@ -201,18 +235,8 @@ export default function ManageUsers() {
   }, [currentPage, cursorStack, loadUsers]);
 
   const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
-      const searchValue = search.toLowerCase();
-      const matchesSearch =
-        user.name.toLowerCase().includes(searchValue) ||
-        user.email.toLowerCase().includes(searchValue) ||
-        user.id.toLowerCase().includes(searchValue);
-      const matchesStatus =
-        filterStatus === "all" || user.status === filterStatus;
-      const matchesRole = filterRole === "all" || user.role === filterRole;
-      return matchesSearch && matchesStatus && matchesRole;
-    });
-  }, [filterRole, filterStatus, search, users]);
+    return users;
+  }, [users]);
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;
@@ -286,36 +310,7 @@ export default function ManageUsers() {
       )}
 
       <div style={S.summaryGrid}>
-        {[
-          {
-            label: "Total Users",
-            count: stats.totalUsers,
-            color: "#007AFF",
-            bg: "#EFF6FF",
-            icon: Users,
-          },
-          {
-            label: "Active",
-            count: stats.activeUsers,
-            color: "#10B981",
-            bg: "#ECFDF5",
-            icon: UserCheck,
-          },
-          {
-            label: "Borrowers",
-            count: stats.borrowers,
-            color: "#8B5CF6",
-            bg: "#F5F3FF",
-            icon: Users,
-          },
-          {
-            label: "Suspended",
-            count: stats.suspendedUsers,
-            color: "#6B7280",
-            bg: "#F3F4F6",
-            icon: Shield,
-          },
-        ].map((item) => {
+        {buildSummaryCards(stats).map((item) => {
           const Icon = item.icon;
           return (
             <div key={item.label} className="card" style={S.summaryCard}>
@@ -346,7 +341,7 @@ export default function ManageUsers() {
         </div>
 
         <div className="tabs">
-          {(["all", "active", "pending", "suspended", "inactive"] as const).map(
+          {(["all", "active", "pending", "suspended"] as const).map(
             (status) => (
               <button
                 key={status}
@@ -580,7 +575,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const S: Record<string, any> = {
+const S = {
   pendingChip: {
     background: "#FEF3C7",
     color: "#92400E",
@@ -767,4 +762,4 @@ const S: Record<string, any> = {
     background: "#F3F4F6",
     borderRadius: 8,
   },
-};
+} satisfies Record<string, StyleValue>;

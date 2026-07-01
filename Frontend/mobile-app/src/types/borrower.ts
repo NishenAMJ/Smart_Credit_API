@@ -89,6 +89,13 @@ export interface BorrowerRepayment {
   type?: string;
   timestamp?: string;
   lenderName?: string;
+  verificationStatus?: string;
+  statusLabel?: string;
+  statusDetail?: string;
+  installmentId?: string;
+  installmentNumber?: number;
+  paidAmount?: number;
+  totalInstallmentAmount?: number;
 }
 
 export interface BorrowerApplication {

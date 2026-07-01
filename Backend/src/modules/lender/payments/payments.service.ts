@@ -29,10 +29,10 @@ import {
 import {
   LoanLedgerDetailsResponse,
   RecordInstallmentPaymentInput,
-  RecentTransactionListItem,
-  RecentTransactionsResponse,
-  RecentTransactionsSummary,
-} from './recent-transactions.types';
+  PaymentListItem,
+  PaymentsResponse,
+  PaymentsSummary,
+} from './payments.types';
 
 type LoanRecord = {
   id: string;
@@ -86,8 +86,8 @@ type LenderLedgerContext = {
 };
 
 @Injectable()
-export class RecentTransactionsService {
-  private readonly logger = new Logger(RecentTransactionsService.name);
+export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
   private readonly cacheTtlMs = 60_000;
   private readonly lenderContextCache = new Map<
     string,
@@ -95,20 +95,20 @@ export class RecentTransactionsService {
   >();
   private readonly summaryCache = new Map<
     string,
-    CachedValue<RecentTransactionsSummary>
+    CachedValue<PaymentsSummary>
   >();
   private readonly searchCountCache = new Map<string, CachedValue<number>>();
 
   constructor(private readonly firebaseService: FirebaseService) {}
 
-  async getRecentTransactions(
+  async getPayments(
     lenderId: string,
     pageSize = 30,
     cursor?: string | null,
     includeSummary = true,
     includeSearchCount = true,
     search?: string | null,
-  ): Promise<RecentTransactionsResponse> {
+  ): Promise<PaymentsResponse> {
     const safePageSize = this.clamp(pageSize, 8, 60);
     const normalizedSearch = this.normalizeSearch(search);
     const context = await this.getLenderContext(lenderId);
@@ -153,7 +153,7 @@ export class RecentTransactionsService {
         ? await this.getSearchResultCount(lenderId, context, normalizedSearch)
         : null;
 
-    const transactions: RecentTransactionListItem[] = visibleTransactions.map(
+    const transactions: PaymentListItem[] = visibleTransactions.map(
       (transaction) => {
         const loan = transaction.loanId
           ? loanMap.get(transaction.loanId)
@@ -446,7 +446,7 @@ export class RecentTransactionsService {
     lenderId: string,
     loanIds: Set<string>,
     loanIdsList: string[],
-  ): Promise<RecentTransactionsSummary> {
+  ): Promise<PaymentsSummary> {
     const cached = this.getCachedValue(this.summaryCache, lenderId);
 
     if (cached) {
@@ -473,7 +473,7 @@ export class RecentTransactionsService {
         (total, currentSummary) => total + currentSummary.overdueInstallments,
         0,
       ),
-    } satisfies RecentTransactionsSummary;
+    } satisfies PaymentsSummary;
 
     this.setCachedValue(this.summaryCache, lenderId, summary);
 
@@ -1093,7 +1093,7 @@ export class RecentTransactionsService {
     return readNumber(value);
   }
 
-  private createEmptySummary(): RecentTransactionsSummary {
+  private createEmptySummary(): PaymentsSummary {
     return {
       totalTransactions: 0,
       totalCollected: 0,
@@ -1138,6 +1138,16 @@ export class RecentTransactionsService {
   private isRepaymentLike(type: string, status: string): boolean {
     const normalizedType = type.trim().toLowerCase();
     const normalizedStatus = status.trim().toLowerCase();
+    const uncollectedStatuses = new Set([
+      'pending',
+      'pending_verification',
+      'verification_pending',
+      'receipt_required',
+    ]);
+
+    if (uncollectedStatuses.has(normalizedStatus)) {
+      return false;
+    }
 
     if (
       normalizedType.includes('repay') ||

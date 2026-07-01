@@ -7,6 +7,7 @@ type PaginationControlsProps = {
   onNext: () => void;
 };
 
+// Renders cursor pagination controls with page-size selection for admin tables.
 export default function PaginationControls({
   page,
   canGoBack,

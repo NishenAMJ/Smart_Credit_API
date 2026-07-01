@@ -4,6 +4,7 @@ interface Props {
   children: React.ReactNode;
 }
 
+// Protects admin routes until a valid admin session is present.
 export default function ProtectedRoute({ children }: Props) {
   const token = localStorage.getItem("adminToken");
 

@@ -10,7 +10,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,js}\""
   },
   "dependencies": {
-    "@expo/vector-icons": "^15.0.2",
+    "@expo/vector-icons": "15.0.2",
     "@react-native-async-storage/async-storage": "^3.0.2",
     "@react-navigation/bottom-tabs": "^7.15.5",
     "@react-navigation/native": "^7.1.33",
@@ -21,12 +21,18 @@
     "expo-camera": "~17.0.10",
     "expo-document-picker": "~14.0.8",
     "expo-image-picker": "~17.0.11",
+<<<<<<< HEAD
     "expo-sqlite": "~16.0.10",
+=======
+    "expo-location": "~19.0.8",
+    "expo-sqlite": "~15.0.0",
+>>>>>>> 33a52046a849f1138c25336fe41c157713bf94e2
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
+    "react-native-maps": "1.20.1",
     "react-native-qrcode-svg": "^6.3.21",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",

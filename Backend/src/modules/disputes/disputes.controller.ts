@@ -20,6 +20,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 export class DisputesController {
   constructor(private readonly disputesService: DisputesService) {}
 
+  // Returns the admin list of disputes with paging support.
   @Get()
   async getAllDisputes(
     @Query('limit') limit?: string,
@@ -29,11 +30,13 @@ export class DisputesController {
   }
 
   @Get(':disputeId')
+  // Returns one dispute so the admin can inspect it.
   async getDisputeById(@Param('disputeId') disputeId: string) {
     return this.disputesService.getDisputeById(disputeId);
   }
 
   @Post(':disputeId/resolve')
+  // Marks a dispute as resolved using the admin's decision.
   async resolveDispute(
     @Param('disputeId') disputeId: string,
     @Body() resolveDisputeDto: ResolveDisputeDto,
@@ -46,6 +49,7 @@ export class DisputesController {
   }
 
   @Post(':disputeId/escalate')
+  // Escalates a dispute for further review.
   async escalateDispute(
     @Param('disputeId') disputeId: string,
     @Body() escalateDisputeDto: EscalateDisputeDto,

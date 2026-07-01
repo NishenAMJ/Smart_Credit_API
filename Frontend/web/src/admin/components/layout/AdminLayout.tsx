@@ -1,12 +1,14 @@
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 
+// Wraps the admin shell so the sidebar stays separate from the scrollable content area.
 export default function AdminLayout() {
   return (
     <div
       style={{
         display: "flex",
-        minHeight: "100vh",
+        height: "100vh",
+        overflow: "hidden",
         background: "#F5F6FA",
       }}
     >
@@ -21,6 +23,7 @@ export default function AdminLayout() {
           overflowY: "auto",
           overflowX: "auto",
           minWidth: 0,
+          height: "100vh",
         }}
       >
         {/* Outlet renders whichever page is currently active */}

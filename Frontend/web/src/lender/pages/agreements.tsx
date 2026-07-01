@@ -1,3 +1,4 @@
+// Lender wrapper around the shared legal agreements page and lender-specific download behavior.
 import { useCallback } from "react";
 import type { LenderSession } from "../lib/lender-session";
 import { LenderAgreementsApi } from "../lib/lender-agreements-api";
@@ -9,6 +10,7 @@ type AgreementsPageProps = {
 };
 
 export default function LenderAgreements({ session }: AgreementsPageProps) {
+  // Adapts the lender agreements response into the shared legal page contract.
   const fetcher = useCallback(async (): Promise<AgreementsResponse> => {
     const response = await LenderAgreementsApi.getLegalAgreements();
     return {
@@ -19,6 +21,7 @@ export default function LenderAgreements({ session }: AgreementsPageProps) {
   }, []);
 
   const handleDownload = (documentId: string, pdfDownloadPath?: string) => {
+    // Downloads are tokenized because the shared legal page opens a direct browser URL.
     const token = session.accessToken;
     if (!token) return;
 
@@ -38,8 +41,8 @@ export default function LenderAgreements({ session }: AgreementsPageProps) {
       role="lender"
       fetcher={fetcher}
       onDownload={handleDownload}
-      title="My Agreements"
-      subtitle="View and download legal agreements for loans you've funded."
+      title="Agreements"
+      subtitle="View and download your agreements."
     />
   );
 }

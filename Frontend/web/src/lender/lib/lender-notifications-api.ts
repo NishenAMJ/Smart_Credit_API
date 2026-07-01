@@ -1,3 +1,4 @@
+// Notification API contracts and actions for the lender inbox.
 import {
   fetchLenderApi,
   fetchLenderApiWithQuery,
@@ -80,6 +81,7 @@ export async function fetchLenderNotifications(
   state: NotificationStateFilter,
   limit = 80,
 ): Promise<LenderNotificationsListResponse> {
+  // Category and state filters are optional on the backend, so "all" is omitted from the query string.
   const searchParams = new URLSearchParams({
     state,
     limit: String(limit),
@@ -102,6 +104,7 @@ export async function fetchLenderNotifications(
 }
 
 export async function fetchLenderNotificationSummary(): Promise<LenderNotificationsSummaryResponse> {
+  // Summary counts are fetched separately so the inbox header can stay lightweight and focused.
   const response = await fetchLenderApi("/lender-notifications/summary");
 
   if (!response.ok) {
@@ -114,6 +117,7 @@ export async function fetchLenderNotificationSummary(): Promise<LenderNotificati
 export async function markNotificationAsRead(
   notificationId: string,
 ): Promise<LenderNotification> {
+  // Returns the updated notification so list state can be reconciled without a full page reload.
   const response = await fetchLenderApi(
     `/lender-notifications/${encodeURIComponent(notificationId)}/read`,
     {
@@ -132,6 +136,7 @@ export async function markAllNotificationsAsRead(
   category: string,
   state: NotificationStateFilter,
 ): Promise<void> {
+  // Bulk actions respect the current visible filters so the page can mark only the inbox slice in view.
   const searchParams = new URLSearchParams({
     state,
   });

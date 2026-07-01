@@ -1,3 +1,4 @@
+// Modal editor for lender profile details that power profile surfaces and workflow defaults.
 import { useEffect, useState, type FormEvent } from "react";
 import type { LenderSession } from "../../lib/lender-session";
 import {
@@ -40,6 +41,7 @@ function formatLabel(value: string): string {
 }
 
 function toFormState(profile: LenderProfile): ProfileFormState {
+  // Converts nullable API fields into safe form strings for controlled inputs.
   return {
     fullName: profile.fullName,
     email: profile.email,
@@ -73,6 +75,7 @@ export default function LenderProfileModal({
 
     let isMounted = true;
 
+    // Load fresh profile data every time the modal opens so edits start from the server copy.
     const loadProfile = async () => {
       try {
         setIsLoading(true);
@@ -111,6 +114,7 @@ export default function LenderProfileModal({
       return;
     }
 
+    // Allow the modal to close with Escape to match the rest of the lender detail overlays.
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose();
@@ -155,6 +159,7 @@ export default function LenderProfileModal({
       return;
     }
 
+    // Trim and normalize free-text form fields before sending them back to the API.
     const nextProfile = {
       fullName: formState.fullName.trim(),
       email: formState.email.trim(),

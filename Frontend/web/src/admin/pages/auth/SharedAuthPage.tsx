@@ -50,6 +50,7 @@ const initialRegisterForm = {
   kyc: initialKycForm,
 };
 
+// Restores the last auth session from local storage when the admin returns to the app.
 function loadStoredSession(): SharedSession | null {
   const rawValue = localStorage.getItem(STORAGE_KEY);
 
@@ -65,6 +66,7 @@ function loadStoredSession(): SharedSession | null {
   }
 }
 
+// Converts an uploaded file into a data URL for preview and submission flows.
 function toDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -76,6 +78,7 @@ function toDataUrl(file: File): Promise<string> {
   });
 }
 
+// Maps document type to the label shown in the KYC form.
 function getDocumentNumberLabel(documentType: string) {
   switch (documentType) {
     case "passport":
@@ -91,6 +94,7 @@ type SharedAuthPageProps = {
   initialMode: AuthMode;
 };
 
+// Handles the shared sign-in and sign-up flow for admin, lender, and borrower auth.
 export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   const navigate = useNavigate();
   const [mode, setMode] = useState<AuthMode>(initialMode);
@@ -107,8 +111,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   const [infoMessage, setInfoMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const registerRoleLabel =
-    registerForm.role === "borrower" ? "borrower" : "lender";
+  const registerRoleLabel = "lender";
 
   const sessionSummary = useMemo(() => {
     if (!session) {
@@ -303,18 +306,26 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
     try {
       setLoading(true);
 
-      await registerPublicUser({
-        fullName: registerForm.fullName.trim(),
-        email: registerForm.email.trim(),
-        phone: registerForm.phone.trim(),
-        password: registerForm.password,
-        role: registerForm.role,
-      });
+      try {
+        await registerPublicUser({
+          fullName: registerForm.fullName.trim(),
+          email: registerForm.email.trim(),
+          phone: registerForm.phone.trim(),
+          password: registerForm.password,
+          role: "lender",
+        });
+      } catch (registerError) {
+        const message =
+          registerError instanceof Error ? registerError.message : "";
+        if (!message.toLowerCase().includes("already exists")) {
+          throw registerError;
+        }
+      }
 
       const authResponse = await loginWithRole(
         registerForm.email.trim(),
         registerForm.password,
-        registerForm.role === "lender" ? "lender" : undefined,
+        "lender",
       );
 
       await submitKyc(authResponse.accessToken, {
@@ -414,15 +425,15 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
           </h1>
           <p>
             Sign in with your credentials and let the backend confirm the right
-            access level for your account. Public signup stays available only
-            for lenders and borrowers.
+            access level for your account. Public signup on the web app is for
+            lenders only.
           </p>
         </div>
 
         <div className="shared-auth-stat-row">
           <div className="shared-auth-stat-card">
             <strong>Role based</strong>
-            <span>Admin, lender, or borrower</span>
+            <span>Admin and lender access</span>
           </div>
           <div className="shared-auth-stat-card">
             <strong>Step 2 KYC</strong>
@@ -516,15 +527,6 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                     Enter the credentials stored for your Smart Credit account.
                   </span>
                 </div>
-
-                <div className="shared-auth-note-box">
-                  <strong>Backend-resolved access</strong>
-                  <span>
-                    Your session is issued with the role stored on the backend,
-                    so the login form stays focused on identity and password
-                    only.
-                  </span>
-                </div>
               </div>
 
               <div className="shared-auth-field-card shared-auth-field-card-soft">
@@ -600,31 +602,6 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                     <p>Submit identity evidence.</p>
                   </div>
                 </div>
-              </div>
-
-              <div className="shared-auth-field-card">
-                <label className="shared-auth-field">
-                  <span>Create account for</span>
-                  <div className="shared-auth-role-chip-row">
-                    {(["lender", "borrower"] as PublicSignupRole[]).map(
-                      (role) => (
-                        <button
-                          key={role}
-                          type="button"
-                          className={`shared-auth-role-chip ${registerForm.role === role ? "active" : ""}`}
-                          onClick={() =>
-                            setRegisterForm((current) => ({
-                              ...current,
-                              role,
-                            }))
-                          }
-                        >
-                          {role.charAt(0).toUpperCase() + role.slice(1)}
-                        </button>
-                      ),
-                    )}
-                  </div>
-                </label>
               </div>
 
               {registerStep === "account" ? (

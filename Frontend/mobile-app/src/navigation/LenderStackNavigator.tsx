@@ -18,6 +18,7 @@ import AdAnalyticsScreen from "../screens/lender/AdAnalyticsScreen";
 import BoostAdScreen from "../screens/lender/BoostAdScreen";
 import AdSummaryAnalyticsScreen from "../screens/lender/AdSummaryAnalyticsScreen";
 import BorrowerDetailScreen from "../screens/lender/BorrowerDetailScreen";
+import BorrowerMapScreen from "../screens/lender/BorrowerMapScreen";
 import AgreementsListScreen from "../screens/shared/AgreementsListScreen";
 import LegalAgreementScreen from "../screens/shared/LegalAgreementScreen";
 import TermsConditionsScreen from '../screens/lender/TermsConditionsScreen';
@@ -50,6 +51,7 @@ export default function LenderStackNavigator() {
       {/* Screens without bottom bar (modal-style navigation) */}
       <Stack.Screen name="LenderProfile" component={LenderProfileScreen} />
       <Stack.Screen name="MyBorrowers" component={MyBorrowersScreen} />
+      <Stack.Screen name="BorrowerMap" component={BorrowerMapScreen} />
       <Stack.Screen name="BorrowerDetail" component={BorrowerDetailScreen} />
       <Stack.Screen
         name="CollectionHistory"

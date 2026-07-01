@@ -8,17 +8,21 @@ import type { AuthenticatedRequest } from '../../common/types/authenticated-requ
 export class KycMobileController {
   constructor(private readonly kycService: KycService) {}
 
+  // Accepts the mobile app's profile photo and KYC document payloads for a new or existing user.
   @Post('submit')
-  async submit(@Body() dto: SubmitKycDto) {
-    return this.kycService.submitMobileKyc(dto);
+  @UseGuards(JwtAuthGuard)
+  async submit(@Body() dto: SubmitKycDto, @Req() req: AuthenticatedRequest) {
+    return this.kycService.submitMobileKyc(dto, req.user.sub);
   }
 
+  // Returns the authenticated user's own uploaded KYC documents.
   @Get('documents')
   @UseGuards(JwtAuthGuard)
   async listMyDocuments(@Req() req: AuthenticatedRequest) {
     return this.kycService.getUserDocuments(req.user.sub);
   }
 
+  // Generates a time-limited access URL so the owner can view a stored KYC file securely.
   @Get('documents/:documentId/access')
   @UseGuards(JwtAuthGuard)
   async getDocumentAccessUrl(

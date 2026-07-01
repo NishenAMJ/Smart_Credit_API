@@ -11,7 +11,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader, AlertBanner } from "../../components/lender";
-import { RecentTransactionsService } from "../../services/lender.service";
+import { PaymentsService } from "../../services/lender.service";
 
 /**
  
@@ -29,7 +29,7 @@ export default function ActiveLoansScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const data = await RecentTransactionsService.getTransactions({
+        const data = await PaymentsService.getTransactions({
           pageSize: 100,
         });
         setAllLoans(data?.transactions ?? []);

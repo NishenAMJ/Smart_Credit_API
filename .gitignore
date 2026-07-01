@@ -21,7 +21,7 @@ key/
 .env.production.local
 
 # Local scripts and Firebase keys (DO NOT PUSH)
-scripts/
+/scripts/
 firebase-service-account*.json
 firebase.json
 firestore.rules

@@ -187,7 +187,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       setAuthLoading(true);
       setError("");
-      await register(payload.account);
+      try {
+        await register(payload.account);
+      } catch (registerError) {
+        const message =
+          registerError instanceof Error ? registerError.message : "";
+        if (!message.toLowerCase().includes("already exists")) {
+          throw registerError;
+        }
+      }
       const loginResponse = await login({
         identifier: payload.account.email,
         password: payload.account.password,

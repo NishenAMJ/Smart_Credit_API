@@ -205,6 +205,14 @@ export default function MyBorrowersScreen({ navigation }: any) {
         <Text style={commonStyles.sectionTitle}>
           {filtered.length} Borrowers
         </Text>
+        <TouchableOpacity
+          style={styles.mapButton}
+          onPress={() => navigation.getParent()?.navigate("BorrowerMap")}
+          activeOpacity={0.9}
+        >
+          <Feather name="map-pin" size={15} color={COLORS.primary} />
+          <Text style={styles.mapButtonText}>Map View</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -255,6 +263,23 @@ const styles = StyleSheet.create({
   countRow: {
     paddingHorizontal: 16,
     marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  mapButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E8F1FF",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  mapButtonText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: "700",
+    marginLeft: 5,
   },
   card: {
     backgroundColor: "#fff",

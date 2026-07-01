@@ -1,3 +1,4 @@
+// Pending request API contracts for lender review and decision flows.
 import {
   fetchLenderApi,
   fetchLenderApiWithQuery,
@@ -70,6 +71,7 @@ export type FetchPendingRequestsOptions = {
 export async function fetchPendingRequests(
   options: number | FetchPendingRequestsOptions = 30,
 ): Promise<PendingRequestsResponse> {
+  // Accepts either a raw limit or a richer options object to keep simple call sites concise.
   const normalizedOptions: FetchPendingRequestsOptions =
     typeof options === "number" ? { limit: options } : options;
 
@@ -109,6 +111,7 @@ export async function approvePendingRequest(
   requestId: string,
   notes?: string,
 ): Promise<PendingRequestDecisionResponse> {
+  // Optional notes are trimmed before they are attached to the approval audit trail.
   const response = await fetchLenderApi(
     `/loan-requests/${encodeURIComponent(requestId)}/approve`,
     {
@@ -133,6 +136,7 @@ export async function rejectPendingRequest(
   requestId: string,
   reason: string,
 ): Promise<PendingRequestDecisionResponse> {
+  // Rejection requires a reason because the UI surfaces it back to the lender workflow.
   const response = await fetchLenderApi(
     `/loan-requests/${encodeURIComponent(requestId)}/reject`,
     {
@@ -157,6 +161,7 @@ export async function markPendingRequestUnderReview(
   requestId: string,
   notes?: string,
 ): Promise<PendingRequestDecisionResponse> {
+  // Under-review keeps the request active while recording lender notes for the next pass.
   const response = await fetchLenderApi(
     `/loan-requests/${encodeURIComponent(requestId)}/review`,
     {

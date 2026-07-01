@@ -14,23 +14,21 @@ import type { AuthenticatedRequest } from '../../../common/types/authenticated-r
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
-import { RecentTransactionsResponse } from './recent-transactions.types';
+import { PaymentsResponse } from './payments.types';
 import type {
   LoanLedgerDetailsResponse,
   RecordInstallmentPaymentInput,
-} from './recent-transactions.types';
-import { RecentTransactionsService } from './recent-transactions.service';
+} from './payments.types';
+import { PaymentsService } from './payments.service';
 
-@Controller('recent-transactions')
+@Controller('payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('lender')
-export class RecentTransactionsController {
-  constructor(
-    private readonly recentTransactionsService: RecentTransactionsService,
-  ) {}
+export class PaymentsController {
+  constructor(private readonly paymentsService: PaymentsService) {}
 
   @Get()
-  getRecentTransactions(
+  getPayments(
     @Req() req: AuthenticatedRequest,
     @Query('pageSize') pageSize?: string,
     @Query('limit') limit?: string,
@@ -38,8 +36,8 @@ export class RecentTransactionsController {
     @Query('includeSummary') includeSummary?: string,
     @Query('includeSearchCount') includeSearchCount?: string,
     @Query('search') search?: string,
-  ): Promise<RecentTransactionsResponse> {
-    return this.recentTransactionsService.getRecentTransactions(
+  ): Promise<PaymentsResponse> {
+    return this.paymentsService.getPayments(
       req.user.sub,
       this.toNumber(pageSize) ?? this.toNumber(limit) ?? 30,
       cursor?.trim() || null,
@@ -54,7 +52,7 @@ export class RecentTransactionsController {
     @Req() req: AuthenticatedRequest,
     @Param('loanId') loanId: string,
   ): Promise<LoanLedgerDetailsResponse> {
-    const details = await this.recentTransactionsService.getLoanLedgerDetails(
+    const details = await this.paymentsService.getLoanLedgerDetails(
       req.user.sub,
       loanId,
     );
@@ -84,7 +82,7 @@ export class RecentTransactionsController {
     }
 
     const details =
-      await this.recentTransactionsService.recordInstallmentPayment(
+      await this.paymentsService.recordInstallmentPayment(
         req.user.sub,
         loanId,
         installmentId,

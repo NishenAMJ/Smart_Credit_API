@@ -29,8 +29,12 @@ import {
 } from './interfaces/borrower.interface';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { instanceToPlain } from 'class-transformer';
-import { BORROWER_DEFAULTS, BORROWER_FLOW } from './borrower.constants';
-import { CreditScoreService } from './credit-score.service';
+import {
+  BORROWER_DEFAULTS,
+  BORROWER_FLOW,
+  BORROWER_MONEY,
+} from './borrower.constants';
+import { CreditScoreService } from './credit-score/credit-score.service';
 import { randomBytes, scrypt } from 'crypto';
 import { promisify } from 'util';
 
@@ -52,6 +56,16 @@ type QrTokenPayload = {
   issuedAt: number;
 };
 
+export type BorrowerInstallmentSummary = {
+  installmentId: string;
+  installmentNumber: number;
+  amount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  status: string;
+  dueDate: Date | null;
+};
+
 /**
  * Core borrower service — covers profiles, loans, applications, repayments, QR tokens,
  * and dashboard aggregation.
@@ -66,6 +80,7 @@ export class BorrowerService {
   private readonly LOANS_COL = 'loans';
   private readonly ADS_COL = 'ads';
   private readonly REPAYMENTS_COL = 'repayments';
+  private readonly TRANSACTIONS_COL = 'transactions';
   private readonly QR_NONCES_COL = 'qrNonces';
 
   constructor(
@@ -118,7 +133,11 @@ export class BorrowerService {
     // Single query for all loans; active loans are derived by filtering to avoid
     // a redundant Firestore read.
     const allLoans = await this.getLoans(borrowerId);
-    const activeLoans = allLoans.filter((l) => l.status === LoanStatus.ACTIVE);
+    const activeLoans = allLoans.filter(
+      (l) =>
+        l.status === LoanStatus.ACTIVE &&
+        (l.outstandingBalance || 0) > BORROWER_MONEY.ROUNDING_DUST_THRESHOLD,
+    );
 
     // Pending applications count uses the shared helper to keep status lists in sync.
     const pendingApplications =
@@ -160,7 +179,7 @@ export class BorrowerService {
       nextDueDate = nextLoan.nextDueDate;
       nextPaymentAmount = Math.min(
         nextLoan.monthlyInstallment || 0,
-        nextLoan.outstandingBalance || 0,
+        this.clearRoundingDust(nextLoan.outstandingBalance || 0),
       );
     }
 
@@ -264,6 +283,15 @@ export class BorrowerService {
       : fallback;
   }
 
+  private roundMoney(value: number): number {
+    return Math.round(value * 100) / 100;
+  }
+
+  private clearRoundingDust(value: number): number {
+    const rounded = this.roundMoney(value);
+    return rounded <= BORROWER_MONEY.ROUNDING_DUST_THRESHOLD ? 0 : rounded;
+  }
+
   /** Normalizes a raw date-like value into a Firestore Timestamp, or undefined if unresolvable. */
   private toTimestamp(value: unknown): FirebaseFirestore.Timestamp | undefined {
     if (!value) {
@@ -284,6 +312,57 @@ export class BorrowerService {
     }
 
     return undefined;
+  }
+
+  private toDate(value: unknown): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      if ('toDate' in value && typeof value.toDate === 'function') {
+        const date = value.toDate();
+        return date instanceof Date ? date : null;
+      }
+    }
+
+    return null;
+  }
+
+  private normalizeInstallmentStatus(
+    value: unknown,
+    dueDate: Date | null,
+    amount: number,
+    paidAmount: number,
+  ): string {
+    const status = String(value ?? '').trim().toLowerCase();
+
+    if (['paid', 'completed'].includes(status) || paidAmount >= amount) {
+      return 'paid';
+    }
+
+    if (['pending_verification', 'verification_pending'].includes(status)) {
+      return 'pending_verification';
+    }
+
+    if (paidAmount > 0) {
+      return 'partially_paid';
+    }
+
+    if (dueDate && dueDate.getTime() < Date.now()) {
+      return 'overdue';
+    }
+
+    return status || 'pending';
   }
 
   /**
@@ -915,6 +994,52 @@ export class BorrowerService {
     return loan;
   }
 
+  async getBorrowerLoanInstallments(
+    loanId: string,
+    borrowerId: string,
+  ): Promise<BorrowerInstallmentSummary[]> {
+    await this.getLoanById(loanId, borrowerId);
+
+    const snapshot = await this.db
+      .collection(this.LOANS_COL)
+      .doc(loanId)
+      .collection('installments')
+      .get();
+
+    return snapshot.docs
+      .map((doc) => {
+        const data = doc.data();
+        const amount = this.toNumber(data.amount ?? data.amountDue);
+        const paidAmount = this.toNumber(
+          data.paidAmount ?? data.amountPaid,
+        );
+        const dueDate = this.toDate(data.dueDate ?? data.dueDateAt);
+        const status = this.normalizeInstallmentStatus(
+          data.status,
+          dueDate,
+          amount,
+          paidAmount,
+        );
+
+        return {
+          installmentId: String(data.installmentId ?? doc.id),
+          installmentNumber: this.toNumber(data.installmentNumber),
+          amount,
+          paidAmount,
+          remainingAmount: this.clearRoundingDust(
+            Math.max(0, amount - paidAmount),
+          ),
+          status,
+          dueDate,
+        };
+      })
+      .sort((a, b) => {
+        const aTime = a.dueDate ? a.dueDate.getTime() : Number.MAX_SAFE_INTEGER;
+        const bTime = b.dueDate ? b.dueDate.getTime() : Number.MAX_SAFE_INTEGER;
+        return aTime - bTime || a.installmentNumber - b.installmentNumber;
+      });
+  }
+
   /**
    * Calculates the full repayment schedule and marks paid or overdue items.
    */
@@ -1020,16 +1145,18 @@ export class BorrowerService {
 
     const now = FieldValue.serverTimestamp();
     const repaymentRef = this.db.collection(this.REPAYMENTS_COL).doc();
+    const transactionRef = this.db.collection(this.TRANSACTIONS_COL).doc();
 
     // Calculate principal vs interest split
     const monthlyRate = loan.interestRate / 100 / 12;
-    const interestPaid =
-      Math.round(loan.outstandingBalance * monthlyRate * 100) / 100;
-    const principalPaid = Math.round((dto.amount - interestPaid) * 100) / 100;
+    const interestPaid = Math.min(
+      dto.amount,
+      this.roundMoney(loan.outstandingBalance * monthlyRate),
+    );
+    const principalPaid = this.roundMoney(dto.amount - interestPaid);
 
-    const newOutstanding = Math.max(
-      0,
-      Math.round((loan.outstandingBalance - principalPaid) * 100) / 100,
+    const newOutstanding = this.clearRoundingDust(
+      Math.max(0, loan.outstandingBalance - dto.amount),
     );
 
     const installmentNumber = loan.repaymentsMade + 1;
@@ -1037,7 +1164,17 @@ export class BorrowerService {
     const status =
       dto.paymentMethod === RepaymentMethod.CARD
         ? RepaymentStatus.COMPLETED
-        : RepaymentStatus.PENDING;
+        : dto.paymentMethod === RepaymentMethod.BANK_TRANSFER
+          ? RepaymentStatus.PENDING_VERIFICATION
+          : RepaymentStatus.PENDING;
+    const requiresVerification =
+      dto.paymentMethod === RepaymentMethod.BANK_TRANSFER;
+    const verifiedByLender = status === RepaymentStatus.COMPLETED;
+    const verificationStatus = verifiedByLender
+      ? 'approved'
+      : requiresVerification
+        ? 'pending'
+        : 'awaiting_lender_scan';
 
     const repaymentData = {
       repaymentId: repaymentRef.id,
@@ -1052,15 +1189,40 @@ export class BorrowerService {
       paymentProofUrl: dto.paymentProofUrl ?? null,
       status: status,
       dueDate: loan.nextDueDate,
-      paidAt: now,
+      paidAt: status === RepaymentStatus.COMPLETED ? now : null,
       installmentNumber,
+      requiresVerification,
+      verificationStatus,
+      verifiedByLender,
       createdAt: now,
+    };
+    const transactionData = {
+      transactionId: transactionRef.id,
+      paymentId: repaymentRef.id,
+      repaymentId: repaymentRef.id,
+      loanId: dto.loanId,
+      borrowerId: dto.borrowerId,
+      lenderId: loan.lenderId,
+      amount: dto.amount,
+      type: 'repayment',
+      status,
+      paymentMethod: dto.paymentMethod,
+      paymentType: dto.paymentMethod,
+      transactionReference: dto.transactionReference ?? null,
+      paymentProofUrl: dto.paymentProofUrl ?? null,
+      requiresVerification,
+      verificationStatus,
+      verifiedByLender,
+      paidAt: status === RepaymentStatus.COMPLETED ? now : null,
+      createdAt: now,
+      updatedAt: now,
     };
 
     // Use a batch write for atomicity
     const batch = this.db.batch();
 
     batch.set(repaymentRef, repaymentData);
+    batch.set(transactionRef, transactionData);
 
     const isFullyRepaid = newOutstanding === 0;
     const nextDueDate = new Date();
@@ -1118,7 +1280,10 @@ export class BorrowerService {
     }
 
     // Guard against loans that are not yet marked completed but carry a zero balance,
-    if (loan.outstandingBalance <= 0) {
+    if (
+      this.clearRoundingDust(loan.outstandingBalance) <=
+      BORROWER_MONEY.ROUNDING_DUST_THRESHOLD
+    ) {
       throw new BadRequestException(
         'Cannot generate QR for a loan with no outstanding balance.',
       );
@@ -1241,6 +1406,53 @@ export class BorrowerService {
         this.timestampToMillis(b.createdAt) -
         this.timestampToMillis(a.createdAt),
     );
+  }
+
+  /**
+   * Reads borrower-visible repayment transactions from the shared transaction log.
+   * This keeps borrower history populated for seeded data and for newly-created
+   * borrower repayments without changing the lender ledger flow.
+   */
+  async getBorrowerRepaymentTransactions(
+    borrowerId: string,
+    loanIds?: string[],
+  ): Promise<Array<Record<string, unknown>>> {
+    const snapshot = await this.db
+      .collection(this.TRANSACTIONS_COL)
+      .where('borrowerId', '==', borrowerId)
+      .get();
+    const loanIdSet = loanIds?.length ? new Set(loanIds) : null;
+
+    return snapshot.docs
+      .map(
+        (doc): Record<string, unknown> => ({
+          transactionId: doc.id,
+          ...doc.data(),
+        }),
+      )
+      .filter((transaction) => {
+        const loanId =
+          typeof transaction.loanId === 'string' ? transaction.loanId : '';
+        const type = String(transaction.type ?? '').toLowerCase();
+        const status = String(transaction.status ?? '').toLowerCase();
+
+        if (loanIdSet && !loanIdSet.has(loanId)) {
+          return false;
+        }
+
+        return (
+          type === 'repayment' ||
+          type.includes('repay') ||
+          ['paid', 'completed', 'success', 'successful'].includes(status)
+        );
+      })
+      .sort(
+        (a, b) =>
+          this.timestampToMillis(b.paidAt as TimestampLike) -
+          this.timestampToMillis(a.paidAt as TimestampLike) ||
+          this.timestampToMillis(b.createdAt as TimestampLike) -
+            this.timestampToMillis(a.createdAt as TimestampLike),
+      );
   }
 
   /**

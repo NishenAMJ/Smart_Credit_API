@@ -13,8 +13,8 @@
  *   GET  /dashboard/summary?lenderId=                       → DashboardService.getSummary
  *   GET  /dashboard/borrowers?lenderId=&pageSize=           → DashboardService.getBorrowers
  *   GET  /loan-requests/pending?lenderId=&...               → LoanRequestsService.getPendingRequests
- *   GET  /recent-transactions?lenderId=&pageSize=           → RecentTransactionsService.getTransactions
- *   GET  /recent-transactions/loans/:id?lenderId=           → RecentTransactionsService.getLoanLedger
+ *   GET  /payments?lenderId=&pageSize=                      → PaymentsService.getTransactions
+ *   GET  /payments/loans/:id?lenderId=                      → PaymentsService.getLoanLedger
  *   GET  /analytics/summary?lenderId=&range=                → AnalyticsService.getSummary
  *   GET  /lender-profile/:lenderId                          → LenderProfileService.getProfile
  *   PATCH /lender-profile/:lenderId                         → LenderProfileService.updateProfile
@@ -163,13 +163,13 @@ export const LoanRequestsService = {
   },
 };
 
-// RecentTransactionsService 
+// PaymentsService 
 
 
-export const RecentTransactionsService = {
+export const PaymentsService = {
   /**
    * Fetch the lender's active loans / recent transactions list.
-   * GET /api/recent-transactions?lenderId=&pageSize=
+   * GET /api/payments?lenderId=&pageSize=
    */
   getTransactions: async (
     opts: {
@@ -183,16 +183,16 @@ export const RecentTransactionsService = {
     if (opts.pageSize) params.append("pageSize", String(opts.pageSize));
     if (opts.cursor) params.append("cursor", opts.cursor);
     if (opts.search) params.append("search", opts.search);
-    return api.get(`/recent-transactions?${params.toString()}`);
+    return api.get(`/payments?${params.toString()}`);
   },
 
   /**
    * Fetch full ledger details for a specific loan.
-   * GET /api/recent-transactions/loans/:loanId?lenderId=
+   * GET /api/payments/loans/:loanId?lenderId=
    */
   getLoanLedger: async (loanId: string) => {
     const lenderId = getLenderId();
-    return api.get(`/recent-transactions/loans/${loanId}?lenderId=${lenderId}`);
+    return api.get(`/payments/loans/${loanId}?lenderId=${lenderId}`);
   },
 };
 

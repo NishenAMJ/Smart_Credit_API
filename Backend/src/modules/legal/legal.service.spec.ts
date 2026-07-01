@@ -244,6 +244,12 @@ describe('LegalService', () => {
       { signedName: 'Lender User' },
     );
 
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(Buffer.from('signed-pdf-content'), {
+        status: 200,
+      }),
+    );
+
     const result = await service.downloadDocumentPdf(
       accepted.document.id,
       'borrower-1',

@@ -12,7 +12,7 @@ import { LenderNotificationsModule } from './modules/lender/lender-notifications
 import { LenderProfileModule } from './modules/lender/lender-profile/lender-profile.module';
 import { LenderSettingsModule } from './modules/lender/lender-settings/lender-settings.module';
 import { LoanRequestsModule } from './modules/lender/loan-requests/loan-requests.module';
-import { RecentTransactionsModule } from './modules/lender/recent-transactions/recent-transactions.module';
+import { PaymentsModule } from './modules/lender/payments/payments.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { LegalModule } from './modules/legal/legal.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
@@ -23,8 +23,12 @@ import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module
 import { ReportsModule } from './modules/reports/reports.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { AdsModule } from './modules/ads/ads.module';
+<<<<<<< HEAD
 import { AdvertisementModule } from './modules/advertisement/advertisement.module';
 import { QrScannerModule } from './modules/qrScanner/qr-scanner.module';
+=======
+import { LocationModule } from './modules/location/location.module';
+>>>>>>> 33a52046a849f1138c25336fe41c157713bf94e2
 
 @Module({
   imports: [
@@ -42,7 +46,7 @@ import { QrScannerModule } from './modules/qrScanner/qr-scanner.module';
     LenderProfileModule,
     LenderSettingsModule,
     LoanRequestsModule,
-    RecentTransactionsModule,
+    PaymentsModule,
     AdminModule,
     LegalModule,
     TransactionsModule,
@@ -53,8 +57,12 @@ import { QrScannerModule } from './modules/qrScanner/qr-scanner.module';
     ReportsModule,
     DisputesModule,
     AdsModule,
+<<<<<<< HEAD
     AdvertisementModule,
     QrScannerModule,
+=======
+    LocationModule,
+>>>>>>> 33a52046a849f1138c25336fe41c157713bf94e2
   ],
   controllers: [AppController],
   providers: [AppService],

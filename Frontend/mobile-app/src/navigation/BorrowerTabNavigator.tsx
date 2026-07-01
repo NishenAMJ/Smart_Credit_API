@@ -3,7 +3,7 @@
 import React from "react";
 import { Platform } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FindLoansScreen from "../screens/borrower/FindLoansScreen";
 import Home from "../screens/borrower/Home";
@@ -13,6 +13,59 @@ import ProfileScreen from "../screens/borrower/ProfileScreen";
 import AgreementsListScreen from "../screens/shared/AgreementsListScreen";
 
 const Tab = createBottomTabNavigator();
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+const TAB_ICONS: Record<
+  "Home" | "Loans" | "Payments" | "Support" | "Agreement" | "Profile",
+  { active: IoniconName; inactive: IoniconName }
+> = {
+  Home: {
+    active: "home",
+    inactive: "home-outline",
+  },
+  Loans: {
+    active: "wallet",
+    inactive: "wallet-outline",
+  },
+  Payments: {
+    active: "card",
+    inactive: "card-outline",
+  },
+  Support: {
+    active: "headset",
+    inactive: "headset-outline",
+  },
+  Agreement: {
+    active: "document-text",
+    inactive: "document-text-outline",
+  },
+  Profile: {
+    active: "person-circle",
+    inactive: "person-circle-outline",
+  },
+};
+
+function BorrowerTabIcon({
+  route,
+  focused,
+  color,
+  size,
+}: {
+  route: keyof typeof TAB_ICONS;
+  focused: boolean;
+  color: string;
+  size: number;
+}) {
+  const icon = TAB_ICONS[route];
+
+  return (
+    <Ionicons
+      name={focused ? icon.active : icon.inactive}
+      size={size + (focused ? 1 : 0)}
+      color={color}
+    />
+  );
+}
 
 export default function BorrowerTabNavigator() {
   const insets = useSafeAreaInsets();
@@ -53,8 +106,13 @@ export default function BorrowerTabNavigator() {
         name="Home"
         component={Home}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <BorrowerTabIcon
+              route="Home"
+              focused={focused}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />
@@ -64,8 +122,13 @@ export default function BorrowerTabNavigator() {
         component={FindLoansScreen}
         options={{
           tabBarLabel: "Find Loans",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="file-text" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <BorrowerTabIcon
+              route="Loans"
+              focused={focused}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />
@@ -74,8 +137,13 @@ export default function BorrowerTabNavigator() {
         name="Payments"
         component={PaymentsScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="credit-card" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <BorrowerTabIcon
+              route="Payments"
+              focused={focused}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />
@@ -84,8 +152,13 @@ export default function BorrowerTabNavigator() {
         name="Support"
         component={SupportScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="message-circle" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <BorrowerTabIcon
+              route="Support"
+              focused={focused}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />
@@ -94,8 +167,13 @@ export default function BorrowerTabNavigator() {
         name="Agreement"
         component={AgreementsListScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="file-text" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <BorrowerTabIcon
+              route="Agreement"
+              focused={focused}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />
@@ -104,8 +182,13 @@ export default function BorrowerTabNavigator() {
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="user" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <BorrowerTabIcon
+              route="Profile"
+              focused={focused}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />

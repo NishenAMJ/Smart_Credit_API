@@ -1,3 +1,4 @@
+// Lender profile read/write helpers used by the profile modal.
 import { fetchLenderApi, parseApiError } from "./api-client";
 
 export type LenderProfile = {
@@ -32,6 +33,7 @@ export type UpdateLenderProfilePayload = {
 };
 
 export async function fetchLenderProfile(): Promise<LenderProfile> {
+  // Always fetches the current lender profile rather than relying on possibly stale session copy.
   const response = await fetchLenderApi("/lender-profile/me");
 
   if (!response.ok) {
@@ -44,6 +46,7 @@ export async function fetchLenderProfile(): Promise<LenderProfile> {
 export async function updateLenderProfile(
   payload: UpdateLenderProfilePayload,
 ): Promise<LenderProfile> {
+  // Sends a trimmed profile payload and expects the saved server copy back for UI resync.
   const response = await fetchLenderApi("/lender-profile/me", {
     method: "PATCH",
     headers: {

@@ -24,6 +24,7 @@ import {
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SessionResponseDto } from './dto/session-response.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { UserDocument, UserRole, KycStatus, USER_ROLES } from './auth.types';
 
 @Injectable()
@@ -39,6 +40,7 @@ export class AuthService {
     ) as CollectionReference<UserDocument>;
   }
 
+  // Registers a local account and stores the normalized identity fields used for login lookups.
   async register(registerDto: RegisterDto): Promise<RegisterResponseDto> {
     const emailLower = this.normalizeEmail(registerDto.email);
     const phoneNormalized = this.normalizePhone(registerDto.phone);
@@ -91,6 +93,7 @@ export class AuthService {
     };
   }
 
+  // Validates credentials, resolves the active role, and issues a JWT for that session.
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     const user = await this.findUserByIdentifier(loginDto.identifier);
 
@@ -130,6 +133,7 @@ export class AuthService {
     };
   }
 
+  // Loads the current user's safe profile payload without exposing sensitive fields.
   async getMe(userId: string): Promise<MeResponseDto> {
     const user = await this.getRequiredUser(userId);
 
@@ -138,6 +142,7 @@ export class AuthService {
     };
   }
 
+  // Builds the dashboard data by combining user data with related loans, relationships, and ads.
   async getDashboard(
     userId: string,
     activeRole: UserRole,
@@ -206,6 +211,7 @@ export class AuthService {
     };
   }
 
+  // Aggregates cross-user metrics for the admin review dashboard.
   async getAdminDashboard(userId: string): Promise<DashboardResponseDto> {
     const user = await this.getRequiredUser(userId);
     const snapshot = await this.usersCollection.get();
@@ -277,6 +283,7 @@ export class AuthService {
     };
   }
 
+  // Returns the current session's resolved role and account state for the client app.
   async getSessionStatus(
     userId: string,
     activeRole: UserRole,
@@ -295,10 +302,45 @@ export class AuthService {
     };
   }
 
+  // Verifies the existing password before writing a fresh hash back to Firestore.
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
+    const user = await this.getRequiredUser(userId);
+    const currentPasswordMatches = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!currentPasswordMatches) {
+      throw new UnauthorizedException('Current password is incorrect.');
+    }
+
+    if (changePasswordDto.currentPassword === changePasswordDto.newPassword) {
+      throw new BadRequestException(
+        'New password must be different from the current password.',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(changePasswordDto.newPassword, 10);
+
+    await this.usersCollection.doc(userId).update({
+      passwordHash,
+      updatedAt: Timestamp.now(),
+    });
+
+    return {
+      message: 'Password updated successfully.',
+    };
+  }
+
+  // Shared helper used by other modules that need the full stored user record.
   async getUserById(userId: string): Promise<UserDocument> {
     return this.getRequiredUser(userId);
   }
 
+  // Keeps the user's top-level KYC status in sync with document review decisions.
   async updateUserKycStatus(
     userId: string,
     kycStatus: KycStatus,
@@ -319,6 +361,7 @@ export class AuthService {
     }
 
     if (trimmedIdentifier.includes('@')) {
+      // Check normalized email first, then fall back to legacy records.
       const snapshot = await this.usersCollection
         .where('emailLower', '==', this.normalizeEmail(trimmedIdentifier))
         .limit(1)
@@ -339,6 +382,7 @@ export class AuthService {
     }
 
     const normalizedPhone = this.normalizePhone(trimmedIdentifier);
+    // Phone logins follow the same normalized-first, legacy-fallback pattern.
     const snapshot = await this.usersCollection
       .where('phoneNormalized', '==', normalizedPhone)
       .limit(1)
@@ -358,6 +402,7 @@ export class AuthService {
       : (legacySnapshot.docs[0].data() as UserDocument);
   }
 
+  // Shapes the user object that is safe to send back to the frontend.
   private toSafeUser(user: UserDocument, roleOverride?: UserRole): SafeUserDto {
     const primaryRole = this.getPrimaryRole(user.role);
 
@@ -371,6 +416,7 @@ export class AuthService {
     };
   }
 
+  // Ensures the requested login role is one of the roles assigned to the user.
   private resolveLoginRole(
     user: UserDocument,
     requestedRole?: UserRole,
@@ -400,6 +446,7 @@ export class AuthService {
     return email.trim().toLowerCase();
   }
 
+  // Normalizes the stored role field so the rest of the service can treat it as an array.
   private getRoles(role: UserDocument['role']): UserRole[] {
     if (Array.isArray(role)) {
       return role.filter(
@@ -429,6 +476,7 @@ export class AuthService {
     return primaryRole;
   }
 
+  // Converts several phone input styles into a single E.164-like format used by the system.
   private normalizePhone(phone: string): string {
     const raw = phone.trim();
 
@@ -509,6 +557,7 @@ export class AuthService {
     }));
   }
 
+  // Builds the small metric cards shown on the borrower dashboard.
   private buildBorrowerMetrics(
     user: UserDocument,
     loanDocs: Array<Record<string, unknown>>,
