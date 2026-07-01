@@ -1,4 +1,8 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 
 @Injectable()
 export class LenderMobileService {
@@ -20,16 +24,13 @@ export class LenderMobileService {
 
       this.logger.debug(`Dashboard data loaded: ${JSON.stringify(data)}`);
       return data;
-
     } catch (error) {
       this.logger.error(
         'Error while fetching lender dashboard data',
-        error.stack,
+        this.getErrorStack(error),
       );
 
-      throw new InternalServerErrorException(
-        'Failed to load dashboard data',
-      );
+      throw new InternalServerErrorException('Failed to load dashboard data');
     }
   }
 
@@ -45,11 +46,10 @@ export class LenderMobileService {
 
       this.logger.debug(`Dashboard summary loaded: ${JSON.stringify(summary)}`);
       return summary;
-
     } catch (error) {
       this.logger.error(
         'Error while fetching lender dashboard summary',
-        error.stack,
+        this.getErrorStack(error),
       );
 
       throw new InternalServerErrorException(
@@ -76,16 +76,21 @@ export class LenderMobileService {
 
       this.logger.debug(`Dashboard stats loaded: ${JSON.stringify(stats)}`);
       return stats;
-
     } catch (error) {
       this.logger.error(
         'Error while fetching lender dashboard stats',
-        error.stack,
+        this.getErrorStack(error),
       );
 
       throw new InternalServerErrorException(
         'Failed to load dashboard statistics',
       );
     }
+  }
+
+  private getErrorStack(error: unknown): string {
+    return error instanceof Error
+      ? (error.stack ?? error.message)
+      : String(error);
   }
 }
