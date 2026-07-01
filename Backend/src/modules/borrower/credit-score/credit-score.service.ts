@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FieldValue } from 'firebase-admin/firestore';
-import { FirebaseService } from '../../firebase/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 
 type TimestampLike =
   | FirebaseFirestore.Timestamp

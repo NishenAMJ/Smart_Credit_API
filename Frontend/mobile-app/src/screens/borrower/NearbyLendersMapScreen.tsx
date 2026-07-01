@@ -22,18 +22,18 @@ import {
   NearbyUserLocation,
 } from "../../api/services/location.service";
 import { COLORS } from "../../constants/colors";
+import {
+  MAP_DEFAULT_DELTA,
+  MAP_DEFAULT_RADIUS_KM,
+  MAP_DEFAULT_RESULT_LIMIT,
+  MAP_RADIUS_OPTIONS_KM,
+} from "../../constants/map";
 import type { BorrowerLoan } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
 
 type Props = {
   navigation: BorrowerNavigation;
 };
-
-const DEFAULT_DELTA = {
-  latitudeDelta: 0.08,
-  longitudeDelta: 0.08,
-};
-const RADIUS_OPTIONS = [1, 5, 10, 20, 30];
 
 export default function NearbyLendersMapScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -47,7 +47,7 @@ export default function NearbyLendersMapScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [radiusKm, setRadiusKm] = useState(10);
+  const [radiusKm, setRadiusKm] = useState(MAP_DEFAULT_RADIUS_KM);
   const [isListVisible, setIsListVisible] = useState(true);
 
   const loadNearbyLenders = useCallback(async () => {
@@ -61,13 +61,13 @@ export default function NearbyLendersMapScreen({ navigation }: Props) {
 
       const nextRegion = {
         ...coordinates,
-        ...DEFAULT_DELTA,
+        ...MAP_DEFAULT_DELTA,
       };
       const [nearby, featuredLoansResponse] = await Promise.all([
         locationService.getNearbyLenders({
           ...coordinates,
           radiusKm,
-          limit: 50,
+          limit: MAP_DEFAULT_RESULT_LIMIT,
         }),
         loanService.getFeaturedLoans(),
       ]);
@@ -244,7 +244,7 @@ export default function NearbyLendersMapScreen({ navigation }: Props) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.radiusOptions}
           >
-            {RADIUS_OPTIONS.map((option) => {
+            {MAP_RADIUS_OPTIONS_KM.map((option) => {
               const isActive = radiusKm === option;
 
               return (

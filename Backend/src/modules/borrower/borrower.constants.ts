@@ -13,3 +13,7 @@ export const BORROWER_FILTER_LIMITS = {
   MIN_AMOUNT: 0,
   MAX_AMOUNT: Number.MAX_SAFE_INTEGER,
 } as const;
+
+export const BORROWER_MONEY = {
+  ROUNDING_DUST_THRESHOLD: 0.01,
+} as const;

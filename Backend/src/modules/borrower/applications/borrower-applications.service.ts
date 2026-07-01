@@ -6,17 +6,17 @@ import {
 } from '@nestjs/common';
 import { FieldValue } from 'firebase-admin/firestore';
 import { instanceToPlain } from 'class-transformer';
-import { FirebaseService } from '../../firebase/firebase.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   CreateLoanApplicationDto,
   LoanApplicationStatus,
   UpdateLoanApplicationDto,
-} from './dto/loan-application.dto';
+} from '../dto/loan-application.dto';
 import {
   BorrowerProfile,
   LoanApplication,
-} from './interfaces/borrower.interface';
-import { CreditScoreService } from './credit-score.service';
+} from '../interfaces/borrower.interface';
+import { CreditScoreService } from '../credit-score/credit-score.service';
 
 type TimestampLike =
   | FirebaseFirestore.Timestamp

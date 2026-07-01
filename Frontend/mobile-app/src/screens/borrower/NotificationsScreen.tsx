@@ -1,8 +1,10 @@
 /** @format */
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
+  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,50 +12,36 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import EmptyState from "../../components/common/EmptyState";
+import { getApiErrorMessage } from "../../api/api-error";
+import {
+  BorrowerNotification,
+  notificationService,
+} from "../../api/services/notification.service";
 import type { BorrowerNavigation } from "../../types/navigation";
-
-type NotificationItem = {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-  unread: boolean;
-};
 
 type NotificationsScreenProps = {
   navigation: BorrowerNavigation;
 };
 
-const initialNotifications: NotificationItem[] = [
-  {
-    id: "ntf-1",
-    title: "Application Approved",
-    message: "Your personal loan application was approved by City Finance.",
-    time: "2 min ago",
-    unread: true,
-  },
-  {
-    id: "ntf-2",
-    title: "Payment Due Reminder",
-    message: "LKR 12,500 is due tomorrow. Avoid late fees by paying today.",
-    time: "1 hour ago",
-    unread: true,
-  },
-  {
-    id: "ntf-3",
-    title: "New Featured Loan",
-    message: "A new featured loan with 6.2% interest is now available.",
-    time: "Yesterday",
-    unread: false,
-  },
-  {
-    id: "ntf-4",
-    title: "Profile Update",
-    message: "Your profile information was updated successfully.",
-    time: "2 days ago",
-    unread: false,
-  },
-];
+function formatRelativeTime(value: string) {
+  const createdAt = new Date(value).getTime();
+  if (Number.isNaN(createdAt)) {
+    return "";
+  }
+
+  const diffMs = Date.now() - createdAt;
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+
+  return new Date(value).toLocaleDateString();
+}
 
 /**
  * Displays borrower notifications and quick actions.
@@ -61,34 +49,104 @@ const initialNotifications: NotificationItem[] = [
 export default function NotificationsScreen({
   navigation,
 }: NotificationsScreenProps) {
-  const [notifications, setNotifications] =
-    useState<NotificationItem[]>(initialNotifications);
+  const [notifications, setNotifications] = useState<BorrowerNotification[]>(
+    [],
+  );
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setErrorMessage("");
+      const response = await notificationService.getMyNotifications();
+      setNotifications(response.notifications);
+    } catch (error) {
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load notifications.",
+      );
+      setErrorMessage(message);
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchNotifications();
+  }, [fetchNotifications]);
 
   const unreadCount = useMemo(
-    () => notifications.filter((item) => item.unread).length,
+    () => notifications.filter((item) => !item.isRead).length,
     [notifications],
   );
 
-  const markAllAsRead = () => {
-    setNotifications((previous) =>
-      previous.map((item) => ({ ...item, unread: false })),
+  const markAllAsRead = async () => {
+    const previous = notifications;
+    setNotifications((current) =>
+      current.map((item) => ({ ...item, isRead: true })),
     );
+
+    try {
+      await notificationService.markAllAsRead();
+    } catch (error) {
+      setNotifications(previous);
+      setErrorMessage(
+        getApiErrorMessage(error, "Failed to mark notifications as read."),
+      );
+    }
   };
 
-  const renderNotificationItem = ({ item }: { item: NotificationItem }) => (
-    <TouchableOpacity style={styles.notificationCard}>
+  const markOneAsRead = async (item: BorrowerNotification) => {
+    if (item.isRead) {
+      return;
+    }
+
+    const previous = notifications;
+    setNotifications((current) =>
+      current.map((notification) =>
+        notification.id === item.id
+          ? { ...notification, isRead: true }
+          : notification,
+      ),
+    );
+
+    try {
+      await notificationService.markAsRead(item.id);
+    } catch (error) {
+      setNotifications(previous);
+      setErrorMessage(
+        getApiErrorMessage(error, "Failed to mark notification as read."),
+      );
+    }
+  };
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void fetchNotifications();
+  }, [fetchNotifications]);
+
+  const renderNotificationItem = ({ item }: { item: BorrowerNotification }) => (
+    <TouchableOpacity
+      style={styles.notificationCard}
+      onPress={() => void markOneAsRead(item)}
+    >
       <View
         style={[
           styles.statusDot,
           {
-            backgroundColor: item.unread ? "#007AFF" : "#D1D5DB",
+            backgroundColor: !item.isRead ? "#007AFF" : "#D1D5DB",
           },
         ]}
       />
       <View style={styles.notificationContent}>
         <View style={styles.rowBetween}>
           <Text style={styles.notificationTitle}>{item.title}</Text>
-          <Text style={styles.notificationTime}>{item.time}</Text>
+          <Text style={styles.notificationTime}>
+            {formatRelativeTime(item.createdAt)}
+          </Text>
         </View>
         <Text style={styles.notificationMessage}>{item.message}</Text>
       </View>
@@ -109,21 +167,41 @@ export default function NotificationsScreen({
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.subHeaderText}>{unreadCount} unread</Text>
-        <TouchableOpacity onPress={markAllAsRead}>
+        <Text style={styles.subHeaderText}>
+          {loading ? "Loading..." : `${unreadCount} unread`}
+        </Text>
+        <TouchableOpacity onPress={() => void markAllAsRead()}>
           <Text style={styles.markReadText}>Mark all as read</Text>
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={notifications}
-        renderItem={renderNotificationItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <EmptyState title="No notifications yet." description="" />
-        }
-      />
+      {loading ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          renderItem={renderNotificationItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#007AFF"
+            />
+          }
+          ListHeaderComponent={
+            errorMessage ? (
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            ) : null
+          }
+          ListEmptyComponent={
+            <EmptyState title="No notifications yet." description="" />
+          }
+        />
+      )}
     </View>
   );
 }
@@ -173,6 +251,17 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingBottom: 32,
+    flexGrow: 1,
+  },
+  centerState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorText: {
+    color: "#DC2626",
+    fontSize: 13,
+    marginBottom: 12,
   },
   notificationCard: {
     backgroundColor: "#FFFFFF",

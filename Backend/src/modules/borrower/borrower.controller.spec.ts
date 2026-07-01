@@ -1,16 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BorrowerController } from './borrower.controller';
+import { BorrowerPaymentsController } from './payments/borrower-payments.controller';
 import { BorrowerService } from './borrower.service';
-import { BorrowerApplicationsService } from './borrower-applications.service';
-import { BorrowerDashboardService } from './borrower-dashboard.service';
-import { BorrowerSupportService } from './borrower-support.service';
-import { CreditScoreService } from './credit-score.service';
+import { BorrowerApplicationsService } from './applications/borrower-applications.service';
+import { BorrowerDashboardService } from './dashboard/borrower-dashboard.service';
+import { BorrowerSupportService } from './support/borrower-support.service';
+import { CreditScoreService } from './credit-score/credit-score.service';
 
 /**
  * Baseline wiring tests for `BorrowerController`.
  */
 describe('BorrowerController', () => {
   let controller: BorrowerController;
+  let paymentsController: BorrowerPaymentsController;
   let service: BorrowerService;
 
   beforeEach(async () => {
@@ -22,6 +24,8 @@ describe('BorrowerController', () => {
       getLoans: jest.fn(),
       getLenderNamesMap: jest.fn(),
       getRepaymentHistory: jest.fn(),
+      getBorrowerLoanInstallments: jest.fn().mockResolvedValue([]),
+      getBorrowerRepaymentTransactions: jest.fn().mockResolvedValue([]),
     };
     const mockCreditScoreService = {
       getSummary: jest.fn(),
@@ -45,7 +49,7 @@ describe('BorrowerController', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [BorrowerController],
+      controllers: [BorrowerController, BorrowerPaymentsController],
       providers: [
         {
           provide: BorrowerService,
@@ -71,9 +75,10 @@ describe('BorrowerController', () => {
     }).compile();
 
     controller = module.get<BorrowerController>(BorrowerController);
+    paymentsController = module.get<BorrowerPaymentsController>(
+      BorrowerPaymentsController,
+    );
     service = module.get<BorrowerService>(BorrowerService);
-
-    controller = module.get<BorrowerController>(BorrowerController);
   });
 
   it('should be defined', () => {
@@ -131,7 +136,7 @@ describe('BorrowerController', () => {
         .mockResolvedValueOnce(mockHistory as any);
 
       // Act
-      const result = await controller.getMyPayments('user_1');
+      const result = await paymentsController.getMyPayments('user_1');
 
       // Assert
       expect(result.success).toBe(true);
@@ -176,7 +181,7 @@ describe('BorrowerController', () => {
       jest.spyOn(service, 'getRepaymentHistory').mockResolvedValue([]); // return empty array per loan
 
       // Act
-      const result = await controller.getMyPayments('user_1');
+      const result = await paymentsController.getMyPayments('user_1');
 
       // Assert
       expect(result.data).toHaveLength(2);

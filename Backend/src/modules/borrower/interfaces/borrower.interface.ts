@@ -123,6 +123,7 @@ export interface Loan {
  */
 export enum RepaymentStatus {
   PENDING = 'pending',
+  PENDING_VERIFICATION = 'pending_verification',
   COMPLETED = 'completed',
   FAILED = 'failed',
   OVERDUE = 'overdue',

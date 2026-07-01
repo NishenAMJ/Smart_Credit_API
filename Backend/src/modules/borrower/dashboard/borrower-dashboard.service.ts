@@ -4,9 +4,10 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
-import { FirebaseService } from '../../firebase/firebase.service';
-import { Loan, LoanStatus } from './interfaces/borrower.interface';
-import { LoanApplicationStatus } from './dto/loan-application.dto';
+import { FirebaseService } from '../../../firebase/firebase.service';
+import { Loan, LoanStatus } from '../interfaces/borrower.interface';
+import { LoanApplicationStatus } from '../dto/loan-application.dto';
+import { BORROWER_MONEY } from '../borrower.constants';
 
 type TimestampLike =
   | FirebaseFirestore.Timestamp
@@ -82,9 +83,16 @@ export class BorrowerDashboardService {
         );
         totalRepaid += repaidOnThisLoan;
 
-        if (data.status === LoanStatus.ACTIVE) {
+        const payableOutstanding = this.clearRoundingDust(
+          loan.outstandingBalance || 0,
+        );
+
+        if (
+          data.status === LoanStatus.ACTIVE &&
+          payableOutstanding > BORROWER_MONEY.ROUNDING_DUST_THRESHOLD
+        ) {
           activeLoansCount++;
-          totalOutstanding += loan.outstandingBalance || 0;
+          totalOutstanding += payableOutstanding;
 
           if (loan.nextDueDate) {
             const loanDate = new Date(this.timestampToMillis(loan.nextDueDate));
@@ -96,7 +104,7 @@ export class BorrowerDashboardService {
               nextDueDate = loan.nextDueDate;
               nextPaymentAmount = Math.min(
                 loan.monthlyInstallment || 0,
-                loan.outstandingBalance || 0,
+                payableOutstanding,
               );
             }
           }
@@ -181,6 +189,15 @@ export class BorrowerDashboardService {
     return typeof value === 'number' && Number.isFinite(value)
       ? value
       : fallback;
+  }
+
+  private roundMoney(value: number): number {
+    return Math.round(value * 100) / 100;
+  }
+
+  private clearRoundingDust(value: number): number {
+    const rounded = this.roundMoney(value);
+    return rounded <= BORROWER_MONEY.ROUNDING_DUST_THRESHOLD ? 0 : rounded;
   }
 
   /** Normalizes a raw date-like value into a Firestore Timestamp, or undefined if unresolvable. */

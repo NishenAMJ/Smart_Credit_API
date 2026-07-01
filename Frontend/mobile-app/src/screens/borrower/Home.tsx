@@ -549,9 +549,9 @@ export default function Home({ navigation }: MyLoansScreenProps) {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Loans</Text>
             <TouchableOpacity
-              onPress={() => navigateToBorrowerTab(navigation, "Loans")}
+              onPress={() => navigation.navigate("MyLoans")}
             >
-              <Text style={styles.sectionLink}>Find Loans</Text>
+              <Text style={styles.sectionLink}>View All</Text>
             </TouchableOpacity>
           </View>
 
