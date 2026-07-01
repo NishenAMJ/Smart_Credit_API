@@ -1,18 +1,10 @@
 import { Controller, Get, Inject } from '@nestjs/common';
-import { Controller, Get, Inject } from '@nestjs/common';
 import { AppService } from './app.service';
-import { FirebaseService } from './firebase/firebase.service';
-import { app } from 'firebase-admin';
 import { FirebaseService } from './firebase/firebase.service';
 import { app } from 'firebase-admin';
 
 @Controller()
 export class AppController {
-  constructor(
-    private readonly appService: AppService,
-    private readonly firebaseService: FirebaseService,
-    @Inject('FIREBASE_APP') private firebaseApp: app.App,
-  ) {}
   constructor(
     private readonly appService: AppService,
     private readonly firebaseService: FirebaseService,
@@ -25,20 +17,8 @@ export class AppController {
   }
 
   @Get('firebase-status')
-  async getFirebaseStatus() {
+  getFirebaseStatus() {
     try {
-      // Test Firestore connection by reading a test document
-      const testRef = this.firebaseService.db
-        .collection('_test')
-        .doc('connection');
-
-      // Try to set a small test value (this also needs permission)
-      // If this fails, it means Firebase is not connected properly
-      const testData = {
-        timestamp: new Date(),
-        status: 'connected',
-      };
-
       return {
         status: 'ok',
         message: 'Firebase is connected and ready',
@@ -52,8 +32,12 @@ export class AppController {
       return {
         status: 'error',
         message: 'Firebase connection failed',
-        error: error.message,
+        error: this.getErrorMessage(error),
       };
     }
+  }
+
+  private getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }
