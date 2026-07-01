@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 
 @Injectable()
 export class LenderMobileService {
@@ -24,13 +20,16 @@ export class LenderMobileService {
 
       this.logger.debug(`Dashboard data loaded: ${JSON.stringify(data)}`);
       return data;
+
     } catch (error) {
       this.logger.error(
         'Error while fetching lender dashboard data',
         error.stack,
       );
 
-      throw new InternalServerErrorException('Failed to load dashboard data');
+      throw new InternalServerErrorException(
+        'Failed to load dashboard data',
+      );
     }
   }
 
@@ -46,6 +45,7 @@ export class LenderMobileService {
 
       this.logger.debug(`Dashboard summary loaded: ${JSON.stringify(summary)}`);
       return summary;
+
     } catch (error) {
       this.logger.error(
         'Error while fetching lender dashboard summary',
@@ -76,6 +76,7 @@ export class LenderMobileService {
 
       this.logger.debug(`Dashboard stats loaded: ${JSON.stringify(stats)}`);
       return stats;
+
     } catch (error) {
       this.logger.error(
         'Error while fetching lender dashboard stats',

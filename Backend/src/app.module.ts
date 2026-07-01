@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { FirebaseModule } from './firebase/firebase.module';
+import { ConfigModule } from '@nestjs/config';
+import { FirebaseModule } from './firebase/firebase.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -17,6 +19,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { LegalModule } from './modules/legal/legal.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { ChatModule } from './modules/chat/chat.module';
+
 import { KycModule } from './modules/kyc/kyc.module';
 import { LoansModule } from './modules/loans/loans.module';
 import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module';

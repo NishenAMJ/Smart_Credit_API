@@ -1,3 +1,4 @@
+// modules/borrower/borrower.module.ts
 import { Module } from '@nestjs/common';
 import { BorrowerCoreModule } from './core/borrower-core.module';
 import { BorrowerApplicationsModule } from './applications/borrower-applications.module';
@@ -8,6 +9,7 @@ import { BorrowerCreditScoreModule } from './credit-score/credit-score.module';
 import { BorrowerProfileModule } from './profile/borrower-profile.module';
 import { BorrowerLoansModule } from './loans/borrower-loans.module';
 import { BorrowerPaymentsModule } from './payments/borrower-payments.module';
+import { BorrowerChatModule } from './chat/borrower-chat.module';
 
 /**
  * Registers borrower HTTP routes and business services.
@@ -23,6 +25,7 @@ import { BorrowerPaymentsModule } from './payments/borrower-payments.module';
     BorrowerProfileModule,
     BorrowerLoansModule,
     BorrowerPaymentsModule,
+    BorrowerChatModule,
   ],
   controllers: [],
   providers: [],
@@ -36,6 +39,7 @@ import { BorrowerPaymentsModule } from './payments/borrower-payments.module';
     BorrowerProfileModule,
     BorrowerLoansModule,
     BorrowerPaymentsModule,
+    BorrowerChatModule,
   ],
 })
 export class BorrowerModule {}
