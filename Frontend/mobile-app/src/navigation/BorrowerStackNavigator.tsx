@@ -3,6 +3,7 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import BorrowerTabNavigator from "./BorrowerTabNavigator";
+import ChatNavigator from "./ChatNavigator";
 import MyLoansScreen from "../screens/borrower/MyLoansScreen";
 import LoanDetailsScreen from "../screens/borrower/LoanDetailsScreen";
 import LoanApplicationScreen from "../screens/borrower/LoanApplicationScreen";
@@ -41,6 +42,7 @@ export default function BorrowerStackNavigator() {
       <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
       <Stack.Screen name="ContactSupport" component={ContactSupportScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="BorrowerChat" component={ChatNavigator} />
       <Stack.Screen name="NearbyLendersMap" component={NearbyLendersMapScreen} />
       <Stack.Screen name="AgreementsList" component={AgreementsListScreen} />
       <Stack.Screen name="LoanAgreement">

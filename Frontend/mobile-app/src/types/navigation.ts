@@ -7,6 +7,7 @@ import type {
   BorrowerLoan,
   BorrowerTransaction,
 } from "./borrower";
+import type { ChatStackParamList } from "./chat.types";
 
 export type BorrowerStackParamList = {
   BorrowerTabs:
@@ -36,6 +37,7 @@ export type BorrowerStackParamList = {
   HelpCenter: undefined;
   ContactSupport: { initialCategory?: string } | undefined;
   Notifications: undefined;
+  BorrowerChat: NavigatorScreenParams<ChatStackParamList> | undefined;
   LoanAgreement: { initialLoanId?: string } | undefined;
   NearbyLendersMap: undefined;
 };

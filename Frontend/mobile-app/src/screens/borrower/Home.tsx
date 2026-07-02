@@ -301,12 +301,23 @@ export default function Home({ navigation }: MyLoansScreenProps) {
             Welcome back, {borrowerName}
           </Animated.Text>
 
-          <TouchableOpacity
-            style={styles.heroIconButton}
-            onPress={() => navigation.navigate("Notifications")}
-          >
-            <Feather name="bell" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={styles.heroActionRow}>
+            <TouchableOpacity
+              style={styles.heroIconButton}
+              onPress={() =>
+                navigation.navigate("BorrowerChat", { screen: "ChatList" })
+              }
+            >
+              <Feather name="message-circle" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.heroIconButton}
+              onPress={() => navigation.navigate("Notifications")}
+            >
+              <Feather name="bell" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         <Animated.View
@@ -676,6 +687,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+  heroActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
   },
   heroIconButton: {
     width: 38,

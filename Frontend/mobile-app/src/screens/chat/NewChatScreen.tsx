@@ -7,8 +7,8 @@ import {
   StyleSheet,
   TextInput,
   ActivityIndicator,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from "../../constants";
 import { User, ChatStackParamList } from "../../types/chat.types";
