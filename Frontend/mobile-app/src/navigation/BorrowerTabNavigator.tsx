@@ -32,8 +32,8 @@ const TAB_ICONS: Record<
     inactive: "card-outline",
   },
   Support: {
-    active: "headset",
-    inactive: "headset-outline",
+    active: "chatbubble-ellipses",
+    inactive: "chatbubble-ellipses-outline",
   },
   Agreement: {
     active: "document-text",

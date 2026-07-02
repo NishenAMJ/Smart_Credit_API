@@ -2,7 +2,7 @@ import {
   LoanPurpose,
   LoanApplicationStatus,
   RepaymentMethod,
-} from '../dto/loan-application.dto';
+} from '../applications/dto/loan-application.dto';
 
 export { RepaymentMethod };
 

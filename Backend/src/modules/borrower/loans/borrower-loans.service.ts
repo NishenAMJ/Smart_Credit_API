@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import {
   BORROWER_FILTER_LIMITS,
   BORROWER_FLOW,
-} from '../borrower.constants';
-import { LoanStatus } from '../interfaces/borrower.interface';
-import { BorrowerService } from '../borrower.service';
+} from '../shared/borrower.constants';
+import { LoanStatus } from '../types/borrower.types';
+import { BorrowerService } from '../core/borrower.service';
 
 @Injectable()
 export class BorrowerLoansService {
@@ -65,3 +65,4 @@ export class BorrowerLoansService {
     });
   }
 }
+

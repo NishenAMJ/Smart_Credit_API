@@ -8,8 +8,8 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { CreateBorrowerProfileDto } from '../dto/create-profile.dto';
-import { UpdateBorrowerProfileDto } from '../dto/update-profile.dto';
+import { CreateBorrowerProfileDto } from './dto/create-profile.dto';
+import { UpdateBorrowerProfileDto } from './dto/update-profile.dto';
 import { BorrowerProfileService } from './borrower-profile.service';
 
 @Controller('borrower/profile')
@@ -35,3 +35,4 @@ export class BorrowerProfileController {
     return this.borrowerProfileService.updateProfile(userId, dto);
   }
 }
+

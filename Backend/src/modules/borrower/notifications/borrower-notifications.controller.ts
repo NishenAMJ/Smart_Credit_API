@@ -103,3 +103,4 @@ export class BorrowerNotificationsController {
     return Number.isFinite(parsed) ? parsed : null;
   }
 }
+

@@ -5,9 +5,9 @@ import {
 } from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
-import { Loan, LoanStatus } from '../interfaces/borrower.interface';
-import { LoanApplicationStatus } from '../dto/loan-application.dto';
-import { BORROWER_MONEY } from '../borrower.constants';
+import { Loan, LoanStatus } from '../types/borrower.types';
+import { LoanApplicationStatus } from '../applications/dto/loan-application.dto';
+import { BORROWER_MONEY } from '../shared/borrower.constants';
 
 type TimestampLike =
   | FirebaseFirestore.Timestamp

@@ -1,7 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { BORROWER_MONEY } from '../borrower.constants';
-import { RepaymentMethod } from '../dto/loan-application.dto';
-import { BorrowerService } from '../borrower.service';
+import { BORROWER_MONEY } from '../shared/borrower.constants';
+import { RepaymentMethod } from '../applications/dto/loan-application.dto';
+import {
+  BorrowerInstallmentSummary,
+  BorrowerService,
+} from '../core/borrower.service';
+import { LoanStatus, Repayment } from '../types/borrower.types';
+
+type PaymentRecord = Record<string, unknown> & {
+  loanId?: string;
+  lenderId?: string;
+  paymentId?: string;
+  repaymentId?: string;
+  transactionId?: string;
+  amount?: unknown;
+  status?: unknown;
+  paidAt?: unknown;
+  createdAt?: unknown;
+  paymentMethod?: unknown;
+  paymentProofUrl?: unknown;
+};
 
 @Injectable()
 export class BorrowerPaymentsService {
@@ -13,7 +31,7 @@ export class BorrowerPaymentsService {
       loans.map((loan) =>
         this.borrowerService
           .getBorrowerLoanInstallments(loan.loanId, borrowerId)
-          .catch(() => []),
+          .catch((): BorrowerInstallmentSummary[] => []),
       ),
     );
     const installmentsByLoanId = new Map(
@@ -23,10 +41,12 @@ export class BorrowerPaymentsService {
       loans.map((loan) =>
         this.borrowerService
           .getRepaymentHistory(loan.loanId, borrowerId)
-          .catch(() => [] as any[]),
+          .catch((): Repayment[] => []),
       ),
     );
-    const repayments = histories.flat();
+    const repayments: PaymentRecord[] = histories
+      .flat()
+      .map((repayment) => ({ ...repayment }) as PaymentRecord);
     const loanById = new Map(loans.map((loan) => [loan.loanId, loan]));
     const borrowerTransactions =
       await this.borrowerService.getBorrowerRepaymentTransactions(
@@ -38,7 +58,7 @@ export class BorrowerPaymentsService {
         .map((repayment) => repayment.repaymentId ?? repayment.paymentId)
         .filter(Boolean),
     );
-    const transactionRepayments = borrowerTransactions
+    const transactionRepayments: PaymentRecord[] = borrowerTransactions
       .filter((transaction) => {
         const paymentId =
           typeof transaction.paymentId === 'string'
@@ -51,13 +71,15 @@ export class BorrowerPaymentsService {
       })
       .map((transaction) => ({
         paymentId:
-          transaction.paymentId ??
-          transaction.repaymentId ??
-          transaction.transactionId,
-        transactionId: transaction.transactionId,
-        repaymentId: transaction.repaymentId ?? transaction.paymentId,
-        loanId: transaction.loanId,
-        lenderId: transaction.lenderId,
+          this.toOptionalString(transaction.paymentId) ||
+          this.toOptionalString(transaction.repaymentId) ||
+          this.toOptionalString(transaction.transactionId),
+        transactionId: this.toOptionalString(transaction.transactionId),
+        repaymentId:
+          this.toOptionalString(transaction.repaymentId) ||
+          this.toOptionalString(transaction.paymentId),
+        loanId: this.toOptionalString(transaction.loanId),
+        lenderId: this.toOptionalString(transaction.lenderId),
         amount: transaction.amount,
         status: transaction.status,
         paidAt: transaction.paidAt ?? transaction.createdAt,
@@ -72,20 +94,22 @@ export class BorrowerPaymentsService {
     const allLenderIds = [
       ...loans.map((loan) => loan.lenderId),
       ...repayments.map(
-        (repayment) => repayment.lenderId ?? loanById.get(repayment.loanId)?.lenderId,
+        (repayment) =>
+          repayment.lenderId ??
+          loanById.get(this.toOptionalString(repayment.loanId))?.lenderId,
       ),
       ...transactionRepayments.map(
         (repayment) =>
           repayment.lenderId ??
-          loanById.get(String(repayment.loanId ?? ''))?.lenderId,
+          loanById.get(this.toOptionalString(repayment.loanId))?.lenderId,
       ),
-    ];
+    ].filter((lenderId): lenderId is string => typeof lenderId === 'string');
     const lenderNames =
       await this.borrowerService.getLenderNamesMap(allLenderIds);
     const upcomingPayments = loans
       .filter(
         (loan) =>
-          loan.status === 'active' &&
+          loan.status === LoanStatus.ACTIVE &&
           loan.outstandingBalance > BORROWER_MONEY.ROUNDING_DUST_THRESHOLD,
       )
       .map((loan) => {
@@ -96,12 +120,10 @@ export class BorrowerPaymentsService {
         const nextInstallment = (
           installmentsByLoanId.get(loan.loanId) ?? []
         ).find((installment) => this.isUnpaidInstallment(installment));
-        const rawDate = loan.nextDueDate as any;
+        const rawDate = loan.nextDueDate as unknown;
         const dueDate = nextInstallment?.dueDate
           ? nextInstallment.dueDate.toISOString()
-          : rawDate?.toDate
-            ? rawDate.toDate().toISOString()
-            : (rawDate ?? null);
+          : this.toIsoDate(rawDate);
         const amount = nextInstallment
           ? Math.min(nextInstallment.remainingAmount, outstandingBalance)
           : Math.min(loan.monthlyInstallment, outstandingBalance);
@@ -125,7 +147,7 @@ export class BorrowerPaymentsService {
       });
     const enrichedRepayments = [...repayments, ...transactionRepayments].map(
       (repayment) => {
-        const loan = loanById.get(String(repayment.loanId ?? ''));
+        const loan = loanById.get(this.toOptionalString(repayment.loanId));
         const lenderId = repayment.lenderId ?? loan?.lenderId;
 
         return {
@@ -153,7 +175,7 @@ export class BorrowerPaymentsService {
 
   makePayment(payload: {
     loanId: string;
-    amount?: number;
+    amount?: unknown;
     paymentMethod?: RepaymentMethod;
     transactionReference?: string;
     paymentProofUrl?: string;
@@ -229,7 +251,7 @@ export class BorrowerPaymentsService {
     );
     const topLevelRepaymentTransactions = borrowerTransactions.map(
       (transaction) => {
-        const loan = loanById.get(String(transaction.loanId ?? ''));
+        const loan = loanById.get(this.toOptionalString(transaction.loanId));
 
         return {
           transactionId: transaction.transactionId,
@@ -285,8 +307,9 @@ export class BorrowerPaymentsService {
     const transactions = await this.getTransactions(borrowerId);
 
     return (
-      transactions.find((transaction) => transaction.transactionId === transactionId) ??
-      null
+      transactions.find(
+        (transaction) => transaction.transactionId === transactionId,
+      ) ?? null
     );
   }
 
@@ -295,8 +318,10 @@ export class BorrowerPaymentsService {
     paymentMethod?: unknown;
     paymentProofUrl?: unknown;
   }) {
-    const status = String(payment.status ?? '').toLowerCase();
-    const paymentMethod = String(payment.paymentMethod ?? '').toLowerCase();
+    const status = this.toOptionalString(payment.status).toLowerCase();
+    const paymentMethod = this.toOptionalString(
+      payment.paymentMethod,
+    ).toLowerCase();
     const hasReceipt =
       typeof payment.paymentProofUrl === 'string' &&
       payment.paymentProofUrl.trim().length > 0;
@@ -352,7 +377,7 @@ export class BorrowerPaymentsService {
   }) {
     return (
       !['paid', 'completed'].includes(
-        String(installment.status ?? '').toLowerCase(),
+        this.toOptionalString(installment.status).toLowerCase(),
       ) &&
       Number(installment.remainingAmount ?? 0) >
         BORROWER_MONEY.ROUNDING_DUST_THRESHOLD
@@ -369,9 +394,31 @@ export class BorrowerPaymentsService {
       'toMillis' in value &&
       typeof value.toMillis === 'function'
     ) {
-      return value.toMillis();
+      return (value as { toMillis: () => number }).toMillis();
     }
 
     return value instanceof Date ? value.getTime() : 0;
+  }
+
+  private toOptionalString(value: unknown): string {
+    return typeof value === 'string' ? value : '';
+  }
+
+  private toIsoDate(value: unknown): string | null {
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      'toDate' in value &&
+      typeof value.toDate === 'function'
+    ) {
+      const date = (value as { toDate: () => Date }).toDate();
+      return date.toISOString();
+    }
+
+    return typeof value === 'string' ? value : null;
   }
 }

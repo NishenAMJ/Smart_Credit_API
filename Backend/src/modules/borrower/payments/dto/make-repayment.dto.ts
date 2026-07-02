@@ -6,7 +6,7 @@ import {
   IsOptional,
   Min,
 } from 'class-validator';
-import { RepaymentMethod } from './loan-application.dto';
+import { RepaymentMethod } from '../../applications/dto/loan-application.dto';
 
 /**
  * Validates borrower repayment submission payloads.

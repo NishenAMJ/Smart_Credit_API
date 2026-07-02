@@ -1,11 +1,15 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { resolveBorrowerId } from '../borrower-request.utils';
-import { RepaymentMethod } from '../dto/loan-application.dto';
+import { resolveBorrowerId } from '../shared/borrower-request.utils';
+import { RepaymentMethod } from '../applications/dto/loan-application.dto';
 import { BorrowerPaymentsService } from './borrower-payments.service';
+import { GenerateQrDto } from './dto/generate-qr.dto';
+import { VerifyQrDto } from './dto/verify-qr.dto';
 
 @Controller('borrower')
 export class BorrowerPaymentsController {
-  constructor(private readonly borrowerPaymentsService: BorrowerPaymentsService) {}
+  constructor(
+    private readonly borrowerPaymentsService: BorrowerPaymentsService,
+  ) {}
 
   @Get('payments')
   async getMyPayments(@Query('borrowerId') borrowerId?: string) {
@@ -41,7 +45,7 @@ export class BorrowerPaymentsController {
 
   @Post('payments/generate-qr')
   async generateQr(
-    @Body() payload: { loanId: string; amount?: number; borrowerId?: string },
+    @Body() payload: GenerateQrDto,
     @Query('borrowerId') borrowerId?: string,
   ) {
     return {
@@ -55,7 +59,7 @@ export class BorrowerPaymentsController {
   }
 
   @Post('payments/verify-qr')
-  async verifyQr(@Body() payload: { token: string }) {
+  async verifyQr(@Body() payload: VerifyQrDto) {
     return {
       success: true,
       data: await this.borrowerPaymentsService.verifyQrToken(payload.token),
@@ -63,7 +67,7 @@ export class BorrowerPaymentsController {
   }
 
   @Post('payments/upload-receipt')
-  async uploadReceipt(@Body() payload: Record<string, unknown>) {
+  uploadReceipt(@Body() payload: Record<string, unknown>) {
     return {
       success: true,
       data: this.borrowerPaymentsService.uploadReceipt(payload),
