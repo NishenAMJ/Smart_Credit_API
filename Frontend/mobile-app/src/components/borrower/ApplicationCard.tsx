@@ -9,19 +9,30 @@ type ApplicationCardProps = {
     status?: string;
     createdAt?: string;
     loanTitle?: string;
-    requestedAmount?: number;
+    amount?: number;
     purpose?: string;
   };
   onPress?: () => void;
 };
 
+/**
+ * Renders a summary card for a borrower loan application.
+ */
 export default function ApplicationCard({
   application,
   onPress,
 }: ApplicationCardProps) {
+  const displayStatus = (() => {
+    const status = String(application.status ?? "").toLowerCase();
+    if (status === "draft" || status === "open" || status === "pending") {
+      return "under_review";
+    }
+    return status;
+  })();
+
   const getStatusColor = (status?: string) => {
     switch (status) {
-      case "pending":
+      case "under_review":
         return { bg: "#FEF3C7", text: "#F59E0B" };
       case "approved":
         return { bg: "#D1FAE5", text: "#10B981" };
@@ -32,14 +43,16 @@ export default function ApplicationCard({
     }
   };
 
-  const statusColor = getStatusColor(application.status);
+  const statusColor = getStatusColor(displayStatus);
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
       <View style={styles.header}>
         <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
           <Text style={[styles.statusText, { color: statusColor.text }]}>
-            {application.status?.toUpperCase() ?? "UNKNOWN"}
+            {displayStatus === "under_review"
+              ? "UNDER REVIEW"
+              : displayStatus.toUpperCase() || "UNKNOWN"}
           </Text>
         </View>
         <Text style={styles.date}>
@@ -53,13 +66,13 @@ export default function ApplicationCard({
         {application.loanTitle || "Loan Application"}
       </Text>
       <Text style={styles.amount}>
-        LKR {application.requestedAmount?.toLocaleString() ?? "0"}
+        LKR {application.amount?.toLocaleString() ?? "0"}
       </Text>
       <Text style={styles.purpose}>{application.purpose ?? "-"}</Text>
 
       <View style={styles.footer}>
         <Text style={styles.viewDetails}>View Details</Text>
-        <Feather name='chevron-right' size={20} color='#6B7280' />
+        <Feather name="chevron-right" size={20} color="#6B7280" />
       </View>
     </TouchableOpacity>
   );

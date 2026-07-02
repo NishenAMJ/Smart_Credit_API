@@ -10,22 +10,25 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { getApiErrorMessage } from "../../api/api-error";
 import { creditScoreService } from "../../api/services/creditScore.service";
-
-type CreditData = {
-  smartScore?: number;
-  creditLimit?: number;
-};
+import type { CreditScoreSummary } from "../../types/borrower";
+import type { BorrowerNavigation } from "../../types/navigation";
+import { getScoreColor, getScoreRating } from "../../utils/scoreUtils";
 
 type CreditScoreScreenProps = {
-  navigation: any;
+  navigation: BorrowerNavigation;
 };
 
+/**
+ * Displays borrower credit score summary and key indicators.
+ */
 export default function CreditScoreScreen({
   navigation,
 }: CreditScoreScreenProps) {
-  const [creditData, setCreditData] = useState<CreditData | null>(null);
+  const [creditData, setCreditData] = useState<CreditScoreSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     void fetchCreditScore();
@@ -33,46 +36,54 @@ export default function CreditScoreScreen({
 
   const fetchCreditScore = async () => {
     try {
+      setErrorMessage("");
       const response = await creditScoreService.getMyCreditScore();
-      setCreditData((response?.data as CreditData) ?? null);
+      setCreditData(response?.data ?? null);
     } catch (error) {
-      console.error("Error fetching credit score:", error);
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load your credit score.",
+      );
+      console.error("Error fetching credit score:", message);
+      setErrorMessage(message);
       setCreditData(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const getScoreLevel = (score: number) => {
-    if (score >= 750) return { text: "EXCELLENT", color: "#10B981" };
-    if (score >= 650) return { text: "GOOD", color: "#3B82F6" };
-    if (score >= 550) return { text: "FAIR", color: "#F59E0B" };
-    return { text: "POOR", color: "#EF4444" };
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color='#007AFF' />
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }
 
-  const scoreLevel = getScoreLevel(creditData?.smartScore || 0);
+  const score = creditData?.smartScore || 0;
+  const scoreLevel = {
+    text: getScoreRating(score).toUpperCase(),
+    color: getScoreColor(score),
+  };
+  const breakdown = Object.entries(creditData?.breakdown ?? {});
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name='arrow-left' size={24} color='#FFFFFF' />
+          <Feather name="arrow-left" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Smart Credit Score</Text>
         <TouchableOpacity onPress={() => navigation.navigate("CreditHistory")}>
-          <Feather name='clock' size={20} color='#FFFFFF' />
+          <Feather name="clock" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {errorMessage ? (
+          <Text style={styles.emptyBreakdownText}>{errorMessage}</Text>
+        ) : null}
+
         <View style={styles.scoreCard}>
           <View style={styles.scoreCircle}>
             <Text style={styles.scoreNumber}>
@@ -87,7 +98,7 @@ export default function CreditScoreScreen({
             {[1, 2, 3, 4].map((star) => (
               <Feather
                 key={star}
-                name='star'
+                name="star"
                 size={20}
                 color={
                   (creditData?.smartScore || 0) >= star * 200
@@ -99,59 +110,46 @@ export default function CreditScoreScreen({
           </View>
         </View>
 
-        <View style={styles.limitCard}>
-          <Text style={styles.limitLabel}>Credit Limit</Text>
-          <Text style={styles.limitAmount}>
-            LKR {creditData?.creditLimit?.toLocaleString() || "0"}
-          </Text>
-        </View>
-
         <View style={styles.breakdownCard}>
           <Text style={styles.sectionTitle}>Score Breakdown</Text>
 
-          <View style={styles.breakdownItem}>
-            <View style={styles.breakdownHeader}>
-              <Text style={styles.breakdownLabel}>Payment History</Text>
-              <Text style={styles.breakdownValue}>90%</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: "90%" }]} />
-            </View>
-          </View>
+          {breakdown.length > 0 ? (
+            breakdown.map(([key, item]) => {
+              const value = Math.max(0, Math.min(100, item.subScore));
 
-          <View style={styles.breakdownItem}>
-            <View style={styles.breakdownHeader}>
-              <Text style={styles.breakdownLabel}>Loan Diversity</Text>
-              <Text style={styles.breakdownValue}>80%</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: "80%" }]} />
-            </View>
-          </View>
-
-          <View style={styles.breakdownItem}>
-            <View style={styles.breakdownHeader}>
-              <Text style={styles.breakdownLabel}>Credit Utilization</Text>
-              <Text style={styles.breakdownValue}>70%</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: "70%" }]} />
-            </View>
-          </View>
+              return (
+                <View key={key} style={styles.breakdownItem}>
+                  <View style={styles.breakdownHeader}>
+                    <Text style={styles.breakdownLabel}>{item.label}</Text>
+                    <Text style={styles.breakdownValue}>{value}%</Text>
+                  </View>
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[styles.progressFill, { width: `${value}%` }]}
+                    />
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.emptyBreakdownText}>
+              Your score breakdown will appear after the first calculation.
+            </Text>
+          )}
         </View>
 
         <View style={styles.tipsCard}>
           <Text style={styles.sectionTitle}>Tips to Improve</Text>
           <View style={styles.tip}>
-            <Feather name='check-circle' size={20} color='#10B981' />
+            <Feather name="check-circle" size={20} color="#10B981" />
             <Text style={styles.tipText}>Pay all loans on time</Text>
           </View>
           <View style={styles.tip}>
-            <Feather name='check-circle' size={20} color='#10B981' />
+            <Feather name="check-circle" size={20} color="#10B981" />
             <Text style={styles.tipText}>Maintain low balance</Text>
           </View>
           <View style={styles.tip}>
-            <Feather name='check-circle' size={20} color='#10B981' />
+            <Feather name="check-circle" size={20} color="#10B981" />
             <Text style={styles.tipText}>Avoid multiple loan applications</Text>
           </View>
         </View>
@@ -226,29 +224,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  limitCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 15,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  limitLabel: {
-    fontSize: 15,
-    color: "#6B7280",
-  },
-  limitAmount: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1A1A1A",
-  },
+
   breakdownCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
@@ -282,6 +258,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#1A1A1A",
+  },
+  emptyBreakdownText: {
+    fontSize: 13,
+    color: "#6B7280",
+    lineHeight: 19,
   },
   progressBar: {
     height: 8,

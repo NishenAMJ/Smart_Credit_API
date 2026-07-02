@@ -10,13 +10,16 @@ type FilterModalProps = {
   onApply?: () => void;
 };
 
+/**
+ * Generic borrower filter modal used for list refinements.
+ */
 export default function FilterModal({
   visible,
   onClose,
   onApply,
 }: FilterModalProps) {
   return (
-    <Modal visible={visible} transparent animationType='slide'>
+    <Modal visible={visible} transparent animationType="slide">
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           <Text style={styles.title}>Filters</Text>

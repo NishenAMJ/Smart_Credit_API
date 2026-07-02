@@ -1,16 +1,58 @@
 /** @format */
 
-import { Platform } from "react-native";
+import axios from "axios";
+import { getApiBaseUrl } from "../api/base-url";
+import { toApiError } from "../api/api-error";
 
-const DEFAULT_PORT = 3000;
+// Using _api internally so we can cast it below with unwrapped response types
+const _api = axios.create({
+  baseURL: getApiBaseUrl(),
+  timeout: 15000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
-function getDefaultApiBaseUrl() {
-  if (Platform.OS === "android") {
-    return `http://10.0.2.2:${DEFAULT_PORT}`;
+// Inject the current user's ID into every outgoing request
+_api.interceptors.request.use((config) => {
+  if (typeof _currentUserId !== "undefined") {
+    config.headers["x-user-id"] = _currentUserId;
   }
+  return config;
+});
 
-  return `http://localhost:${DEFAULT_PORT}`;
+// Unwrap response.data so callers don't have to reach into `.data` every time
+_api.interceptors.response.use(
+  (response) => response.data,
+  (error) => Promise.reject(toApiError(error)),
+);
+
+export const api = _api as unknown as {
+  get<T = any>(url: string, config?: any): Promise<T>;
+  post<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  put<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  patch<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  delete<T = any>(url: string, config?: any): Promise<T>;
+};
+
+export const API_BASE_URL = getApiBaseUrl();
+
+let _currentUserId: string | undefined;
+
+export function setAuthToken(token: string | null) {
+  if (token) {
+    (_api.defaults.headers as any).common.Authorization = `Bearer ${token}`;
+    return;
+  }
+  delete (_api.defaults.headers as any).common.Authorization;
 }
 
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? getDefaultApiBaseUrl();
+export function getCurrentUserId(): string {
+  return _currentUserId ?? "";
+}
+
+export function setCurrentUserId(userId: string | null | undefined) {
+  _currentUserId = userId ?? undefined;
+}
+
+export type ApiResponse<T = any> = T;

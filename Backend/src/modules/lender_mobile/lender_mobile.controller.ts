@@ -6,20 +6,18 @@ import {
 } from '@nestjs/common';
 import { LenderMobileService } from './lender_mobile.service';
 
-@Controller('api/lender/dashboard')
+@Controller('lender-mobile/dashboard')
 export class LenderMobileController {
   private readonly logger = new Logger(LenderMobileController.name);
 
-  constructor(
-    private readonly lenderMobileService: LenderMobileService,
-  ) {}
+  constructor(private readonly lenderMobileService: LenderMobileService) {}
 
   @Get()
-  async getDashboard() {
+  getDashboard() {
     try {
       this.logger.log('Fetching lender dashboard data');
 
-      const data = await this.lenderMobileService.getDashboard();
+      const data = this.lenderMobileService.getDashboard();
 
       this.logger.debug('Dashboard data fetched successfully');
 
@@ -31,22 +29,19 @@ export class LenderMobileController {
     } catch (error) {
       this.logger.error(
         'Error while fetching dashboard data',
-        error.stack,
+        this.getErrorStack(error),
       );
 
-      throw new InternalServerErrorException(
-        'Failed to load dashboard data',
-      );
+      throw new InternalServerErrorException('Failed to load dashboard data');
     }
   }
 
   @Get('summary')
-  async getDashboardSummary() {
+  getDashboardSummary() {
     try {
       this.logger.log('Fetching lender dashboard summary');
 
-      const data =
-        await this.lenderMobileService.getDashboardSummary();
+      const data = this.lenderMobileService.getDashboardSummary();
 
       this.logger.debug('Dashboard summary fetched successfully');
 
@@ -58,7 +53,7 @@ export class LenderMobileController {
     } catch (error) {
       this.logger.error(
         'Error while fetching dashboard summary',
-        error.stack,
+        this.getErrorStack(error),
       );
 
       throw new InternalServerErrorException(
@@ -68,12 +63,11 @@ export class LenderMobileController {
   }
 
   @Get('stats')
-  async getDashboardStats() {
+  getDashboardStats() {
     try {
       this.logger.log('Fetching lender dashboard statistics');
 
-      const data =
-        await this.lenderMobileService.getDashboardStats();
+      const data = this.lenderMobileService.getDashboardStats();
 
       this.logger.debug('Dashboard statistics fetched successfully');
 
@@ -85,12 +79,18 @@ export class LenderMobileController {
     } catch (error) {
       this.logger.error(
         'Error while fetching dashboard statistics',
-        error.stack,
+        this.getErrorStack(error),
       );
 
       throw new InternalServerErrorException(
         'Failed to load dashboard statistics',
       );
     }
+  }
+
+  private getErrorStack(error: unknown): string {
+    return error instanceof Error
+      ? (error.stack ?? error.message)
+      : String(error);
   }
 }

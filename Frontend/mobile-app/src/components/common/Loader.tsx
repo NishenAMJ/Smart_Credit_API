@@ -7,7 +7,7 @@ import { COLORS } from "../../constants/colors";
 export default function Loader() {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size='large' color={COLORS.primary} />
+      <ActivityIndicator size="large" color={COLORS.primary} />
     </View>
   );
 }

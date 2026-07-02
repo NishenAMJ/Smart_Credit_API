@@ -9,6 +9,9 @@ type LoanDetailsHeaderProps = {
   onBack?: () => void;
 };
 
+/**
+ * Header section for borrower loan details and key values.
+ */
 export default function LoanDetailsHeader({
   title,
   onBack,
@@ -16,7 +19,7 @@ export default function LoanDetailsHeader({
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack}>
-        <Feather name='arrow-left' size={22} color='#FFFFFF' />
+        <Feather name="arrow-left" size={22} color="#FFFFFF" />
       </TouchableOpacity>
       <Text style={styles.title}>{title}</Text>
       <View style={styles.spacer} />

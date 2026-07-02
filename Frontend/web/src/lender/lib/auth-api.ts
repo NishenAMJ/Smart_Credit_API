@@ -1,0 +1,138 @@
+// Authentication and onboarding helpers for the lender sign-in and sign-up flow.
+import { fetchLenderApi, parseApiError } from "./api-client";
+
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
+    /\/$/,
+    "",
+  ) ?? "/api";
+
+export type LoginPayload = {
+  identifier: string;
+  password: string;
+};
+
+export type RegisterPayload = {
+  fullName: string;
+  email: string;
+  phone: string;
+  password: string;
+  role: "lender";
+};
+
+export type SubmitKycPayload = {
+  documentType: string;
+  documentNumber: string;
+  fullName: string;
+  issuingCountry?: string;
+  expiryDate?: string;
+  nicFrontDataUrl?: string;
+  nicBackDataUrl?: string;
+  addressProofDataUrl?: string;
+  bankDocumentDataUrl?: string;
+  profilePhotoUrl?: string;
+  documentFrontUrl?: string;
+  documentBackUrl?: string;
+  selfieUrl?: string;
+  profilePictureUrl?: string;
+  addressProofNumber?: string;
+  bankAccountNumber?: string;
+  bankName?: string;
+  branchCode?: string;
+  accountType?: string;
+};
+
+export type AuthResponse = {
+  accessToken: string;
+  user: {
+    uid: string;
+    email: string;
+    fullName: string;
+    role: string;
+    phone?: string;
+    kycStatus?: string;
+  };
+};
+
+export type ChangePasswordResponse = {
+  message: string;
+};
+
+async function parseError(
+  response: Response,
+  fallbackMessage: string,
+): Promise<never> {
+  // The public auth endpoints return a lightweight message field rather than the app-wide error shape.
+  const errorBody = await response.json().catch(() => ({}));
+  throw new Error(errorBody.message || fallbackMessage);
+}
+
+export async function login(payload: LoginPayload): Promise<AuthResponse> {
+  // Login stays unauthenticated because the caller has not established a lender session yet.
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    return parseError(response, "Login failed");
+  }
+
+  return response.json();
+}
+
+export async function register(payload: RegisterPayload): Promise<void> {
+  // Registration only creates the account shell; KYC still happens in a separate follow-up call.
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    return parseError(response, "Registration failed");
+  }
+}
+
+export async function submitKyc(
+  accessToken: string,
+  payload: SubmitKycPayload,
+): Promise<void> {
+  // KYC is submitted immediately after signup using the freshly issued access token.
+  const response = await fetch(`${API_BASE_URL}/kyc/submit`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    return parseError(response, "KYC submission failed");
+  }
+}
+
+export async function changeLenderPassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordResponse> {
+  // Password changes run through the authenticated lender API because they require the active session.
+  const response = await fetchLenderApi("/auth/change-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      currentPassword,
+      newPassword,
+    }),
+  });
+
+  if (!response.ok) {
+    return parseApiError(response, "Failed to update password.");
+  }
+
+  return response.json();
+}

@@ -8,9 +8,12 @@ type QRCodeModalProps = {
   onClose: () => void;
 };
 
+/**
+ * Modal container for displaying borrower payment QR codes.
+ */
 export default function QRCodeModal({ visible, onClose }: QRCodeModalProps) {
   return (
-    <Modal visible={visible} transparent animationType='fade'>
+    <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Text style={styles.title}>QR Code</Text>

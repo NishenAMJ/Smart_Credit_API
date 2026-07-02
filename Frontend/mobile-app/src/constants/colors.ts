@@ -9,4 +9,6 @@ export const COLORS = {
   border: "#F3F4F6",
   success: "#10B981",
   warning: "#F59E0B",
+  error: "#EF4444",
+  text: "#1A1A1A", // alias for textPrimary
 } as const;
