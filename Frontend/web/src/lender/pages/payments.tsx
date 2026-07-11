@@ -78,19 +78,15 @@ function getStatusBadgeClass(value: string): string {
   return "badge-gray";
 }
 
-export default function PaymentsPage({
-  session,
-}: PaymentsPageProps) {
-  const [response, setResponse] = useState<PaymentsResponse | null>(
-    null,
-  );
+export default function PaymentsPage({ session }: PaymentsPageProps) {
+  const [response, setResponse] = useState<PaymentsResponse | null>(null);
   const [isListLoading, setIsListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<
-    PaymentsResponse["summary"] | null
-  >(null);
+  const [summary, setSummary] = useState<PaymentsResponse["summary"] | null>(
+    null,
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -476,7 +472,9 @@ export default function PaymentsPage({
           <div>
             <p className="eyebrow">Payments</p>
             <h1 className="page-title">Payments</h1>
-            <p className="page-subtitle">Payments, balances, and installments.</p>
+            <p className="page-subtitle">
+              Payments, balances, and installments.
+            </p>
             <p className="dashboard-context-pill">{session.displayName}</p>
           </div>
         </header>
@@ -572,9 +570,7 @@ export default function PaymentsPage({
               <div className="borrowers-toolbar">
                 <div>
                   <h2 className="section-title">Loan Activity Ledger</h2>
-                  <p className="section-subtitle">
-                    Recent payment activity.
-                  </p>
+                  <p className="section-subtitle">Recent payment activity.</p>
                 </div>
 
                 <label className="search-field">
@@ -608,9 +604,7 @@ export default function PaymentsPage({
                       <p className="metric-value">
                         {isListLoading ? "..." : String(matchedPaymentsCount)}
                       </p>
-                      <p className="metric-caption">
-                        Matched payment rows
-                      </p>
+                      <p className="metric-caption">Matched payment rows</p>
                     </div>
                   </article>
                 </section>
@@ -938,7 +932,7 @@ export default function PaymentsPage({
                       <div className="borrower-loans-section__header">
                         <div>
                           <h3 className="section-title">
-                            Installments and payments
+                            Monthly installments
                           </h3>
                           <p className="section-subtitle">
                             Full lender-owned installment record for this loan.
@@ -1004,10 +998,10 @@ export default function PaymentsPage({
                                 </article>
                                 <article className="borrower-detail-card">
                                   <p className="borrower-detail-card__label">
-                                    Payments Count
+                                    Last Payment
                                   </p>
                                   <p className="borrower-detail-card__value">
-                                    {String(installment.payments.length)}
+                                    {formatDate(installment.lastPaymentAt)}
                                   </p>
                                 </article>
                               </div>
@@ -1143,51 +1137,11 @@ export default function PaymentsPage({
                                 </div>
                               ) : null}
 
-                              <div className="loan-ledger-payments">
-                                <p className="borrower-detail-card__label">
-                                  Payments
+                              {installment.note ? (
+                                <p className="section-subtitle">
+                                  Note: {installment.note}
                                 </p>
-                                {installment.payments.length > 0 ? (
-                                  installment.payments.map((payment) => (
-                                    <div
-                                      className="loan-ledger-payment-row"
-                                      key={payment.id}
-                                    >
-                                      <div className="dashboard-table__stack">
-                                        <span>{payment.id}</span>
-                                        <span className="dashboard-table__subcopy">
-                                          {formatDate(payment.createdAt)} ·{" "}
-                                          {payment.source === "payment"
-                                            ? "Installment payment"
-                                            : "Transaction fallback"}
-                                        </span>
-                                      </div>
-                                      <div className="dashboard-table__stack">
-                                        <span>
-                                          {formatCurrency(payment.amount)}
-                                        </span>
-                                        <span className="dashboard-table__subcopy">
-                                          {formatLabel(payment.type)}
-                                          {payment.note
-                                            ? ` · ${payment.note}`
-                                            : ""}
-                                        </span>
-                                      </div>
-                                      <span
-                                        className={`badge ${getStatusBadgeClass(
-                                          payment.status,
-                                        )}`}
-                                      >
-                                        {formatLabel(payment.status)}
-                                      </span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="section-subtitle">
-                                    No payment records yet.
-                                  </p>
-                                )}
-                              </div>
+                              ) : null}
                             </article>
                           ))
                         ) : (

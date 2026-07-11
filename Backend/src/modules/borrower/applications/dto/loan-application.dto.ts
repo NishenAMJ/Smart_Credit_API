@@ -37,13 +37,13 @@ export enum RepaymentMethod {
  */
 export enum LoanApplicationStatus {
   DRAFT = 'draft',
-  OPEN = 'open',
-  PENDING = 'pending',
+  OPEN = 'submitted',
+  PENDING = 'submitted',
   UNDER_REVIEW = 'under_review',
   APPROVED = 'approved',
   REJECTED = 'rejected',
-  CANCELLED = 'cancelled',
-  FUNDED = 'funded',
+  CANCELLED = 'withdrawn',
+  FUNDED = 'converted',
 }
 
 /**

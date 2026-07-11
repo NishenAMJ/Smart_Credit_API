@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { CoreLedgerModule } from './modules/core-ledger/core-ledger.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -23,13 +24,9 @@ import { LoansModule } from './modules/loans/loans.module';
 import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
-import { AdsModule } from './modules/ads/ads.module';
-
-import { AdvertisementModule } from './modules/advertisement/advertisement.module';
 import { QrScannerModule } from './modules/qrScanner/qr-scanner.module';
 
 import { LocationModule } from './modules/location/location.module';
-
 
 @Module({
   imports: [
@@ -37,6 +34,7 @@ import { LocationModule } from './modules/location/location.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    CoreLedgerModule,
     FirebaseModule,
     AuthModule,
     BorrowerModule,
@@ -57,13 +55,9 @@ import { LocationModule } from './modules/location/location.module';
     LenderMobileModule,
     ReportsModule,
     DisputesModule,
-    AdsModule,
-
-    AdvertisementModule,
     QrScannerModule,
 
     LocationModule,
-
   ],
   controllers: [AppController],
   providers: [AppService],

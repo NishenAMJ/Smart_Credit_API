@@ -12,10 +12,7 @@ import {
   LoanApplicationStatus,
   UpdateLoanApplicationDto,
 } from './dto/loan-application.dto';
-import {
-  BorrowerProfile,
-  LoanApplication,
-} from '../types/borrower.types';
+import { BorrowerProfile, LoanApplication } from '../types/borrower.types';
 import { CreditScoreService } from '../credit-score/credit-score.service';
 
 type TimestampLike =
@@ -31,8 +28,8 @@ type TimestampLike =
  */
 @Injectable()
 export class BorrowerApplicationsService {
-  private readonly BORROWERS_COL = 'borrowers';
-  private readonly LOAN_APPS_COL = 'loanRequests';
+  private readonly BORROWERS_COL = 'users';
+  private readonly LOAN_APPS_COL = 'loanApplications';
 
   constructor(
     private readonly firebaseService: FirebaseService,
@@ -106,35 +103,55 @@ export class BorrowerApplicationsService {
       );
     }
 
-    const profile = profileDoc.data() as BorrowerProfile;
-    if (!profile.kycVerified) {
+    const profile = profileDoc.data() as BorrowerProfile & {
+      kycStatus?: string;
+      borrowerProfile?: { creditScore?: number | null } | null;
+    };
+    if (profile.kycStatus !== 'approved') {
       throw new ForbiddenException(
         'KYC verification required before submitting a loan application.',
       );
     }
 
-    const scoreSummary = await this.creditScoreService.getSummary(
-      plainDto.borrowerId,
-    );
     const now = FieldValue.serverTimestamp();
     const appRef = this.db.collection(this.LOAN_APPS_COL).doc();
 
-    const applicationData = {
-      requestId: appRef.id,
-      ...plainDto,
-      purpose: plainDto.loanPurpose,
-      borrowerName: profile.fullName || 'Unknown',
-      borrowerPhotoURL: (profile as any).photoURL || '',
-      borrowerRating: (profile as any).rating || 0,
-      smartScore: scoreSummary.score,
-      borrowerCreditScore: scoreSummary.score,
-      scoreRating: scoreSummary.rating,
-      scoreBreakdown: scoreSummary.breakdown,
-      scoreSnapshotAt: now,
+    const applicationData: Record<string, any> = {
+      applicationId: appRef.id,
+      listingId: plainDto.adId,
+      lenderId: null,
+      borrowerId: plainDto.borrowerId,
+      requestedPrincipalMinor: Math.round(plainDto.amount * 100),
+      requestedTenureMonths: plainDto.tenureMonths,
+      requestedPurpose: plainDto.loanPurpose,
+      purposeDescription: plainDto.purposeDescription ?? '',
       status: LoanApplicationStatus.DRAFT,
+      lenderDecision: {
+        approvedPrincipalMinor: null,
+        annualInterestRate: null,
+        approvedTenureMonths: null,
+        decisionNote: null,
+        decidedAt: null,
+      },
+      convertedLoanId: null,
+      submittedAt: null,
       createdAt: now,
       updatedAt: now,
     };
+
+    if (!plainDto.adId) {
+      throw new BadRequestException('A lender listing is required.');
+    }
+    const listing = await this.db
+      .collection('loanListings')
+      .doc(plainDto.adId)
+      .get();
+    if (!listing.exists || listing.get('status') !== 'active') {
+      throw new BadRequestException(
+        'The selected lender listing is not active.',
+      );
+    }
+    applicationData.lenderId = listing.get('lenderId');
 
     await appRef.set(applicationData);
 
@@ -287,4 +304,3 @@ export class BorrowerApplicationsService {
     return this.getLoanApplicationById(applicationId, borrowerId);
   }
 }
-

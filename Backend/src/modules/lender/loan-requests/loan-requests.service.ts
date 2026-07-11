@@ -75,7 +75,10 @@ export class LoanRequestsService {
     const safePageSize = Math.min(Math.max(pageSize, 8), 60);
     const db = this.firebaseService.getDb();
 
-    const adsSnapshot = await db.collection('ads').where('lenderId', '==', lenderId).get();
+    const adsSnapshot = await db
+      .collection('loanListings')
+      .where('lenderId', '==', lenderId)
+      .get();
     const adTitleMap = new Map(
       adsSnapshot.docs.map((doc) => {
         const data = doc.data();
@@ -109,55 +112,55 @@ export class LoanRequestsService {
 
     const borrowerProfiles = await this.getBorrowerProfiles(borrowerIds);
 
-    const requests: PendingRequestListItem[] = prioritizedRequests.map((request) => {
-      const borrower = request.borrowerId
-        ? borrowerProfiles.get(request.borrowerId)
-        : undefined;
+    const requests: PendingRequestListItem[] = prioritizedRequests.map(
+      (request) => {
+        const borrower = request.borrowerId
+          ? borrowerProfiles.get(request.borrowerId)
+          : undefined;
 
-      return {
-        requestId: request.requestId,
-        borrowerId: request.borrowerId ?? 'unknown-borrower',
-        borrowerName: borrower?.fullName ?? 'Unknown borrower',
-        borrowerEmail: borrower?.email ?? 'No email',
-        borrowerPhone: borrower?.phone ?? null,
-        borrowerCreditScore: borrower?.creditScore ?? null,
-        borrowerKycStatus: borrower?.kycStatus ?? 'not_submitted',
-        amount: request.amount,
-        tenureMonths: request.tenureMonths,
-        purpose: request.purpose,
-        purposeCategory: request.purposeCategory,
-        status: request.status,
-        urgency: request.urgency,
-        suggestedInterestRate: request.suggestedInterestRate,
-        monthlyIncome: request.monthlyIncome,
-        incomeSource: request.incomeSource,
-        requestedRegion: request.requestedRegion,
-        collateralOffered: request.collateralOffered,
-        targetType: request.adId ? 'targeted' : 'marketplace',
-        adId: request.adId,
-        adTitle: request.adId ? adTitleMap.get(request.adId) ?? null : null,
-        createdAt: request.createdAt ? request.createdAt.toISOString() : null,
-        updatedAt: request.updatedAt ? request.updatedAt.toISOString() : null,
-        notes: request.notes,
-        matchedLenderIds: request.matchedLenderIds,
-      };
-    });
+        return {
+          requestId: request.requestId,
+          borrowerId: request.borrowerId ?? 'unknown-borrower',
+          borrowerName: borrower?.fullName ?? 'Unknown borrower',
+          borrowerEmail: borrower?.email ?? 'No email',
+          borrowerPhone: borrower?.phone ?? null,
+          borrowerCreditScore: borrower?.creditScore ?? null,
+          borrowerKycStatus: borrower?.kycStatus ?? 'not_submitted',
+          amount: request.amount,
+          tenureMonths: request.tenureMonths,
+          purpose: request.purpose,
+          purposeCategory: request.purposeCategory,
+          status: request.status,
+          urgency: request.urgency,
+          suggestedInterestRate: request.suggestedInterestRate,
+          monthlyIncome: request.monthlyIncome,
+          incomeSource: request.incomeSource,
+          requestedRegion: request.requestedRegion,
+          collateralOffered: request.collateralOffered,
+          targetType: request.adId ? 'targeted' : 'marketplace',
+          adId: request.adId,
+          adTitle: request.adId ? (adTitleMap.get(request.adId) ?? null) : null,
+          createdAt: request.createdAt ? request.createdAt.toISOString() : null,
+          updatedAt: request.updatedAt ? request.updatedAt.toISOString() : null,
+          notes: request.notes,
+          matchedLenderIds: request.matchedLenderIds,
+        };
+      },
+    );
 
     const summary = includeSummary
-      ? await this.buildSummary(
-          db,
-          lenderId,
-          adIds,
-          adId,
-          includeAllStatuses,
-        )
+      ? await this.buildSummary(db, lenderId, adIds, adId, includeAllStatuses)
       : this.buildSummaryFromRequests(prioritizedRequests);
 
     return {
       lenderId,
       summary,
       requests,
-      pageInfo: buildPageInfo(prioritizedRequests, safePageSize, pagedRequests.items.length > safePageSize),
+      pageInfo: buildPageInfo(
+        prioritizedRequests,
+        safePageSize,
+        pagedRequests.items.length > safePageSize,
+      ),
       generatedAt: new Date().toISOString(),
     };
   }
@@ -177,7 +180,7 @@ export class LoanRequestsService {
       batchSize: Math.max(pageSize * 2, 40),
       fetchChunk: async (nextCursor, batchSize) => {
         const snapshot = await applyDateCursor(
-          orderByDateAndId(db.collection('loanRequests'), 'createdAt'),
+          orderByDateAndId(db.collection('loanApplications'), 'createdAt'),
           nextCursor,
         )
           .limit(batchSize)
@@ -214,7 +217,7 @@ export class LoanRequestsService {
 
     while (hasMore) {
       const snapshot = await applyDateCursor(
-        orderByDateAndId(db.collection('loanRequests'), 'createdAt'),
+        orderByDateAndId(db.collection('loanApplications'), 'createdAt'),
         cursor,
       )
         .limit(80)
@@ -253,7 +256,8 @@ export class LoanRequestsService {
   private buildSummaryFromRequests(requests: RawLoanRequest[]) {
     return {
       totalPendingRequests: requests.length,
-      targetedRequests: requests.filter((request) => Boolean(request.adId)).length,
+      targetedRequests: requests.filter((request) => Boolean(request.adId))
+        .length,
       marketplaceMatches: requests.filter((request) => !request.adId).length,
       highUrgencyRequests: requests.filter((request) =>
         ['high', 'critical'].includes(request.urgency),
@@ -273,8 +277,8 @@ export class LoanRequestsService {
 
     return Boolean(
       request.targetLenderId === lenderId ||
-        request.matchedLenderIds.includes(lenderId) ||
-        (request.adId && adIds.has(request.adId)),
+      request.matchedLenderIds.includes(lenderId) ||
+      (request.adId && adIds.has(request.adId)),
     );
   }
 
@@ -292,16 +296,19 @@ export class LoanRequestsService {
 
     return {
       requestId:
-        typeof data.requestId === 'string' && data.requestId.trim().length > 0
-          ? data.requestId
+        typeof data.applicationId === 'string' &&
+        data.applicationId.trim().length > 0
+          ? data.applicationId
           : doc.id,
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
-      adId: typeof data.adId === 'string' ? data.adId : null,
-      targetLenderId:
-        typeof data.targetLenderId === 'string' ? data.targetLenderId : null,
-      amount: this.toNumber(data.amount),
-      tenureMonths: this.toNumber(data.tenureMonths),
-      purpose: typeof data.purpose === 'string' ? data.purpose : 'Unknown purpose',
+      adId: typeof data.listingId === 'string' ? data.listingId : null,
+      targetLenderId: typeof data.lenderId === 'string' ? data.lenderId : null,
+      amount: this.toNumber(data.requestedPrincipalMinor) / 100,
+      tenureMonths: this.toNumber(data.requestedTenureMonths),
+      purpose:
+        typeof data.requestedPurpose === 'string'
+          ? data.requestedPurpose
+          : 'Unknown purpose',
       purposeCategory:
         typeof data.purposeCategory === 'string'
           ? data.purposeCategory
@@ -313,7 +320,9 @@ export class LoanRequestsService {
       incomeSource:
         typeof data.incomeSource === 'string' ? data.incomeSource : 'unknown',
       requestedRegion:
-        typeof data.requestedRegion === 'string' ? data.requestedRegion : 'Unknown',
+        typeof data.requestedRegion === 'string'
+          ? data.requestedRegion
+          : 'Unknown',
       collateralOffered: data.collateralOffered === true,
       matchedLenderIds: readStringArray(data.matchedLenderIds),
       notes: typeof data.notes === 'string' ? data.notes : '',
@@ -333,7 +342,9 @@ export class LoanRequestsService {
 
     const db = this.firebaseService.getDb();
     const snapshots = await db.getAll(
-      ...borrowerIds.map((borrowerId) => db.collection('users').doc(borrowerId)),
+      ...borrowerIds.map((borrowerId) =>
+        db.collection('users').doc(borrowerId),
+      ),
     );
 
     return new Map(
@@ -344,16 +355,20 @@ export class LoanRequestsService {
           snapshot.id,
           {
             fullName:
-              data && typeof data.fullName === 'string' && data.fullName.trim().length > 0
+              data &&
+              typeof data.fullName === 'string' &&
+              data.fullName.trim().length > 0
                 ? data.fullName
                 : snapshot.id,
-            email: data && typeof data.email === 'string' ? data.email : 'No email',
+            email:
+              data && typeof data.email === 'string' ? data.email : 'No email',
             phone: data && typeof data.phone === 'string' ? data.phone : null,
             creditScore:
               data &&
-              typeof data.creditScore === 'number' &&
-              Number.isFinite(data.creditScore)
-                ? data.creditScore
+              typeof data.borrowerProfile === 'object' &&
+              data.borrowerProfile !== null &&
+              typeof data.borrowerProfile.creditScore === 'number'
+                ? data.borrowerProfile.creditScore
                 : null,
             kycStatus:
               data && typeof data.kycStatus === 'string'

@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import {
@@ -45,8 +49,9 @@ export class BorrowerNotificationsService {
       .get();
 
     const decodedCursor = decodeCursor(cursor);
-    const filtered = snapshot.docs
-      .map((doc) => this.mapNotification(doc.id, doc.data()));
+    const filtered = snapshot.docs.map((doc) =>
+      this.mapNotification(doc.id, doc.data()),
+    );
     const sorted = filtered
       .filter((notification) => {
         if (state === 'read') {
@@ -61,7 +66,8 @@ export class BorrowerNotificationsService {
       })
       .sort((first, second) => {
         const dateDelta =
-          new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime();
+          new Date(second.createdAt).getTime() -
+          new Date(first.createdAt).getTime();
 
         return dateDelta || second.id.localeCompare(first.id);
       })
@@ -73,7 +79,10 @@ export class BorrowerNotificationsService {
         const createdAt = new Date(notification.createdAt);
         const timeDelta = createdAt.getTime() - decodedCursor.date.getTime();
 
-        return timeDelta < 0 || (timeDelta === 0 && notification.id < decodedCursor.id);
+        return (
+          timeDelta < 0 ||
+          (timeDelta === 0 && notification.id < decodedCursor.id)
+        );
       });
     const pageItems = sorted.slice(0, safePageSize + 1);
     const notifications = pageItems.slice(0, safePageSize);
@@ -222,12 +231,18 @@ export class BorrowerNotificationsService {
     const [requestsSnapshot, loansSnapshot, profileSnapshot] =
       await Promise.all([
         db
-          .collection('loanRequests')
+          .collection('loanApplications')
           .where('borrowerId', '==', borrowerId)
           .orderBy('updatedAt', 'desc')
           .limit(20)
           .get()
-          .catch(() => db.collection('loanRequests').where('borrowerId', '==', borrowerId).limit(20).get()),
+          .catch(() =>
+            db
+              .collection('loanApplications')
+              .where('borrowerId', '==', borrowerId)
+              .limit(20)
+              .get(),
+          ),
         db.collection('loans').where('borrowerId', '==', borrowerId).get(),
         db.collection('users').doc(borrowerId).get(),
       ]);

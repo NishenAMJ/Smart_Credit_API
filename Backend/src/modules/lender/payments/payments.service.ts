@@ -7,23 +7,16 @@ import {
   Timestamp,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
+import { repaymentTransactionIdFor } from '../../../common/firestore/schema';
 import {
-  applyDateCursor,
   buildPageInfo,
   chunkValues,
   decodeCursor,
-  orderByDateAndId,
   readDate,
   readNumber,
 } from '../../../firebase/firestore-query.utils';
 import {
-  computeLoanRemainingAmount,
-  getInstallmentAmount,
   getNormalizedInstallment,
-  getPaymentAmount,
-  getPaymentAncestorData,
-  getPaymentCreatedAt,
-  getLoanAmount,
   getLoanCreatedAt,
 } from '../../../firebase/firestore-seed.utils';
 import {
@@ -296,18 +289,12 @@ export class PaymentsService {
         );
       }
 
-      if (input.amount > installmentOutstanding) {
+      if (input.amount !== installmentOutstanding) {
         throw new BadRequestException(
-          `Payment exceeds installment outstanding balance of ${installmentOutstanding}.`,
+          `This installment must be settled in full with ${installmentOutstanding}.`,
         );
       }
 
-      const nextPaidAmount = currentPaidAmount + input.amount;
-      const installmentStatus = this.resolveInstallmentStatus(
-        installment.dueDate,
-        installment.amount,
-        nextPaidAmount,
-      );
       const nextRemainingAmount = Math.max(
         0,
         loan.remainingAmount - input.amount,
@@ -318,59 +305,48 @@ export class PaymentsService {
           : loan.status === 'completed'
             ? 'active'
             : loan.status;
-      const paymentRef = installmentRef.collection('payments').doc();
-      const transactionRef = db.collection('transactions').doc();
+      const transactionId = repaymentTransactionIdFor(loanId, installmentId);
+      const transactionRef = db.collection('transactions').doc(transactionId);
       const paymentTimestamp = Timestamp.fromDate(parsedPaidAt);
       const note = this.normalizeNote(input.note);
 
-      transaction.set(paymentRef, {
-        paymentId: paymentRef.id,
-        lenderId,
-        borrowerId: loan.borrowerId,
+      transaction.create(transactionRef, {
+        transactionId,
         loanId,
         installmentId,
-        amount: input.amount,
-        paidAmount: input.amount,
-        paidAt: paymentTimestamp,
+        listingId: loanSnapshot.get('listingId') ?? null,
+        amountMinor: Math.round(input.amount * 100),
+        currency: 'LKR',
         createdAt: paymentTimestamp,
-        updatedAt: FieldValue.serverTimestamp(),
-        type: 'repayment',
-        paymentType: 'repayment',
-        status: 'completed',
-        note,
-        recordedByLenderId: lenderId,
-      });
-
-      transaction.set(transactionRef, {
-        paymentId: paymentRef.id,
-        loanId,
-        installmentId,
-        amount: input.amount,
-        createdAt: paymentTimestamp,
-        updatedAt: FieldValue.serverTimestamp(),
+        completedAt: paymentTimestamp,
         type: 'repayment',
         status: 'completed',
+        paymentMethod: 'bank_transfer',
+        externalReference: null,
+        idempotencyKey: transactionId,
+        receiptDocumentId: null,
         note,
         lenderId,
         borrowerId: loan.borrowerId,
+        initiatedByUserId: lenderId,
       });
 
       transaction.update(installmentRef, {
-        lenderId,
-        borrowerId: loan.borrowerId,
-        loanId,
-        installmentId,
-        paidAmount: nextPaidAmount,
-        amountPaid: nextPaidAmount,
-        amountDue: installment.amount,
-        status: installmentStatus,
-        lastPaymentAt: paymentTimestamp,
+        status: 'paid',
+        paidTransactionId: transactionId,
+        paidAt: paymentTimestamp,
+        note,
         updatedAt: FieldValue.serverTimestamp(),
       });
 
       transaction.update(loanRef, {
-        remainingAmount: nextRemainingAmount,
+        amountPaidMinor: Math.round(
+          this.toNumber(loanSnapshot.get('amountPaidMinor')) +
+            input.amount * 100,
+        ),
+        remainingBalanceMinor: Math.round(nextRemainingAmount * 100),
         status: loanStatus,
+        completedAt: nextRemainingAmount <= 0 ? paymentTimestamp : null,
         updatedAt: FieldValue.serverTimestamp(),
       });
 
@@ -511,75 +487,7 @@ export class PaymentsService {
     cursor?: string | null,
     search?: string | null,
   ): Promise<{ items: TransactionRecord[] }> {
-    const db = this.firebaseService.getDb();
-    let usedCollectionGroup = false;
-
-    try {
-      const items: TransactionRecord[] = [];
-      let currentCursor = cursor ?? null;
-      let exhausted = false;
-
-      while (items.length < pageSize + 1 && !exhausted) {
-        const snapshot = await applyDateCursor(
-          orderByDateAndId(
-            db
-              .collectionGroup('payments')
-              .where('lenderId', '==', context.lenderId),
-            'paidAt',
-          ),
-          currentCursor,
-        )
-          .limit(Math.max(pageSize * 2, 40))
-          .get();
-        usedCollectionGroup = true;
-
-        if (snapshot.empty) {
-          exhausted = true;
-          break;
-        }
-
-        snapshot.docs.forEach((paymentDoc) => {
-          if (items.length >= pageSize + 1) {
-            return;
-          }
-
-          const payment = this.mapPayment(paymentDoc);
-
-          if (
-            this.matchesTransactionFilters(payment, context, search ?? null)
-          ) {
-            items.push(payment);
-          }
-        });
-
-        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-        currentCursor =
-          snapshot.docs.length > 0
-            ? Buffer.from(
-                JSON.stringify({
-                  timestamp:
-                    readDate(lastDoc.get('paidAt'))?.toISOString() ??
-                    new Date(0).toISOString(),
-                  id: lastDoc.id,
-                }),
-                'utf8',
-              ).toString('base64url')
-            : null;
-        exhausted = snapshot.docs.length < Math.max(pageSize * 2, 40);
-      }
-
-      if (items.length > 0 || usedCollectionGroup) {
-        return { items };
-      }
-    } catch (error) {
-      this.logFallback(
-        'recent-payments:collection-group',
-        'Falling back from lender-scoped payments collection group query.',
-        error,
-      );
-    }
-
-    const topLevelTransactions = this.paginateTransactions(
+    const items = this.paginateTransactions(
       (await this.getTopLevelRepaymentsByLoanIds(context.loanIds)).filter(
         (transaction) =>
           this.matchesTransactionFilters(transaction, context, search ?? null),
@@ -588,68 +496,14 @@ export class PaymentsService {
       cursor,
     );
 
-    if (topLevelTransactions.length > 0) {
-      this.logger.warn(
-        'Using degraded top-level transactions fallback for recent payments page.',
-      );
-      return { items: topLevelTransactions };
-    }
-
-    this.logger.warn(
-      'Using degraded traversed nested-payments fallback for recent payments page.',
-    );
-    return {
-      items: await this.getTraversedPaymentsByLoanIds(
-        context.loanIdsList,
-        pageSize,
-        cursor,
-        search,
-        context,
-      ),
-    };
+    return { items };
   }
 
   private async getAllRecentPayments(
-    lenderId: string,
+    _lenderId: string,
     loanIds: Set<string>,
   ): Promise<TransactionRecord[]> {
-    const db = this.firebaseService.getDb();
-
-    try {
-      const snapshot = await db
-        .collectionGroup('payments')
-        .where('lenderId', '==', lenderId)
-        .orderBy('paidAt', 'desc')
-        .get();
-
-      const payments = snapshot.docs
-        .map((paymentDoc) => this.mapPayment(paymentDoc))
-        .filter(
-          (payment) =>
-            payment.loanId &&
-            loanIds.has(payment.loanId) &&
-            payment.amount > 0 &&
-            this.isRepaymentLike(payment.type, payment.status),
-        );
-
-      if (payments.length > 0) {
-        return payments;
-      }
-    } catch (error) {
-      this.logFallback(
-        'recent-payments:full-collection-group',
-        'Falling back from full lender-scoped payments history query.',
-        error,
-      );
-    }
-
-    const topLevel = await this.getTopLevelRepaymentsByLoanIds(loanIds);
-
-    if (topLevel.length > 0) {
-      return topLevel;
-    }
-
-    return this.getTraversedPaymentsByLoanIds(Array.from(loanIds));
+    return this.getTopLevelRepaymentsByLoanIds(loanIds);
   }
 
   private async getRecentPaymentsForLender(
@@ -679,59 +533,21 @@ export class PaymentsService {
       .doc(loanId)
       .collection('installments')
       .get();
-    const topLevelTransactions = await this.getTopLevelRepaymentsByLoanIds(
-      new Set([loanId]),
-    );
+    const installments = installmentsSnapshot.docs.map((installmentDoc) => {
+      const installment = this.mapInstallment(installmentDoc);
+      const data = installmentDoc.data();
+      const lastPaymentAt = readDate(data.lastPaymentAt ?? data.paidAt);
 
-    const installments = await Promise.all(
-      installmentsSnapshot.docs.map(async (installmentDoc) => {
-        const installment = this.mapInstallment(installmentDoc);
-        const paymentsSnapshot = await installmentDoc.ref
-          .collection('payments')
-          .get();
-        const payments = paymentsSnapshot.docs
-          .map((paymentDoc) => this.mapPayment(paymentDoc))
-          .filter((payment) => payment.amount > 0);
-
-        const fallbackTransactions = topLevelTransactions.filter(
-          (transaction) =>
-            transaction.installmentId === installmentDoc.id &&
-            !transaction.paymentId,
-        );
-
-        const mergedPayments = [...payments, ...fallbackTransactions].sort(
-          (left, right) => {
-            const leftTime = left.createdAt ? left.createdAt.getTime() : 0;
-            const rightTime = right.createdAt ? right.createdAt.getTime() : 0;
-            return rightTime - leftTime;
-          },
-        );
-
-        return {
-          id: installment.id,
-          status: installment.status,
-          dueDate: installment.dueDate
-            ? installment.dueDate.toISOString()
-            : null,
-          amount: installment.amount,
-          paidAmount:
-            installment.paidAmount > 0
-              ? installment.paidAmount
-              : this.sum(mergedPayments.map((payment) => payment.amount)),
-          payments: mergedPayments.map((payment) => ({
-            id: payment.id,
-            amount: payment.amount,
-            status: payment.status,
-            type: payment.type,
-            createdAt: payment.createdAt
-              ? payment.createdAt.toISOString()
-              : null,
-            source: payment.source,
-            note: payment.note,
-          })),
-        };
-      }),
-    );
+      return {
+        id: installment.id,
+        status: installment.status,
+        dueDate: installment.dueDate ? installment.dueDate.toISOString() : null,
+        amount: installment.amount,
+        paidAmount: installment.paidAmount,
+        lastPaymentAt: lastPaymentAt ? lastPaymentAt.toISOString() : null,
+        note: this.normalizeNote(data.note),
+      };
+    });
 
     installments.sort((left, right) => {
       const leftTime = left.dueDate ? new Date(left.dueDate).getTime() : 0;
@@ -863,9 +679,9 @@ export class PaymentsService {
     return {
       id,
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
-      amount: getLoanAmount(data),
-      remainingAmount: await computeLoanRemainingAmount(db, id, data),
-      interestRate: this.toNumber(data.interestRate),
+      amount: this.toNumber(data.principalMinor) / 100,
+      remainingAmount: this.toNumber(data.remainingBalanceMinor) / 100,
+      interestRate: this.toNumber(data.annualInterestRate),
       tenureMonths: this.toNumber(data.tenureMonths),
       status: typeof data.status === 'string' ? data.status : 'unknown',
       createdAt: getLoanCreatedAt(data),
@@ -885,51 +701,11 @@ export class PaymentsService {
       paymentId: typeof data.paymentId === 'string' ? data.paymentId : null,
       type: typeof data.type === 'string' ? data.type : 'unknown',
       status: typeof data.status === 'string' ? data.status : 'recorded',
-      amount: this.toNumber(data.amount),
+      amount: this.toNumber(data.amountMinor) / 100,
       createdAt: this.toDate(data.createdAt),
       source: 'transaction',
       note: typeof data.note === 'string' ? data.note : null,
     };
-  }
-
-  private async getNestedPayments(
-    loanIds: string[],
-  ): Promise<TransactionRecord[]> {
-    if (loanIds.length === 0) {
-      return [];
-    }
-
-    const db = this.firebaseService.getDb();
-    const loanIdChunks = chunkValues(loanIds, 10);
-    const paymentGroups = await Promise.all(
-      loanIdChunks.map(async (loanIdChunk) => {
-        const snapshot = await db
-          .collectionGroup('payments')
-          .where('loanId', 'in', loanIdChunk)
-          .get();
-
-        return snapshot.docs.map((paymentDoc) => {
-          return this.mapPayment(paymentDoc);
-        });
-      }),
-    );
-
-    return paymentGroups
-      .flat()
-      .filter((payment) => payment.loanId && loanIds.includes(payment.loanId))
-      .filter((payment) => payment.amount > 0)
-      .filter((payment) => this.isRepaymentLike(payment.type, payment.status))
-      .sort((left, right) => {
-        const leftTime = left.createdAt ? left.createdAt.getTime() : 0;
-        const rightTime = right.createdAt ? right.createdAt.getTime() : 0;
-        return rightTime - leftTime;
-      });
-  }
-
-  private async getTopLevelRepayments(
-    loanIds: Set<string>,
-  ): Promise<TransactionRecord[]> {
-    return this.getTopLevelRepaymentsByLoanIds(loanIds);
   }
 
   private async getTopLevelRepaymentsByLoanIds(
@@ -967,102 +743,6 @@ export class PaymentsService {
     return transactions;
   }
 
-  private async getTraversedPaymentsByLoanIds(
-    loanIds: string[],
-    pageSize?: number,
-    cursor?: string | null,
-    search?: string | null,
-    context?: LenderLedgerContext,
-  ): Promise<TransactionRecord[]> {
-    if (loanIds.length === 0) {
-      return [];
-    }
-
-    const db = this.firebaseService.getDb();
-    const paymentGroups = await Promise.all(
-      loanIds.map(async (loanId) => {
-        const installmentsSnapshot = await db
-          .collection('loans')
-          .doc(loanId)
-          .collection('installments')
-          .get();
-
-        const installmentPayments = await Promise.all(
-          installmentsSnapshot.docs.map(async (installmentDoc) => {
-            const paymentsSnapshot = await installmentDoc.ref
-              .collection('payments')
-              .get();
-            return paymentsSnapshot.docs.map((paymentDoc) =>
-              this.mapPayment(paymentDoc),
-            );
-          }),
-        );
-
-        return installmentPayments.flat();
-      }),
-    );
-
-    const allPayments = paymentGroups
-      .flat()
-      .filter((payment) => payment.loanId && loanIds.includes(payment.loanId))
-      .filter((payment) => payment.amount > 0)
-      .filter((payment) => this.isRepaymentLike(payment.type, payment.status))
-      .filter((payment) =>
-        context ? this.matchesSearch(payment, context, search ?? null) : true,
-      )
-      .sort((left, right) => {
-        const leftTime = left.createdAt ? left.createdAt.getTime() : 0;
-        const rightTime = right.createdAt ? right.createdAt.getTime() : 0;
-        return rightTime - leftTime;
-      });
-
-    if (!pageSize) {
-      return allPayments;
-    }
-
-    const decodedCursor = decodeCursor(cursor);
-    const startIndex = decodedCursor
-      ? allPayments.findIndex(
-          (payment) =>
-            payment.id === decodedCursor.id &&
-            payment.createdAt?.toISOString() ===
-              decodedCursor.date.toISOString(),
-        ) + 1
-      : 0;
-    const safeStartIndex = startIndex > 0 ? startIndex : 0;
-
-    return allPayments.slice(safeStartIndex, safeStartIndex + pageSize + 1);
-  }
-
-  private mapPayment(
-    doc: QueryDocumentSnapshot<DocumentData>,
-  ): TransactionRecord {
-    const data = doc.data();
-    const ancestors = getPaymentAncestorData(doc);
-    const rawType =
-      typeof data.type === 'string'
-        ? data.type
-        : typeof data.paymentType === 'string'
-          ? data.paymentType
-          : 'payment';
-    const normalizedType = this.isSeedPaymentMethod(rawType)
-      ? 'repayment'
-      : rawType;
-
-    return {
-      id: doc.id,
-      loanId: ancestors.loanId,
-      installmentId: ancestors.installmentId,
-      paymentId: doc.id,
-      type: normalizedType,
-      status: typeof data.status === 'string' ? data.status : 'recorded',
-      amount: getPaymentAmount(data),
-      createdAt: getPaymentCreatedAt(data),
-      source: 'payment',
-      note: typeof data.note === 'string' ? data.note : null,
-    };
-  }
-
   private mapInstallment(
     doc: QueryDocumentSnapshot<DocumentData>,
   ): InstallmentRecord {
@@ -1080,8 +760,11 @@ export class PaymentsService {
       id,
       status: normalized.status,
       dueDate: normalized.dueDate,
-      amount: getInstallmentAmount(data),
-      paidAmount: this.toNumber(data.paidAmount ?? data.amountPaid),
+      amount: this.toNumber(data.amountDueMinor) / 100,
+      paidAmount:
+        normalized.status === 'paid'
+          ? this.toNumber(data.amountDueMinor) / 100
+          : 0,
     };
   }
 

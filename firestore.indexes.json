@@ -1,61 +1,81 @@
 {
   "indexes": [
     {
-      "collectionGroup": "transactions",
+      "collectionGroup": "loanListings",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "lenderId", "order": "ASCENDING" },
-        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "ads",
+      "collectionGroup": "loanListings",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "lenderId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "ads",
+      "collectionGroup": "loanListings",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "lenderId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "expiresAt", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "loanRequests",
+      "collectionGroup": "loanApplications",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "targetLenderId", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "ASCENDING" }
+        { "fieldPath": "borrowerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "loanRequests",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "matchedLenderIds", "arrayConfig": "CONTAINS" },
-        { "fieldPath": "updatedAt", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "loanRequests",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "adId", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "disputes",
+      "collectionGroup": "loanApplications",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "lenderId", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "ASCENDING" }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "loanApplications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "listingId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "loans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "borrowerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "loans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "lenderId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "installments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "borrowerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "dueAt", "order": "ASCENDING" }
       ]
     },
     {
@@ -64,19 +84,19 @@
       "fields": [
         { "fieldPath": "lenderId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "ASCENDING" }
+        { "fieldPath": "dueAt", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "payments",
-      "queryScope": "COLLECTION_GROUP",
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "lenderId", "order": "ASCENDING" },
-        { "fieldPath": "paidAt", "order": "DESCENDING" }
+        { "fieldPath": "borrowerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "lenderNotifications",
+      "collectionGroup": "transactions",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "lenderId", "order": "ASCENDING" },
@@ -84,39 +104,36 @@
       ]
     },
     {
-      "collectionGroup": "lenderNotifications",
+      "collectionGroup": "transactions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "lenderId", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "loanId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "lenderNotifications",
+      "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "lenderId", "order": "ASCENDING" },
+        { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "isRead", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "lenderNotifications",
+      "collectionGroup": "disputes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "lenderId", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "isRead", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "lenderBorrowers",
+      "collectionGroup": "conversations",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "lenderId", "order": "ASCENDING" },
-        { "fieldPath": "latestLoanCreatedAt", "order": "DESCENDING" }
+        { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ]
     },
     {

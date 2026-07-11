@@ -50,23 +50,14 @@ export type PaymentsResponse = {
   generatedAt: string;
 };
 
-export type LoanLedgerPaymentDetail = {
-  id: string;
-  amount: number;
-  status: string;
-  type: string;
-  createdAt: string | null;
-  source: "payment" | "transaction";
-  note: string | null;
-};
-
 export type LoanLedgerInstallmentDetail = {
   id: string;
   status: string;
   dueDate: string | null;
   amount: number;
   paidAmount: number;
-  payments: LoanLedgerPaymentDetail[];
+  lastPaymentAt: string | null;
+  note: string | null;
 };
 
 export type LoanLedgerDetailsResponse = {
@@ -122,10 +113,7 @@ export async function fetchPayments(
     params.set("search", options.search.trim());
   }
 
-  const response = await fetchLenderApiWithQuery(
-    "/payments",
-    params,
-  );
+  const response = await fetchLenderApiWithQuery("/payments", params);
 
   if (!response.ok) {
     return parseApiError(response, "Failed to load payments.");

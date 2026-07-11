@@ -65,11 +65,11 @@ export type BorrowerInstallmentSummary = {
 export class BorrowerService {
   // Firestore collection names used across this service.
   private readonly USERS_COL = 'users';
-  private readonly BORROWERS_COL = 'borrowers';
-  private readonly LOAN_APPS_COL = 'loanRequests';
+  private readonly BORROWERS_COL = 'users';
+  private readonly LOAN_APPS_COL = 'loanApplications';
 
   private readonly LOANS_COL = 'loans';
-  private readonly ADS_COL = 'ads';
+  private readonly ADS_COL = 'loanListings';
   private readonly REPAYMENTS_COL = 'repayments';
   private readonly TRANSACTIONS_COL = 'transactions';
   private readonly QR_NONCES_COL = 'qrNonces';
@@ -1114,4 +1114,3 @@ export class BorrowerService {
       );
   }
 }
-

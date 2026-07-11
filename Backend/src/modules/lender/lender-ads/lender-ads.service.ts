@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import {
@@ -28,15 +33,19 @@ export class LenderAdsService {
     this.validateCreateInput(input);
 
     const db = this.firebaseService.getDb();
-    const lenderSnapshot = await db.collection('users').doc(input.lenderId).get();
+    const lenderSnapshot = await db
+      .collection('users')
+      .doc(input.lenderId)
+      .get();
     const lenderData = lenderSnapshot.data();
     const now = Timestamp.now();
     const expiresAt = Timestamp.fromDate(this.getExpiryDate(now.toDate(), 30));
-    const docRef = db.collection('ads').doc();
+    const docRef = db.collection('loanListings').doc();
     const title = input.headline.trim();
     const preferredPurposes = this.buildPreferredPurposes(input);
     const lenderName =
-      typeof lenderData?.businessName === 'string' && lenderData.businessName.trim().length > 0
+      typeof lenderData?.businessName === 'string' &&
+      lenderData.businessName.trim().length > 0
         ? lenderData.businessName
         : input.lenderName;
     const location =
@@ -49,34 +58,31 @@ export class LenderAdsService {
         ? lenderData.responseTimeHours
         : 24;
     const document = {
-      adId: docRef.id,
+      listingId: docRef.id,
       lenderId: input.lenderId,
       title,
       description: `${input.borrowerFocus.trim()}. ${input.supportNote.trim()}`,
-      minAmount: input.minAmount,
-      maxAmount: input.maxAmount,
-      preferredInterestRate: input.interestRate,
+      purposeCategories: preferredPurposes,
+      minAmountMinor: Math.round(input.minAmount * 100),
+      maxAmountMinor: Math.round(input.maxAmount * 100),
+      minInterestRateAnnual: input.interestRate,
+      maxInterestRateAnnual: input.interestRate,
       minTenureMonths: Math.min(6, input.tenureMonths),
       maxTenureMonths: input.tenureMonths,
       location,
-      preferredPurposes,
-      status: 'active',
-      isBoosted: false,
-      availableCapital: input.maxAmount,
-      applicationCount: 0,
-      fundedLoansCount: 0,
-      responseTimeHours,
+      currency: 'LKR',
+      repaymentFrequency: 'monthly',
+      status: 'pending_review',
+      availableCapitalMinor: Math.round(input.maxAmount * 100),
+      adminReview: {
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectionReason: null,
+      },
+      publishedAt: null,
       expiresAt,
       createdAt: now,
       updatedAt: now,
-      searchKeywords: this.buildSearchKeywords([
-        lenderName ?? '',
-        location,
-        title,
-        preferredPurposes.join(' '),
-      ]),
-      seedBatchId: `manual_${input.lenderId}_${now.toDate().getTime()}`,
-      source: 'create_ad_page',
     };
 
     await docRef.set(document);
@@ -102,29 +108,29 @@ export class LenderAdsService {
 
     return {
       id: docRef.id,
-      adId: document.adId,
+      adId: document.listingId,
       lenderId: document.lenderId,
       title: document.title,
       description: document.description,
-      minAmount: document.minAmount,
-      maxAmount: document.maxAmount,
-      preferredInterestRate: document.preferredInterestRate,
+      minAmount: document.minAmountMinor / 100,
+      maxAmount: document.maxAmountMinor / 100,
+      preferredInterestRate: document.minInterestRateAnnual,
       maxTenureMonths: document.maxTenureMonths,
       location: document.location,
-      preferredPurposes: document.preferredPurposes,
+      preferredPurposes: document.purposeCategories,
       status: document.status,
-      isBoosted: document.isBoosted,
-      availableCapital: document.availableCapital,
-      applicationCount: document.applicationCount,
-      fundedLoansCount: document.fundedLoansCount,
-      responseTimeHours: document.responseTimeHours,
+      isBoosted: false,
+      availableCapital: document.availableCapitalMinor / 100,
+      applicationCount: 0,
+      fundedLoansCount: 0,
+      responseTimeHours,
       lenderName,
       expiresAt: document.expiresAt.toDate().toISOString(),
       createdAt: document.createdAt.toDate().toISOString(),
       updatedAt: document.updatedAt.toDate().toISOString(),
-      searchKeywords: document.searchKeywords,
-      seedBatchId: document.seedBatchId,
-      source: document.source,
+      searchKeywords: this.buildSearchKeywords([title, ...preferredPurposes]),
+      seedBatchId: '',
+      source: 'loanListings',
     };
   }
 
@@ -134,9 +140,12 @@ export class LenderAdsService {
     cursor?: string | null,
   ): Promise<LenderAdsListResponse> {
     const safePageSize = Math.min(Math.max(pageSize, 1), 12);
-    const collection = this.firebaseService.getDb().collection('ads');
+    const collection = this.firebaseService.getDb().collection('loanListings');
     const snapshot = await applyDateCursor(
-      orderByDateAndId(collection.where('lenderId', '==', lenderId), 'createdAt'),
+      orderByDateAndId(
+        collection.where('lenderId', '==', lenderId),
+        'createdAt',
+      ),
       cursor,
     )
       .limit(safePageSize + 1)
@@ -161,6 +170,68 @@ export class LenderAdsService {
     };
   }
 
+  async updateAdFromMobile(
+    lenderId: string,
+    adId: string,
+    input: {
+      minAmount?: number;
+      maxAmount?: number;
+      interestRate?: number;
+      tenureMonths?: number;
+      active?: boolean;
+    },
+  ): Promise<LenderAdResponse> {
+    const db = this.firebaseService.getDb();
+    const ref = db.collection('loanListings').doc(adId);
+    const snapshot = await ref.get();
+
+    if (!snapshot.exists) {
+      throw new NotFoundException(`Lender ad ${adId} was not found.`);
+    }
+    if (snapshot.get('lenderId') !== lenderId) {
+      throw new ForbiddenException('You can only update your own lender ads.');
+    }
+
+    const update: Record<string, unknown> = { updatedAt: Timestamp.now() };
+    if (input.minAmount !== undefined) {
+      if (!Number.isFinite(input.minAmount) || input.minAmount <= 0) {
+        throw new BadRequestException('minAmount must be greater than zero.');
+      }
+      update.minAmountMinor = Math.round(input.minAmount * 100);
+    }
+    if (input.maxAmount !== undefined) {
+      if (!Number.isFinite(input.maxAmount) || input.maxAmount <= 0) {
+        throw new BadRequestException('maxAmount must be greater than zero.');
+      }
+      update.maxAmountMinor = Math.round(input.maxAmount * 100);
+      update.availableCapitalMinor = Math.round(input.maxAmount * 100);
+    }
+    if (input.interestRate !== undefined) {
+      if (!Number.isFinite(input.interestRate) || input.interestRate <= 0) {
+        throw new BadRequestException(
+          'interestRate must be greater than zero.',
+        );
+      }
+      update.minInterestRateAnnual = input.interestRate;
+      update.maxInterestRateAnnual = input.interestRate;
+    }
+    if (input.tenureMonths !== undefined) {
+      if (!Number.isInteger(input.tenureMonths) || input.tenureMonths <= 0) {
+        throw new BadRequestException(
+          'tenureMonths must be a positive integer.',
+        );
+      }
+      update.maxTenureMonths = input.tenureMonths;
+    }
+    if (input.active !== undefined) {
+      update.status = input.active ? 'active' : 'paused';
+    }
+
+    await ref.update(update);
+    const updated = await ref.get();
+    return this.mapLenderAd(updated.id, lenderId, updated.data() ?? {});
+  }
+
   private validateCreateInput(input: CreateLenderAdInput): void {
     if (!input.lenderId.trim()) {
       throw new BadRequestException('lenderId is required.');
@@ -171,11 +242,15 @@ export class LenderAdsService {
     }
 
     if (input.minAmount <= 0 || input.maxAmount <= 0) {
-      throw new BadRequestException('Loan amount range must be greater than zero.');
+      throw new BadRequestException(
+        'Loan amount range must be greater than zero.',
+      );
     }
 
     if (input.maxAmount < input.minAmount) {
-      throw new BadRequestException('maxAmount must be greater than or equal to minAmount.');
+      throw new BadRequestException(
+        'maxAmount must be greater than or equal to minAmount.',
+      );
     }
 
     if (input.interestRate <= 0) {
@@ -187,23 +262,33 @@ export class LenderAdsService {
     }
 
     if (input.borrowerFocus.trim().length < 8) {
-      throw new BadRequestException('borrowerFocus must be at least 8 characters.');
+      throw new BadRequestException(
+        'borrowerFocus must be at least 8 characters.',
+      );
     }
 
     if (input.processingTime.trim().length < 6) {
-      throw new BadRequestException('processingTime must be at least 6 characters.');
+      throw new BadRequestException(
+        'processingTime must be at least 6 characters.',
+      );
     }
 
     if (input.repaymentStyle.trim().length < 6) {
-      throw new BadRequestException('repaymentStyle must be at least 6 characters.');
+      throw new BadRequestException(
+        'repaymentStyle must be at least 6 characters.',
+      );
     }
 
     if (input.requirements.trim().length < 12) {
-      throw new BadRequestException('requirements must be at least 12 characters.');
+      throw new BadRequestException(
+        'requirements must be at least 12 characters.',
+      );
     }
 
     if (input.supportNote.trim().length < 12) {
-      throw new BadRequestException('supportNote must be at least 12 characters.');
+      throw new BadRequestException(
+        'supportNote must be at least 12 characters.',
+      );
     }
   }
 
@@ -247,28 +332,33 @@ export class LenderAdsService {
   ): LenderAdResponse {
     return {
       id,
-      adId: typeof data.adId === 'string' ? data.adId : id,
+      adId: typeof data.listingId === 'string' ? data.listingId : id,
       lenderId: typeof data.lenderId === 'string' ? data.lenderId : lenderId,
-      title: typeof data.title === 'string' && data.title.trim().length > 0 ? data.title : 'Untitled ad',
+      title:
+        typeof data.title === 'string' && data.title.trim().length > 0
+          ? data.title
+          : 'Untitled ad',
       description: typeof data.description === 'string' ? data.description : '',
-      minAmount: this.toNumber(data.minAmount),
-      maxAmount: this.toNumber(data.maxAmount),
-      preferredInterestRate: this.toNumber(data.preferredInterestRate),
+      minAmount: this.toNumber(data.minAmountMinor) / 100,
+      maxAmount: this.toNumber(data.maxAmountMinor) / 100,
+      preferredInterestRate: this.toNumber(data.minInterestRateAnnual),
       maxTenureMonths: this.toNumber(data.maxTenureMonths),
       location: typeof data.location === 'string' ? data.location : '',
-      preferredPurposes: readStringArray(data.preferredPurposes),
+      preferredPurposes: readStringArray(data.purposeCategories),
       status: getAdStatus(data),
       isBoosted: data.isBoosted === true,
-      availableCapital: this.toNumber(data.availableCapital ?? data.maxAmount),
-      applicationCount: this.toNumber(data.applicationCount),
-      fundedLoansCount: this.toNumber(data.fundedLoansCount),
-      responseTimeHours: this.toNumber(data.responseTimeHours),
+      availableCapital: this.toNumber(data.availableCapitalMinor) / 100,
+      applicationCount: 0,
+      fundedLoansCount: 0,
+      responseTimeHours: 24,
       lenderName: typeof data.lenderName === 'string' ? data.lenderName : null,
       expiresAt: this.toIsoString(data.expiresAt),
       createdAt: this.toIsoString(data.createdAt),
       updatedAt: this.toIsoString(data.updatedAt),
       searchKeywords: Array.isArray(data.searchKeywords)
-        ? data.searchKeywords.filter((value): value is string => typeof value === 'string')
+        ? data.searchKeywords.filter(
+            (value): value is string => typeof value === 'string',
+          )
         : [],
       seedBatchId: typeof data.seedBatchId === 'string' ? data.seedBatchId : '',
       source: typeof data.source === 'string' ? data.source : 'unknown',

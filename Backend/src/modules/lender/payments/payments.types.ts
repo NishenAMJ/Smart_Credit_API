@@ -45,23 +45,14 @@ export interface PaymentsResponse {
   generatedAt: string;
 }
 
-export interface LoanLedgerPaymentDetail {
-  id: string;
-  amount: number;
-  status: string;
-  type: string;
-  createdAt: string | null;
-  source: 'payment' | 'transaction';
-  note: string | null;
-}
-
 export interface LoanLedgerInstallmentDetail {
   id: string;
   status: string;
   dueDate: string | null;
   amount: number;
   paidAmount: number;
-  payments: LoanLedgerPaymentDetail[];
+  lastPaymentAt: string | null;
+  note: string | null;
 }
 
 export interface LoanLedgerDetailsResponse {

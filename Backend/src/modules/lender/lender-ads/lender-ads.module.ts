@@ -8,5 +8,6 @@ import { LenderAdsService } from './lender-ads.service';
   imports: [FirebaseModule, LenderNotificationsModule],
   controllers: [LenderAdsController],
   providers: [LenderAdsService],
+  exports: [LenderAdsService],
 })
 export class LenderAdsModule {}

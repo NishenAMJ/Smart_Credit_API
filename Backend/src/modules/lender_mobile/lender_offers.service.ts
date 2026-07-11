@@ -1,10 +1,5 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  ForbiddenException,
-} from '@nestjs/common';
-import { FirebaseService } from '../../firebase/firebase.service';
+import { Injectable, Logger } from '@nestjs/common';
+import { LenderAdsService } from '../lender/lender-ads/lender-ads.service';
 
 export interface LoanOffer {
   id: string;
@@ -41,96 +36,62 @@ export interface UpdateOfferInput {
 export class LenderOffersService {
   private readonly logger = new Logger(LenderOffersService.name);
 
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(private readonly lenderAdsService: LenderAdsService) {}
 
-  /**
-   * Create a new loan offer for this lender.
-   * Writes to the 'loanOffers' Firestore collection.
-   */
   async createOffer(
     lenderId: string,
     input: Record<string, any>,
   ): Promise<LoanOffer> {
-    this.logger.log(`Creating loan offer for lender ${lenderId}`);
-
-    const now = new Date().toISOString();
-    const offerData = {
+    this.logger.log(`Creating lender ad for mobile lender ${lenderId}`);
+    const loanType = String(input.loanType ?? 'Personal').trim() || 'Personal';
+    const ad = await this.lenderAdsService.createAd({
       lenderId,
-      loanType: input.loanType,
+      lenderName: null,
+      headline: `${loanType} financing offer`,
       minAmount: Number(input.minAmount) || 0,
       maxAmount: Number(input.maxAmount) || 0,
       interestRate: Number(input.interestRate) || 0,
       tenureMonths: Number(input.tenureMonths) || 12,
-      active: input.active !== false,
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    };
+      borrowerFocus: `${loanType} borrowers`,
+      processingTime: 'Reviewed within 24 hours',
+      repaymentStyle: 'Monthly installments',
+      requirements: 'Approved KYC and verified income documents',
+      supportNote: 'Contact the lender through Smart Credit support',
+    });
 
-    const docRef = await this.firebaseService.db
-      .collection('loanOffers')
-      .add(offerData);
-
-    this.logger.debug(`Created offer ${docRef.id} for lender ${lenderId}`);
-
-    return { id: docRef.id, ...offerData };
+    return this.toMobileOffer(ad, loanType);
   }
 
-  /**
-   * Update an existing loan offer (must belong to this lender).
-   * PATCH on the 'loanOffers' collection doc.
-   */
   async updateOffer(
     lenderId: string,
     offerId: string,
     input: Record<string, any>,
   ): Promise<LoanOffer> {
-    this.logger.log(`Updating offer ${offerId} for lender ${lenderId}`);
+    this.logger.log(`Updating lender ad ${offerId} from lender mobile`);
+    const ad = await this.lenderAdsService.updateAdFromMobile(
+      lenderId,
+      offerId,
+      input,
+    );
+    return this.toMobileOffer(ad, ad.preferredPurposes[0] ?? 'Personal');
+  }
 
-    const offerRef = this.firebaseService.db
-      .collection('loanOffers')
-      .doc(offerId);
-    const doc = await offerRef.get();
-
-    if (!doc.exists) {
-      throw new NotFoundException(`Offer ${offerId} not found`);
-    }
-
-    const existingData = doc.data();
-    if (existingData?.lenderId !== lenderId) {
-      throw new ForbiddenException('You can only update your own offers');
-    }
-
-    const updateData: Record<string, any> = {
-      updatedAt: new Date().toISOString(),
-    };
-    if (input.minAmount !== undefined)
-      updateData.minAmount = Number(input.minAmount);
-    if (input.maxAmount !== undefined)
-      updateData.maxAmount = Number(input.maxAmount);
-    if (input.interestRate !== undefined)
-      updateData.interestRate = Number(input.interestRate);
-    if (input.tenureMonths !== undefined)
-      updateData.tenureMonths = Number(input.tenureMonths);
-    if (input.active !== undefined) updateData.active = input.active;
-
-    await offerRef.update(updateData);
-
-    const updated = await offerRef.get();
-    const data = updated.data()!;
-
+  private toMobileOffer(
+    ad: Awaited<ReturnType<LenderAdsService['updateAdFromMobile']>>,
+    loanType: string,
+  ): LoanOffer {
     return {
-      id: updated.id,
-      lenderId: data.lenderId,
-      loanType: data.loanType,
-      minAmount: data.minAmount,
-      maxAmount: data.maxAmount,
-      interestRate: data.interestRate,
-      tenureMonths: data.tenureMonths,
-      active: data.active,
-      status: data.status,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
+      id: ad.id,
+      lenderId: ad.lenderId,
+      loanType,
+      minAmount: ad.minAmount,
+      maxAmount: ad.maxAmount,
+      interestRate: ad.preferredInterestRate,
+      tenureMonths: ad.maxTenureMonths,
+      active: ad.status === 'active',
+      status: ad.status,
+      createdAt: ad.createdAt ?? '',
+      updatedAt: ad.updatedAt ?? '',
     };
   }
 }

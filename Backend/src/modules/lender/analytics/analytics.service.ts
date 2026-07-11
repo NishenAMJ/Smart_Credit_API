@@ -14,12 +14,8 @@ import {
   readNumber,
 } from '../../../firebase/firestore-query.utils';
 import {
-  computeLoanRemainingAmount,
   getAdStatus,
-  getLoanAmount,
   getLoanCreatedAt,
-  getPaymentAmount,
-  getPaymentCreatedAt,
   isActiveAd as isSeedActiveAd,
 } from '../../../firebase/firestore-seed.utils';
 import {
@@ -189,7 +185,7 @@ export class AnalyticsService {
     const db = this.firebaseService.getDb();
     const [loanSnapshot, adSnapshot] = await Promise.all([
       db.collection('loans').where('lenderId', '==', lenderId).get(),
-      db.collection('ads').where('lenderId', '==', lenderId).get(),
+      db.collection('loanListings').where('lenderId', '==', lenderId).get(),
     ]);
 
     const loans = await Promise.all(
@@ -545,12 +541,13 @@ export class AnalyticsService {
 
     return {
       id: doc.id,
-      requestId: typeof data.requestId === 'string' ? data.requestId : null,
+      requestId:
+        typeof data.applicationId === 'string' ? data.applicationId : null,
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
-      amount: getLoanAmount(data),
-      interestRate: this.toNumber(data.interestRate),
+      amount: this.toNumber(data.principalMinor) / 100,
+      interestRate: this.toNumber(data.annualInterestRate),
       tenureMonths: this.toNumber(data.tenureMonths),
-      remainingAmount: await computeLoanRemainingAmount(db, doc.id, data),
+      remainingAmount: this.toNumber(data.remainingBalanceMinor) / 100,
       status: typeof data.status === 'string' ? data.status : 'unknown',
       createdAt: getLoanCreatedAt(data),
     };
@@ -576,12 +573,14 @@ export class AnalyticsService {
     return {
       id: doc.id,
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
-      targetLenderId:
-        typeof data.targetLenderId === 'string' ? data.targetLenderId : null,
-      adId: typeof data.adId === 'string' ? data.adId : null,
-      amount: this.toNumber(data.amount),
-      tenureMonths: this.toNumber(data.tenureMonths),
-      purpose: typeof data.purpose === 'string' ? data.purpose : null,
+      targetLenderId: typeof data.lenderId === 'string' ? data.lenderId : null,
+      adId: typeof data.listingId === 'string' ? data.listingId : null,
+      amount: this.toNumber(data.requestedPrincipalMinor) / 100,
+      tenureMonths: this.toNumber(data.requestedTenureMonths),
+      purpose:
+        typeof data.requestedPurpose === 'string'
+          ? data.requestedPurpose
+          : null,
       status: typeof data.status === 'string' ? data.status : 'unknown',
       createdAt: this.toDate(data.createdAt),
     };
@@ -595,7 +594,7 @@ export class AnalyticsService {
     return {
       loanId: typeof data.loanId === 'string' ? data.loanId : null,
       type: typeof data.type === 'string' ? data.type : 'unknown',
-      amount: this.toNumber(data.amount),
+      amount: this.toNumber(data.amountMinor) / 100,
       createdAt: this.toDate(data.createdAt),
     };
   }
@@ -633,7 +632,7 @@ export class AnalyticsService {
     const db = this.firebaseService.getDb();
     const [loanSnapshot, adSnapshot] = await Promise.all([
       db.collection('loans').where('lenderId', '==', lenderId).get(),
-      db.collection('ads').where('lenderId', '==', lenderId).get(),
+      db.collection('loanListings').where('lenderId', '==', lenderId).get(),
     ]);
 
     const loans = await Promise.all(
@@ -678,16 +677,12 @@ export class AnalyticsService {
     adIds: Set<string>,
   ): Promise<RequestRecord[]> {
     const scopedSnapshots = await Promise.all([
-      db
-        .collection('loanRequests')
-        .where('targetLenderId', '==', lenderId)
-        .get(),
-      db
-        .collection('loanRequests')
-        .where('matchedLenderIds', 'array-contains', lenderId)
-        .get(),
-      ...chunkValues(Array.from(adIds), 10).map((adIdChunk) =>
-        db.collection('loanRequests').where('adId', 'in', adIdChunk).get(),
+      db.collection('loanApplications').where('lenderId', '==', lenderId).get(),
+      ...chunkValues(Array.from(adIds), 10).map((listingIds) =>
+        db
+          .collection('loanApplications')
+          .where('listingId', 'in', listingIds)
+          .get(),
       ),
     ]);
 
@@ -763,11 +758,7 @@ export class AnalyticsService {
       snapshot.docs.map((doc) => this.mapTransaction(doc)),
     );
 
-    if (topLevelTransactions.length > 0) {
-      return topLevelTransactions;
-    }
-
-    return this.getNestedPaymentTransactions(db, Array.from(loanIds));
+    return topLevelTransactions;
   }
 
   private async getTransactionsForLender(
@@ -1205,48 +1196,6 @@ export class AnalyticsService {
 
   private sum(values: number[]): number {
     return values.reduce((total, value) => total + value, 0);
-  }
-
-  private async getNestedPaymentTransactions(
-    db: Firestore,
-    loanIds: string[],
-  ): Promise<TransactionRecord[]> {
-    const groups = await Promise.all(
-      loanIds.map(async (loanId) => {
-        const installmentsSnapshot = await db
-          .collection('loans')
-          .doc(loanId)
-          .collection('installments')
-          .get();
-
-        const paymentGroups = await Promise.all(
-          installmentsSnapshot.docs.map(async (installmentDoc) => {
-            const paymentsSnapshot = await installmentDoc.ref
-              .collection('payments')
-              .get();
-
-            return paymentsSnapshot.docs.map((paymentDoc) => {
-              const data = paymentDoc.data();
-              return {
-                loanId,
-                type:
-                  typeof data.type === 'string'
-                    ? data.type
-                    : typeof data.paymentType === 'string'
-                      ? data.paymentType
-                      : 'repayment',
-                amount: getPaymentAmount(data),
-                createdAt: getPaymentCreatedAt(data),
-              } satisfies TransactionRecord;
-            });
-          }),
-        );
-
-        return paymentGroups.flat();
-      }),
-    );
-
-    return groups.flat();
   }
 
   private paginateItems<T extends { id: string; date: string | null }>(

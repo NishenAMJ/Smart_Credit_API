@@ -25,8 +25,6 @@ import {
   getLoanAmount,
   getLoanCreatedAt,
   getNormalizedInstallment,
-  getPaymentAmount,
-  getPaymentCreatedAt,
 } from '../../../firebase/firestore-seed.utils';
 import {
   LenderNotification,
@@ -148,7 +146,11 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationGenerationPreferences = {
   inAppDisputes: true,
 };
 
-const REQUEST_STATUS_UPDATES = new Set(['under_review', 'approved', 'pending_kyc']);
+const REQUEST_STATUS_UPDATES = new Set([
+  'under_review',
+  'approved',
+  'pending_kyc',
+]);
 
 @Injectable()
 export class LenderNotificationsService {
@@ -165,7 +167,9 @@ export class LenderNotificationsService {
 
     const notifications = await this.loadNotifications(lenderId);
     const countsByCategory = this.buildCountsByCategory(notifications);
-    const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+    const unreadCount = notifications.filter(
+      (notification) => !notification.isRead,
+    ).length;
     const safePageSize = this.clamp(pageSize, 10, 100);
     const snapshot = await this.buildNotificationsQuery(
       lenderId,
@@ -174,7 +178,9 @@ export class LenderNotificationsService {
       safePageSize,
       cursor,
     ).get();
-    const filtered = snapshot.docs.slice(0, safePageSize).map((doc) => this.mapNotification(doc));
+    const filtered = snapshot.docs
+      .slice(0, safePageSize)
+      .map((doc) => this.mapNotification(doc));
 
     return {
       lenderId,
@@ -200,7 +206,9 @@ export class LenderNotificationsService {
 
     const notifications = await this.loadNotifications(lenderId);
     const countsByCategory = this.buildCountsByCategory(notifications);
-    const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+    const unreadCount = notifications.filter(
+      (notification) => !notification.isRead,
+    ).length;
     const highPriorityCount = notifications.filter((notification) =>
       ['warning', 'critical'].includes(notification.severity),
     ).length;
@@ -226,18 +234,22 @@ export class LenderNotificationsService {
   ): Promise<LenderNotification> {
     const docRef = this.firebaseService
       .getDb()
-      .collection('lenderNotifications')
+      .collection('notifications')
       .doc(notificationId);
     const snapshot = await docRef.get();
 
     if (!snapshot.exists) {
-      throw new NotFoundException(`Notification ${notificationId} was not found.`);
+      throw new NotFoundException(
+        `Notification ${notificationId} was not found.`,
+      );
     }
 
     const data = snapshot.data();
 
-    if (!data || data.lenderId !== lenderId) {
-      throw new NotFoundException(`Notification ${notificationId} was not found.`);
+    if (!data || data.userId !== lenderId) {
+      throw new NotFoundException(
+        `Notification ${notificationId} was not found.`,
+      );
     }
 
     if (data.isRead !== true) {
@@ -260,8 +272,8 @@ export class LenderNotificationsService {
 
     const collection = await this.firebaseService
       .getDb()
-      .collection('lenderNotifications')
-      .where('lenderId', '==', lenderId)
+      .collection('notifications')
+      .where('userId', '==', lenderId)
       .get();
 
     const targets = collection.docs
@@ -281,7 +293,7 @@ export class LenderNotificationsService {
       batch.update(
         this.firebaseService
           .getDb()
-          .collection('lenderNotifications')
+          .collection('notifications')
           .doc(notification.id),
         {
           isRead: true,
@@ -298,34 +310,34 @@ export class LenderNotificationsService {
     };
   }
 
-  async createNotification(
-    draft: NotificationDraft,
-  ): Promise<void> {
+  async createNotification(draft: NotificationDraft): Promise<void> {
     const existingSnapshot = await this.firebaseService
       .getDb()
-      .collection('lenderNotifications')
+      .collection('notifications')
       .doc(draft.id)
       .get();
     const existing = existingSnapshot.data();
-    const readAt = existing?.readAt instanceof Timestamp ? existing.readAt : null;
+    const readAt =
+      existing?.readAt instanceof Timestamp ? existing.readAt : null;
     const isRead = existing?.isRead === true;
 
     await this.firebaseService
       .getDb()
-      .collection('lenderNotifications')
+      .collection('notifications')
       .doc(draft.id)
       .set({
-        lenderId: draft.lenderId,
+        notificationId: draft.id,
+        userId: draft.lenderId,
         category: draft.category,
         eventType: draft.eventType,
         title: draft.title,
-        message: draft.message,
+        body: draft.message,
         severity: draft.severity,
         isRead,
         createdAt: Timestamp.fromDate(draft.createdAt),
         readAt,
-        relatedEntityType: draft.relatedEntityType,
-        relatedEntityId: draft.relatedEntityId,
+        entityType: draft.relatedEntityType,
+        entityId: draft.relatedEntityId,
         actionLabel: draft.actionLabel,
         actionTarget: draft.actionTarget,
         metadata: draft.metadata,
@@ -342,7 +354,7 @@ export class LenderNotificationsService {
 
     const [loansSnapshot, adsSnapshot] = await Promise.all([
       db.collection('loans').where('lenderId', '==', lenderId).get(),
-      db.collection('ads').where('lenderId', '==', lenderId).get(),
+      db.collection('loanListings').where('lenderId', '==', lenderId).get(),
     ]);
 
     const loans = await Promise.all(
@@ -405,8 +417,8 @@ export class LenderNotificationsService {
     await this.persistDrafts(drafts);
     await this.firebaseService
       .getDb()
-      .collection('lenderNotificationSync')
-      .doc(lenderId)
+      .collection('systemSettings')
+      .doc(`notification_sync_${lenderId}`)
       .set(
         {
           lenderId,
@@ -433,16 +445,17 @@ export class LenderNotificationsService {
     lastSyncedAt: Date | null,
   ): Promise<RequestRecord[]> {
     const baseQueries = [
-      db.collection('loanRequests').where('targetLenderId', '==', lenderId),
-      db.collection('loanRequests').where('matchedLenderIds', 'array-contains', lenderId),
-      ...chunkValues(Array.from(adIds), 10).map((adIdChunk) =>
-        db.collection('loanRequests').where('adId', 'in', adIdChunk),
+      db.collection('loanApplications').where('lenderId', '==', lenderId),
+      ...chunkValues(Array.from(adIds), 10).map((listingIds) =>
+        db.collection('loanApplications').where('listingId', 'in', listingIds),
       ),
     ];
 
     const snapshots = await Promise.all(
       baseQueries.map((query) =>
-        lastSyncedAt ? query.where('updatedAt', '>=', lastSyncedAt).get() : query.get(),
+        lastSyncedAt
+          ? query.where('updatedAt', '>=', lastSyncedAt).get()
+          : query.get(),
       ),
     );
 
@@ -501,7 +514,11 @@ export class LenderNotificationsService {
       return topLevelTransactions;
     }
 
-    return this.getNestedPaymentTransactions(db, Array.from(loanIds), lastSyncedAt);
+    return this.getNestedPaymentTransactions(
+      db,
+      Array.from(loanIds),
+      lastSyncedAt,
+    );
   }
 
   private async getDisputesForLender(
@@ -514,7 +531,9 @@ export class LenderNotificationsService {
       return [];
     }
 
-    const lenderScopedQuery = db.collection('disputes').where('lenderId', '==', lenderId);
+    const lenderScopedQuery = db
+      .collection('disputes')
+      .where('lenderId', '==', lenderId);
 
     try {
       const snapshot = await (lastSyncedAt
@@ -536,7 +555,9 @@ export class LenderNotificationsService {
       snapshots
         .flatMap((snapshot) => snapshot.docs)
         .map((doc) => this.mapDispute(doc))
-        .filter((dispute) => (dispute.loanId ? loanIds.has(dispute.loanId) : false))
+        .filter((dispute) =>
+          dispute.loanId ? loanIds.has(dispute.loanId) : false,
+        )
         .filter((dispute) =>
           lastSyncedAt && (dispute.updatedAt ?? dispute.createdAt)
             ? (dispute.updatedAt ?? dispute.createdAt)! >= lastSyncedAt
@@ -552,7 +573,7 @@ export class LenderNotificationsService {
 
     const db = this.firebaseService.getDb();
     const refs = drafts.map((draft) =>
-      db.collection('lenderNotifications').doc(draft.id),
+      db.collection('notifications').doc(draft.id),
     );
     const existingSnapshots = await db.getAll(...refs);
     const existingMap = new Map(
@@ -582,22 +603,20 @@ export class LenderNotificationsService {
           : null;
 
     batch.set(
-      this.firebaseService
-        .getDb()
-        .collection('lenderNotifications')
-        .doc(draft.id),
+      this.firebaseService.getDb().collection('notifications').doc(draft.id),
       {
-        lenderId: draft.lenderId,
+        notificationId: draft.id,
+        userId: draft.lenderId,
         category: draft.category,
         eventType: draft.eventType,
         title: draft.title,
-        message: draft.message,
+        body: draft.message,
         severity: draft.severity,
         isRead,
         createdAt: Timestamp.fromDate(draft.createdAt),
         readAt,
-        relatedEntityType: draft.relatedEntityType,
-        relatedEntityId: draft.relatedEntityId,
+        entityType: draft.relatedEntityType,
+        entityId: draft.relatedEntityId,
         actionLabel: draft.actionLabel,
         actionTarget: draft.actionTarget,
         metadata: draft.metadata,
@@ -616,7 +635,9 @@ export class LenderNotificationsService {
         borrowerMap.get(request.borrowerId ?? '')?.fullName ?? 'Borrower';
       const drafts: NotificationDraft[] = [];
       const requestDate = request.updatedAt ?? request.createdAt ?? new Date();
-      const isTargeted = Boolean(request.adId || request.targetLenderId === lenderId);
+      const isTargeted = Boolean(
+        request.adId || request.targetLenderId === lenderId,
+      );
 
       if (
         preferences.inAppNewRequests &&
@@ -626,8 +647,12 @@ export class LenderNotificationsService {
           id: `${isTargeted ? 'targeted' : 'marketplace'}-request-${request.id}`,
           lenderId,
           category: 'loan_request',
-          eventType: isTargeted ? 'new_targeted_request' : 'new_marketplace_request',
-          title: isTargeted ? 'New targeted loan request' : 'New marketplace match',
+          eventType: isTargeted
+            ? 'new_targeted_request'
+            : 'new_marketplace_request',
+          title: isTargeted
+            ? 'New targeted loan request'
+            : 'New marketplace match',
           message: `${borrowerName} requested ${this.formatCurrency(request.amount)} for ${request.purpose ?? 'a new loan offer'}.`,
           severity: request.urgency === 'critical' ? 'critical' : 'info',
           createdAt: request.createdAt ?? new Date(),
@@ -688,16 +713,21 @@ export class LenderNotificationsService {
     return transactions
       .filter((transaction) => transaction.type === 'repayment')
       .map((transaction) => {
-        const loan = transaction.loanId ? loanMap.get(transaction.loanId) : undefined;
-        const borrowerName =
-          loan?.borrowerId ? borrowerMap.get(loan.borrowerId)?.fullName : null;
+        const loan = transaction.loanId
+          ? loanMap.get(transaction.loanId)
+          : undefined;
+        const borrowerName = loan?.borrowerId
+          ? borrowerMap.get(loan.borrowerId)?.fullName
+          : null;
 
         return {
           id: `transaction-repayment-${transaction.id}`,
           lenderId,
           category: 'transaction',
           eventType:
-            transaction.amount >= 100000 ? 'large_repayment_received' : 'repayment_received',
+            transaction.amount >= 100000
+              ? 'large_repayment_received'
+              : 'repayment_received',
           title:
             transaction.amount >= 100000
               ? 'Large repayment received'
@@ -734,8 +764,9 @@ export class LenderNotificationsService {
 
     overdueMap.forEach((createdAt, loanId) => {
       const loan = loans.find((item) => item.id === loanId);
-      const borrowerName =
-        loan?.borrowerId ? borrowerMap.get(loan.borrowerId)?.fullName : null;
+      const borrowerName = loan?.borrowerId
+        ? borrowerMap.get(loan.borrowerId)?.fullName
+        : null;
 
       drafts.push({
         id: `risk-overdue-${loanId}`,
@@ -762,8 +793,9 @@ export class LenderNotificationsService {
     loans
       .filter((loan) => loan.status === 'defaulted')
       .forEach((loan) => {
-        const borrowerName =
-          loan.borrowerId ? borrowerMap.get(loan.borrowerId)?.fullName : null;
+        const borrowerName = loan.borrowerId
+          ? borrowerMap.get(loan.borrowerId)?.fullName
+          : null;
 
         drafts.push({
           id: `risk-defaulted-${loan.id}`,
@@ -803,8 +835,9 @@ export class LenderNotificationsService {
 
     return disputes.map((dispute) => {
       const loan = dispute.loanId ? loanMap.get(dispute.loanId) : undefined;
-      const borrowerName =
-        loan?.borrowerId ? borrowerMap.get(loan.borrowerId)?.fullName : null;
+      const borrowerName = loan?.borrowerId
+        ? borrowerMap.get(loan.borrowerId)?.fullName
+        : null;
       const isOpen = ['open', 'under_review'].includes(dispute.status);
 
       return {
@@ -1032,11 +1065,15 @@ export class LenderNotificationsService {
           ? data.fullName
           : lenderId,
       businessName:
-        typeof data.businessName === 'string' && data.businessName.trim().length > 0
+        typeof data.businessName === 'string' &&
+        data.businessName.trim().length > 0
           ? data.businessName
           : null,
       email: typeof data.email === 'string' ? data.email : '',
-      city: typeof data.city === 'string' && data.city.trim().length > 0 ? data.city : null,
+      city:
+        typeof data.city === 'string' && data.city.trim().length > 0
+          ? data.city
+          : null,
       district:
         typeof data.district === 'string' && data.district.trim().length > 0
           ? data.district
@@ -1057,7 +1094,9 @@ export class LenderNotificationsService {
 
     const db = this.firebaseService.getDb();
     const snapshots = await db.getAll(
-      ...uniqueBorrowerIds.map((borrowerId) => db.collection('users').doc(borrowerId)),
+      ...uniqueBorrowerIds.map((borrowerId) =>
+        db.collection('users').doc(borrowerId),
+      ),
     );
 
     return new Map(
@@ -1118,18 +1157,20 @@ export class LenderNotificationsService {
 
               return [loanId, createdAt] as const;
             })
-            .filter((entry): entry is readonly [string, Date] => entry !== null),
+            .filter(
+              (entry): entry is readonly [string, Date] => entry !== null,
+            ),
         );
       }
     } catch {}
 
-      const results = await Promise.all(
-        loans.map(async (loan) => {
-          const snapshot = await db
-            .collection('loans')
-            .doc(loan.id)
-            .collection('installments')
-            .get();
+    const results = await Promise.all(
+      loans.map(async (loan) => {
+        const snapshot = await db
+          .collection('loans')
+          .doc(loan.id)
+          .collection('installments')
+          .get();
 
         const overdueInstallment = snapshot.docs.find((doc) => {
           const installment = getNormalizedInstallment(doc.data());
@@ -1158,16 +1199,20 @@ export class LenderNotificationsService {
     );
 
     return new Map(
-      results.filter((entry): entry is readonly [string, Date] => entry !== null),
+      results.filter(
+        (entry): entry is readonly [string, Date] => entry !== null,
+      ),
     );
   }
 
-  private async loadNotifications(lenderId: string): Promise<LenderNotification[]> {
+  private async loadNotifications(
+    lenderId: string,
+  ): Promise<LenderNotification[]> {
     const snapshot = await orderByDateAndId(
       this.firebaseService
         .getDb()
-        .collection('lenderNotifications')
-        .where('lenderId', '==', lenderId),
+        .collection('notifications')
+        .where('userId', '==', lenderId),
       'createdAt',
     ).get();
 
@@ -1186,8 +1231,8 @@ export class LenderNotificationsService {
     let query = orderByDateAndId(
       this.firebaseService
         .getDb()
-        .collection('lenderNotifications')
-        .where('lenderId', '==', lenderId),
+        .collection('notifications')
+        .where('userId', '==', lenderId),
       'createdAt',
     );
 
@@ -1236,23 +1281,26 @@ export class LenderNotificationsService {
 
     return {
       id: snapshot.id,
-      lenderId: typeof data.lenderId === 'string' ? data.lenderId : '',
+      lenderId: typeof data.userId === 'string' ? data.userId : '',
       category: this.readCategory(data.category),
-      eventType: typeof data.eventType === 'string' ? data.eventType : 'unknown',
+      eventType:
+        typeof data.eventType === 'string' ? data.eventType : 'unknown',
       title: typeof data.title === 'string' ? data.title : 'Notification',
-      message: typeof data.message === 'string' ? data.message : '',
+      message: typeof data.body === 'string' ? data.body : '',
       severity: this.readSeverity(data.severity),
       isRead: data.isRead === true,
       createdAt:
         this.toDate(data.createdAt)?.toISOString() ?? new Date().toISOString(),
       readAt: this.toDate(data.readAt)?.toISOString() ?? null,
-      relatedEntityType: this.readEntityType(data.relatedEntityType),
-      relatedEntityId:
-        typeof data.relatedEntityId === 'string' ? data.relatedEntityId : null,
-      actionLabel: typeof data.actionLabel === 'string' ? data.actionLabel : null,
+      relatedEntityType: this.readEntityType(data.entityType),
+      relatedEntityId: typeof data.entityId === 'string' ? data.entityId : null,
+      actionLabel:
+        typeof data.actionLabel === 'string' ? data.actionLabel : null,
       actionTarget: this.readActionTarget(data.actionTarget),
       metadata:
-        data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
+        data.metadata &&
+        typeof data.metadata === 'object' &&
+        !Array.isArray(data.metadata)
           ? (data.metadata as Record<string, string | number>)
           : {},
     };
@@ -1282,9 +1330,10 @@ export class LenderNotificationsService {
   private getTopCategory(
     counts: Record<NotificationCategory, number>,
   ): NotificationCategory | null {
-    const sorted = CATEGORY_ORDER
-      .map((category) => ({ category, count: counts[category] }))
-      .sort((left, right) => right.count - left.count);
+    const sorted = CATEGORY_ORDER.map((category) => ({
+      category,
+      count: counts[category],
+    })).sort((left, right) => right.count - left.count);
 
     return sorted[0]?.count ? sorted[0].category : null;
   }
@@ -1353,9 +1402,10 @@ export class LenderNotificationsService {
     const data = doc.data();
 
     return {
-      id: typeof data.requestId === 'string' && data.requestId.trim().length > 0
-        ? data.requestId
-        : doc.id,
+      id:
+        typeof data.requestId === 'string' && data.requestId.trim().length > 0
+          ? data.requestId
+          : doc.id,
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
       adId: typeof data.adId === 'string' ? data.adId : null,
       targetLenderId:
@@ -1384,7 +1434,7 @@ export class LenderNotificationsService {
           : typeof data.paymentType === 'string'
             ? data.paymentType
             : 'unknown',
-      amount: this.toNumber(data.amount ?? data.paidAmount),
+      amount: this.toNumber(data.amountMinor) / 100,
       status: typeof data.status === 'string' ? data.status : 'recorded',
       createdAt: this.toDate(data.createdAt ?? data.paidAt),
     };
@@ -1502,46 +1552,23 @@ export class LenderNotificationsService {
     lastSyncedAt: Date | null,
   ): Promise<TransactionRecord[]> {
     const groups = await Promise.all(
-      loanIds.map(async (loanId) => {
-        const installmentsSnapshot = await db
-          .collection('loans')
-          .doc(loanId)
-          .collection('installments')
-          .get();
-
-        const paymentGroups = await Promise.all(
-          installmentsSnapshot.docs.map(async (installmentDoc) => {
-            const paymentsSnapshot = await installmentDoc.ref.collection('payments').get();
-
-            return paymentsSnapshot.docs
-              .map((paymentDoc) => {
-                const data = paymentDoc.data();
-                return {
-                  id: paymentDoc.id,
-                  loanId,
-                  type:
-                    typeof data.type === 'string'
-                      ? data.type
-                      : typeof data.paymentType === 'string'
-                        ? data.paymentType
-                        : 'repayment',
-                  amount: getPaymentAmount(data),
-                  status: typeof data.status === 'string' ? data.status : 'completed',
-                  createdAt: getPaymentCreatedAt(data),
-                } satisfies TransactionRecord;
-              })
-              .filter((payment) =>
-                lastSyncedAt && payment.createdAt
-                  ? payment.createdAt >= lastSyncedAt
-                  : true,
-              );
-          }),
-        );
-
-        return paymentGroups.flat();
-      }),
+      chunkValues(loanIds, 10).map((ids) =>
+        db
+          .collection('transactions')
+          .where('loanId', 'in', ids)
+          .where('type', '==', 'repayment')
+          .get(),
+      ),
     );
-
-    return dedupeById(groups.flat());
+    return dedupeById(
+      groups
+        .flatMap((snapshot) => snapshot.docs)
+        .map((doc) => this.mapTransaction(doc))
+        .filter((payment) =>
+          lastSyncedAt && payment.createdAt
+            ? payment.createdAt >= lastSyncedAt
+            : true,
+        ),
+    );
   }
 }

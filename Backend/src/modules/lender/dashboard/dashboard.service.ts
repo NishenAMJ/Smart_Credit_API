@@ -9,6 +9,7 @@ import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   applyDateCursor,
   buildPageInfo,
+  chunkValues,
   decodeCursor,
   hasRole,
   encodeCursor,
@@ -22,8 +23,6 @@ import {
   getLoanAmount,
   getLoanCreatedAt,
   getNormalizedInstallment,
-  getPaymentAmount,
-  getPaymentCreatedAt,
   isActiveAd,
 } from '../../../firebase/firestore-seed.utils';
 import {
@@ -221,14 +220,14 @@ export class DashboardService {
   ): Promise<number> {
     const now = new Date();
     const activeQuery = db
-      .collection('ads')
+      .collection('loanListings')
       .where('lenderId', '==', lenderId)
       .where('status', 'in', ['active', 'approved'])
       .where('expiresAt', '>=', now);
 
     return this.getCountWithFallback('active-ads', activeQuery, async () => {
       const snapshot = await db
-        .collection('ads')
+        .collection('loanListings')
         .where('lenderId', '==', lenderId)
         .get();
       return snapshot.docs.filter((doc) => isActiveAd(doc.data(), now)).length;
@@ -239,14 +238,15 @@ export class DashboardService {
     db: Firestore,
     lenderId: string,
   ): Promise<number> {
-    const query = db
-      .collection('lenderBorrowers')
-      .where('lenderId', '==', lenderId);
-
-    return this.getCountWithFallback('lender-borrowers', query, async () => {
-      const snapshot = await query.get();
-      return snapshot.size;
-    });
+    const snapshot = await db
+      .collection('loans')
+      .where('lenderId', '==', lenderId)
+      .get();
+    return new Set(
+      snapshot.docs
+        .map((doc) => readString(doc.data().borrowerId))
+        .filter(Boolean),
+    ).size;
   }
 
   private async getOverduePaymentsCount(
@@ -297,14 +297,15 @@ export class DashboardService {
 
     try {
       const snapshot = await db
-        .collectionGroup('payments')
+        .collection('transactions')
         .where('lenderId', '==', lenderId)
-        .where('paidAt', '>=', start)
-        .where('paidAt', '<', end)
+        .where('type', '==', 'repayment')
+        .where('createdAt', '>=', start)
+        .where('createdAt', '<', end)
         .get();
 
       return snapshot.docs.reduce(
-        (total, doc) => total + getPaymentAmount(doc.data()),
+        (total, doc) => total + readNumber(doc.data().amountMinor) / 100,
         0,
       );
     } catch (error) {
@@ -401,9 +402,7 @@ export class DashboardService {
     pageInfo: CursorPageInfo;
   } | null> {
     try {
-      const query = db
-        .collection('lenderBorrowers')
-        .where('lenderId', '==', lenderId);
+      const query = db.collection('loans').where('lenderId', '==', lenderId);
       const batchSize = Math.max(pageSize * 2, pageSize);
       let currentCursor = cursor ?? null;
       let exhausted = false;
@@ -729,7 +728,10 @@ export class DashboardService {
         )
       : 0;
     const safeStartIndex = startIndex < 0 ? borrowers.length : startIndex;
-    const pagedBorrowers = borrowers.slice(safeStartIndex, safeStartIndex + pageSize + 1);
+    const pagedBorrowers = borrowers.slice(
+      safeStartIndex,
+      safeStartIndex + pageSize + 1,
+    );
 
     return this.createBorrowerPage(
       pagedBorrowers.slice(0, pageSize),
@@ -767,7 +769,9 @@ export class DashboardService {
     borrower: DashboardBorrowerPageItem,
     cursor: { date: Date; id: string },
   ): boolean {
-    const borrowerTime = borrower.cursorDate ? borrower.cursorDate.getTime() : 0;
+    const borrowerTime = borrower.cursorDate
+      ? borrower.cursorDate.getTime()
+      : 0;
     const cursorTime = cursor.date.getTime();
 
     if (borrowerTime !== cursorTime) {
@@ -782,41 +786,24 @@ export class DashboardService {
     loanIds: string[],
     range: { start: Date; end: Date },
   ): Promise<number> {
-    const totals = await Promise.all(
-      loanIds.map(async (loanId) => {
-        const installmentsSnapshot = await db
-          .collection('loans')
-          .doc(loanId)
-          .collection('installments')
-          .get();
-
-        const installmentTotals = await Promise.all(
-          installmentsSnapshot.docs.map(async (installmentDoc) => {
-            const paymentsSnapshot = await installmentDoc.ref
-              .collection('payments')
-              .get();
-
-            return paymentsSnapshot.docs.reduce((total, paymentDoc) => {
-              const data = paymentDoc.data();
-              const createdAt = getPaymentCreatedAt(data);
-
-              if (
-                !createdAt ||
-                createdAt < range.start ||
-                createdAt >= range.end
-              ) {
-                return total;
-              }
-
-              return total + getPaymentAmount(data);
-            }, 0);
-          }),
-        );
-
-        return this.sum(installmentTotals);
-      }),
+    if (loanIds.length === 0) return 0;
+    const groups = await Promise.all(
+      chunkValues(loanIds, 10).map((ids) =>
+        db
+          .collection('transactions')
+          .where('loanId', 'in', ids)
+          .where('type', '==', 'repayment')
+          .get(),
+      ),
     );
-
-    return this.sum(totals);
+    return groups
+      .flatMap((snapshot) => snapshot.docs)
+      .reduce((total, doc) => {
+        const data = doc.data();
+        const createdAt = readDate(data.createdAt);
+        return createdAt && createdAt >= range.start && createdAt < range.end
+          ? total + readNumber(data.amountMinor) / 100
+          : total;
+      }, 0);
   }
 }

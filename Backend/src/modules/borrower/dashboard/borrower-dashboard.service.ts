@@ -22,9 +22,9 @@ type TimestampLike =
  */
 @Injectable()
 export class BorrowerDashboardService {
-  private readonly BORROWERS_COL = 'borrowers';
+  private readonly BORROWERS_COL = 'users';
   private readonly LOANS_COL = 'loans';
-  private readonly LOAN_APPS_COL = 'loanRequests';
+  private readonly LOAN_APPS_COL = 'loanApplications';
   private readonly USERS_COL = 'users';
 
   constructor(private readonly firebaseService: FirebaseService) {}

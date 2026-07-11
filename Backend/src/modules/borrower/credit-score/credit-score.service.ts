@@ -35,7 +35,7 @@ export interface CreditScoreSummary {
  */
 @Injectable()
 export class CreditScoreService {
-  private readonly BORROWERS_COL = 'borrowers';
+  private readonly BORROWERS_COL = 'users';
   private readonly LOANS_COL = 'loans';
   private readonly REPAYMENTS_COL = 'repayments';
   private readonly SCORE_HISTORY_COL = 'credit_score_history';

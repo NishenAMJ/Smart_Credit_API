@@ -56,8 +56,12 @@ export class ReportsService {
         this.getCount(usersCollection.where('status', '==', 'suspended')),
         this.getCount(usersCollection.where('status', '==', 'inactive')),
         this.getCount(usersCollection.where('accountStatus', '==', 'pending')),
-        this.getCount(usersCollection.where('role', 'array-contains', 'borrower')),
-        this.getCount(usersCollection.where('role', 'array-contains', 'lender')),
+        this.getCount(
+          usersCollection.where('role', 'array-contains', 'borrower'),
+        ),
+        this.getCount(
+          usersCollection.where('role', 'array-contains', 'lender'),
+        ),
         this.getCount(usersCollection.where('role', 'array-contains', 'admin')),
         this.getCount(usersCollection.where('createdAt', '>=', monthStart)),
       ]);
@@ -95,7 +99,7 @@ export class ReportsService {
     try {
       const db = this.firebaseService.db;
       const loansCollection = db.collection('loans');
-      const requestsCollection = db.collection('loanRequests');
+      const requestsCollection = db.collection('loanApplications');
       const [
         totalLoans,
         activeLoans,
@@ -159,17 +163,21 @@ export class ReportsService {
     try {
       const db = this.firebaseService.db;
       const transactionsCollection = db.collection('transactions');
-      const [totalTransactions, failedTransactions, completedTransactions, txnSnapshot] =
-        await Promise.all([
-          this.getCount(transactionsCollection),
-          this.getCount(transactionsCollection.where('status', '==', 'failed')),
-          this.getCount(
-            transactionsCollection.where('status', '==', 'completed'),
-          ),
-          transactionsCollection
-            .select('status', 'verifiedByLender', 'amount', 'paymentType', 'type')
-            .get(),
-        ]);
+      const [
+        totalTransactions,
+        failedTransactions,
+        completedTransactions,
+        txnSnapshot,
+      ] = await Promise.all([
+        this.getCount(transactionsCollection),
+        this.getCount(transactionsCollection.where('status', '==', 'failed')),
+        this.getCount(
+          transactionsCollection.where('status', '==', 'completed'),
+        ),
+        transactionsCollection
+          .select('status', 'verifiedByLender', 'amount', 'paymentType', 'type')
+          .get(),
+      ]);
 
       let successfulTransactions = 0;
       let totalVolume = 0;
@@ -196,7 +204,9 @@ export class ReportsService {
         completedTransactions,
       );
       const pendingTransactions = Math.max(
-        totalTransactions - normalizedSuccessfulTransactions - failedTransactions,
+        totalTransactions -
+          normalizedSuccessfulTransactions -
+          failedTransactions,
         0,
       );
 
@@ -228,7 +238,10 @@ export class ReportsService {
           .collection('transactions')
           .select('amount', 'platformFee', 'fee', 'paidAt', 'createdAt')
           .get(),
-        db.collection('loans').select('totalRepayable', 'principalAmount').get(),
+        db
+          .collection('loans')
+          .select('totalRepayable', 'principalAmount')
+          .get(),
       ]);
 
       let totalRevenue = 0;
@@ -341,19 +354,21 @@ export class ReportsService {
         ),
         this.getCount(db.collection('users').where('createdAt', '>=', today)),
         this.getCount(
-          db.collection('loanRequests').where('createdAt', '>=', today),
+          db.collection('loanApplications').where('createdAt', '>=', today),
         ),
         this.getCount(
           db.collection('disputes').where('resolvedAt', '>=', today),
         ),
         this.getCount(
-          db.collection('loanRequests').where('status', '==', 'pending'),
+          db.collection('loanApplications').where('status', '==', 'submitted'),
         ),
         this.getCount(
           db.collection('users').where('accountStatus', '==', 'pending'),
         ),
         this.getCount(db.collection('disputes')),
-        this.getCount(db.collection('disputes').where('status', '==', 'resolved')),
+        this.getCount(
+          db.collection('disputes').where('status', '==', 'resolved'),
+        ),
         db
           .collection('transactions')
           .select('amount', 'platformFee', 'fee', 'paidAt', 'createdAt')
@@ -361,9 +376,7 @@ export class ReportsService {
       ]);
 
       const activeDisputes =
-        activeDisputesOpen +
-        activeDisputesInProgress +
-        activeDisputesEscalated;
+        activeDisputesOpen + activeDisputesInProgress + activeDisputesEscalated;
       let transactionsToday = 0;
       let totalRevenue = 0;
 
@@ -433,9 +446,7 @@ export class ReportsService {
             revenueGrowthRate: 0,
             disputeResolutionRate:
               totalDisputes > 0
-                ? Number(
-                    (resolvedDisputes / totalDisputes).toFixed(2),
-                  )
+                ? Number((resolvedDisputes / totalDisputes).toFixed(2))
                 : 0,
           },
           alerts,

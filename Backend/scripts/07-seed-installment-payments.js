@@ -1,38 +1,9 @@
 'use strict';
 
-const { getDb } = require('./shared/firebase');
-const {
-  assertInstallmentDocsExist,
-  commitSetWrites,
-} = require('./shared/firestore-helpers');
-const { buildMockFixtures } = require('./shared/mock-fixtures');
-
 async function seedInstallmentPayments() {
-  const db = getDb();
-  const fixtures = buildMockFixtures();
-
-  await assertInstallmentDocsExist(
-    db,
-    fixtures.installmentPayments.map((payment) => ({
-      loanId: payment.loanId,
-      installmentId: payment.installmentId,
-    })),
+  console.log(
+    '07 skipped: monthly payment state is stored directly on installment documents.',
   );
-
-  const writes = fixtures.installmentPayments.map((payment) => ({
-    ref: db
-      .collection('loans')
-      .doc(payment.loanId)
-      .collection('installments')
-      .doc(payment.installmentId)
-      .collection('payments')
-      .doc(payment.paymentId),
-    data: payment,
-  }));
-
-  await commitSetWrites(db, writes, 'installment payments');
-
-  console.log('07 complete: installment payment subcollection documents created.');
 }
 
 if (require.main === module) {

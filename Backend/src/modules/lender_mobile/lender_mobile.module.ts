@@ -1,5 +1,6 @@
 import { Module, Logger } from '@nestjs/common';
 import { FirebaseModule } from '../../firebase/firebase.module';
+import { LenderAdsModule } from '../lender/lender-ads/lender-ads.module';
 
 import { LenderMobileController } from './lender_mobile.controller';
 import { LenderMobileService } from './lender_mobile.service';
@@ -15,7 +16,7 @@ import { LenderRemindersController } from './lender_reminders.controller';
 import { LenderRemindersService } from './lender_reminders.service';
 
 @Module({
-  imports: [FirebaseModule],
+  imports: [FirebaseModule, LenderAdsModule],
   controllers: [
     LenderMobileController,
     LenderApplicationsController,

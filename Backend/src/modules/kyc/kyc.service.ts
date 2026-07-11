@@ -361,7 +361,7 @@ export class KycService {
       const passwordHash = this.resolveOptionalField(
         dto,
         'passwordHash',
-        existingUser?.passwordHash,
+        undefined,
       );
 
       const documentRefs: Record<string, string> = {};

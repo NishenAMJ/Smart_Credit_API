@@ -48,8 +48,8 @@ type NearbyLocation = {
 export class LocationService {
   private readonly logger = new Logger(LocationService.name);
   private readonly LOCATIONS_COL = 'userLocations';
-  private readonly LENDER_BORROWERS_COL = 'lenderBorrowers';
-  private readonly LOAN_REQUESTS_COL = 'loanRequests';
+  private readonly LENDER_BORROWERS_COL = 'loans';
+  private readonly LOAN_REQUESTS_COL = 'loanApplications';
   private readonly DEFAULT_RADIUS_KM = 10;
   private readonly MAX_RADIUS_KM = 30;
   private readonly DEFAULT_LIMIT = 50;

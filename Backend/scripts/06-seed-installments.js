@@ -14,7 +14,9 @@ async function seedInstallments() {
   await assertTopLevelDocsExist(
     db,
     'loans',
-    Array.from(new Set(fixtures.installments.map((installment) => installment.loanId))),
+    Array.from(
+      new Set(fixtures.installments.map((installment) => installment.loanId)),
+    ),
     '06-seed-installments',
   );
 
@@ -24,7 +26,14 @@ async function seedInstallments() {
       .doc(installment.loanId)
       .collection('installments')
       .doc(installment.installmentId),
-    data: installment,
+    data: {
+      ...installment,
+      lastPaymentAt: installment.paidAmount > 0 ? installment.updatedAt : null,
+      note:
+        installment.paidAmount > 0
+          ? 'Seeded monthly installment payment.'
+          : null,
+    },
   }));
 
   await commitSetWrites(db, writes, 'installments');

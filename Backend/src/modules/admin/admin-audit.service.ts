@@ -188,7 +188,9 @@ export class AdminAuditService {
         performedBy: 'Admin',
         targetName: ad.lenderName || doc.id,
         targetType: 'ad',
-        dateTime: this.formatDate(ad.rejectedAt || ad.reviewedAt || ad.updatedAt),
+        dateTime: this.formatDate(
+          ad.rejectedAt || ad.reviewedAt || ad.updatedAt,
+        ),
         severity: 'warning',
       });
     }
@@ -209,7 +211,7 @@ export class AdminAuditService {
         .orderBy('updatedAt', 'desc')
         .limit(sourceLimit);
       let adsQuery: FirebaseFirestore.Query = db
-        .collection('ads')
+        .collection('loanListings')
         .orderBy('updatedAt', 'desc')
         .limit(sourceLimit);
 
@@ -220,7 +222,7 @@ export class AdminAuditService {
           .startAfter(cursorDate)
           .limit(sourceLimit);
         adsQuery = db
-          .collection('ads')
+          .collection('loanListings')
           .orderBy('updatedAt', 'desc')
           .startAfter(cursorDate)
           .limit(sourceLimit);

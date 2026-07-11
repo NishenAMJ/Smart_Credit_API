@@ -374,7 +374,7 @@ export class LegalService {
     role: 'borrower' | 'lender',
   ): LegalDocumentParty {
     return {
-      userId: user.uid,
+      userId: user.userId,
       fullName: user.fullName,
       email: user.email,
       phone: user.phone,
@@ -623,7 +623,7 @@ export class LegalService {
       try {
         const page = await browser.newPage();
         await page.setContent(document.htmlContent, {
-          waitUntil: 'networkidle0',
+          waitUntil: 'domcontentloaded',
         });
 
         const pdf = await page.pdf({

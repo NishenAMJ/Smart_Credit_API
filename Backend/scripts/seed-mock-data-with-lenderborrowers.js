@@ -1518,9 +1518,6 @@ async function main() {
   console.log('Writing installments...');
   await commitWrites(db, generated.installmentWrites, 'installments');
 
-  console.log('Writing payments...');
-  await commitWrites(db, generated.paymentWrites, 'payments');
-
   console.log('Writing lenderBorrowers...');
   await commitWrites(db, generated.lenderBorrowerWrites, 'lenderBorrowers');
 

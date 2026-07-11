@@ -13,6 +13,9 @@ import {
 } from './firestore-query.utils';
 
 export function getLoanAmount(data: DocumentData): number {
+  if (typeof data.principalMinor === 'number') {
+    return data.principalMinor / 100;
+  }
   return readNumber(data.amount, data.principalAmount);
 }
 
@@ -26,6 +29,9 @@ export function getLoanCreatedAt(data: DocumentData): Date | null {
 }
 
 export function getInstallmentAmount(data: DocumentData): number {
+  if (typeof data.amountDueMinor === 'number') {
+    return data.amountDueMinor / 100;
+  }
   return readNumber(
     data.amount,
     data.amountDue,
@@ -35,11 +41,20 @@ export function getInstallmentAmount(data: DocumentData): number {
 }
 
 export function getPaymentAmount(data: DocumentData): number {
+  if (typeof data.amountMinor === 'number') {
+    return data.amountMinor / 100;
+  }
   return readNumber(data.amount, data.paidAmount);
 }
 
 export function getPaymentCreatedAt(data: DocumentData): Date | null {
-  return readDate(data.paidAt, data.paidDate, data.createdAt, data.updatedAt);
+  return readDate(
+    data.completedAt,
+    data.paidAt,
+    data.paidDate,
+    data.createdAt,
+    data.updatedAt,
+  );
 }
 
 export function getAdStatus(data: DocumentData): string {
@@ -63,13 +78,17 @@ export function isActiveAd(data: DocumentData, now = new Date()): boolean {
 
 export function getNormalizedInstallment(data: DocumentData) {
   const dueDate = readDate(
+    data.dueAt,
     data.dueDateAt,
     data.dueDate,
     data.createdAt,
     data.updatedAt,
   );
   const amount = getInstallmentAmount(data);
-  const paidAmount = readNumber(data.paidAmount, data.amountPaid);
+  const paidAmount =
+    data.status === 'paid'
+      ? amount
+      : readNumber(data.paidAmount, data.amountPaid);
 
   return {
     id: readString(data.installmentId),
@@ -82,7 +101,11 @@ export function getNormalizedInstallment(data: DocumentData) {
     dueDate,
     amount,
     paidAmount,
-    installmentNumber: readNumber(data.installmentNumber, data.installmentNo),
+    installmentNumber: readNumber(
+      data.sequence,
+      data.installmentNumber,
+      data.installmentNo,
+    ),
   };
 }
 
@@ -107,17 +130,23 @@ export async function computeLoanRemainingAmount(
 ): Promise<number> {
   void db;
   void loanId;
-  const storedRemaining = readNumber(data.remainingAmount);
+  const storedRemaining =
+    typeof data.remainingBalanceMinor === 'number'
+      ? data.remainingBalanceMinor / 100
+      : readNumber(data.remainingAmount);
 
-  if (storedRemaining > 0 || data.remainingAmount === 0) {
+  if (
+    storedRemaining > 0 ||
+    data.remainingAmount === 0 ||
+    data.remainingBalanceMinor === 0
+  ) {
     return storedRemaining;
   }
 
-  const totalRepayable = readNumber(
-    data.totalRepayable,
-    data.amount,
-    data.principalAmount,
-  );
+  const totalRepayable =
+    typeof data.totalRepayableMinor === 'number'
+      ? data.totalRepayableMinor / 100
+      : readNumber(data.totalRepayable, data.amount, data.principalAmount);
 
   return totalRepayable > 0 ? totalRepayable : 0;
 }

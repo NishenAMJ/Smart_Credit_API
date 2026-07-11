@@ -19,7 +19,7 @@ export class LenderRequestsService {
     this.logger.log(`Lender ${lenderId} approving request ${requestId}`);
 
     const ref = this.firebaseService.db
-      .collection('loanRequests')
+      .collection('loanApplications')
       .doc(requestId);
     const doc = await ref.get();
 
@@ -52,7 +52,7 @@ export class LenderRequestsService {
     this.logger.log(`Lender ${lenderId} rejecting request ${requestId}`);
 
     const ref = this.firebaseService.db
-      .collection('loanRequests')
+      .collection('loanApplications')
       .doc(requestId);
     const doc = await ref.get();
 
