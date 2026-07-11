@@ -1,0 +1,151 @@
+{
+  "info": {
+    "name": "Smart Credit+ Auth",
+    "_postman_id": "f7441d9e-5b81-4d5e-9856-a0dc2a63a411",
+    "description": "Auth API collection for borrower/lender register, login, session, and role-protected dashboards.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3000/api"
+    },
+    {
+      "key": "bearerToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Register Borrower",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Postman Borrower\",\n  \"email\": \"postman.borrower@example.com\",\n  \"phone\": \"+947711111111\",\n  \"password\": \"DemoPass123\",\n  \"role\": \"borrower\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "register"]
+        }
+      }
+    },
+    {
+      "name": "Login Borrower",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"identifier\": \"nadeesha.fernando.b01@smartcredit.lk\",\n  \"password\": \"SmartCredit@123\",\n  \"role\": \"borrower\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "Login Lender",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"identifier\": \"kamal.rathnayake.l01@smartcredit.lk\",\n  \"password\": \"SmartCredit@123\",\n  \"role\": \"lender\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "Session Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bearerToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/session",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "session"]
+        }
+      }
+    },
+    {
+      "name": "Borrower Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bearerToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/borrower/dashboard",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "borrower", "dashboard"]
+        }
+      }
+    },
+    {
+      "name": "Lender Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bearerToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/lender/dashboard",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "lender", "dashboard"]
+        }
+      }
+    },
+    {
+      "name": "Profile Me",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bearerToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/me",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "me"]
+        }
+      }
+    }
+  ]
+}

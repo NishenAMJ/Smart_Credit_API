@@ -29,7 +29,9 @@ describe('firestore-query utils', () => {
 
   it('extracts payment ancestors from a nested payment path', () => {
     expect(
-      getPaymentAncestorIds('loans/loan_1/installments/inst_2/payments/payment_3'),
+      getPaymentAncestorIds(
+        'loans/loan_1/installments/inst_2/payments/payment_3',
+      ),
     ).toEqual({
       loanId: 'loan_1',
       installmentId: 'inst_2',
