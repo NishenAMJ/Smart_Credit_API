@@ -12,7 +12,7 @@ const topLevelWrites = (db, collection, records, idField) =>
     data,
   }));
 
-async function seedSchemaV2() {
+async function runSeed() {
   const config = getSeedConfig();
   if (!config.enabled) {
     throw new Error(
@@ -86,16 +86,16 @@ async function seedSchemaV2() {
     'conversation messages',
   );
 
-  console.log('Schema v2 seed complete. Validation counts:');
+  console.log('Database seed complete. Validation counts:');
   console.log(JSON.stringify(counts, null, 2));
 }
 
 if (require.main === module) {
-  seedSchemaV2().catch((error) => {
-    console.error('Schema v2 seed failed.');
+  runSeed().catch((error) => {
+    console.error('Database seed failed.');
     console.error(error);
     process.exitCode = 1;
   });
 }
 
-module.exports = { seedSchemaV2 };
+module.exports = { runSeed };

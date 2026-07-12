@@ -10,29 +10,58 @@ async function commitSetWrites(db, writes, label) {
     return;
   }
 
-  const MAX_BATCH_SIZE = 400;
-  let batch = db.batch();
-  let count = 0;
-  let batchNumber = 0;
+  const MAX_BATCH_SIZE = 300;
+  const MAX_ATTEMPTS = 3;
+  const COMMIT_TIMEOUT_MS = 45000;
 
-  for (let index = 0; index < writes.length; index += 1) {
-    const write = writes[index];
-    batch.set(write.ref, write.data, { merge: true });
-    count += 1;
+  for (let offset = 0; offset < writes.length; offset += MAX_BATCH_SIZE) {
+    const chunk = writes.slice(offset, offset + MAX_BATCH_SIZE);
+    const batchNumber = Math.floor(offset / MAX_BATCH_SIZE) + 1;
 
-    if (count === MAX_BATCH_SIZE || index === writes.length - 1) {
-      batchNumber += 1;
-      await batch.commit();
-      console.log(
-        `Committed ${label} batch ${pad(batchNumber, 2)} with ${count} writes.`,
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const batch = db.batch();
+      chunk.forEach((write) =>
+        batch.set(write.ref, write.data, { merge: true }),
       );
-      batch = db.batch();
-      count = 0;
+
+      let timeout;
+      try {
+        await Promise.race([
+          batch.commit(),
+          new Promise((_, reject) => {
+            timeout = setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `Firestore commit timed out after ${COMMIT_TIMEOUT_MS}ms`,
+                  ),
+                ),
+              COMMIT_TIMEOUT_MS,
+            );
+          }),
+        ]);
+        clearTimeout(timeout);
+        console.log(
+          `Committed ${label} batch ${pad(batchNumber, 2)} with ${chunk.length} writes.`,
+        );
+        break;
+      } catch (error) {
+        clearTimeout(timeout);
+        if (attempt === MAX_ATTEMPTS) throw error;
+        console.warn(
+          `${label} batch ${pad(batchNumber, 2)} attempt ${attempt} failed; retrying.`,
+        );
+      }
     }
   }
 }
 
-async function assertTopLevelDocsExist(db, collectionName, ids, dependencyLabel) {
+async function assertTopLevelDocsExist(
+  db,
+  collectionName,
+  ids,
+  dependencyLabel,
+) {
   const snapshots = await Promise.all(
     ids.map((id) => db.collection(collectionName).doc(id).get()),
   );

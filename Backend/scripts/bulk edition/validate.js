@@ -13,6 +13,21 @@ function validateFixtures(fixtures) {
   const transactionIds = ids(fixtures.transactions, 'transactionId');
   const documentIds = ids(fixtures.documents, 'documentId');
 
+  const assertUnique = (records, key, label) => {
+    const values = records.map((record) => record[key]);
+    assert(
+      new Set(values).size === values.length,
+      `${label} contains duplicate ${key} values`,
+    );
+  };
+  assertUnique(fixtures.users, 'userId', 'users');
+  assertUnique(fixtures.users, 'email', 'users');
+  assertUnique(fixtures.users, 'phone', 'users');
+  assertUnique(fixtures.loanListings, 'listingId', 'loan listings');
+  assertUnique(fixtures.loanApplications, 'applicationId', 'loan applications');
+  assertUnique(fixtures.loans, 'loanId', 'loans');
+  assertUnique(fixtures.transactions, 'transactionId', 'transactions');
+
   fixtures.authCredentials.forEach((record) => {
     assert(
       userIds.has(record.userId),
@@ -111,6 +126,47 @@ function validateFixtures(fixtures) {
         documentIds.has(record.receiptDocumentId),
         `receipt ${record.receiptDocumentId} is missing`,
       );
+    if (record.type === 'repayment') {
+      const installment = fixtures.installments.find(
+        (item) =>
+          item.loanId === record.loanId &&
+          item.installmentId === record.installmentId,
+      );
+      assert(
+        Boolean(installment),
+        `repayment ${record.transactionId} installment is missing`,
+      );
+      assert(
+        installment.amountDueMinor === record.amountMinor,
+        `repayment ${record.transactionId} amount differs from installment`,
+      );
+      assert(
+        installment.paidTransactionId === record.transactionId,
+        `repayment ${record.transactionId} is not linked from installment`,
+      );
+    }
+  });
+
+  fixtures.conversations.forEach((record) => {
+    record.participantIds.forEach((userId) =>
+      assert(
+        userIds.has(userId),
+        `conversation ${record.conversationId} participant ${userId} is missing`,
+      ),
+    );
+  });
+  fixtures.messages.forEach((record) => {
+    const conversation = fixtures.conversations.find(
+      (item) => item.conversationId === record.conversationId,
+    );
+    assert(
+      Boolean(conversation),
+      `message ${record.messageId} conversation is missing`,
+    );
+    assert(
+      conversation.participantIds.includes(record.senderId),
+      `message ${record.messageId} sender is not a participant`,
+    );
   });
 
   return {
@@ -127,6 +183,10 @@ function validateFixtures(fixtures) {
     notifications: fixtures.notifications.length,
     conversations: fixtures.conversations.length,
     messages: fixtures.messages.length,
+    disputeEvents: fixtures.disputeEvents.length,
+    legalAcceptances: fixtures.legalAcceptances.length,
+    userLocations: fixtures.userLocations.length,
+    auditLogs: fixtures.auditLogs.length,
   };
 }
 
