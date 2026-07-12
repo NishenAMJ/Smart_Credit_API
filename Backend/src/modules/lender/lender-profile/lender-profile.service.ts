@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { hasRole, readDate } from '../../../firebase/firestore-query.utils';
@@ -24,7 +28,7 @@ export class LenderProfileService {
 
     const data = snapshot.data();
 
-    if (!data || !hasRole(data.role, 'lender')) {
+    if (!data || !hasRole(data.roles ?? data.role, 'lender')) {
       throw new NotFoundException(`Lender ${lenderId} was not found.`);
     }
 
@@ -37,7 +41,10 @@ export class LenderProfileService {
   ): Promise<LenderProfileResponse> {
     this.validateInput(input);
 
-    const docRef = this.firebaseService.getDb().collection('users').doc(lenderId);
+    const docRef = this.firebaseService
+      .getDb()
+      .collection('users')
+      .doc(lenderId);
     const snapshot = await docRef.get();
 
     if (!snapshot.exists) {
@@ -46,7 +53,7 @@ export class LenderProfileService {
 
     const data = snapshot.data();
 
-    if (!data || !hasRole(data.role, 'lender')) {
+    if (!data || !hasRole(data.roles ?? data.role, 'lender')) {
       throw new NotFoundException(`Lender ${lenderId} was not found.`);
     }
 
@@ -57,7 +64,7 @@ export class LenderProfileService {
       address: input.address.trim(),
       city: input.city.trim(),
       district: input.district.trim(),
-      businessName: input.businessName.trim(),
+      'lenderProfile.businessName': input.businessName.trim(),
       responseTimeHours: input.responseTimeHours,
       preferredRegions: this.uniqueRegions(input.preferredRegions),
       updatedAt: Timestamp.now(),
@@ -72,7 +79,10 @@ export class LenderProfileService {
     await docRef.update(updates);
     const updatedSnapshot = await docRef.get();
 
-    return this.mapProfile(lenderId, updatedSnapshot.data() ?? { ...data, ...updates });
+    return this.mapProfile(
+      lenderId,
+      updatedSnapshot.data() ?? { ...data, ...updates },
+    );
   }
 
   private validateInput(input: UpdateLenderProfileInput): void {
@@ -85,7 +95,9 @@ export class LenderProfileService {
     }
 
     if (input.businessName.trim().length < 3) {
-      throw new BadRequestException('businessName must be at least 3 characters.');
+      throw new BadRequestException(
+        'businessName must be at least 3 characters.',
+      );
     }
 
     if (input.city.trim().length < 2 || input.district.trim().length < 2) {
@@ -93,7 +105,9 @@ export class LenderProfileService {
     }
 
     if (input.responseTimeHours <= 0 || input.responseTimeHours > 72) {
-      throw new BadRequestException('responseTimeHours must be between 1 and 72.');
+      throw new BadRequestException(
+        'responseTimeHours must be between 1 and 72.',
+      );
     }
   }
 
@@ -101,6 +115,11 @@ export class LenderProfileService {
     lenderId: string,
     data: Record<string, unknown>,
   ): LenderProfileResponse {
+    const lenderProfile =
+      data.lenderProfile && typeof data.lenderProfile === 'object'
+        ? (data.lenderProfile as Record<string, unknown>)
+        : {};
+
     return {
       lenderId,
       fullName:
@@ -112,12 +131,20 @@ export class LenderProfileService {
       address: typeof data.address === 'string' ? data.address : null,
       city: typeof data.city === 'string' ? data.city : null,
       district: typeof data.district === 'string' ? data.district : null,
-      businessName: typeof data.businessName === 'string' ? data.businessName : null,
+      businessName:
+        typeof lenderProfile.businessName === 'string'
+          ? lenderProfile.businessName
+          : typeof data.businessName === 'string'
+            ? data.businessName
+            : null,
       businessRegistrationNo:
-        typeof data.businessRegistrationNo === 'string'
-          ? data.businessRegistrationNo
-          : null,
-      kycStatus: typeof data.kycStatus === 'string' ? data.kycStatus : 'unknown',
+        typeof lenderProfile.registrationNumber === 'string'
+          ? lenderProfile.registrationNumber
+          : typeof data.businessRegistrationNo === 'string'
+            ? data.businessRegistrationNo
+            : null,
+      kycStatus:
+        typeof data.kycStatus === 'string' ? data.kycStatus : 'unknown',
       responseTimeHours:
         typeof data.responseTimeHours === 'number' &&
         Number.isFinite(data.responseTimeHours)
@@ -129,13 +156,17 @@ export class LenderProfileService {
           )
         : [],
       availableCapital:
-        typeof data.availableCapital === 'number' && Number.isFinite(data.availableCapital)
+        typeof data.availableCapital === 'number' &&
+        Number.isFinite(data.availableCapital)
           ? data.availableCapital
           : 0,
       rating:
-        typeof data.rating === 'number' && Number.isFinite(data.rating)
-          ? data.rating
-          : null,
+        typeof lenderProfile.rating === 'number' &&
+        Number.isFinite(lenderProfile.rating)
+          ? lenderProfile.rating
+          : typeof data.rating === 'number' && Number.isFinite(data.rating)
+            ? data.rating
+            : null,
       profilePhotoUrl:
         typeof data.profilePhotoUrl === 'string' ? data.profilePhotoUrl : null,
       updatedAt: this.toIsoString(data.updatedAt),
@@ -144,7 +175,9 @@ export class LenderProfileService {
 
   private uniqueRegions(values: string[]): string[] {
     return Array.from(
-      new Set(values.map((value) => value.trim()).filter((value) => value.length > 0)),
+      new Set(
+        values.map((value) => value.trim()).filter((value) => value.length > 0),
+      ),
     );
   }
 

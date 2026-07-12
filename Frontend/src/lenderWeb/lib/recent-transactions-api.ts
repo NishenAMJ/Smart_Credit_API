@@ -1,6 +1,4 @@
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
-  'http://localhost:3000'
+import { API_BASE_URL, getAuthHeaders } from './api-config'
 
 export type RecentTransactionsSummary = {
   totalTransactions: number
@@ -137,7 +135,8 @@ export async function fetchRecentTransactions(
   }
 
   const response = await fetch(
-    `${API_BASE_URL}/recent-transactions?${params.toString()}`,
+    `${API_BASE_URL}/payments?${params.toString()}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {
@@ -152,9 +151,10 @@ export async function fetchLoanLedgerDetails(
   loanId: string,
 ): Promise<LoanLedgerDetailsResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/recent-transactions/loans/${encodeURIComponent(
+    `${API_BASE_URL}/payments/loans/${encodeURIComponent(
       loanId,
     )}?lenderId=${encodeURIComponent(lenderId)}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {
@@ -171,16 +171,16 @@ export async function recordInstallmentPayment(
   input: RecordInstallmentPaymentInput,
 ): Promise<LoanLedgerDetailsResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/recent-transactions/loans/${encodeURIComponent(
+    `${API_BASE_URL}/payments/loans/${encodeURIComponent(
       loanId,
     )}/installments/${encodeURIComponent(installmentId)}/payments?lenderId=${encodeURIComponent(
       lenderId,
     )}`,
     {
       method: 'POST',
-      headers: {
+      headers: getAuthHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify(input),
     },
   )

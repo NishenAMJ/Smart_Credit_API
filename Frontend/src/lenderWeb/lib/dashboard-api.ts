@@ -1,3 +1,5 @@
+import { API_BASE_URL } from './api-config'
+
 export type DashboardSummary = {
   totalBorrowers: number
   todaysCollection: number
@@ -67,10 +69,6 @@ export type BorrowerLoan = {
   tenureMonths: number
   createdAt: string | null
 }
-
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
-  'http://localhost:3000'
 
 async function parseError(response: Response, fallback: string): Promise<never> {
   try {

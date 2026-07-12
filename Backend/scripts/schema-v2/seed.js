@@ -4,6 +4,7 @@ const { getDb } = require('../shared/firebase');
 const { commitSetWrites } = require('../shared/firestore-helpers');
 const { buildSchemaV2Fixtures } = require('./fixtures');
 const { validateFixtures } = require('./validate');
+const { getSeedConfig } = require('./config');
 
 const topLevelWrites = (db, collection, records, idField) =>
   records.map((data) => ({
@@ -12,6 +13,12 @@ const topLevelWrites = (db, collection, records, idField) =>
   }));
 
 async function seedSchemaV2() {
+  const config = getSeedConfig();
+  if (!config.enabled) {
+    throw new Error(
+      'Firestore seed writes are disabled. Set SEED_ENABLED=true in Backend/.env after verifying the Firebase project.',
+    );
+  }
   const db = getDb();
   const fixtures = await buildSchemaV2Fixtures();
   const counts = validateFixtures(fixtures);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Files, Megaphone } from 'lucide-react'
 import type { LenderView } from '../components/common/LenderSidebar'
 import {
   fetchAnalyticsDrilldown,
@@ -211,7 +212,7 @@ export default function ActiveAdsRequestsPage({
       <section className="summary-grid" aria-label="Active ads summary">
         <article className="card metric-card">
           <div className="metric-icon metric-icon--primary" aria-hidden="true">
-            AD
+            <Megaphone size={22} strokeWidth={1.8} />
           </div>
           <div className="metric-copy">
             <p className="metric-label">Ads Per Page</p>
@@ -221,7 +222,7 @@ export default function ActiveAdsRequestsPage({
         </article>
         <article className="card metric-card">
           <div className="metric-icon metric-icon--success" aria-hidden="true">
-            PG
+            <Files size={22} strokeWidth={1.8} />
           </div>
           <div className="metric-copy">
             <p className="metric-label">Current Page</p>

@@ -99,21 +99,6 @@ export class DashboardService {
     const db = this.firebaseService.getDb();
     const safePageSize = this.clamp(pageSize, 8, 50);
 
-    const relationBorrowers = await this.getBorrowersFromRelations(
-      db,
-      lenderId,
-      safePageSize,
-      cursor,
-    );
-
-    if (relationBorrowers) {
-      return {
-        borrowers: relationBorrowers.borrowers,
-        pageInfo: relationBorrowers.pageInfo,
-        generatedAt: new Date().toISOString(),
-      };
-    }
-
     const loansSnapshot = await db
       .collection('loans')
       .where('lenderId', '==', lenderId)
@@ -148,7 +133,7 @@ export class DashboardService {
 
     const data = snapshot.data();
 
-    if (!data || !hasRole(data.role, 'borrower')) {
+    if (!data || !hasRole(data.roles ?? data.role, 'borrower')) {
       return null;
     }
 
@@ -172,7 +157,9 @@ export class DashboardService {
 
     return {
       id: snapshot.id,
-      role: hasRole(data.role, 'borrower') ? 'borrower' : 'unknown',
+      role: hasRole(data.roles ?? data.role, 'borrower')
+        ? 'borrower'
+        : 'unknown',
       fullName:
         typeof data.fullName === 'string' && data.fullName.trim().length > 0
           ? data.fullName
@@ -183,11 +170,7 @@ export class DashboardService {
       nic: typeof data.nic === 'string' ? data.nic : null,
       kycStatus:
         typeof data.kycStatus === 'string' ? data.kycStatus : 'not_submitted',
-      creditScore:
-        typeof data.creditScore === 'number' &&
-        Number.isFinite(data.creditScore)
-          ? data.creditScore
-          : null,
+      creditScore: this.readBorrowerCreditScore(data),
       rating:
         typeof data.rating === 'number' && Number.isFinite(data.rating)
           ? data.rating
@@ -196,7 +179,9 @@ export class DashboardService {
       activeLoansCount,
       totalBorrowedAmount,
       outstandingAmount,
-      isActive: data.isActive !== false,
+      isActive: data.accountStatus
+        ? data.accountStatus === 'active'
+        : data.isActive !== false,
       createdAt: this.toIsoString(data.createdAt),
       loans: lenderLoans
         .slice()
@@ -523,10 +508,8 @@ export class DashboardService {
         ) ?? 'Unnamed borrower',
       email: readString(userData?.email) ?? 'No email',
       creditScore:
-        typeof userData?.creditScore === 'number' &&
-        Number.isFinite(userData.creditScore)
-          ? userData.creditScore
-          : this.toNullableNumber(relation.borrowerCreditScore),
+        this.readBorrowerCreditScore(userData) ??
+        this.toNullableNumber(relation.borrowerCreditScore),
       kycStatus:
         readString(userData?.kycStatus, relation.borrowerKycStatus) ??
         'not_submitted',
@@ -542,7 +525,9 @@ export class DashboardService {
       ),
       latestLoanStatus: readString(relation.latestLoanStatus) ?? 'unknown',
       latestLoanCreatedAt: createdAt,
-      isActive: userData?.isActive !== false,
+      isActive: userData?.accountStatus
+        ? userData.accountStatus === 'active'
+        : userData?.isActive !== false,
       createdAt: this.toIsoString(userData?.createdAt),
     };
   }
@@ -595,7 +580,11 @@ export class DashboardService {
     data: DocumentData | undefined,
     loans: DashboardLoanRecord[],
   ): DashboardBorrower | null {
-    if (!data || !hasRole(data.role, 'borrower') || loans.length === 0) {
+    if (
+      !data ||
+      !hasRole(data.roles ?? data.role, 'borrower') ||
+      loans.length === 0
+    ) {
       return null;
     }
 
@@ -620,11 +609,7 @@ export class DashboardService {
           ? data.fullName
           : 'Unnamed borrower',
       email: typeof data.email === 'string' ? data.email : 'No email',
-      creditScore:
-        typeof data.creditScore === 'number' &&
-        Number.isFinite(data.creditScore)
-          ? data.creditScore
-          : null,
+      creditScore: this.readBorrowerCreditScore(data),
       kycStatus:
         typeof data.kycStatus === 'string' ? data.kycStatus : 'not_submitted',
       loanCount: loans.length,
@@ -635,7 +620,9 @@ export class DashboardService {
       latestLoanCreatedAt: latestLoan?.createdAt
         ? latestLoan.createdAt.toISOString()
         : null,
-      isActive: data.isActive !== false,
+      isActive: data.accountStatus
+        ? data.accountStatus === 'active'
+        : data.isActive !== false,
       createdAt: this.toIsoString(data.createdAt),
     };
   }
@@ -651,7 +638,7 @@ export class DashboardService {
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
       amount: getLoanAmount(data),
       remainingAmount: await computeLoanRemainingAmount(db, doc.id, data),
-      interestRate: this.toNumber(data.interestRate),
+      interestRate: this.toNumber(data.annualInterestRate ?? data.interestRate),
       tenureMonths: this.toNumber(data.tenureMonths),
       status: typeof data.status === 'string' ? data.status : 'unknown',
       createdAt: getLoanCreatedAt(data),
@@ -707,6 +694,19 @@ export class DashboardService {
   private toNullableNumber(value: unknown): number | null {
     const numeric = this.toNumber(value);
     return numeric > 0 ? numeric : null;
+  }
+
+  private readBorrowerCreditScore(
+    data: DocumentData | undefined,
+  ): number | null {
+    const nestedProfile = data?.borrowerProfile;
+    const nestedScore =
+      nestedProfile && typeof nestedProfile === 'object'
+        ? (nestedProfile as DocumentData).creditScore
+        : undefined;
+    const score = readNumber(nestedScore, data?.creditScore);
+
+    return score > 0 ? score : null;
   }
 
   private sum(values: number[]): number {

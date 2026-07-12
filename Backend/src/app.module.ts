@@ -14,6 +14,7 @@ import { LenderProfileModule } from './modules/lender/lender-profile/lender-prof
 import { LenderSettingsModule } from './modules/lender/lender-settings/lender-settings.module';
 import { LoanRequestsModule } from './modules/lender/loan-requests/loan-requests.module';
 import { PaymentsModule } from './modules/lender/payments/payments.module';
+import { LenderLoansModule } from './modules/lender/loans/lender-loans.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { LegalModule } from './modules/legal/legal.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
@@ -46,6 +47,7 @@ import { LocationModule } from './modules/location/location.module';
     LenderSettingsModule,
     LoanRequestsModule,
     PaymentsModule,
+    LenderLoansModule,
     AdminModule,
     LegalModule,
     TransactionsModule,

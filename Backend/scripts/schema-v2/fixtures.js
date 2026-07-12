@@ -1,6 +1,8 @@
 'use strict';
 
 const bcrypt = require('bcrypt');
+const { addBulkFixtures } = require('./bulk-fixtures');
+const { getSeedConfig } = require('./config');
 
 const addMonths = (date, months) => {
   const next = new Date(date);
@@ -12,7 +14,8 @@ const installmentIdFor = (sequence) =>
   `month_${String(sequence).padStart(3, '0')}`;
 
 async function buildSchemaV2Fixtures(referenceDate = new Date()) {
-  const passwordHash = await bcrypt.hash('SmartCredit@123', 10);
+  const config = getSeedConfig();
+  const passwordHash = await bcrypt.hash(config.defaultPassword, 10);
   const users = [
     {
       userId: 'admin_001',
@@ -485,7 +488,7 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
     },
   ];
 
-  return {
+  const fixtures = {
     users,
     authCredentials,
     documents,
@@ -505,6 +508,8 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
     userLocations,
     auditLogs,
   };
+
+  return addBulkFixtures(fixtures, config, referenceDate, passwordHash);
 }
 
 module.exports = { buildSchemaV2Fixtures, installmentIdFor };

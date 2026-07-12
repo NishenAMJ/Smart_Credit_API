@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { RotateCcw, Save, Send } from 'lucide-react'
 import type { LenderSession } from '../lib/lender-session'
 import {
   createLenderAd,
@@ -24,18 +25,16 @@ type AdDraft = {
 }
 
 const DEFAULT_DRAFT: AdDraft = {
-  headline: 'Fast working-capital support for reliable borrowers',
+  headline: 'Working capital loans',
   minAmount: '50000',
   maxAmount: '250000',
   interestRate: '14.5',
   tenureMonths: '12',
-  borrowerFocus: 'Small business owners with stable monthly cash flow',
-  processingTime: 'Approval review within 24 hours',
+  borrowerFocus: 'Small business owners',
+  processingTime: 'Within 24 hours',
   repaymentStyle: 'Monthly installments',
-  requirements:
-    'NIC, bank statements, business or salary proof, and a clear repayment plan.',
-  supportNote:
-    'Friendly review, transparent pricing, and updates at every step of approval.',
+  requirements: 'NIC, bank statements, and income proof.',
+  supportNote: 'Transparent rates and a clear approval process.',
 }
 
 function getStorageKey(lenderId: string): string {
@@ -252,84 +251,20 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
 
   const amountRange = `${formatCurrency(draft.minAmount)} - ${formatCurrency(draft.maxAmount)}`
   const previewStatus = recentAds[0]?.status ?? 'preview only'
-  const qualitySignals = [
-    draft.headline.trim().length >= 18
-      ? 'Clear value headline'
-      : 'Strengthen your headline',
-    Number(draft.interestRate) > 0 ? 'Pricing is visible' : 'Add interest rate',
-    draft.requirements.trim().length >= 24
-      ? 'Borrower requirements are clear'
-      : 'Explain borrower requirements',
-    draft.supportNote.trim().length >= 20
-      ? 'Human trust note included'
-      : 'Add a trust-building note',
-  ]
-
   return (
     <section className="dashboard-panel">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Lender growth tool</p>
           <h1 className="page-title">Create Ad</h1>
-          <p className="page-subtitle">
-            Build a simple lending offer that feels trustworthy, attractive, and
-            easy for the right borrower to understand.
-          </p>
-          <p className="dashboard-context-pill">
-            Draft owner: {session.displayName} - {session.lenderId}
-          </p>
+          <p className="page-subtitle">Create a lending offer for borrower review.</p>
         </div>
       </header>
-
-      <section className="create-ad-hero">
-        <article className="card create-ad-hero__story">
-          <div className="create-ad-hero__badge">Offer quality</div>
-          <h2 className="section-title">
-            A strong ad should feel clear, trustworthy, and easy to act on
-          </h2>
-          <p className="section-subtitle">
-            Borrowers usually decide in seconds whether a lender looks safe and
-            professional. A clean offer with visible numbers and stable terms wins
-            more trust than a complicated ad.
-          </p>
-          <div className="create-ad-hero__chips">
-            <span className="create-ad-chip">Transparent pricing</span>
-            <span className="create-ad-chip">Fast review promise</span>
-            <span className="create-ad-chip">Human support tone</span>
-          </div>
-        </article>
-
-        <article className="card create-ad-hero__score">
-          <p className="create-ad-score__label">Ad quality signals</p>
-          <div className="create-ad-score__value">
-            {
-              qualitySignals.filter(
-                (item) =>
-                  !item.startsWith('Strengthen') && !item.startsWith('Add'),
-              ).length
-            }
-            /4
-          </div>
-          <div className="create-ad-score__list">
-            {qualitySignals.map((signal) => (
-              <div className="create-ad-score__item" key={signal}>
-                <span className="create-ad-score__dot" aria-hidden="true" />
-                <p>{signal}</p>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
 
       <section className="create-ad-layout">
         <article className="card create-ad-form-card">
           <div className="create-ad-form-card__header">
             <div>
-              <h2 className="section-title">Ad Builder</h2>
-              <p className="section-subtitle">
-                Keep it simple. Say what you offer, who it is for, and why the
-                borrower should trust the process.
-              </p>
+              <h2 className="section-title">Offer Details</h2>
             </div>
           </div>
 
@@ -347,13 +282,13 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
 
           <div className="create-ad-form-grid">
             <label className="create-ad-field create-ad-field--full">
-              <span className="create-ad-field__label">Ad headline</span>
+              <span className="create-ad-field__label">Title</span>
               <input
                 className="input"
                 type="text"
                 value={draft.headline}
                 onChange={(event) => updateDraft('headline', event.target.value)}
-                placeholder="Ex: Flexible personal loans for salary earners"
+                placeholder="Working capital loans"
               />
             </label>
 
@@ -382,7 +317,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
             </label>
 
             <label className="create-ad-field">
-              <span className="create-ad-field__label">Interest rate %</span>
+              <span className="create-ad-field__label">Annual interest (%)</span>
               <input
                 className="input"
                 type="number"
@@ -395,7 +330,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
             </label>
 
             <label className="create-ad-field">
-              <span className="create-ad-field__label">Tenure in months</span>
+              <span className="create-ad-field__label">Maximum tenure (months)</span>
               <input
                 className="input"
                 type="number"
@@ -407,7 +342,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
             </label>
 
             <label className="create-ad-field create-ad-field--full">
-              <span className="create-ad-field__label">Best-fit borrower</span>
+              <span className="create-ad-field__label">Target borrowers</span>
               <input
                 className="input"
                 type="text"
@@ -418,46 +353,48 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
             </label>
 
             <label className="create-ad-field">
-              <span className="create-ad-field__label">Review speed</span>
-              <input
+              <span className="create-ad-field__label">Review time</span>
+              <select
                 className="input"
-                type="text"
                 value={draft.processingTime}
                 onChange={(event) => updateDraft('processingTime', event.target.value)}
-                placeholder="Approval within 24 hours"
-              />
+              >
+                <option value="Within 24 hours">Within 24 hours</option>
+                <option value="Within 2 business days">Within 2 business days</option>
+                <option value="Within 3 business days">Within 3 business days</option>
+              </select>
             </label>
 
             <label className="create-ad-field">
-              <span className="create-ad-field__label">Repayment style</span>
-              <input
+              <span className="create-ad-field__label">Repayment</span>
+              <select
                 className="input"
-                type="text"
                 value={draft.repaymentStyle}
                 onChange={(event) => updateDraft('repaymentStyle', event.target.value)}
-                placeholder="Monthly installments"
-              />
+              >
+                <option value="Monthly installments">Monthly installments</option>
+              </select>
             </label>
 
             <label className="create-ad-field create-ad-field--full">
-              <span className="create-ad-field__label">Required documents</span>
+              <span className="create-ad-field__label">Requirements</span>
               <textarea
                 className="create-ad-textarea"
                 value={draft.requirements}
                 onChange={(event) => updateDraft('requirements', event.target.value)}
-                rows={4}
-                placeholder="List the documents or proof you expect from the borrower."
+                rows={3}
+                placeholder="NIC, bank statements, and income proof"
               />
             </label>
 
             <label className="create-ad-field create-ad-field--full">
-              <span className="create-ad-field__label">Trust note</span>
+              <span className="create-ad-field__label">Description</span>
               <textarea
                 className="create-ad-textarea"
                 value={draft.supportNote}
                 onChange={(event) => updateDraft('supportNote', event.target.value)}
                 rows={3}
-                placeholder="What makes your process feel safe, fair, and professional?"
+                placeholder="Short description shown to borrowers"
               />
             </label>
           </div>
@@ -470,7 +407,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 onClick={handleResetDraft}
                 disabled={isPublishing}
               >
-                Reset
+                <RotateCcw size={16} /> Reset
               </button>
               <button
                 type="button"
@@ -478,7 +415,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 onClick={handleSaveDraft}
                 disabled={isPublishing}
               >
-                Save Draft
+                <Save size={16} /> Save
               </button>
               <button
                 type="button"
@@ -486,7 +423,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 onClick={handlePublishAd}
                 disabled={isPublishing}
               >
-                {isPublishing ? 'Publishing...' : 'Publish Ad'}
+                <Send size={16} /> {isPublishing ? 'Publishing...' : 'Publish'}
               </button>
             </div>
           </div>
@@ -496,8 +433,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
           <article className="card create-ad-preview-card">
             <div className="create-ad-preview-card__top">
               <div>
-                <p className="create-ad-preview-card__eyebrow">Live preview</p>
-                <h2 className="section-title">Borrower-facing ad</h2>
+                <h2 className="section-title">Preview</h2>
               </div>
               <span className="badge badge-gray">{previewStatus}</span>
             </div>
@@ -509,7 +445,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 </div>
                 <div>
                   <p className="create-ad-preview__name">{session.displayName}</p>
-                  <p className="create-ad-preview__meta">Verified lender profile</p>
+                  <p className="create-ad-preview__meta">Verified lender</p>
                 </div>
               </div>
 
@@ -536,12 +472,12 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 <p className="create-ad-preview__label">Best for</p>
                 <p>
                   {draft.borrowerFocus ||
-                    'Describe the borrower segment you want to attract.'}
+                    'Target borrower group'}
                 </p>
               </div>
 
               <div className="create-ad-preview__section">
-                <p className="create-ad-preview__label">Why borrowers feel safe</p>
+                <p className="create-ad-preview__label">Terms</p>
                 <p>{buildOfferSummary(draft)}</p>
               </div>
 
@@ -556,7 +492,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
           </article>
 
           <article className="card create-ad-tips-card">
-            <h2 className="section-title">Recent Published Ads</h2>
+            <h2 className="section-title">Recent Ads</h2>
             <div className="create-ad-tips-card__list">
               {isRecentAdsLoading ? (
                 <article className="create-ad-tip">
@@ -579,11 +515,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
                 ))
               ) : (
                 <article className="create-ad-tip">
-                  <strong>No ads published yet</strong>
-                  <p>
-                    Publish your first lender ad from this page and it will appear
-                    here after Firestore saves it.
-                  </p>
+                  <strong>No ads yet</strong>
                 </article>
               )}
             </div>

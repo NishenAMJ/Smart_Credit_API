@@ -1055,9 +1055,14 @@ export class LenderNotificationsService {
 
     const data = snapshot.data();
 
-    if (!data || !hasRole(data.role, 'lender')) {
+    if (!data || !hasRole(data.roles ?? data.role, 'lender')) {
       throw new NotFoundException(`Lender ${lenderId} was not found.`);
     }
+
+    const lenderProfile =
+      data.lenderProfile && typeof data.lenderProfile === 'object'
+        ? (data.lenderProfile as Record<string, unknown>)
+        : {};
 
     return {
       fullName:
@@ -1065,10 +1070,13 @@ export class LenderNotificationsService {
           ? data.fullName
           : lenderId,
       businessName:
-        typeof data.businessName === 'string' &&
-        data.businessName.trim().length > 0
-          ? data.businessName
-          : null,
+        typeof lenderProfile.businessName === 'string' &&
+        lenderProfile.businessName.trim().length > 0
+          ? lenderProfile.businessName
+          : typeof data.businessName === 'string' &&
+              data.businessName.trim().length > 0
+            ? data.businessName
+            : null,
       email: typeof data.email === 'string' ? data.email : '',
       city:
         typeof data.city === 'string' && data.city.trim().length > 0

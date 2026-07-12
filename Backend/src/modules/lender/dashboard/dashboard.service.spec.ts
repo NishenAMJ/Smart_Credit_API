@@ -42,7 +42,7 @@ describe('DashboardService', () => {
     expect(result.generatedAt).toEqual(expect.any(String));
   });
 
-  it('returns paged borrowers with cursor page info from lender relations', async () => {
+  it('returns paged borrowers aggregated from canonical lender loans', async () => {
     const db = {
       collection: jest.fn(() => ({
         where: jest.fn(() => ({
@@ -52,7 +52,7 @@ describe('DashboardService', () => {
     };
     const service = new DashboardService({ getDb: () => db } as any);
 
-    jest.spyOn(service as any, 'getBorrowersFromRelations').mockResolvedValue({
+    jest.spyOn(service as any, 'getRecentBorrowers').mockResolvedValue({
       borrowers: [
         {
           id: 'borrower_1',
@@ -86,6 +86,41 @@ describe('DashboardService', () => {
       nextCursor: 'cursor_1',
     });
     expect(result.generatedAt).toEqual(expect.any(String));
+  });
+
+  it('maps schema-v2 roles and nested borrower credit score', () => {
+    const service = new DashboardService({} as any);
+    const result = (service as any).mapBorrower(
+      'borrower_1',
+      {
+        roles: ['borrower'],
+        fullName: 'Borrower One',
+        email: 'borrower@example.com',
+        accountStatus: 'active',
+        kycStatus: 'approved',
+        borrowerProfile: { creditScore: 735 },
+      },
+      [
+        {
+          id: 'loan_1',
+          borrowerId: 'borrower_1',
+          amount: 100000,
+          remainingAmount: 60000,
+          status: 'active',
+          createdAt: new Date('2026-07-01T00:00:00.000Z'),
+        },
+      ],
+    );
+
+    expect(result).toMatchObject({
+      id: 'borrower_1',
+      creditScore: 735,
+      loanCount: 1,
+      activeLoansCount: 1,
+      totalBorrowedAmount: 100000,
+      outstandingAmount: 60000,
+      isActive: true,
+    });
   });
 
   it('falls back overdue count to nested installments when aggregate query fails', async () => {

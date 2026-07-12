@@ -1,8 +1,23 @@
-import { useEffect, useState, type JSX } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  BadgePlus,
+  Bell,
+  ChartNoAxesCombined,
+  ClipboardList,
+  CreditCard,
+  Landmark,
+  LayoutDashboard,
+  LogOut,
+  Megaphone,
+  PanelLeftClose,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react'
 import type { LenderSession } from '../../lib/lender-session'
 
 type LenderView =
   | 'dashboard'
+  | 'loans'
   | 'recent-transactions'
   | 'analytics'
   | 'active-ads-requests'
@@ -14,80 +29,22 @@ type LenderView =
 type NavItem = {
   id: LenderView
   label: string
-  icon: () => JSX.Element
-}
-
-function DashboardIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="4.5" y="4.5" width="6.5" height="6.5" rx="1.5" />
-      <rect x="13" y="4.5" width="6.5" height="6.5" rx="1.5" />
-      <rect x="4.5" y="13" width="6.5" height="6.5" rx="1.5" />
-      <rect x="13" y="13" width="6.5" height="6.5" rx="1.5" />
-    </svg>
-  )
-}
-
-function TransactionsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="4" y="5.5" width="16" height="13" rx="2.5" />
-      <path d="M4 10h16" />
-      <path d="M8 14h3.5" />
-      <path d="M14.5 14H16" />
-    </svg>
-  )
-}
-
-function AnalyticsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M5 19.5h14" />
-      <path d="M8 17V11" />
-      <path d="M12 17V7" />
-      <path d="M16 17v-4" />
-    </svg>
-  )
-}
-
-function CreateAdIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-      <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
-    </svg>
-  )
-}
-
-function SidebarToggleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="4.5" y="5" width="15" height="14" rx="2.5" />
-      <path d="M10 5v14" />
-      <rect x="6.5" y="7.5" width="1.5" height="9" rx="0.75" fill="currentColor" stroke="none" />
-    </svg>
-  )
+  icon: LucideIcon
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
-  { id: 'recent-transactions', label: 'Payments', icon: TransactionsIcon },
-  { id: 'analytics', label: 'Analytics', icon: AnalyticsIcon },
-  { id: 'create-ad', label: 'Create Ad', icon: CreateAdIcon },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'loans', label: 'Loans', icon: Landmark },
+  { id: 'recent-transactions', label: 'Payments', icon: CreditCard },
+  { id: 'pending-requests', label: 'Applications', icon: ClipboardList },
+  { id: 'active-ads-requests', label: 'Advertisements', icon: Megaphone },
+  { id: 'analytics', label: 'Analytics', icon: ChartNoAxesCombined },
+  { id: 'create-ad', label: 'Create Ad', icon: BadgePlus },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
 const SIDEBAR_COLLAPSE_STORAGE_KEY = 'smart-credit:lender-sidebar-collapsed'
-
-function LogoutIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M10 6H7.75A2.75 2.75 0 0 0 5 8.75v6.5A2.75 2.75 0 0 0 7.75 18H10" />
-      <path d="M13 8.5 17 12l-4 3.5" />
-      <path d="M9 12h8" />
-    </svg>
-  )
-}
 
 type LenderSidebarProps = {
   activeView: LenderView
@@ -133,7 +90,7 @@ export default function LenderSidebar({
     <>
       <div className="lender-sidebar__mobile-bar">
         <div className="lender-sidebar__logo-inner">
-          <div className="lender-sidebar__logo-icon">SC</div>
+          <div className="lender-sidebar__logo-icon"><Landmark size={20} /></div>
           <div>
             <div className="lender-sidebar__logo-text">Smart Credit+</div>
             <div className="lender-sidebar__logo-sub">Lender Panel</div>
@@ -176,11 +133,11 @@ export default function LenderSidebar({
                 onClick={() => setIsDesktopCollapsed((current) => !current)}
               >
                 <span aria-hidden="true" className="lender-sidebar__collapse-icon">
-                  <SidebarToggleIcon />
+                  <PanelLeftClose />
                 </span>
               </button>
 
-              <div className="lender-sidebar__logo-icon">SC</div>
+              <div className="lender-sidebar__logo-icon"><Landmark size={20} /></div>
               <div className="lender-sidebar__brand-copy">
                 <div className="lender-sidebar__logo-text">Smart Credit+</div>
                 <div className="lender-sidebar__logo-sub">Lender Panel</div>
@@ -241,7 +198,7 @@ export default function LenderSidebar({
               onClick={onLogout}
             >
               <span className="lender-sidebar__logout-icon" aria-hidden="true">
-                <LogoutIcon />
+                <LogOut />
               </span>
             </button>
           </div>

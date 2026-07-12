@@ -6,6 +6,7 @@ import AnalyticsPage from './pages/analytics'
 import ActiveAdsRequestsPage from './pages/active-ads-requests'
 import CreateAdPage from './pages/create-ad'
 import DashboardPage from './pages/dashboard'
+import LoansPage from './pages/loans'
 import AuthPage from './pages/auth'
 import PendingRequestsPage from './pages/pending-requests'
 import NotificationsPage from './pages/notifications'
@@ -15,8 +16,6 @@ import LenderProfileModal from './components/profile/LenderProfileModal'
 import {
   clearStoredSession,
   getStoredSession,
-  registerTemporaryLender,
-  signInWithLenderId,
   updateStoredSession,
   type LenderSession,
 } from './lib/lender-session'
@@ -30,14 +29,8 @@ function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
 
   function handleLogin(input: LenderSession) {
-    const nextSession = signInWithLenderId(input.lenderId)
-    setSession(nextSession)
-    setActiveView('dashboard')
-  }
-
-  function handleSignUp(input: LenderSession) {
-    const nextSession = registerTemporaryLender(input)
-    setSession(nextSession)
+    updateStoredSession(input)
+    setSession(input)
     setActiveView('dashboard')
   }
 
@@ -48,10 +41,15 @@ function App() {
   }
 
   function handleProfileSaved(profile: LenderProfile) {
+    if (!session) {
+      return
+    }
+
     const nextSession: LenderSession = {
       lenderId: profile.lenderId,
       displayName: profile.businessName || profile.fullName,
       email: profile.email,
+      accessToken: session.accessToken,
     }
 
     updateStoredSession(nextSession)
@@ -63,7 +61,7 @@ function App() {
     .replace(/\b\w/g, (character: string) => character.toUpperCase())
 
   if (!session) {
-    return <AuthPage onLogin={handleLogin} onSignUp={handleSignUp} />
+    return <AuthPage onLogin={handleLogin} />
   }
 
   return (
@@ -77,6 +75,8 @@ function App() {
       >
         {activeView === 'dashboard' ? (
           <DashboardPage session={session} onNavigate={setActiveView} />
+        ) : activeView === 'loans' ? (
+          <LoansPage session={session} />
         ) : activeView === 'recent-transactions' ? (
           <RecentTransactionsPage session={session} />
         ) : activeView === 'analytics' ? (

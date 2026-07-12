@@ -1,4 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  Bell,
+  CircleAlert,
+  ClipboardList,
+  Megaphone,
+  Settings,
+  Users,
+  WalletCards,
+  type LucideIcon,
+} from 'lucide-react'
 import type { LenderView } from '../components/common/LenderSidebar'
 import type {
   BorrowerDetails,
@@ -67,60 +77,30 @@ type DashboardPageProps = {
 
 type DashboardQuickAction = {
   id: Extract<LenderView, 'pending-requests' | 'settings' | 'notifications'>
-  icon: 'requests' | 'settings' | 'notifications'
+  icon: LucideIcon
   label: string
 }
 
 const quickActions: DashboardQuickAction[] = [
   {
     id: 'pending-requests',
-    icon: 'requests',
+    icon: ClipboardList,
     label: 'Pending requests',
   },
   {
     id: 'settings',
-    icon: 'settings',
+    icon: Settings,
     label: 'Settings',
   },
   {
     id: 'notifications',
-    icon: 'notifications',
+    icon: Bell,
     label: 'Notifications',
   },
 ]
 
-function DashboardQuickActionIcon({
-  icon,
-}: {
-  icon: DashboardQuickAction['icon']
-}) {
-  if (icon === 'requests') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M4.75 8.75h14.5v9a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2v-9Z" />
-        <path d="M8 8.75V6.5a4 4 0 0 1 8 0v2.25" />
-        <path d="M8.5 13h7" />
-      </svg>
-    )
-  }
-
-  if (icon === 'settings') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M5 7h14" />
-        <path d="M5 17h14" />
-        <circle cx="9" cy="7" r="2.2" fill="currentColor" stroke="none" />
-        <circle cx="15" cy="17" r="2.2" fill="currentColor" stroke="none" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M12 5a4.5 4.5 0 0 1 4.5 4.5v2.18c0 .76.25 1.5.72 2.1l1.03 1.32H5.75l1.03-1.32c.47-.6.72-1.34.72-2.1V9.5A4.5 4.5 0 0 1 12 5Z" />
-      <path d="M10 18a2.25 2.25 0 0 0 4 0" />
-    </svg>
-  )
+function IconSymbol({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={22} strokeWidth={1.8} />
 }
 
 export default function DashboardPage({
@@ -337,28 +317,28 @@ export default function DashboardPage({
       label: 'Total Borrowers',
       value: summary ? String(summary.totalBorrowers) : '--',
       caption: 'Borrowers who already borrowed from you',
-      accent: 'BR',
+      icon: Users,
       route: null,
     },
     {
       label: "Today's Collection",
       value: summary ? formatCurrency(summary.todaysCollection) : '--',
       caption: 'Repayments recorded today from your loans',
-      accent: 'LKR',
+      icon: WalletCards,
       route: null,
     },
     {
       label: 'Overdue Payments',
       value: summary ? String(summary.overduePayments) : '--',
       caption: 'Overdue installments inside your loan book',
-      accent: 'OD',
+      icon: CircleAlert,
       route: null,
     },
     {
       label: 'Active Ads',
       value: summary ? String(summary.activeAds) : '--',
       caption: 'Approved ads owned by this lender',
-      accent: 'AD',
+      icon: Megaphone,
       route: 'active-ads-requests' as const,
     },
   ]
@@ -461,7 +441,7 @@ export default function DashboardPage({
                     className="dashboard-quick-action__symbol"
                     aria-hidden="true"
                   >
-                    <DashboardQuickActionIcon icon={action.icon} />
+                    <IconSymbol icon={action.icon} />
                   </span>
                 </button>
               ))}
@@ -502,7 +482,7 @@ export default function DashboardPage({
                       className={`metric-icon metric-icon--${getMetricTone(index)}`}
                       aria-hidden="true"
                     >
-                      {card.accent}
+                      <IconSymbol icon={card.icon} />
                     </div>
                     <div className="metric-copy">
                       <p className="metric-label">{card.label}</p>
@@ -517,7 +497,7 @@ export default function DashboardPage({
                       className={`metric-icon metric-icon--${getMetricTone(index)}`}
                       aria-hidden="true"
                     >
-                      {card.accent}
+                      <IconSymbol icon={card.icon} />
                     </div>
                     <div className="metric-copy">
                       <p className="metric-label">{card.label}</p>

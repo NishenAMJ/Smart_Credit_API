@@ -841,7 +841,11 @@ export class AnalyticsService {
     return snapshots
       .map((snapshot) => {
         const data = snapshot.data();
-        return data ? this.toNullableNumber(data.creditScore) : null;
+        return data
+          ? this.toNullableNumber(
+              data.borrowerProfile?.creditScore ?? data.creditScore,
+            )
+          : null;
       })
       .filter((score): score is number => score !== null);
   }

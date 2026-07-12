@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Clock3, Store, Target, TriangleAlert, type LucideIcon } from 'lucide-react'
 import type { LenderSession } from '../lib/lender-session'
 import {
   fetchPendingRequests,
@@ -8,6 +9,10 @@ import {
 
 type PendingRequestsPageProps = {
   session: LenderSession
+}
+
+function SummaryIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={22} strokeWidth={1.8} />
 }
 
 const API_LIMIT = 30
@@ -164,25 +169,25 @@ export default function PendingRequestsPage({
       label: 'Pending Requests',
       value: summary ? String(summary.totalPendingRequests) : '--',
       caption: 'Requests currently waiting in your pipeline',
-      accent: 'RQ',
+      icon: Clock3,
     },
     {
       label: 'Targeted Requests',
       value: summary ? String(summary.targetedRequests) : '--',
       caption: 'Requests that came directly through your ad',
-      accent: 'TG',
+      icon: Target,
     },
     {
       label: 'Marketplace Matches',
       value: summary ? String(summary.marketplaceMatches) : '--',
       caption: 'Requests surfaced to you through marketplace matching',
-      accent: 'MP',
+      icon: Store,
     },
     {
       label: 'High Urgency',
       value: summary ? String(summary.highUrgencyRequests) : '--',
       caption: 'Requests marked high or critical urgency',
-      accent: 'HI',
+      icon: TriangleAlert,
     },
   ]
 
@@ -227,7 +232,7 @@ export default function PendingRequestsPage({
                     }`}
                     aria-hidden="true"
                   >
-                    {card.accent}
+                    <SummaryIcon icon={card.icon} />
                   </div>
                   <div className="metric-copy">
                     <p className="metric-label">{card.label}</p>

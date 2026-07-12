@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Activity, BadgeCheck, HandCoins, ReceiptText, type LucideIcon } from 'lucide-react'
 import type { LenderView } from '../components/common/LenderSidebar'
 import type {
   AnalyticsDrilldownResponse,
@@ -8,10 +9,7 @@ import type {
   AnalyticsTrendPoint,
 } from '../lib/analytics-api'
 import type { LenderSession } from '../lib/lender-session'
-
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ??
-  'http://localhost:3000'
+import { API_BASE_URL } from '../lib/api-config'
 
 const RANGE_OPTIONS = [
   { key: '30d', label: '30 Days' },
@@ -29,6 +27,10 @@ const percentFormatter = new Intl.NumberFormat('en-LK', {
   style: 'percent',
   maximumFractionDigits: 0,
 })
+
+function SummaryIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={22} strokeWidth={1.8} />
+}
 
 function formatCurrency(value: number): string {
   return currencyFormatter.format(value)
@@ -332,6 +334,7 @@ export default function AnalyticsPage({ session, onNavigate }: AnalyticsPageProp
         value: formatCurrency(summaryData.summary.totalLent),
         caption: 'Lending volume in selected period',
         tone: 'primary',
+        icon: HandCoins,
         drilldownType: 'total-lent',
       },
       {
@@ -339,6 +342,7 @@ export default function AnalyticsPage({ session, onNavigate }: AnalyticsPageProp
         value: formatCurrency(summaryData.summary.totalCollected),
         caption: 'Repayments captured in selected period',
         tone: 'success',
+        icon: ReceiptText,
         drilldownType: 'total-collected',
       },
       {
@@ -346,6 +350,7 @@ export default function AnalyticsPage({ session, onNavigate }: AnalyticsPageProp
         value: String(summaryData.summary.activeLoans),
         caption: 'Loans currently in active status',
         tone: 'warning',
+        icon: Activity,
         drilldownType: 'active-loans',
       },
       {
@@ -353,6 +358,7 @@ export default function AnalyticsPage({ session, onNavigate }: AnalyticsPageProp
         value: formatPercent(summaryData.summary.repaymentSuccessRate),
         caption: 'Completed vs defaulted closed loans',
         tone: 'danger',
+        icon: BadgeCheck,
         drilldownType: null,
       },
     ]
@@ -441,7 +447,7 @@ export default function AnalyticsPage({ session, onNavigate }: AnalyticsPageProp
                       className={`metric-icon metric-icon--${card.tone}`}
                       aria-hidden="true"
                     >
-                      {card.label.slice(0, 2).toUpperCase()}
+                      <SummaryIcon icon={card.icon} />
                     </div>
                     <div className="metric-copy">
                       <p className="metric-label">{card.label}</p>

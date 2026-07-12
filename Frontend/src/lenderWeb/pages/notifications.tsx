@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { BellRing, CalendarDays, Tags, TriangleAlert, type LucideIcon } from 'lucide-react'
 import type { LenderView } from '../components/common/LenderSidebar'
 import type { LenderSession } from '../lib/lender-session'
 import {
@@ -15,6 +16,10 @@ import {
 type NotificationsPageProps = {
   session: LenderSession
   onNavigate: (view: LenderView) => void
+}
+
+function SummaryIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={22} strokeWidth={1.8} />
 }
 
 const CATEGORY_OPTIONS = [
@@ -308,28 +313,28 @@ export default function NotificationsPage({
         label: 'Unread Total',
         value: String(summary.unreadCount),
         caption: 'Notifications still waiting for lender action',
-        accent: 'UN',
+        icon: BellRing,
         tone: 'primary',
       },
       {
         label: 'High Priority',
         value: String(summary.highPriorityCount),
         caption: 'Warning or critical items across the inbox',
-        accent: 'HP',
+        icon: TriangleAlert,
         tone: 'danger',
       },
       {
         label: "Today's Activity",
         value: String(summary.todaysCount),
         caption: 'Notifications created today',
-        accent: 'TD',
+        icon: CalendarDays,
         tone: 'warning',
       },
       {
         label: 'Top Category',
         value: formatCategoryLabel(summary.topCategory),
         caption: 'Category with the most current activity',
-        accent: 'TC',
+        icon: Tags,
         tone: 'success',
       },
     ]
@@ -388,7 +393,7 @@ export default function NotificationsPage({
                   className={`metric-icon metric-icon--${card.tone}`}
                   aria-hidden="true"
                 >
-                  {card.accent}
+                  <SummaryIcon icon={card.icon} />
                 </div>
                 <div className="metric-copy">
                   <p className="metric-label">{card.label}</p>
