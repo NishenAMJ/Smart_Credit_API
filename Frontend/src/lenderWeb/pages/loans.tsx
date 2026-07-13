@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Banknote, CircleCheckBig, Landmark, Wallet } from "lucide-react";
+import BorrowerSidePanel from "../components/borrowers/BorrowerSidePanel";
 import LoanDetailsModal from "../components/loans/LoanDetailsModal";
 import type { LenderSession } from "../lib/lender-session";
 import {
@@ -51,6 +52,9 @@ export default function LoansPage({ session }: { session: LenderSession }) {
     borrowerName: string;
     showPayments: boolean;
   } | null>(null);
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
+    null,
+  );
   const activeCursor = pageCursors[currentPage - 1] ?? null;
 
   useEffect(() => {
@@ -192,7 +196,7 @@ export default function LoansPage({ session }: { session: LenderSession }) {
               <input
                 className="input"
                 type="search"
-                placeholder="Borrower, email, or loan ID"
+                placeholder="Search borrower names"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
               />
@@ -206,25 +210,24 @@ export default function LoansPage({ session }: { session: LenderSession }) {
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>Loan / Borrower</th>
+                  <th>Borrower</th>
                   <th>Status</th>
-                  <th>Principal</th>
-                  <th>Outstanding</th>
-                  <th>Terms</th>
+                  <th>Loan Amount</th>
+                  <th>Remaining</th>
+                  <th>Monthly Installment</th>
                   <th>Installments</th>
-                  <th>Maturity</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td className="table-empty" colSpan={7}>
+                    <td className="table-empty" colSpan={6}>
                       Loading loans...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td className="table-empty" colSpan={7}>
+                    <td className="table-empty" colSpan={6}>
                       {error}
                     </td>
                   </tr>
@@ -242,13 +245,16 @@ export default function LoansPage({ session }: { session: LenderSession }) {
                       }
                     >
                       <td>
-                        <div className="dashboard-table__stack">
-                          <strong>{loan.id}</strong>
-                          <span>{loan.borrower.fullName}</span>
-                          <span className="dashboard-table__subcopy">
-                            {loan.borrower.email}
-                          </span>
-                        </div>
+                        <button
+                          type="button"
+                          className="borrower-name borrower-name--button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedBorrowerId(loan.borrower.id);
+                          }}
+                        >
+                          {loan.borrower.fullName}
+                        </button>
                       </td>
                       <td>
                         <span className="badge badge-gray">
@@ -257,9 +263,7 @@ export default function LoansPage({ session }: { session: LenderSession }) {
                       </td>
                       <td>{formatCurrency(loan.principal)}</td>
                       <td>{formatCurrency(loan.remainingBalance)}</td>
-                      <td>
-                        {loan.annualInterestRate}% / {loan.tenureMonths} months
-                      </td>
+                      <td>{formatCurrency(loan.monthlyInstallment)}</td>
                       <td>
                         <button
                           className="loan-installments-button"
@@ -283,12 +287,11 @@ export default function LoansPage({ session }: { session: LenderSession }) {
                           </span>
                         </button>
                       </td>
-                      <td>{formatDate(loan.maturityDate)}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td className="table-empty" colSpan={7}>
+                    <td className="table-empty" colSpan={6}>
                       No loans match this view.
                     </td>
                   </tr>
@@ -329,6 +332,14 @@ export default function LoansPage({ session }: { session: LenderSession }) {
           borrowerName={selectedLoan.borrowerName}
           initialShowPayments={selectedLoan.showPayments}
           onClose={() => setSelectedLoan(null)}
+        />
+      ) : null}
+
+      {selectedBorrowerId ? (
+        <BorrowerSidePanel
+          session={session}
+          borrowerId={selectedBorrowerId}
+          onClose={() => setSelectedBorrowerId(null)}
         />
       ) : null}
     </>

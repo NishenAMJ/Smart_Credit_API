@@ -307,7 +307,7 @@ export default function SettingsPage({
             without changing your main business profile.
           </p>
           <p className="dashboard-context-pill">
-            Signed in as {session.displayName} - {session.lenderId}
+            Signed in as {session.displayName}
           </p>
         </div>
       </header>
@@ -634,10 +634,6 @@ export default function SettingsPage({
                 </div>
 
                 <div className="settings-session-list">
-                  <div className="settings-session-item">
-                    <span className="settings-session-item__label">Lender ID</span>
-                    <strong>{session.lenderId}</strong>
-                  </div>
                   <div className="settings-session-item">
                     <span className="settings-session-item__label">Display name</span>
                     <strong>{session.displayName}</strong>

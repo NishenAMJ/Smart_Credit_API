@@ -7,6 +7,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import BorrowerSidePanel from "../components/borrowers/BorrowerSidePanel";
 import type { LenderSession } from "../lib/lender-session";
 import {
   fetchSmsSettings,
@@ -36,6 +37,9 @@ export default function SmsPage({ session }: SmsPageProps) {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<SendSmsResponse | null>(null);
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -185,7 +189,7 @@ export default function SmsPage({ session }: SmsPageProps) {
             Select borrowers connected to your loans and send them a direct SMS.
           </p>
           <p className="dashboard-context-pill">
-            SMS desk: {session.displayName} - {session.lenderId}
+            SMS desk: {session.displayName}
           </p>
         </div>
 
@@ -243,7 +247,7 @@ export default function SmsPage({ session }: SmsPageProps) {
               <input
                 type="search"
                 value={search}
-                placeholder="Search name, email, phone, or borrower ID"
+                placeholder="Search borrowers"
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
@@ -263,9 +267,13 @@ export default function SmsPage({ session }: SmsPageProps) {
                         {borrower.fullName.slice(0, 2).toUpperCase()}
                       </div>
                       <div className="sms-borrower-row__copy">
-                        <strong>{borrower.fullName}</strong>
-                        <span>{borrower.phone}</span>
-                        <span>{borrower.email}</span>
+                        <button
+                          type="button"
+                          className="borrower-name borrower-name--button"
+                          onClick={() => setSelectedBorrowerId(borrower.borrowerId)}
+                        >
+                          {borrower.fullName}
+                        </button>
                       </div>
                       <button
                         type="button"
@@ -359,6 +367,14 @@ export default function SmsPage({ session }: SmsPageProps) {
           </section>
         </div>
       )}
+
+      {selectedBorrowerId ? (
+        <BorrowerSidePanel
+          session={session}
+          borrowerId={selectedBorrowerId}
+          onClose={() => setSelectedBorrowerId(null)}
+        />
+      ) : null}
     </section>
   );
 }

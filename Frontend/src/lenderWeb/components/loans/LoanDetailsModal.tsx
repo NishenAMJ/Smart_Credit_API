@@ -95,10 +95,10 @@ export default function LoanDetailsModal({
   const payments = useMemo(
     () =>
       (details?.installments ?? [])
-        .flatMap((installment) =>
+        .flatMap((installment, installmentIndex) =>
           installment.payments.map((payment) => ({
             ...payment,
-            installmentId: installment.id,
+            installmentNumber: installmentIndex + 1,
           })),
         )
         .sort(
@@ -128,7 +128,7 @@ export default function LoanDetailsModal({
               <Landmark size={20} />
             </span>
             <div>
-              <h2 id="loan-details-title">Loan {loanId}</h2>
+              <h2 id="loan-details-title">Loan details</h2>
               {borrowerName ? <p>{borrowerName}</p> : null}
             </div>
           </div>
@@ -203,20 +203,17 @@ export default function LoanDetailsModal({
                       <table className="dashboard-table">
                         <thead>
                           <tr>
-                            <th>Payment</th>
                             <th>Installment</th>
                             <th>Status</th>
                             <th>Amount</th>
                             <th>Date</th>
+                            <th>Type</th>
                           </tr>
                         </thead>
                         <tbody>
                           {payments.map((payment) => (
                             <tr key={payment.id}>
-                              <td>
-                                <strong>{payment.id}</strong>
-                              </td>
-                              <td>{payment.installmentId}</td>
+                              <td>Installment {payment.installmentNumber}</td>
                               <td>
                                 <span className="badge badge-gray">
                                   {formatLabel(payment.status)}
@@ -224,6 +221,7 @@ export default function LoanDetailsModal({
                               </td>
                               <td>{formatCurrency(payment.amount)}</td>
                               <td>{formatDate(payment.createdAt)}</td>
+                              <td>{formatLabel(payment.type)}</td>
                             </tr>
                           ))}
                         </tbody>

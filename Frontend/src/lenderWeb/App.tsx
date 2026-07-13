@@ -115,7 +115,7 @@ function App() {
                   tokens.
                 </p>
                 <p className="dashboard-context-pill">
-                  Signed in as {session.displayName} - {session.lenderId}
+                  Signed in as {session.displayName}
                 </p>
               </div>
             </header>

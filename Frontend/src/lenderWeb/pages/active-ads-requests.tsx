@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BadgeCheck, Ban, Files, Megaphone, Plus, X } from 'lucide-react'
+import BorrowerSidePanel from '../components/borrowers/BorrowerSidePanel'
 import type { LenderView } from '../components/common/LenderSidebar'
 import CreateAdPage from './create-ad'
 import {
@@ -81,6 +82,7 @@ export default function ActiveAdsRequestsPage({
   const [decisionRequestId, setDecisionRequestId] = useState<string | null>(null)
   const [isCreateAdOpen, setIsCreateAdOpen] = useState(false)
   const [adsRefreshKey, setAdsRefreshKey] = useState(0)
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null)
 
   const activeCursor = pageCursors[currentPage - 1] ?? null
   const ads = adsResponse?.items ?? []
@@ -267,7 +269,7 @@ export default function ActiveAdsRequestsPage({
             through that specific ad.
           </p>
           <p className="dashboard-context-pill">
-            Ads desk: {session.displayName} - {session.lenderId}
+            Ads desk: {session.displayName}
           </p>
         </div>
 
@@ -337,7 +339,6 @@ export default function ActiveAdsRequestsPage({
                   >
                     <div>
                       <p className="active-ads-list__title">{ad.title}</p>
-                      <p className="active-ads-list__subtitle">{ad.subtitle}</p>
                     </div>
                     <div className="active-ads-list__meta">
                       <span className="badge badge-gray">{formatLabel(ad.status)}</span>
@@ -450,11 +451,18 @@ export default function ActiveAdsRequestsPage({
                       >
                         <div className="analytics-drilldown-item">
                           <div className="analytics-drilldown-item__main">
-                            <h3 className="analytics-drilldown-item__title">
+                            <button
+                              type="button"
+                              className="analytics-drilldown-item__title borrower-name--button"
+                              onClick={() => {
+                                setSelectedAd(null)
+                                setSelectedBorrowerId(request.borrowerId)
+                              }}
+                            >
                               {request.borrowerName}
-                            </h3>
+                            </button>
                             <p className="analytics-drilldown-item__subtitle">
-                              {request.purpose} · {request.borrowerEmail}
+                              {request.purpose}
                             </p>
                           </div>
                           <div className="analytics-drilldown-item__meta">
@@ -557,6 +565,14 @@ export default function ActiveAdsRequestsPage({
             </div>
           </section>
         </div>
+      ) : null}
+
+      {selectedBorrowerId ? (
+        <BorrowerSidePanel
+          session={session}
+          borrowerId={selectedBorrowerId}
+          onClose={() => setSelectedBorrowerId(null)}
+        />
       ) : null}
     </section>
   )

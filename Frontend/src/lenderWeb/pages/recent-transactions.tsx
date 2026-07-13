@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  fetchBorrowerDetails,
-  type BorrowerDetails,
-} from '../lib/dashboard-api'
+import BorrowerSidePanel from '../components/borrowers/BorrowerSidePanel'
 import type { LenderSession } from '../lib/lender-session'
 import {
   fetchLoanLedgerDetails,
@@ -16,8 +13,6 @@ import {
 type RecentTransactionsPageProps = {
   session: LenderSession
 }
-
-type DetailSection = 'loan' | 'borrower'
 
 type PaymentFormState = {
   installmentId: string | null
@@ -90,8 +85,7 @@ export default function RecentTransactionsPage({
   const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
   const [selectedTransaction, setSelectedTransaction] =
     useState<RecentTransactionItem | null>(null)
-  const [detailSection, setDetailSection] = useState<DetailSection>('loan')
-  const [borrowerDetails, setBorrowerDetails] = useState<BorrowerDetails | null>(null)
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null)
   const [loanDetails, setLoanDetails] = useState<LoanLedgerDetailsResponse | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
@@ -184,13 +178,12 @@ export default function RecentTransactionsPage({
         setIsDetailLoading(true)
         setDetailError(null)
 
-        const [borrowerData, loanData] = await Promise.all([
-          fetchBorrowerDetails(session.lenderId, selectedTransaction.borrowerId),
-          fetchLoanLedgerDetails(session.lenderId, selectedTransaction.loanId),
-        ])
+        const loanData = await fetchLoanLedgerDetails(
+          session.lenderId,
+          selectedTransaction.loanId,
+        )
 
         if (isMounted) {
-          setBorrowerDetails(borrowerData)
           setLoanDetails(loanData)
         }
       } catch (loadError) {
@@ -225,8 +218,6 @@ export default function RecentTransactionsPage({
 
   function openLoanSection(transaction: RecentTransactionItem) {
     setSelectedTransaction(transaction)
-    setDetailSection('loan')
-    setBorrowerDetails(null)
     setLoanDetails(null)
     setDetailError(null)
     setPaymentForm({
@@ -241,11 +232,7 @@ export default function RecentTransactionsPage({
   }
 
   function openBorrowerSection(transaction: RecentTransactionItem) {
-    setSelectedTransaction(transaction)
-    setDetailSection('borrower')
-    setBorrowerDetails(null)
-    setLoanDetails(null)
-    setDetailError(null)
+    setSelectedBorrowerId(transaction.borrowerId)
   }
 
   function openPaymentForm(installmentId: string) {
@@ -368,7 +355,7 @@ export default function RecentTransactionsPage({
               installment progress, and remaining balances in one place.
             </p>
             <p className="dashboard-context-pill">
-              Payment ledger: {session.displayName} - {session.lenderId}
+              Payment ledger: {session.displayName}
             </p>
           </div>
         </header>
@@ -395,8 +382,8 @@ export default function RecentTransactionsPage({
                   <p className="section-subtitle">
                     Every row is a lender-linked payment record. The page loads the
                     latest {PAGE_SIZE} first, then fetches the next {PAGE_SIZE} when
-                    you move forward. Search runs on the server, so loan and
-                    installment lookups can match beyond the current page.
+                    you move forward. Borrower and status searches run across the
+                    full payment history.
                   </p>
                 </div>
 
@@ -408,7 +395,7 @@ export default function RecentTransactionsPage({
                     <input
                       className="input"
                       type="search"
-                      placeholder="Search borrower, email, loan id, installment, status"
+                      placeholder="Search borrowers or payment status"
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
                       aria-describedby="payments-search-status"
@@ -441,9 +428,9 @@ export default function RecentTransactionsPage({
                   <thead>
                     <tr>
                       <th>Borrower</th>
-                      <th>Loan</th>
                       <th>Payment</th>
                       <th>Remaining</th>
+                      <th>Status</th>
                       <th>Installments</th>
                       <th>Next Due</th>
                     </tr>
@@ -473,32 +460,16 @@ export default function RecentTransactionsPage({
                               <span className="borrower-avatar" aria-hidden="true">
                                 {transaction.borrowerName.slice(0, 2).toUpperCase()}
                               </span>
-                              <div>
-                                <button
-                                  type="button"
-                                  className="borrower-name borrower-name--button"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    openBorrowerSection(transaction)
-                                  }}
-                                >
-                                  {transaction.borrowerName}
-                                </button>
-                                <p className="borrower-email">
-                                  {transaction.borrowerEmail}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="dashboard-table__stack">
-                              <span>{transaction.loanId}</span>
-                              <span className="dashboard-table__subcopy">
-                                {formatLabel(transaction.loanStatus)}
-                                {transaction.installmentId
-                                  ? ` · ${transaction.installmentId}`
-                                  : ''}
-                              </span>
+                              <button
+                                type="button"
+                                className="borrower-name borrower-name--button"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  openBorrowerSection(transaction)
+                                }}
+                              >
+                                {transaction.borrowerName}
+                              </button>
                             </div>
                           </td>
                           <td>
@@ -513,6 +484,11 @@ export default function RecentTransactionsPage({
                             </div>
                           </td>
                           <td>{formatCurrency(transaction.remainingAmount)}</td>
+                          <td>
+                            <span className={`badge ${getStatusBadgeClass(transaction.status)}`}>
+                              {formatLabel(transaction.status)}
+                            </span>
+                          </td>
                           <td>
                             <div className="dashboard-table__stack">
                               <span>
@@ -612,8 +588,7 @@ export default function RecentTransactionsPage({
                   {selectedTransaction.borrowerName}
                 </h2>
                 <p className="section-subtitle">
-                  Switch between the lender-owned loan ledger and the borrower
-                  profile without leaving this page.
+                  Review this loan's installments and recorded payments.
                 </p>
               </div>
               <button
@@ -627,31 +602,6 @@ export default function RecentTransactionsPage({
             </div>
 
             <div className="borrower-modal__body">
-              <div className="analytics-range-tabs" role="tablist" aria-label="Loan detail sections">
-                <button
-                  type="button"
-                  className={`analytics-range-tab${
-                    detailSection === 'loan' ? ' analytics-range-tab--active' : ''
-                  }`}
-                  role="tab"
-                  aria-selected={detailSection === 'loan'}
-                  onClick={() => setDetailSection('loan')}
-                >
-                  Loan, Installments, Payments
-                </button>
-                <button
-                  type="button"
-                  className={`analytics-range-tab${
-                    detailSection === 'borrower' ? ' analytics-range-tab--active' : ''
-                  }`}
-                  role="tab"
-                  aria-selected={detailSection === 'borrower'}
-                  onClick={() => setDetailSection('borrower')}
-                >
-                  Borrower Details
-                </button>
-              </div>
-
               <div className="borrower-modal__content">
                 {isDetailLoading ? (
                   <div className="borrower-modal__state">Loading loan activity details...</div>
@@ -659,16 +609,10 @@ export default function RecentTransactionsPage({
                   <div className="borrower-modal__state borrower-modal__state--error">
                     {detailError}
                   </div>
-                ) : detailSection === 'loan' ? (
+                ) : (
                   <div className="borrower-modal__content">
                     <div className="borrower-modal__grid">
                       {[
-                        { label: 'Ledger Entry ID', value: selectedTransaction.transactionId },
-                        { label: 'Loan ID', value: selectedTransaction.loanId },
-                        {
-                          label: 'Installment ID',
-                          value: selectedTransaction.installmentId ?? 'Not linked',
-                        },
                         { label: 'Loan Status', value: formatLabel(selectedTransaction.loanStatus) },
                         {
                           label: 'Loan Amount',
@@ -716,13 +660,13 @@ export default function RecentTransactionsPage({
 
                       <div className="borrower-loan-list">
                         {(loanDetails?.installments ?? []).length > 0 ? (
-                          loanDetails?.installments.map((installment) => (
+                          loanDetails?.installments.map((installment, installmentIndex) => (
                             <article className="borrower-loan-card" key={installment.id}>
                               <div className="borrower-loan-card__header">
                                 <div>
                                   <p className="borrower-loan-card__eyebrow">Installment</p>
                                   <h4 className="borrower-loan-card__title">
-                                    {installment.id}
+                                    Installment {installmentIndex + 1}
                                   </h4>
                                 </div>
                                 <span
@@ -889,9 +833,8 @@ export default function RecentTransactionsPage({
                                   installment.payments.map((payment) => (
                                     <div className="loan-ledger-payment-row" key={payment.id}>
                                       <div className="dashboard-table__stack">
-                                        <span>{payment.id}</span>
+                                        <span>{formatDate(payment.createdAt)}</span>
                                         <span className="dashboard-table__subcopy">
-                                          {formatDate(payment.createdAt)} ·{' '}
                                           {payment.source === 'payment'
                                             ? 'Installment payment'
                                             : 'Transaction fallback'}
@@ -929,117 +872,19 @@ export default function RecentTransactionsPage({
                       </div>
                     </section>
                   </div>
-                ) : borrowerDetails ? (
-                  <div className="borrower-modal__content">
-                    <div className="borrower-modal__grid">
-                      {[
-                        { label: 'Borrower ID', value: borrowerDetails.id },
-                        { label: 'Full Name', value: borrowerDetails.fullName },
-                        { label: 'Email', value: borrowerDetails.email },
-                        { label: 'Phone', value: borrowerDetails.phone ?? 'Not provided' },
-                        { label: 'Address', value: borrowerDetails.address ?? 'Not provided' },
-                        { label: 'NIC', value: borrowerDetails.nic ?? 'Not provided' },
-                        {
-                          label: 'KYC Status',
-                          value: formatLabel(borrowerDetails.kycStatus),
-                        },
-                        {
-                          label: 'Credit Score',
-                          value:
-                            borrowerDetails.creditScore !== null
-                              ? String(borrowerDetails.creditScore)
-                              : 'Unknown',
-                        },
-                        {
-                          label: 'Rating',
-                          value:
-                            borrowerDetails.rating !== null
-                              ? String(borrowerDetails.rating)
-                              : 'Unknown',
-                        },
-                        {
-                          label: 'Loan Count',
-                          value: String(borrowerDetails.loanCount),
-                        },
-                        {
-                          label: 'Active Loans',
-                          value: String(borrowerDetails.activeLoansCount),
-                        },
-                        {
-                          label: 'Outstanding Amount',
-                          value: formatCurrency(borrowerDetails.outstandingAmount),
-                        },
-                      ].map((field) => (
-                        <article className="borrower-detail-card" key={field.label}>
-                          <p className="borrower-detail-card__label">{field.label}</p>
-                          <p className="borrower-detail-card__value">{field.value}</p>
-                        </article>
-                      ))}
-                    </div>
-
-                    <section className="borrower-loans-section">
-                      <div className="borrower-loans-section__header">
-                        <div>
-                          <h3 className="section-title">Borrower loan summary</h3>
-                          <p className="section-subtitle">
-                            Loans this borrower has with you as the current lender.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="borrower-loan-list">
-                        {borrowerDetails.loans.map((loan) => (
-                          <article className="borrower-loan-card" key={loan.id}>
-                            <div className="borrower-loan-card__header">
-                              <div>
-                                <p className="borrower-loan-card__eyebrow">Loan</p>
-                                <h4 className="borrower-loan-card__title">{loan.id}</h4>
-                              </div>
-                              <span className={`badge ${getStatusBadgeClass(loan.status)}`}>
-                                {formatLabel(loan.status)}
-                              </span>
-                            </div>
-
-                            <div className="borrower-loan-card__grid">
-                              <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">Amount</p>
-                                <p className="borrower-detail-card__value">
-                                  {formatCurrency(loan.amount)}
-                                </p>
-                              </article>
-                              <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">Remaining</p>
-                                <p className="borrower-detail-card__value">
-                                  {formatCurrency(loan.remainingAmount)}
-                                </p>
-                              </article>
-                              <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">Interest Rate</p>
-                                <p className="borrower-detail-card__value">
-                                  {loan.interestRate}%
-                                </p>
-                              </article>
-                              <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">Tenure</p>
-                                <p className="borrower-detail-card__value">
-                                  {loan.tenureMonths} months
-                                </p>
-                              </article>
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-                ) : (
-                  <div className="borrower-modal__state">
-                    Borrower details are not available yet.
-                  </div>
                 )}
               </div>
             </div>
           </section>
         </div>
+      ) : null}
+
+      {selectedBorrowerId ? (
+        <BorrowerSidePanel
+          session={session}
+          borrowerId={selectedBorrowerId}
+          onClose={() => setSelectedBorrowerId(null)}
+        />
       ) : null}
     </>
   )

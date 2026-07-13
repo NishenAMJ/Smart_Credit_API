@@ -182,7 +182,7 @@ export default function LenderSidebar({
               <div className="lender-sidebar__admin-avatar">{lenderInitial}</div>
               <div className="lender-sidebar__profile-copy">
                 <div className="lender-sidebar__admin-name">{session.displayName}</div>
-                <div className="lender-sidebar__admin-role">{session.lenderId}</div>
+                <div className="lender-sidebar__admin-role">Lender account</div>
               </div>
             </button>
 

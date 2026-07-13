@@ -62,6 +62,33 @@ function formatLabel(value: string): string {
     .replace(/\b\w/g, (character) => character.toUpperCase())
 }
 
+function getDrilldownTitle(title: string, type: string): string {
+  if (!/^(Loan|Request|Dispute)\s/i.test(title)) {
+    return title
+  }
+
+  if (type === 'requests-received' || type === 'accepted-requests') {
+    return 'Borrower request'
+  }
+
+  if (type === 'open-disputes') {
+    return 'Borrower dispute'
+  }
+
+  return 'Loan activity'
+}
+
+function getDrilldownSubtitle(subtitle: string, type: string): string | null {
+  if (
+    !['requests-received', 'accepted-requests'].includes(type) ||
+    /^Request\s/i.test(subtitle)
+  ) {
+    return null
+  }
+
+  return subtitle
+}
+
 async function fetchAnalyticsOverview(
   lenderId: string,
   range: string,
@@ -391,7 +418,7 @@ export default function AnalyticsPage({ session, onNavigate }: AnalyticsPageProp
 
           <div className="analytics-header-tools">
             <div className="analytics-lender-pill">
-              {session.displayName} • {session.lenderId}
+              {session.displayName}
             </div>
             <div className="analytics-range-tabs" role="tablist" aria-label="Time range">
               {RANGE_OPTIONS.map((option) => (
@@ -750,11 +777,13 @@ export default function AnalyticsPage({ session, onNavigate }: AnalyticsPageProp
                       <article className="analytics-drilldown-item" key={item.id}>
                         <div className="analytics-drilldown-item__main">
                           <h3 className="analytics-drilldown-item__title">
-                            {item.title}
+                            {getDrilldownTitle(item.title, drilldown.type)}
                           </h3>
-                          <p className="analytics-drilldown-item__subtitle">
-                            {item.subtitle}
-                          </p>
+                          {getDrilldownSubtitle(item.subtitle, drilldown.type) ? (
+                            <p className="analytics-drilldown-item__subtitle">
+                              {getDrilldownSubtitle(item.subtitle, drilldown.type)}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="analytics-drilldown-item__meta">
                           <span className="badge badge-gray">

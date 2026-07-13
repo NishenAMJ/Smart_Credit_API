@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Clock3, Store, Target, TriangleAlert, type LucideIcon } from 'lucide-react'
+import BorrowerSidePanel from '../components/borrowers/BorrowerSidePanel'
 import type { LenderSession } from '../lib/lender-session'
 import {
   fetchPendingRequests,
@@ -82,6 +83,7 @@ export default function PendingRequestsPage({
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedRequest, setSelectedRequest] = useState<PendingRequest | null>(null)
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -203,7 +205,7 @@ export default function PendingRequestsPage({
               came directly through your ads or through marketplace matching.
             </p>
             <p className="dashboard-context-pill">
-              Request desk: {session.displayName} - {session.lenderId}
+              Request desk: {session.displayName}
             </p>
           </div>
         </header>
@@ -310,8 +312,16 @@ export default function PendingRequestsPage({
                                 {request.borrowerName.slice(0, 2).toUpperCase()}
                               </span>
                               <div>
-                                <p className="borrower-name">{request.borrowerName}</p>
-                                <p className="borrower-email">{request.borrowerEmail}</p>
+                                <button
+                                  type="button"
+                                  className="borrower-name borrower-name--button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setSelectedBorrowerId(request.borrowerId)
+                                  }}
+                                >
+                                  {request.borrowerName}
+                                </button>
                               </div>
                             </div>
                           </td>
@@ -390,11 +400,19 @@ export default function PendingRequestsPage({
               <div>
                 <p className="eyebrow">Request details</p>
                 <h2 className="section-title" id="pending-request-title">
-                  {selectedRequest.borrowerName}
+                  <button
+                    type="button"
+                    className="borrower-name borrower-name--button"
+                    onClick={() => {
+                      setSelectedRequest(null)
+                      setSelectedBorrowerId(selectedRequest.borrowerId)
+                    }}
+                  >
+                    {selectedRequest.borrowerName}
+                  </button>
                 </h2>
                 <p className="section-subtitle">
-                  Review the borrower profile, requested terms, and how this
-                  request entered your pipeline.
+                  Review the requested terms and how this request entered your pipeline.
                 </p>
               </div>
               <button
@@ -411,10 +429,6 @@ export default function PendingRequestsPage({
               <div className="borrower-modal__content">
                 <div className="borrower-modal__grid">
                   {[
-                    { label: 'Request ID', value: selectedRequest.requestId },
-                    { label: 'Borrower ID', value: selectedRequest.borrowerId },
-                    { label: 'Email', value: selectedRequest.borrowerEmail },
-                    { label: 'Phone', value: selectedRequest.borrowerPhone ?? 'Not available' },
                     {
                       label: 'Credit Score',
                       value:
@@ -446,7 +460,7 @@ export default function PendingRequestsPage({
                     { label: 'Channel', value: formatLabel(selectedRequest.targetType) },
                     {
                       label: 'Linked Ad',
-                      value: selectedRequest.adTitle ?? selectedRequest.adId ?? 'Marketplace request',
+                      value: selectedRequest.adTitle ?? 'Marketplace request',
                     },
                     { label: 'Status', value: formatLabel(selectedRequest.status) },
                     { label: 'Purpose', value: selectedRequest.purpose },
@@ -479,34 +493,19 @@ export default function PendingRequestsPage({
                     </p>
                   </article>
 
-                  <article className="borrower-loan-card">
-                    <div className="borrower-loan-card__header">
-                      <div>
-                        <p className="borrower-loan-card__eyebrow">Routing</p>
-                        <h4 className="borrower-loan-card__title">
-                          Lender matching details
-                        </h4>
-                      </div>
-                    </div>
-                    <div className="pending-request-match-list">
-                      {selectedRequest.matchedLenderIds.length > 0 ? (
-                        selectedRequest.matchedLenderIds.map((lenderId) => (
-                          <span className="badge badge-gray" key={lenderId}>
-                            {lenderId}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="pending-request-notes">
-                          No matched lender IDs were stored for this request.
-                        </p>
-                      )}
-                    </div>
-                  </article>
                 </section>
               </div>
             </div>
           </section>
         </div>
+      ) : null}
+
+      {selectedBorrowerId ? (
+        <BorrowerSidePanel
+          session={session}
+          borrowerId={selectedBorrowerId}
+          onClose={() => setSelectedBorrowerId(null)}
+        />
       ) : null}
     </>
   )

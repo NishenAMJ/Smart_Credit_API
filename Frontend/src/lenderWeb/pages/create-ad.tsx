@@ -245,7 +245,7 @@ export default function CreateAdPage({
       setRecentAds((current) =>
         [createdAd, ...current.filter((ad) => ad.id !== createdAd.id)].slice(0, 4),
       )
-      setPublishMessage(`Ad published successfully as ${createdAd.id}.`)
+      setPublishMessage('Ad published successfully.')
       onPublished?.()
     } catch (error) {
       setPublishError(

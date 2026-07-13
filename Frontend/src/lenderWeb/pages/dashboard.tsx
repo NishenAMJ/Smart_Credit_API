@@ -10,16 +10,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { LenderView } from "../components/common/LenderSidebar";
-import LoanDetailsModal from "../components/loans/LoanDetailsModal";
+import BorrowerSidePanel from "../components/borrowers/BorrowerSidePanel";
 import type {
-  BorrowerDetails,
   DashboardBorrower,
   DashboardBorrowersResponse,
   DashboardSummary,
 } from "../lib/dashboard-api";
 import {
   fetchDashboardBorrowers,
-  fetchBorrowerDetails,
   fetchDashboardSummary,
 } from "../lib/dashboard-api";
 import type { LenderSession } from "../lib/lender-session";
@@ -127,11 +125,6 @@ export default function DashboardPage({
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
     null,
   );
-  const [selectedBorrower, setSelectedBorrower] =
-    useState<BorrowerDetails | null>(null);
-  const [isBorrowerLoading, setIsBorrowerLoading] = useState(false);
-  const [borrowerError, setBorrowerError] = useState<string | null>(null);
-  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
   const activeCursor = pageCursors[currentPage - 1] ?? null;
 
   useEffect(() => {
@@ -235,62 +228,6 @@ export default function DashboardPage({
     };
   }, [activeCursor, currentPage, session.lenderId]);
 
-  useEffect(() => {
-    if (!selectedBorrowerId) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadBorrower = async () => {
-      try {
-        setIsBorrowerLoading(true);
-        setBorrowerError(null);
-        const details = await fetchBorrowerDetails(
-          session.lenderId,
-          selectedBorrowerId,
-        );
-
-        if (isMounted) {
-          setSelectedBorrower(details);
-        }
-      } catch (loadError) {
-        if (isMounted) {
-          setBorrowerError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load borrower details.",
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsBorrowerLoading(false);
-        }
-      }
-    };
-
-    void loadBorrower();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedBorrowerId, session.lenderId]);
-
-  useEffect(() => {
-    if (!selectedBorrowerId) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !selectedLoanId) {
-        handleCloseBorrowerModal();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedBorrowerId, selectedLoanId]);
-
   const filteredBorrowers = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -357,71 +294,12 @@ export default function DashboardPage({
     },
   ];
 
-  const detailFields = selectedBorrower
-    ? [
-        { label: "Borrower ID", value: selectedBorrower.id },
-        { label: "Full Name", value: selectedBorrower.fullName },
-        { label: "Email", value: selectedBorrower.email },
-        { label: "Phone", value: selectedBorrower.phone ?? "Not available" },
-        {
-          label: "Address",
-          value: selectedBorrower.address ?? "Not available",
-        },
-        { label: "NIC", value: selectedBorrower.nic ?? "Not available" },
-        { label: "Role", value: formatLabel(selectedBorrower.role) },
-        { label: "KYC Status", value: formatLabel(selectedBorrower.kycStatus) },
-        {
-          label: "Credit Score",
-          value:
-            selectedBorrower.creditScore !== null
-              ? String(selectedBorrower.creditScore)
-              : "Not available",
-        },
-        {
-          label: "Rating",
-          value:
-            selectedBorrower.rating !== null
-              ? selectedBorrower.rating.toFixed(1)
-              : "Not available",
-        },
-        {
-          label: "Loans With This Lender",
-          value: String(selectedBorrower.loanCount),
-        },
-        {
-          label: "Active Loans",
-          value: String(selectedBorrower.activeLoansCount),
-        },
-        {
-          label: "Total Borrowed From You",
-          value: formatCurrency(selectedBorrower.totalBorrowedAmount),
-        },
-        {
-          label: "Outstanding With You",
-          value: formatCurrency(selectedBorrower.outstandingAmount),
-        },
-        {
-          label: "Account Status",
-          value: selectedBorrower.isActive ? "Active" : "Suspended",
-        },
-        {
-          label: "Joined",
-          value: formatJoinedDate(selectedBorrower.createdAt),
-        },
-      ]
-    : [];
-
   function handleOpenBorrowerModal(borrowerId: string) {
     setSelectedBorrowerId(borrowerId);
-    setSelectedBorrower(null);
-    setBorrowerError(null);
   }
 
   function handleCloseBorrowerModal() {
-    setSelectedLoanId(null);
     setSelectedBorrowerId(null);
-    setSelectedBorrower(null);
-    setBorrowerError(null);
   }
 
   return (
@@ -439,7 +317,6 @@ export default function DashboardPage({
             </p>
             <p className="dashboard-context-pill">
               {session.displayName}
-              {/* Temporary session: {session.displayName} - {session.lenderId} */}
             </p>
           </div>
           <div className="dashboard-header-tools">
@@ -597,14 +474,9 @@ export default function DashboardPage({
                               >
                                 {borrower.fullName.slice(0, 2).toUpperCase()}
                               </span>
-                              <div>
-                                <p className="borrower-name">
-                                  {borrower.fullName}
-                                </p>
-                                <p className="borrower-email">
-                                  {borrower.email}
-                                </p>
-                              </div>
+                              <p className="borrower-name">
+                                {borrower.fullName}
+                              </p>
                             </div>
                           </td>
                           <td>{borrower.creditScore ?? "N/A"}</td>
@@ -680,167 +552,10 @@ export default function DashboardPage({
       </section>
 
       {selectedBorrowerId ? (
-        <div
-          className="borrower-modal__backdrop"
-          role="presentation"
-          onClick={handleCloseBorrowerModal}
-        >
-          <section
-            className="borrower-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="borrower-modal-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="borrower-modal__header">
-              <div>
-                <p className="eyebrow">Borrower details</p>
-                <h2 className="section-title" id="borrower-modal-title">
-                  {selectedBorrower?.fullName ?? "Loading borrower..."}
-                </h2>
-                <p className="section-subtitle">
-                  Review the borrower profile and only the loans connected to
-                  this lender.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="borrower-modal__close"
-                aria-label="Close borrower details"
-                onClick={handleCloseBorrowerModal}
-              >
-                X
-              </button>
-            </div>
-
-            <div className="borrower-modal__body">
-              {isBorrowerLoading ? (
-                <div className="borrower-modal__state">
-                  Loading borrower details...
-                </div>
-              ) : borrowerError ? (
-                <div className="borrower-modal__state borrower-modal__state--error">
-                  {borrowerError}
-                </div>
-              ) : selectedBorrower ? (
-                <div className="borrower-modal__content">
-                  <div className="borrower-modal__grid">
-                    {detailFields.map((field) => (
-                      <article
-                        className="borrower-detail-card"
-                        key={field.label}
-                      >
-                        <p className="borrower-detail-card__label">
-                          {field.label}
-                        </p>
-                        <p className="borrower-detail-card__value">
-                          {field.value}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-
-                  <section className="borrower-loans-section">
-                    <div className="borrower-loans-section__header">
-                      <div>
-                        <h3 className="section-title">
-                          Loans With This Lender
-                        </h3>
-                        <p className="section-subtitle">
-                          Only this lender&apos;s loans are shown, even if the
-                          borrower has loans elsewhere.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="borrower-loan-list">
-                      {selectedBorrower.loans.map((loan) => (
-                        <article
-                          className="borrower-loan-card borrower-loan-card--interactive"
-                          key={loan.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setSelectedLoanId(loan.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              setSelectedLoanId(loan.id);
-                            }
-                          }}
-                        >
-                          <div className="borrower-loan-card__header">
-                            <div>
-                              <p className="borrower-loan-card__eyebrow">
-                                Loan ID
-                              </p>
-                              <h4 className="borrower-loan-card__title">
-                                {loan.id}
-                              </h4>
-                            </div>
-                            <span className="badge badge-gray">
-                              {formatLabel(loan.status)}
-                            </span>
-                          </div>
-
-                          <div className="borrower-loan-card__grid">
-                            <div>
-                              <p className="borrower-detail-card__label">
-                                Amount
-                              </p>
-                              <p className="borrower-detail-card__value">
-                                {formatCurrency(loan.amount)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="borrower-detail-card__label">
-                                Remaining
-                              </p>
-                              <p className="borrower-detail-card__value">
-                                {formatCurrency(loan.remainingAmount)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="borrower-detail-card__label">
-                                Interest Rate
-                              </p>
-                              <p className="borrower-detail-card__value">
-                                {loan.interestRate.toFixed(1)}%
-                              </p>
-                            </div>
-                            <div>
-                              <p className="borrower-detail-card__label">
-                                Tenure
-                              </p>
-                              <p className="borrower-detail-card__value">
-                                {loan.tenureMonths} months
-                              </p>
-                            </div>
-                            <div>
-                              <p className="borrower-detail-card__label">
-                                Created
-                              </p>
-                              <p className="borrower-detail-card__value">
-                                {formatJoinedDate(loan.createdAt)}
-                              </p>
-                            </div>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              ) : null}
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {selectedLoanId ? (
-        <LoanDetailsModal
-          lenderId={session.lenderId}
-          loanId={selectedLoanId}
-          borrowerName={selectedBorrower?.fullName}
-          onClose={() => setSelectedLoanId(null)}
+        <BorrowerSidePanel
+          session={session}
+          borrowerId={selectedBorrowerId}
+          onClose={handleCloseBorrowerModal}
         />
       ) : null}
     </>
