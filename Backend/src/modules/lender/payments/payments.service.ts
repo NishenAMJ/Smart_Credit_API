@@ -10,6 +10,12 @@ import {
   PaymentsResponse,
   PaymentsSummary,
 } from './payments.types';
+import type { PaymentDateRange } from './payment-date-range';
+import {
+  isWithinPaymentDateRange,
+  parseOptionalSriLankaDayRange,
+} from './payment-date-range';
+import { isCollectedRepayment } from './payment-transaction.utils';
 
 type CachedValue<T> = {
   expiresAt: number;
@@ -39,9 +45,11 @@ export class PaymentsService {
     includeSummary = true,
     includeSearchCount = true,
     search?: string | null,
+    date?: string | null,
   ): Promise<PaymentsResponse> {
     const safePageSize = this.clamp(pageSize, 8, 60);
     const normalizedSearch = this.normalizeSearch(search);
+    const collectionDate = parseOptionalSriLankaDayRange(date);
     const context = await this.getLenderContext(lenderId);
     const { loanIds, loanIdsList, loanMap, borrowerMap } = context;
 
@@ -65,6 +73,7 @@ export class PaymentsService {
       safePageSize,
       cursor,
       normalizedSearch,
+      collectionDate,
     );
     const visibleTransactions = pagedTransactions.items.slice(0, safePageSize);
     const activeLoanIds: string[] = Array.from(
@@ -77,11 +86,21 @@ export class PaymentsService {
     const installmentSummaries =
       await this.getInstallmentSummaries(activeLoanIds);
     const summary = includeSummary
-      ? await this.getSummaryForLender(lenderId, loanIds, loanIdsList)
+      ? await this.getSummaryForLender(
+          lenderId,
+          loanIds,
+          loanIdsList,
+          collectionDate,
+        )
       : this.createEmptySummary();
     const searchResultCount =
       normalizedSearch && includeSearchCount
-        ? await this.getSearchResultCount(lenderId, context, normalizedSearch)
+        ? await this.getSearchResultCount(
+            lenderId,
+            context,
+            normalizedSearch,
+            collectionDate,
+          )
         : null;
 
     const transactions: PaymentListItem[] = visibleTransactions.map(
@@ -156,19 +175,33 @@ export class PaymentsService {
     lenderId: string,
     loanIds: Set<string>,
     loanIdsList: string[],
+    collectionDate: PaymentDateRange | null,
   ): Promise<PaymentsSummary> {
-    const cached = this.getCachedValue(this.summaryCache, lenderId);
+    const cached = collectionDate
+      ? null
+      : this.getCachedValue(this.summaryCache, lenderId);
 
     if (cached) {
       return cached;
     }
 
-    const allScopedTransactions = await this.getAllRecentPayments(
-      lenderId,
-      loanIds,
+    const allScopedTransactions = (
+      await this.getAllRecentPayments(lenderId, loanIds)
+    ).filter((transaction) =>
+      isWithinPaymentDateRange(transaction.createdAt, collectionDate),
     );
-    const installmentSummaries =
-      await this.getInstallmentSummaries(loanIdsList);
+    const installmentSummaries = collectionDate
+      ? new Map<
+          string,
+          {
+            totalInstallments: number;
+            paidInstallments: number;
+            overdueInstallments: number;
+            nextDueDate: string | null;
+            latestInstallmentStatus: string;
+          }
+        >()
+      : await this.getInstallmentSummaries(loanIdsList);
     const summary = {
       totalTransactions: allScopedTransactions.length,
       totalCollected: this.sum(
@@ -185,7 +218,9 @@ export class PaymentsService {
       ),
     } satisfies PaymentsSummary;
 
-    this.setCachedValue(this.summaryCache, lenderId, summary);
+    if (!collectionDate) {
+      this.setCachedValue(this.summaryCache, lenderId, summary);
+    }
 
     return summary;
   }
@@ -194,8 +229,9 @@ export class PaymentsService {
     lenderId: string,
     context: LenderLedgerContext,
     search: string,
+    collectionDate: PaymentDateRange | null,
   ): Promise<number> {
-    const cacheKey = `${lenderId}:${search}`;
+    const cacheKey = `${lenderId}:${collectionDate?.value ?? 'all'}:${search}`;
     const cached = this.getCachedValue(this.searchCountCache, cacheKey);
 
     if (cached !== null) {
@@ -206,8 +242,10 @@ export class PaymentsService {
       lenderId,
       context.loanIds,
     );
-    const count = allScopedTransactions.filter((transaction) =>
-      this.matchesSearch(transaction, context, search),
+    const count = allScopedTransactions.filter(
+      (transaction) =>
+        isWithinPaymentDateRange(transaction.createdAt, collectionDate) &&
+        this.matchesSearch(transaction, context, search),
     ).length;
 
     this.setCachedValue(this.searchCountCache, cacheKey, count);
@@ -220,11 +258,17 @@ export class PaymentsService {
     pageSize: number,
     cursor?: string | null,
     search?: string | null,
+    collectionDate: PaymentDateRange | null = null,
   ): Promise<{ items: TransactionRecord[] }> {
     const items = this.paginateTransactions(
       (await this.getTopLevelRepaymentsByLoanIds(context.loanIds)).filter(
         (transaction) =>
-          this.matchesTransactionFilters(transaction, context, search ?? null),
+          this.matchesTransactionFilters(
+            transaction,
+            context,
+            search ?? null,
+            collectionDate,
+          ),
       ),
       pageSize,
       cursor,
@@ -265,7 +309,7 @@ export class PaymentsService {
   ): Promise<TransactionRecord[]> {
     return (await this.paymentsData.getTransactions(loanIds)).filter(
       (transaction) =>
-        this.isRepaymentLike(transaction.type, transaction.status),
+        isCollectedRepayment(transaction.type, transaction.status),
     );
   }
 
@@ -282,43 +326,18 @@ export class PaymentsService {
     return Math.min(Math.max(value, min), max);
   }
 
-  private isRepaymentLike(type: string, status: string): boolean {
-    const normalizedType = type.trim().toLowerCase();
-    const normalizedStatus = status.trim().toLowerCase();
-    const uncollectedStatuses = new Set([
-      'pending',
-      'pending_verification',
-      'verification_pending',
-      'receipt_required',
-    ]);
-
-    if (uncollectedStatuses.has(normalizedStatus)) {
-      return false;
-    }
-
-    if (
-      normalizedType.includes('repay') ||
-      normalizedType.includes('payment') ||
-      normalizedType === 'paid'
-    ) {
-      return true;
-    }
-
-    return ['paid', 'completed', 'success', 'successful'].includes(
-      normalizedStatus,
-    );
-  }
-
   private matchesTransactionFilters(
     transaction: TransactionRecord,
     context: LenderLedgerContext,
     search: string | null,
+    collectionDate: PaymentDateRange | null,
   ): boolean {
     if (
       !transaction.loanId ||
       !context.loanIds.has(transaction.loanId) ||
       transaction.amount <= 0 ||
-      !this.isRepaymentLike(transaction.type, transaction.status)
+      !isCollectedRepayment(transaction.type, transaction.status) ||
+      !isWithinPaymentDateRange(transaction.createdAt, collectionDate)
     ) {
       return false;
     }

@@ -142,10 +142,12 @@ export class DashboardSummaryService {
   }
 
   private getCurrentDayRange() {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    const sriLankaOffsetMs = 5.5 * 60 * 60 * 1000;
+    const sriLankaDate = new Date(Date.now() + sriLankaOffsetMs)
+      .toISOString()
+      .slice(0, 10);
+    const start = new Date(`${sriLankaDate}T00:00:00+05:30`);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
     return { start, end };
   }
 

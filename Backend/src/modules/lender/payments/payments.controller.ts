@@ -8,8 +8,10 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -22,6 +24,7 @@ import type {
 import { InstallmentPaymentService } from './installment-payment.service';
 import { PaymentLedgerDetailsService } from './payment-ledger-details.service';
 import { PaymentsService } from './payments.service';
+import { PaymentsExportService } from './payments-export.service';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,6 +34,7 @@ export class PaymentsController {
     private readonly paymentsService: PaymentsService,
     private readonly installmentPaymentService: InstallmentPaymentService,
     private readonly ledgerDetailsService: PaymentLedgerDetailsService,
+    private readonly paymentsExportService: PaymentsExportService,
   ) {}
 
   @Get()
@@ -42,6 +46,7 @@ export class PaymentsController {
     @Query('includeSummary') includeSummary?: string,
     @Query('includeSearchCount') includeSearchCount?: string,
     @Query('search') search?: string,
+    @Query('date') date?: string,
   ): Promise<PaymentsResponse> {
     return this.paymentsService.getPayments(
       req.user.sub,
@@ -50,7 +55,30 @@ export class PaymentsController {
       includeSummary !== 'false',
       includeSearchCount !== 'false',
       search?.trim() || null,
+      date?.trim() || null,
     );
+  }
+
+  @Get('export')
+  async exportPayments(
+    @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ): Promise<string> {
+    const result = await this.paymentsExportService.createCsv(
+      req.user.sub,
+      startDate?.trim() || null,
+      endDate?.trim() || null,
+    );
+
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${result.fileName}"`,
+    );
+    response.setHeader('X-Export-Record-Count', String(result.recordCount));
+    return result.csv;
   }
 
   @Get('loans/:loanId')

@@ -6,6 +6,7 @@ import { InstallmentPaymentService } from './installment-payment.service';
 import { PaymentLedgerDetailsService } from './payment-ledger-details.service';
 import { PaymentsDataService } from './payments-data.service';
 import { PaymentsService } from './payments.service';
+import { PaymentsExportService } from './payments-export.service';
 
 @Module({
   imports: [FirebaseModule, AuthModule],
@@ -15,6 +16,7 @@ import { PaymentsService } from './payments.service';
     InstallmentPaymentService,
     PaymentLedgerDetailsService,
     PaymentsDataService,
+    PaymentsExportService,
   ],
   exports: [PaymentsService],
 })

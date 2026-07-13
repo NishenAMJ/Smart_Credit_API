@@ -1,4 +1,5 @@
 import { PaymentsService } from './payments.service';
+import type { PaymentsDataService } from './payments-data.service';
 
 function createContext() {
   const loan = {
@@ -57,7 +58,9 @@ describe('PaymentsService', () => {
         ]),
       ),
     };
-    const service = new PaymentsService(paymentsData as any);
+    const service = new PaymentsService(
+      paymentsData as unknown as PaymentsDataService,
+    );
 
     const result = await service.getPayments(
       'lender_1',
@@ -112,7 +115,9 @@ describe('PaymentsService', () => {
       ]),
       getInstallmentSummaries: jest.fn().mockResolvedValue(new Map()),
     };
-    const service = new PaymentsService(paymentsData as any);
+    const service = new PaymentsService(
+      paymentsData as unknown as PaymentsDataService,
+    );
 
     const result = await service.getPayments(
       'lender_1',
@@ -127,13 +132,79 @@ describe('PaymentsService', () => {
     expect(result.transactions[0].transactionId).toBe('repayment_2');
   });
 
+  it('filters a daily collection using the Sri Lanka calendar day', async () => {
+    const paymentsData = {
+      loadLenderContext: jest.fn().mockResolvedValue(createContext()),
+      getTransactions: jest.fn().mockResolvedValue([
+        {
+          id: 'previous_day_payment',
+          loanId: 'loan_1',
+          installmentId: 'month_001',
+          paymentId: null,
+          type: 'repayment',
+          status: 'completed',
+          amount: 4000,
+          createdAt: new Date('2026-04-20T18:29:59.999Z'),
+          source: 'transaction',
+          note: null,
+        },
+        {
+          id: 'selected_day_payment',
+          loanId: 'loan_1',
+          installmentId: 'month_002',
+          paymentId: null,
+          type: 'repayment',
+          status: 'completed',
+          amount: 5000,
+          createdAt: new Date('2026-04-20T18:30:00.000Z'),
+          source: 'transaction',
+          note: null,
+        },
+        {
+          id: 'next_day_payment',
+          loanId: 'loan_1',
+          installmentId: 'month_003',
+          paymentId: null,
+          type: 'repayment',
+          status: 'completed',
+          amount: 6000,
+          createdAt: new Date('2026-04-21T18:30:00.000Z'),
+          source: 'transaction',
+          note: null,
+        },
+      ]),
+      getInstallmentSummaries: jest.fn().mockResolvedValue(new Map()),
+    };
+    const service = new PaymentsService(
+      paymentsData as unknown as PaymentsDataService,
+    );
+
+    const result = await service.getPayments(
+      'lender_1',
+      15,
+      null,
+      true,
+      false,
+      null,
+      '2026-04-21',
+    );
+
+    expect(result.transactions.map((item) => item.transactionId)).toEqual([
+      'selected_day_payment',
+    ]);
+    expect(result.summary.totalTransactions).toBe(1);
+    expect(result.summary.totalCollected).toBe(5000);
+  });
+
   it('caches lender context between list requests', async () => {
     const paymentsData = {
       loadLenderContext: jest.fn().mockResolvedValue(createContext()),
       getTransactions: jest.fn().mockResolvedValue([]),
       getInstallmentSummaries: jest.fn().mockResolvedValue(new Map()),
     };
-    const service = new PaymentsService(paymentsData as any);
+    const service = new PaymentsService(
+      paymentsData as unknown as PaymentsDataService,
+    );
 
     await service.getPayments('lender_1', 15, null, false, false);
     await service.getPayments('lender_1', 15, null, false, false);

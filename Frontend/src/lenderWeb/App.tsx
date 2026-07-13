@@ -12,6 +12,7 @@ import AuthPage from './pages/auth'
 import PendingRequestsPage from './pages/pending-requests'
 import NotificationsPage from './pages/notifications'
 import RecentTransactionsPage from './pages/recent-transactions'
+import DailyCollectionPage from './pages/daily-collection'
 import SettingsPage from './pages/settings'
 import SmsPage from './pages/sms'
 import LenderProfileModal from './components/profile/LenderProfileModal'
@@ -83,6 +84,8 @@ function App() {
           <BorrowersPage session={session} />
         ) : activeView === 'recent-transactions' ? (
           <RecentTransactionsPage session={session} />
+        ) : activeView === 'daily-collection' ? (
+          <DailyCollectionPage session={session} onNavigate={setActiveView} />
         ) : activeView === 'analytics' ? (
           <AnalyticsPage session={session} onNavigate={setActiveView} />
         ) : activeView === 'active-ads-requests' ? (

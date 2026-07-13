@@ -1,7 +1,18 @@
+import type {
+  DocumentData,
+  QueryDocumentSnapshot,
+} from 'firebase-admin/firestore';
+import type { FirebaseService } from '../../../firebase/firebase.service';
 import { PaymentLedgerDetailsService } from './payment-ledger-details.service';
 
-function createDoc(id: string, data: Record<string, unknown>) {
-  return { id, data: () => data } as any;
+function createDoc(
+  id: string,
+  data: Record<string, unknown>,
+): QueryDocumentSnapshot<DocumentData> {
+  return {
+    id,
+    data: () => data,
+  } as unknown as QueryDocumentSnapshot<DocumentData>;
 }
 
 describe('PaymentLedgerDetailsService', () => {
@@ -39,7 +50,11 @@ describe('PaymentLedgerDetailsService', () => {
     const db = {
       collection: jest.fn((name: string) => {
         if (name === 'loans') {
-          return { doc: jest.fn().mockReturnValue({ get: async () => loan }) };
+          return {
+            doc: jest.fn().mockReturnValue({
+              get: jest.fn().mockResolvedValue(loan),
+            }),
+          };
         }
         return {
           where: jest.fn().mockReturnValue({
@@ -61,7 +76,7 @@ describe('PaymentLedgerDetailsService', () => {
     };
     const service = new PaymentLedgerDetailsService({
       getDb: () => db,
-    } as any);
+    } as unknown as FirebaseService);
 
     const result = await service.get('lender_1', 'loan_1');
 

@@ -91,6 +91,7 @@ export type FetchRecentTransactionsOptions = {
   includeSummary?: boolean
   includeSearchCount?: boolean
   search?: string | null
+  date?: string | null
 }
 
 async function parseError(response: Response, fallback: string): Promise<never> {
@@ -134,6 +135,10 @@ export async function fetchRecentTransactions(
     params.set('search', options.search.trim())
   }
 
+  if (options.date && options.date.trim().length > 0) {
+    params.set('date', options.date.trim())
+  }
+
   const response = await fetch(
     `${API_BASE_URL}/payments?${params.toString()}`,
     { headers: getAuthHeaders() },
@@ -162,6 +167,30 @@ export async function fetchLoanLedgerDetails(
   }
 
   return response.json()
+}
+
+export async function fetchPaymentsCsv(
+  startDate: string,
+  endDate: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const params = new URLSearchParams({ startDate, endDate })
+  const response = await fetch(
+    `${API_BASE_URL}/payments/export?${params.toString()}`,
+    { headers: getAuthHeaders() },
+  )
+
+  if (!response.ok) {
+    return parseError(response, 'Failed to export payments.')
+  }
+
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const fileNameMatch = /filename="?([^";]+)"?/i.exec(disposition)
+  return {
+    blob: await response.blob(),
+    fileName:
+      fileNameMatch?.[1] ??
+      `smart-credit-payments-${startDate}-to-${endDate}.csv`,
+  }
 }
 
 export async function recordInstallmentPayment(

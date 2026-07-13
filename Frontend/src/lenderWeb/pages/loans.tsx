@@ -47,6 +47,7 @@ export default function LoansPage({ session }: { session: LenderSession }) {
   const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadVersion, setReloadVersion] = useState(0);
   const [selectedLoan, setSelectedLoan] = useState<{
     loanId: string;
     borrowerName: string;
@@ -104,7 +105,14 @@ export default function LoansPage({ session }: { session: LenderSession }) {
     return () => {
       isMounted = false;
     };
-  }, [activeCursor, currentPage, search, statusFilter, session.lenderId]);
+  }, [
+    activeCursor,
+    currentPage,
+    reloadVersion,
+    search,
+    statusFilter,
+    session.lenderId,
+  ]);
 
   const summaryCards = useMemo(() => {
     const summary = response?.summary;
@@ -331,6 +339,7 @@ export default function LoansPage({ session }: { session: LenderSession }) {
           loanId={selectedLoan.loanId}
           borrowerName={selectedLoan.borrowerName}
           initialShowPayments={selectedLoan.showPayments}
+          onPaymentRecorded={() => setReloadVersion((version) => version + 1)}
           onClose={() => setSelectedLoan(null)}
         />
       ) : null}

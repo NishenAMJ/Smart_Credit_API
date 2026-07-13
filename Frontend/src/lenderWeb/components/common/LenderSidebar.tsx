@@ -17,6 +17,7 @@ type LenderView =
   | 'loans'
   | 'borrowers'
   | 'recent-transactions'
+  | 'daily-collection'
   | 'analytics'
   | 'active-ads-requests'
   | 'create-ad'

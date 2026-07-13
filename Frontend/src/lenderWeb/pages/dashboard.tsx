@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { LenderView } from "../components/common/LenderSidebar";
 import BorrowerSidePanel from "../components/borrowers/BorrowerSidePanel";
+import PaymentCsvExport from "../components/payments/PaymentCsvExport";
 import type {
   DashboardBorrower,
   DashboardBorrowersResponse,
@@ -276,7 +277,7 @@ export default function DashboardPage({
       value: summary ? formatCurrency(summary.todaysCollection) : "--",
       caption: "Repayments recorded today from your loans",
       icon: WalletCards,
-      route: null,
+      route: "daily-collection" as const,
     },
     {
       label: "Overdue Payments",
@@ -320,6 +321,7 @@ export default function DashboardPage({
             </p>
           </div>
           <div className="dashboard-header-tools">
+            <PaymentCsvExport />
             <div
               className="dashboard-quick-actions"
               aria-label="Dashboard quick actions"
