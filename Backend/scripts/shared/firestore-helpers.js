@@ -4,19 +4,42 @@ function pad(value, length) {
   return String(value).padStart(length, '0');
 }
 
-async function commitSetWrites(db, writes, label) {
+const sleep = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+function isRetryableFirestoreError(error) {
+  if (error instanceof Error && error.message.includes('timed out')) {
+    return true;
+  }
+
+  const retryableCodes = new Set([
+    4,
+    8,
+    10,
+    13,
+    14,
+    'deadline-exceeded',
+    'resource-exhausted',
+    'aborted',
+    'internal',
+    'unavailable',
+  ]);
+  return retryableCodes.has(error?.code);
+}
+
+async function commitSetWrites(db, writes, label, options = {}) {
   if (!writes.length) {
     console.log(`No ${label} writes to apply.`);
     return;
   }
 
-  const MAX_BATCH_SIZE = 300;
+  const maxBatchSize = options.batchSize ?? 200;
+  const writeDelayMs = options.delayMs ?? 100;
   const MAX_ATTEMPTS = 3;
-  const COMMIT_TIMEOUT_MS = 45000;
 
-  for (let offset = 0; offset < writes.length; offset += MAX_BATCH_SIZE) {
-    const chunk = writes.slice(offset, offset + MAX_BATCH_SIZE);
-    const batchNumber = Math.floor(offset / MAX_BATCH_SIZE) + 1;
+  for (let offset = 0; offset < writes.length; offset += maxBatchSize) {
+    const chunk = writes.slice(offset, offset + maxBatchSize);
+    const batchNumber = Math.floor(offset / maxBatchSize) + 1;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       const batch = db.batch();
@@ -24,34 +47,26 @@ async function commitSetWrites(db, writes, label) {
         batch.set(write.ref, write.data, { merge: true }),
       );
 
-      let timeout;
       try {
-        await Promise.race([
-          batch.commit(),
-          new Promise((_, reject) => {
-            timeout = setTimeout(
-              () =>
-                reject(
-                  new Error(
-                    `Firestore commit timed out after ${COMMIT_TIMEOUT_MS}ms`,
-                  ),
-                ),
-              COMMIT_TIMEOUT_MS,
-            );
-          }),
-        ]);
-        clearTimeout(timeout);
+        await batch.commit();
         console.log(
           `Committed ${label} batch ${pad(batchNumber, 2)} with ${chunk.length} writes.`,
         );
         break;
       } catch (error) {
-        clearTimeout(timeout);
-        if (attempt === MAX_ATTEMPTS) throw error;
+        if (attempt === MAX_ATTEMPTS || !isRetryableFirestoreError(error)) {
+          throw error;
+        }
+        const retryDelayMs = 1000 * 2 ** (attempt - 1);
         console.warn(
-          `${label} batch ${pad(batchNumber, 2)} attempt ${attempt} failed; retrying.`,
+          `${label} batch ${pad(batchNumber, 2)} attempt ${attempt} failed; retrying in ${retryDelayMs}ms.`,
         );
+        await sleep(retryDelayMs);
       }
+    }
+
+    if (offset + maxBatchSize < writes.length && writeDelayMs > 0) {
+      await sleep(writeDelayMs);
     }
   }
 }

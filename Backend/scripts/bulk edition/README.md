@@ -22,16 +22,16 @@ Run commands from `Backend/`:
 
 ```bash
 # Safe: generate and validate the full configured dataset without database writes
-npm run seed:check
+npm run seed:bulk:check
 
-# Safe: validate a small dataset
-npm run seed:check:small
+# Safe: validate the basic dataset
+npm run seed:basic:check
 
 # Writes to the Firebase project configured in Backend/.env
-npm run seed
+npm run seed:bulk
 ```
 
-`npm run seed` refuses to write unless `SEED_ENABLED=true`. The seeder uses
+`npm run seed:bulk` refuses to write unless `SEED_ENABLED=true`. The seeder uses
 merge upserts, deterministic document IDs, and never deletes database records.
 Running the same batch again updates the same seed documents.
 
@@ -45,17 +45,34 @@ Copy the required non-secret settings from `Backend/.env.seed.example` into
 | `SEED_ENABLED`           |            `false` | Must be `true` to permit Firestore writes      |
 | `SEED_RANDOM_SEED`       | `smart-credit-dev` | Makes generated values repeatable              |
 | `SEED_BATCH_ID`          |         `bulk_dev` | Unique namespace included in bulk document IDs |
-| `SEED_LENDER_COUNT`      |              `300` | Additional lender accounts                     |
-| `SEED_BORROWER_COUNT`    |              `699` | Additional borrower accounts                   |
-| `SEED_LISTING_COUNT`     |              `600` | Additional loan listings                       |
-| `SEED_APPLICATION_COUNT` |             `1500` | Additional loan applications                   |
-| `SEED_LOAN_COUNT`        |              `800` | Applications converted into loans              |
+| `SEED_LENDER_COUNT`      |               `30` | Additional lender accounts                     |
+| `SEED_BORROWER_COUNT`    |               `70` | Additional borrower accounts                   |
+| `SEED_LISTING_COUNT`     |               `60` | Additional loan listings                       |
+| `SEED_APPLICATION_COUNT` |              `150` | Additional loan applications                   |
+| `SEED_LOAN_COUNT`        |               `80` | Applications converted into loans              |
+| `SEED_MAX_WRITES`        |             `5000` | Refuse a run exceeding this document count     |
+| `SEED_WRITE_BATCH_SIZE`  |              `200` | Maximum writes in one atomic Firestore batch   |
+| `SEED_WRITE_DELAY_MS`    |              `100` | Pause between batches to smooth write load     |
 | `SEED_DEFAULT_PASSWORD`  |  `SmartCredit@123` | Password for generated accounts                |
 
 `SEED_LOAN_COUNT` cannot exceed `SEED_APPLICATION_COUNT`. Listings require at
 least one lender; applications require at least one listing and borrower.
+`SEED_WRITE_BATCH_SIZE` must be between 1 and Firestore's maximum of 500.
+
+The current defaults expand to 2,538 documents after dependent installments,
+transactions, messages, and other records are generated. The old defaults
+expanded to 24,377 writes, which exceeded Firestore's 20,000 daily free-tier
+write allowance before accounting for normal application traffic. Always run
+`npm run seed:bulk:check` first and compare `totalDocuments` with the remaining
+quota for the configured project. Raising `SEED_MAX_WRITES` is an explicit
+override, not a way to obtain additional database quota.
 
 ## Collection structure and attributes
+
+The complete audited collection and attribute inventory, including
+runtime-only collections and schema-drift notes, is in
+[`../schemas.md`](../schemas.md). The summary below describes the canonical
+seed model.
 
 Money is stored as integer LKR minor units in fields ending in `Minor`. Dates
 are written as Firestore timestamps. Status values are lowercase. References

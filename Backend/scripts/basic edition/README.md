@@ -43,5 +43,5 @@ Optional basic-only overrides are `BASIC_SEED_RANDOM_SEED`,
 `BASIC_SEED_APPLICATION_COUNT`, `BASIC_SEED_LOAN_COUNT`, and
 `BASIC_SEED_DEFAULT_PASSWORD`.
 
-See `../bulk edition/README.md` for the complete collection and attribute
-tables shared by both editions.
+See [`../schemas.md`](../schemas.md) for the complete collection and attribute
+inventory shared by both editions and used by the runtime backend.

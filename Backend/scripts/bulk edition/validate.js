@@ -169,7 +169,7 @@ function validateFixtures(fixtures) {
     );
   });
 
-  return {
+  const counts = {
     users: fixtures.users.length,
     authCredentials: fixtures.authCredentials.length,
     documents: fixtures.documents.length,
@@ -184,9 +184,18 @@ function validateFixtures(fixtures) {
     conversations: fixtures.conversations.length,
     messages: fixtures.messages.length,
     disputeEvents: fixtures.disputeEvents.length,
+    legalDocuments: fixtures.legalDocuments.length,
     legalAcceptances: fixtures.legalAcceptances.length,
     userLocations: fixtures.userLocations.length,
     auditLogs: fixtures.auditLogs.length,
+  };
+
+  return {
+    ...counts,
+    totalDocuments: Object.values(counts).reduce(
+      (total, count) => total + count,
+      0,
+    ),
   };
 }
 

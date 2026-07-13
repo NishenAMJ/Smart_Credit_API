@@ -19,9 +19,22 @@ async function runSeed() {
       'Firestore seed writes are disabled. Set SEED_ENABLED=true in Backend/.env after verifying the Firebase project.',
     );
   }
-  const db = getDb();
   const fixtures = await buildSchemaV2Fixtures();
   const counts = validateFixtures(fixtures);
+  if (counts.totalDocuments > config.maxWrites) {
+    throw new Error(
+      `Seed would write ${counts.totalDocuments} documents, exceeding SEED_MAX_WRITES=${config.maxWrites}. Reduce the record counts or explicitly raise the guard after checking the Firebase quota.`,
+    );
+  }
+  console.log(
+    `Validated ${counts.totalDocuments} documents. Writing batches of at most ${config.writeBatchSize} with ${config.writeDelayMs}ms between batches.`,
+  );
+
+  const writeOptions = {
+    batchSize: config.writeBatchSize,
+    delayMs: config.writeDelayMs,
+  };
+  const db = getDb();
 
   const stages = [
     ['users', fixtures.users, 'userId'],
@@ -46,6 +59,7 @@ async function runSeed() {
       db,
       topLevelWrites(db, collection, records, idField),
       collection,
+      writeOptions,
     );
   }
 
@@ -60,6 +74,7 @@ async function runSeed() {
       data,
     })),
     'loan installments',
+    writeOptions,
   );
   await commitSetWrites(
     db,
@@ -72,6 +87,7 @@ async function runSeed() {
       data,
     })),
     'dispute events',
+    writeOptions,
   );
   await commitSetWrites(
     db,
@@ -84,6 +100,7 @@ async function runSeed() {
       data,
     })),
     'conversation messages',
+    writeOptions,
   );
 
   console.log('Database seed complete. Validation counts:');

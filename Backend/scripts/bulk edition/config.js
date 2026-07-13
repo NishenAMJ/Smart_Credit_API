@@ -11,11 +11,14 @@ dotenv.config({
 const DEFAULTS = Object.freeze({
   randomSeed: 'smart-credit-dev',
   batchId: 'bulk_dev',
-  lenderCount: 300,
-  borrowerCount: 699,
-  listingCount: 600,
-  applicationCount: 1500,
-  loanCount: 800,
+  lenderCount: 30,
+  borrowerCount: 70,
+  listingCount: 60,
+  applicationCount: 150,
+  loanCount: 80,
+  maxWrites: 5000,
+  writeBatchSize: 200,
+  writeDelayMs: 100,
   defaultPassword: 'SmartCredit@123',
 });
 
@@ -24,7 +27,11 @@ function integerFromEnv(name, fallback) {
   if (raw === undefined || raw === '') return fallback;
   if (!/^\d+$/.test(raw))
     throw new Error(`${name} must be a non-negative integer.`);
-  return Number(raw);
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(`${name} must be a safe integer.`);
+  }
+  return value;
 }
 
 function getSeedConfig() {
@@ -43,6 +50,12 @@ function getSeedConfig() {
       DEFAULTS.applicationCount,
     ),
     loanCount: integerFromEnv('SEED_LOAN_COUNT', DEFAULTS.loanCount),
+    maxWrites: integerFromEnv('SEED_MAX_WRITES', DEFAULTS.maxWrites),
+    writeBatchSize: integerFromEnv(
+      'SEED_WRITE_BATCH_SIZE',
+      DEFAULTS.writeBatchSize,
+    ),
+    writeDelayMs: integerFromEnv('SEED_WRITE_DELAY_MS', DEFAULTS.writeDelayMs),
     defaultPassword:
       process.env.SEED_DEFAULT_PASSWORD || DEFAULTS.defaultPassword,
   };
@@ -72,6 +85,15 @@ function getSeedConfig() {
   }
   if (config.loanCount > config.applicationCount) {
     throw new Error('SEED_LOAN_COUNT cannot exceed SEED_APPLICATION_COUNT.');
+  }
+  if (config.maxWrites < 1) {
+    throw new Error('SEED_MAX_WRITES must be at least 1.');
+  }
+  if (config.writeBatchSize < 1 || config.writeBatchSize > 500) {
+    throw new Error('SEED_WRITE_BATCH_SIZE must be between 1 and 500.');
+  }
+  if (config.writeDelayMs > 60000) {
+    throw new Error('SEED_WRITE_DELAY_MS cannot exceed 60000.');
   }
   return config;
 }

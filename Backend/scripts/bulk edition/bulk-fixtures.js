@@ -544,6 +544,7 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
       geohash: geohashForLocation(jittered),
       city,
       district,
+      visibility: 'exact',
       updatedAt: referenceDate,
     });
   });

@@ -470,6 +470,7 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
       geohash: 'tcnu',
       city: 'Colombo',
       district: 'Colombo',
+      visibility: 'exact',
       updatedAt: referenceDate,
     },
   ];
