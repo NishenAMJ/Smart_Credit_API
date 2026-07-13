@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   CircleAlert,
@@ -8,202 +8,209 @@ import {
   Users,
   WalletCards,
   type LucideIcon,
-} from 'lucide-react'
-import type { LenderView } from '../components/common/LenderSidebar'
+} from "lucide-react";
+import type { LenderView } from "../components/common/LenderSidebar";
+import LoanDetailsModal from "../components/loans/LoanDetailsModal";
 import type {
   BorrowerDetails,
   DashboardBorrower,
   DashboardBorrowersResponse,
   DashboardSummary,
-} from '../lib/dashboard-api'
+} from "../lib/dashboard-api";
 import {
   fetchDashboardBorrowers,
   fetchBorrowerDetails,
   fetchDashboardSummary,
-} from '../lib/dashboard-api'
-import type { LenderSession } from '../lib/lender-session'
+} from "../lib/dashboard-api";
+import type { LenderSession } from "../lib/lender-session";
 
-const ITEMS_PER_PAGE = 8
+const ITEMS_PER_PAGE = 8;
 
-const currencyFormatter = new Intl.NumberFormat('en-LK', {
-  style: 'currency',
-  currency: 'LKR',
+const currencyFormatter = new Intl.NumberFormat("en-LK", {
+  style: "currency",
+  currency: "LKR",
   maximumFractionDigits: 0,
-})
+});
 
-const dateFormatter = new Intl.DateTimeFormat('en-LK', {
-  weekday: 'long',
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric',
-})
+const dateFormatter = new Intl.DateTimeFormat("en-LK", {
+  weekday: "long",
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
 
-const joinedDateFormatter = new Intl.DateTimeFormat('en-LK', {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-})
+const joinedDateFormatter = new Intl.DateTimeFormat("en-LK", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
 
 function formatCurrency(value: number): string {
-  return currencyFormatter.format(value)
+  return currencyFormatter.format(value);
 }
 
 function formatLabel(value: string): string {
   return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function formatJoinedDate(value: string | null): string {
   if (!value) {
-    return 'Unknown'
+    return "Unknown";
   }
 
-  const parsed = new Date(value)
+  const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
-    ? 'Unknown'
-    : joinedDateFormatter.format(parsed)
+    ? "Unknown"
+    : joinedDateFormatter.format(parsed);
 }
 
 function getMetricTone(index: number): string {
-  const tones = ['primary', 'success', 'warning', 'danger']
-  return tones[index] ?? 'primary'
+  const tones = ["primary", "success", "warning", "danger"];
+  return tones[index] ?? "primary";
 }
 
 type DashboardPageProps = {
-  session: LenderSession
-  onNavigate: (view: LenderView) => void
-}
+  session: LenderSession;
+  onNavigate: (view: LenderView) => void;
+};
 
 type DashboardQuickAction = {
-  id: Extract<LenderView, 'pending-requests' | 'settings' | 'notifications'>
-  icon: LucideIcon
-  label: string
-}
+  id: Extract<LenderView, "pending-requests" | "settings" | "notifications">;
+  icon: LucideIcon;
+  label: string;
+};
 
 const quickActions: DashboardQuickAction[] = [
   {
-    id: 'pending-requests',
+    id: "pending-requests",
     icon: ClipboardList,
-    label: 'Pending requests',
+    label: "Pending requests",
   },
   {
-    id: 'settings',
+    id: "settings",
     icon: Settings,
-    label: 'Settings',
+    label: "Settings",
   },
   {
-    id: 'notifications',
+    id: "notifications",
     icon: Bell,
-    label: 'Notifications',
+    label: "Notifications",
   },
-]
+];
 
 function IconSymbol({ icon: Icon }: { icon: LucideIcon }) {
-  return <Icon size={22} strokeWidth={1.8} />
+  return <Icon size={22} strokeWidth={1.8} />;
 }
 
 export default function DashboardPage({
   session,
   onNavigate,
 }: DashboardPageProps) {
-  const [borrowers, setBorrowers] = useState<DashboardBorrower[]>([])
-  const [summary, setSummary] = useState<DashboardSummary | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
-  const [borrowersPageInfo, setBorrowersPageInfo] =
-    useState<DashboardBorrowersResponse['pageInfo']>({
-      pageSize: ITEMS_PER_PAGE,
-      hasMore: false,
-      nextCursor: null,
-    })
-  const [isSummaryLoading, setIsSummaryLoading] = useState(true)
-  const [isBorrowersLoading, setIsBorrowersLoading] = useState(true)
-  const [summaryError, setSummaryError] = useState<string | null>(null)
-  const [borrowersError, setBorrowersError] = useState<string | null>(null)
-  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null)
-  const [selectedBorrower, setSelectedBorrower] = useState<BorrowerDetails | null>(
+  const [borrowers, setBorrowers] = useState<DashboardBorrower[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
+  const [borrowersPageInfo, setBorrowersPageInfo] = useState<
+    DashboardBorrowersResponse["pageInfo"]
+  >({
+    pageSize: ITEMS_PER_PAGE,
+    hasMore: false,
+    nextCursor: null,
+  });
+  const [isSummaryLoading, setIsSummaryLoading] = useState(true);
+  const [isBorrowersLoading, setIsBorrowersLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [borrowersError, setBorrowersError] = useState<string | null>(null);
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
     null,
-  )
-  const [isBorrowerLoading, setIsBorrowerLoading] = useState(false)
-  const [borrowerError, setBorrowerError] = useState<string | null>(null)
-  const activeCursor = pageCursors[currentPage - 1] ?? null
+  );
+  const [selectedBorrower, setSelectedBorrower] =
+    useState<BorrowerDetails | null>(null);
+  const [isBorrowerLoading, setIsBorrowerLoading] = useState(false);
+  const [borrowerError, setBorrowerError] = useState<string | null>(null);
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
+  const activeCursor = pageCursors[currentPage - 1] ?? null;
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     const loadSummary = async () => {
       try {
-        setIsSummaryLoading(true)
-        setSummaryError(null)
-        const summaryData = await fetchDashboardSummary(session.lenderId)
+        setIsSummaryLoading(true);
+        setSummaryError(null);
+        const summaryData = await fetchDashboardSummary(session.lenderId);
 
         if (isMounted) {
-          setSummary(summaryData.summary)
+          setSummary(summaryData.summary);
         }
       } catch (summaryLoadError) {
         if (isMounted) {
           setSummaryError(
             summaryLoadError instanceof Error
               ? summaryLoadError.message
-              : 'Failed to load dashboard summary.',
-          )
+              : "Failed to load dashboard summary.",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsSummaryLoading(false)
+          setIsSummaryLoading(false);
         }
       }
-    }
+    };
 
-    void loadSummary()
+    void loadSummary();
 
     return () => {
-      isMounted = false
-    }
-  }, [session.lenderId])
+      isMounted = false;
+    };
+  }, [session.lenderId]);
 
   useEffect(() => {
-    setCurrentPage(1)
-    setPageCursors([null])
-    setBorrowers([])
+    setCurrentPage(1);
+    setPageCursors([null]);
+    setBorrowers([]);
     setBorrowersPageInfo({
       pageSize: ITEMS_PER_PAGE,
       hasMore: false,
       nextCursor: null,
-    })
-    setSummary(null)
-    setSummaryError(null)
-    setBorrowersError(null)
-    setSearchQuery('')
-  }, [session.lenderId])
+    });
+    setSummary(null);
+    setSummaryError(null);
+    setBorrowersError(null);
+    setSearchQuery("");
+  }, [session.lenderId]);
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     const loadBorrowers = async () => {
       try {
-        setIsBorrowersLoading(true)
-        setBorrowersError(null)
-        setBorrowers([])
+        setIsBorrowersLoading(true);
+        setBorrowersError(null);
+        setBorrowers([]);
         const borrowersData = await fetchDashboardBorrowers(session.lenderId, {
           pageSize: ITEMS_PER_PAGE,
           cursor: activeCursor,
-        })
+        });
 
         if (isMounted) {
-          setBorrowers(borrowersData.borrowers)
-          setBorrowersPageInfo(borrowersData.pageInfo)
+          setBorrowers(borrowersData.borrowers);
+          setBorrowersPageInfo(borrowersData.pageInfo);
 
           if (borrowersData.pageInfo.nextCursor) {
             setPageCursors((current) => {
               if (current[currentPage] === borrowersData.pageInfo.nextCursor) {
-                return current
+                return current;
               }
 
-              return [...current.slice(0, currentPage), borrowersData.pageInfo.nextCursor]
-            })
+              return [
+                ...current.slice(0, currentPage),
+                borrowersData.pageInfo.nextCursor,
+              ];
+            });
           }
         }
       } catch (borrowersLoadError) {
@@ -211,199 +218,210 @@ export default function DashboardPage({
           setBorrowersError(
             borrowersLoadError instanceof Error
               ? borrowersLoadError.message
-              : 'Failed to load dashboard borrowers.',
-          )
+              : "Failed to load dashboard borrowers.",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsBorrowersLoading(false)
+          setIsBorrowersLoading(false);
         }
       }
-    }
+    };
 
-    void loadBorrowers()
+    void loadBorrowers();
 
     return () => {
-      isMounted = false
-    }
-  }, [activeCursor, currentPage, session.lenderId])
+      isMounted = false;
+    };
+  }, [activeCursor, currentPage, session.lenderId]);
 
   useEffect(() => {
     if (!selectedBorrowerId) {
-      return
+      return;
     }
 
-    let isMounted = true
+    let isMounted = true;
 
     const loadBorrower = async () => {
       try {
-        setIsBorrowerLoading(true)
-        setBorrowerError(null)
+        setIsBorrowerLoading(true);
+        setBorrowerError(null);
         const details = await fetchBorrowerDetails(
           session.lenderId,
           selectedBorrowerId,
-        )
+        );
 
         if (isMounted) {
-          setSelectedBorrower(details)
+          setSelectedBorrower(details);
         }
       } catch (loadError) {
         if (isMounted) {
           setBorrowerError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load borrower details.',
-          )
+              : "Failed to load borrower details.",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsBorrowerLoading(false)
+          setIsBorrowerLoading(false);
         }
       }
-    }
+    };
 
-    void loadBorrower()
+    void loadBorrower();
 
     return () => {
-      isMounted = false
-    }
-  }, [selectedBorrowerId, session.lenderId])
+      isMounted = false;
+    };
+  }, [selectedBorrowerId, session.lenderId]);
 
   useEffect(() => {
     if (!selectedBorrowerId) {
-      return
+      return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        handleCloseBorrowerModal()
+      if (event.key === "Escape" && !selectedLoanId) {
+        handleCloseBorrowerModal();
       }
-    }
+    };
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedBorrowerId])
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedBorrowerId, selectedLoanId]);
 
   const filteredBorrowers = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase()
+    const normalizedQuery = searchQuery.trim().toLowerCase();
 
     if (!normalizedQuery) {
-      return borrowers
+      return borrowers;
     }
 
     return borrowers.filter((borrower) => {
       return (
         borrower.fullName.toLowerCase().includes(normalizedQuery) ||
         borrower.email.toLowerCase().includes(normalizedQuery) ||
-        formatLabel(borrower.kycStatus).toLowerCase().includes(normalizedQuery) ||
-        String(borrower.creditScore ?? '').includes(normalizedQuery) ||
-        formatLabel(borrower.latestLoanStatus).toLowerCase().includes(
-          normalizedQuery,
-        )
-      )
-    })
-  }, [borrowers, searchQuery])
+        formatLabel(borrower.kycStatus)
+          .toLowerCase()
+          .includes(normalizedQuery) ||
+        String(borrower.creditScore ?? "").includes(normalizedQuery) ||
+        formatLabel(borrower.latestLoanStatus)
+          .toLowerCase()
+          .includes(normalizedQuery)
+      );
+    });
+  }, [borrowers, searchQuery]);
 
   const visibleStart =
-    borrowers.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1
-  const visibleEnd = borrowers.length === 0 ? 0 : visibleStart + borrowers.length - 1
+    borrowers.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const visibleEnd =
+    borrowers.length === 0 ? 0 : visibleStart + borrowers.length - 1;
   const isInitialLoading =
-    (isSummaryLoading || isBorrowersLoading) && !summary && borrowers.length === 0
+    (isSummaryLoading || isBorrowersLoading) &&
+    !summary &&
+    borrowers.length === 0;
   const hasBlockingError =
-    !summary && borrowers.length === 0 && Boolean(summaryError || borrowersError)
+    !summary &&
+    borrowers.length === 0 &&
+    Boolean(summaryError || borrowersError);
 
   const summaryCards = [
     {
-      label: 'Total Borrowers',
-      value: summary ? String(summary.totalBorrowers) : '--',
-      caption: 'Borrowers who already borrowed from you',
+      label: "Total Borrowers",
+      value: summary ? String(summary.totalBorrowers) : "--",
+      caption: "Borrowers who already borrowed from you",
       icon: Users,
       route: null,
     },
     {
       label: "Today's Collection",
-      value: summary ? formatCurrency(summary.todaysCollection) : '--',
-      caption: 'Repayments recorded today from your loans',
+      value: summary ? formatCurrency(summary.todaysCollection) : "--",
+      caption: "Repayments recorded today from your loans",
       icon: WalletCards,
       route: null,
     },
     {
-      label: 'Overdue Payments',
-      value: summary ? String(summary.overduePayments) : '--',
-      caption: 'Overdue installments inside your loan book',
+      label: "Overdue Payments",
+      value: summary ? String(summary.overduePayments) : "--",
+      caption: "Overdue installments inside your loan book",
       icon: CircleAlert,
       route: null,
     },
     {
-      label: 'Active Ads',
-      value: summary ? String(summary.activeAds) : '--',
-      caption: 'Approved ads owned by this lender',
+      label: "Active Ads",
+      value: summary ? String(summary.activeAds) : "--",
+      caption: "Approved ads owned by this lender",
       icon: Megaphone,
-      route: 'active-ads-requests' as const,
+      route: "active-ads-requests" as const,
     },
-  ]
+  ];
 
   const detailFields = selectedBorrower
     ? [
-        { label: 'Borrower ID', value: selectedBorrower.id },
-        { label: 'Full Name', value: selectedBorrower.fullName },
-        { label: 'Email', value: selectedBorrower.email },
-        { label: 'Phone', value: selectedBorrower.phone ?? 'Not available' },
-        { label: 'Address', value: selectedBorrower.address ?? 'Not available' },
-        { label: 'NIC', value: selectedBorrower.nic ?? 'Not available' },
-        { label: 'Role', value: formatLabel(selectedBorrower.role) },
-        { label: 'KYC Status', value: formatLabel(selectedBorrower.kycStatus) },
+        { label: "Borrower ID", value: selectedBorrower.id },
+        { label: "Full Name", value: selectedBorrower.fullName },
+        { label: "Email", value: selectedBorrower.email },
+        { label: "Phone", value: selectedBorrower.phone ?? "Not available" },
         {
-          label: 'Credit Score',
+          label: "Address",
+          value: selectedBorrower.address ?? "Not available",
+        },
+        { label: "NIC", value: selectedBorrower.nic ?? "Not available" },
+        { label: "Role", value: formatLabel(selectedBorrower.role) },
+        { label: "KYC Status", value: formatLabel(selectedBorrower.kycStatus) },
+        {
+          label: "Credit Score",
           value:
             selectedBorrower.creditScore !== null
               ? String(selectedBorrower.creditScore)
-              : 'Not available',
+              : "Not available",
         },
         {
-          label: 'Rating',
+          label: "Rating",
           value:
             selectedBorrower.rating !== null
               ? selectedBorrower.rating.toFixed(1)
-              : 'Not available',
+              : "Not available",
         },
         {
-          label: 'Loans With This Lender',
+          label: "Loans With This Lender",
           value: String(selectedBorrower.loanCount),
         },
         {
-          label: 'Active Loans',
+          label: "Active Loans",
           value: String(selectedBorrower.activeLoansCount),
         },
         {
-          label: 'Total Borrowed From You',
+          label: "Total Borrowed From You",
           value: formatCurrency(selectedBorrower.totalBorrowedAmount),
         },
         {
-          label: 'Outstanding With You',
+          label: "Outstanding With You",
           value: formatCurrency(selectedBorrower.outstandingAmount),
         },
         {
-          label: 'Account Status',
-          value: selectedBorrower.isActive ? 'Active' : 'Suspended',
+          label: "Account Status",
+          value: selectedBorrower.isActive ? "Active" : "Suspended",
         },
         {
-          label: 'Joined',
+          label: "Joined",
           value: formatJoinedDate(selectedBorrower.createdAt),
         },
       ]
-    : []
+    : [];
 
   function handleOpenBorrowerModal(borrowerId: string) {
-    setSelectedBorrowerId(borrowerId)
-    setSelectedBorrower(null)
-    setBorrowerError(null)
+    setSelectedBorrowerId(borrowerId);
+    setSelectedBorrower(null);
+    setBorrowerError(null);
   }
 
   function handleCloseBorrowerModal() {
-    setSelectedBorrowerId(null)
-    setSelectedBorrower(null)
-    setBorrowerError(null)
+    setSelectedLoanId(null);
+    setSelectedBorrowerId(null);
+    setSelectedBorrower(null);
+    setBorrowerError(null);
   }
 
   return (
@@ -411,7 +429,9 @@ export default function DashboardPage({
       <section className="dashboard-panel">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Welcome to the Smart Credit Lending Platform</p>
+            <p className="eyebrow">
+              Welcome to the Smart Credit Lending Platform
+            </p>
             <h1 className="page-title">Dashboard</h1>
             <p className="page-subtitle">
               Lender workspace for collections, portfolio health, borrower
@@ -461,7 +481,11 @@ export default function DashboardPage({
         ) : hasBlockingError ? (
           <section className="card error-card">
             <h2>Dashboard data is not available yet</h2>
-            <p>{borrowersError ?? summaryError ?? 'Failed to load dashboard data.'}</p>
+            <p>
+              {borrowersError ??
+                summaryError ??
+                "Failed to load dashboard data."}
+            </p>
             <p>
               Check whether the Nest API is running, Firebase credentials are
               valid, and the lender has loan records.
@@ -470,7 +494,7 @@ export default function DashboardPage({
         ) : (
           <>
             <section className="summary-grid" aria-label="Dashboard summary">
-              {summaryCards.map((card, index) => (
+              {summaryCards.map((card, index) =>
                 card.route ? (
                   <button
                     key={card.label}
@@ -505,8 +529,8 @@ export default function DashboardPage({
                       <p className="metric-caption">{card.caption}</p>
                     </div>
                   </article>
-                )
-              ))}
+                ),
+              )}
             </section>
 
             <section className="card borrowers-card">
@@ -567,24 +591,31 @@ export default function DashboardPage({
                         >
                           <td>
                             <div className="borrower-cell">
-                              <span className="borrower-avatar" aria-hidden="true">
+                              <span
+                                className="borrower-avatar"
+                                aria-hidden="true"
+                              >
                                 {borrower.fullName.slice(0, 2).toUpperCase()}
                               </span>
                               <div>
-                                <p className="borrower-name">{borrower.fullName}</p>
-                                <p className="borrower-email">{borrower.email}</p>
+                                <p className="borrower-name">
+                                  {borrower.fullName}
+                                </p>
+                                <p className="borrower-email">
+                                  {borrower.email}
+                                </p>
                               </div>
                             </div>
                           </td>
-                          <td>{borrower.creditScore ?? 'N/A'}</td>
+                          <td>{borrower.creditScore ?? "N/A"}</td>
                           <td>
                             <span className="badge badge-gray">
                               {formatLabel(borrower.kycStatus)}
                             </span>
                           </td>
                           <td>
-                            {borrower.loanCount} total / {borrower.activeLoansCount}{' '}
-                            active
+                            {borrower.loanCount} total /{" "}
+                            {borrower.activeLoansCount} active
                           </td>
                           <td>{formatCurrency(borrower.outstandingAmount)}</td>
                           <td>
@@ -604,7 +635,7 @@ export default function DashboardPage({
                         <td className="table-empty" colSpan={6}>
                           {searchQuery
                             ? `No borrowers found on this page for "${searchQuery}".`
-                            : 'No lender-linked borrower data available yet.'}
+                            : "No lender-linked borrower data available yet."}
                         </td>
                       </tr>
                     )}
@@ -623,15 +654,15 @@ export default function DashboardPage({
                   <button
                     type="button"
                     className="pagination-button"
-                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                    onClick={() =>
+                      setCurrentPage((page) => Math.max(1, page - 1))
+                    }
                     disabled={currentPage === 1 || isBorrowersLoading}
                   >
                     Previous
                   </button>
 
-                  <span className="pagination-status">
-                    Page {currentPage}
-                  </span>
+                  <span className="pagination-status">Page {currentPage}</span>
 
                   <button
                     type="button"
@@ -665,7 +696,7 @@ export default function DashboardPage({
               <div>
                 <p className="eyebrow">Borrower details</p>
                 <h2 className="section-title" id="borrower-modal-title">
-                  {selectedBorrower?.fullName ?? 'Loading borrower...'}
+                  {selectedBorrower?.fullName ?? "Loading borrower..."}
                 </h2>
                 <p className="section-subtitle">
                   Review the borrower profile and only the loans connected to
@@ -695,9 +726,16 @@ export default function DashboardPage({
                 <div className="borrower-modal__content">
                   <div className="borrower-modal__grid">
                     {detailFields.map((field) => (
-                      <article className="borrower-detail-card" key={field.label}>
-                        <p className="borrower-detail-card__label">{field.label}</p>
-                        <p className="borrower-detail-card__value">{field.value}</p>
+                      <article
+                        className="borrower-detail-card"
+                        key={field.label}
+                      >
+                        <p className="borrower-detail-card__label">
+                          {field.label}
+                        </p>
+                        <p className="borrower-detail-card__value">
+                          {field.value}
+                        </p>
                       </article>
                     ))}
                   </div>
@@ -705,7 +743,9 @@ export default function DashboardPage({
                   <section className="borrower-loans-section">
                     <div className="borrower-loans-section__header">
                       <div>
-                        <h3 className="section-title">Loans With This Lender</h3>
+                        <h3 className="section-title">
+                          Loans With This Lender
+                        </h3>
                         <p className="section-subtitle">
                           Only this lender&apos;s loans are shown, even if the
                           borrower has loans elsewhere.
@@ -715,11 +755,27 @@ export default function DashboardPage({
 
                     <div className="borrower-loan-list">
                       {selectedBorrower.loans.map((loan) => (
-                        <article className="borrower-loan-card" key={loan.id}>
+                        <article
+                          className="borrower-loan-card borrower-loan-card--interactive"
+                          key={loan.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSelectedLoanId(loan.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setSelectedLoanId(loan.id);
+                            }
+                          }}
+                        >
                           <div className="borrower-loan-card__header">
                             <div>
-                              <p className="borrower-loan-card__eyebrow">Loan ID</p>
-                              <h4 className="borrower-loan-card__title">{loan.id}</h4>
+                              <p className="borrower-loan-card__eyebrow">
+                                Loan ID
+                              </p>
+                              <h4 className="borrower-loan-card__title">
+                                {loan.id}
+                              </h4>
                             </div>
                             <span className="badge badge-gray">
                               {formatLabel(loan.status)}
@@ -728,7 +784,9 @@ export default function DashboardPage({
 
                           <div className="borrower-loan-card__grid">
                             <div>
-                              <p className="borrower-detail-card__label">Amount</p>
+                              <p className="borrower-detail-card__label">
+                                Amount
+                              </p>
                               <p className="borrower-detail-card__value">
                                 {formatCurrency(loan.amount)}
                               </p>
@@ -750,13 +808,17 @@ export default function DashboardPage({
                               </p>
                             </div>
                             <div>
-                              <p className="borrower-detail-card__label">Tenure</p>
+                              <p className="borrower-detail-card__label">
+                                Tenure
+                              </p>
                               <p className="borrower-detail-card__value">
                                 {loan.tenureMonths} months
                               </p>
                             </div>
                             <div>
-                              <p className="borrower-detail-card__label">Created</p>
+                              <p className="borrower-detail-card__label">
+                                Created
+                              </p>
                               <p className="borrower-detail-card__value">
                                 {formatJoinedDate(loan.createdAt)}
                               </p>
@@ -772,6 +834,15 @@ export default function DashboardPage({
           </section>
         </div>
       ) : null}
+
+      {selectedLoanId ? (
+        <LoanDetailsModal
+          lenderId={session.lenderId}
+          loanId={selectedLoanId}
+          borrowerName={selectedBorrower?.fullName}
+          onClose={() => setSelectedLoanId(null)}
+        />
+      ) : null}
     </>
-  )
+  );
 }

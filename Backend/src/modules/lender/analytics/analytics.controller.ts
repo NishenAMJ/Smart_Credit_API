@@ -1,4 +1,10 @@
-import { BadRequestException, Controller, DefaultValuePipe, Get, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  DefaultValuePipe,
+  Get,
+  Query,
+} from '@nestjs/common';
 import {
   AnalyticsDrilldownResponse,
   AnalyticsOverviewResponse,

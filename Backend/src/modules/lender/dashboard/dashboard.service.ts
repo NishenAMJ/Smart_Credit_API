@@ -3,13 +3,12 @@ import {
   DocumentData,
   Firestore,
   QueryDocumentSnapshot,
-  Query,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
+import { DashboardSummaryService } from './dashboard-summary.service';
 import {
   applyDateCursor,
   buildPageInfo,
-  chunkValues,
   decodeCursor,
   hasRole,
   encodeCursor,
@@ -22,8 +21,6 @@ import {
   computeLoanRemainingAmount,
   getLoanAmount,
   getLoanCreatedAt,
-  getNormalizedInstallment,
-  isActiveAd,
 } from '../../../firebase/firestore-seed.utils';
 import {
   BorrowerLoanSummary,
@@ -59,36 +56,14 @@ function isDashboardBorrower(
 @Injectable()
 export class DashboardService {
   private readonly logger = new Logger(DashboardService.name);
-  private readonly warnedFallbacks = new Set<string>();
 
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly dashboardSummary: DashboardSummaryService,
+  ) {}
 
-  async getSummary(lenderId: string): Promise<DashboardSummaryResponse> {
-    const db = this.firebaseService.getDb();
-    const loansSnapshot = await db
-      .collection('loans')
-      .where('lenderId', '==', lenderId)
-      .get();
-    const lenderLoans = await Promise.all(
-      loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
-    );
-    const [totalBorrowers, todaysCollection, overduePayments, activeAds] =
-      await Promise.all([
-        this.getTotalBorrowersFromRelations(db, lenderId),
-        this.getTodaysPaymentsCollection(db, lenderId),
-        this.getOverduePaymentsCount(db, lenderId, lenderLoans),
-        this.getActiveAdsCount(db, lenderId),
-      ]);
-
-    return {
-      summary: {
-        totalBorrowers,
-        todaysCollection,
-        overduePayments,
-        activeAds,
-      },
-      generatedAt: new Date().toISOString(),
-    };
+  getSummary(lenderId: string): Promise<DashboardSummaryResponse> {
+    return this.dashboardSummary.getSummary(lenderId);
   }
 
   async getBorrowers(
@@ -197,130 +172,6 @@ export class DashboardService {
 
   private clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
-  }
-
-  private async getActiveAdsCount(
-    db: Firestore,
-    lenderId: string,
-  ): Promise<number> {
-    const now = new Date();
-    const activeQuery = db
-      .collection('loanListings')
-      .where('lenderId', '==', lenderId)
-      .where('status', 'in', ['active', 'approved'])
-      .where('expiresAt', '>=', now);
-
-    return this.getCountWithFallback('active-ads', activeQuery, async () => {
-      const snapshot = await db
-        .collection('loanListings')
-        .where('lenderId', '==', lenderId)
-        .get();
-      return snapshot.docs.filter((doc) => isActiveAd(doc.data(), now)).length;
-    });
-  }
-
-  private async getTotalBorrowersFromRelations(
-    db: Firestore,
-    lenderId: string,
-  ): Promise<number> {
-    const snapshot = await db
-      .collection('loans')
-      .where('lenderId', '==', lenderId)
-      .get();
-    return new Set(
-      snapshot.docs
-        .map((doc) => readString(doc.data().borrowerId))
-        .filter(Boolean),
-    ).size;
-  }
-
-  private async getOverduePaymentsCount(
-    db: Firestore,
-    lenderId: string,
-    loans: DashboardLoanRecord[],
-  ): Promise<number> {
-    try {
-      const snapshot = await db
-        .collectionGroup('installments')
-        .where('lenderId', '==', lenderId)
-        .where('status', '==', 'overdue')
-        .count()
-        .get();
-
-      return snapshot.data().count;
-    } catch (error) {
-      this.logFallback(
-        'overdue-installments:lender-scope',
-        'Falling back getOverduePaymentsCount from lender-scoped overdue installments query.',
-        error,
-      );
-
-      const counts = await Promise.all(
-        loans.map(async (loan) => {
-          const snapshot = await db
-            .collection('loans')
-            .doc(loan.id)
-            .collection('installments')
-            .get();
-
-          return snapshot.docs.filter((doc) => {
-            const installment = getNormalizedInstallment(doc.data());
-            return installment.status === 'overdue';
-          }).length;
-        }),
-      );
-
-      return counts.reduce((total, count) => total + count, 0);
-    }
-  }
-
-  private async getTodaysPaymentsCollection(
-    db: Firestore,
-    lenderId: string,
-  ): Promise<number> {
-    const { start, end } = this.getCurrentDayRange();
-
-    try {
-      const snapshot = await db
-        .collection('transactions')
-        .where('lenderId', '==', lenderId)
-        .where('type', '==', 'repayment')
-        .where('createdAt', '>=', start)
-        .where('createdAt', '<', end)
-        .get();
-
-      return snapshot.docs.reduce(
-        (total, doc) => total + readNumber(doc.data().amountMinor) / 100,
-        0,
-      );
-    } catch (error) {
-      this.logFallback(
-        'todays-payments:lender-scope',
-        'Falling back from lender-scoped todays payments query.',
-        error,
-      );
-
-      const loansSnapshot = await db
-        .collection('loans')
-        .where('lenderId', '==', lenderId)
-        .get();
-
-      return this.sumNestedPaymentsForDateRange(
-        db,
-        loansSnapshot.docs.map((doc) => doc.id),
-        { start, end },
-      );
-    }
-  }
-
-  private getCurrentDayRange(): { start: Date; end: Date } {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
-
-    return { start, end };
   }
 
   private async getRecentBorrowers(
@@ -473,6 +324,12 @@ export class DashboardService {
     );
   }
 
+  private logFallback(key: string, message: string, error: unknown): void {
+    this.logger.warn(
+      `${key}: ${message} ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
   private mapBorrowerFromRelation(
     relation: DocumentData,
     userDataById: Map<string, DocumentData | undefined>,
@@ -530,49 +387,6 @@ export class DashboardService {
         : userData?.isActive !== false,
       createdAt: this.toIsoString(userData?.createdAt),
     };
-  }
-
-  private async getCountWithFallback(
-    label: string,
-    query: Query<DocumentData>,
-    fallback: () => Promise<number>,
-  ): Promise<number> {
-    try {
-      const snapshot = await query.count().get();
-      return snapshot.data().count;
-    } catch (error) {
-      this.logFallback(
-        `aggregate:${label}`,
-        `Falling back from aggregate query for ${label}.`,
-        error,
-      );
-      return fallback();
-    }
-  }
-
-  private logFallback(key: string, message: string, error: unknown): void {
-    if (this.warnedFallbacks.has(key)) {
-      return;
-    }
-
-    this.warnedFallbacks.add(key);
-
-    const errorCode = this.getFirestoreErrorCode(error);
-    const suffix = errorCode ? ` Firestore code: ${errorCode}.` : '';
-    this.logger.warn(`${message}${suffix}`);
-  }
-
-  private getFirestoreErrorCode(error: unknown): string | null {
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      (typeof error.code === 'number' || typeof error.code === 'string')
-    ) {
-      return String(error.code);
-    }
-
-    return null;
   }
 
   private mapBorrower(
@@ -699,12 +513,13 @@ export class DashboardService {
   private readBorrowerCreditScore(
     data: DocumentData | undefined,
   ): number | null {
-    const nestedProfile = data?.borrowerProfile;
+    const record = data as Record<string, unknown> | undefined;
+    const nestedProfile = record?.borrowerProfile;
     const nestedScore =
       nestedProfile && typeof nestedProfile === 'object'
-        ? (nestedProfile as DocumentData).creditScore
+        ? (nestedProfile as Record<string, unknown>).creditScore
         : undefined;
-    const score = readNumber(nestedScore, data?.creditScore);
+    const score = readNumber(nestedScore, record?.creditScore);
 
     return score > 0 ? score : null;
   }
@@ -749,10 +564,11 @@ export class DashboardService {
     pageInfo: CursorPageInfo;
   } {
     return {
-      borrowers: borrowers.map(
-        ({ cursorDate: _cursorDate, cursorId: _cursorId, ...borrower }) =>
-          borrower,
-      ),
+      borrowers: borrowers.map(({ cursorDate, cursorId, ...borrower }) => {
+        void cursorDate;
+        void cursorId;
+        return borrower;
+      }),
       pageInfo: buildPageInfo(borrowers, pageSize, hasMore),
     };
   }
@@ -779,31 +595,5 @@ export class DashboardService {
     }
 
     return borrower.cursorId.localeCompare(cursor.id) < 0;
-  }
-
-  private async sumNestedPaymentsForDateRange(
-    db: Firestore,
-    loanIds: string[],
-    range: { start: Date; end: Date },
-  ): Promise<number> {
-    if (loanIds.length === 0) return 0;
-    const groups = await Promise.all(
-      chunkValues(loanIds, 10).map((ids) =>
-        db
-          .collection('transactions')
-          .where('loanId', 'in', ids)
-          .where('type', '==', 'repayment')
-          .get(),
-      ),
-    );
-    return groups
-      .flatMap((snapshot) => snapshot.docs)
-      .reduce((total, doc) => {
-        const data = doc.data();
-        const createdAt = readDate(data.createdAt);
-        return createdAt && createdAt >= range.start && createdAt < range.end
-          ? total + readNumber(data.amountMinor) / 100
-          : total;
-      }, 0);
   }
 }

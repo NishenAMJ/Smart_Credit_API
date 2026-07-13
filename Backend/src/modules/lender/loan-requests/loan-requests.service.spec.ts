@@ -24,7 +24,7 @@ describe('LoanRequestsService', () => {
     } as any;
     const db = {
       collection: jest.fn((name: string) => {
-        if (name === 'ads') {
+        if (name === 'loanListings') {
           return {
             where: jest.fn().mockReturnValue({
               get: jest.fn().mockResolvedValue({ docs: [adDoc] }),
@@ -50,12 +50,13 @@ describe('LoanRequestsService', () => {
       .mockImplementation(async ({ mapDoc }) => {
         const visible = await mapDoc(
           createDoc('req_1', {
-            requestId: 'req_1',
+            applicationId: 'req_1',
             borrowerId: 'borrower_1',
-            adId: 'ad_1',
-            amount: 50000,
-            tenureMonths: 12,
-            purpose: 'business',
+            listingId: 'ad_1',
+            lenderId: 'lender_1',
+            requestedPrincipalMinor: 5000000,
+            requestedTenureMonths: 12,
+            requestedPurpose: 'business',
             status: 'open',
             urgency: 'high',
             createdAt: '2026-04-21T00:00:00.000Z',
@@ -63,12 +64,12 @@ describe('LoanRequestsService', () => {
         );
         const hidden = await mapDoc(
           createDoc('req_2', {
-            requestId: 'req_2',
+            applicationId: 'req_2',
             borrowerId: 'borrower_2',
-            adId: 'ad_other',
-            amount: 60000,
-            tenureMonths: 10,
-            purpose: 'medical',
+            listingId: 'ad_other',
+            requestedPrincipalMinor: 6000000,
+            requestedTenureMonths: 10,
+            requestedPurpose: 'medical',
             status: 'open',
             createdAt: '2026-04-20T00:00:00.000Z',
           }),
@@ -80,7 +81,12 @@ describe('LoanRequestsService', () => {
         };
       });
 
-    const result = await service.getPendingRequests('lender_1', 10, null, false);
+    const result = await service.getPendingRequests(
+      'lender_1',
+      10,
+      null,
+      false,
+    );
 
     expect(result.requests).toHaveLength(1);
     expect(result.requests[0]).toMatchObject({
@@ -107,7 +113,7 @@ describe('LoanRequestsService', () => {
     } as any;
     const db = {
       collection: jest.fn((name: string) => {
-        if (name === 'ads') {
+        if (name === 'loanListings') {
           return {
             where: jest.fn().mockReturnValue({
               get: jest.fn().mockResolvedValue({ docs: [adDoc] }),
@@ -133,12 +139,13 @@ describe('LoanRequestsService', () => {
       .mockImplementationOnce(async ({ mapDoc }) => {
         const accepted = await mapDoc(
           createDoc('req_1', {
-            requestId: 'req_1',
+            applicationId: 'req_1',
             borrowerId: 'borrower_1',
-            adId: 'ad_1',
-            amount: 50000,
-            tenureMonths: 12,
-            purpose: 'business',
+            listingId: 'ad_1',
+            lenderId: 'lender_1',
+            requestedPrincipalMinor: 5000000,
+            requestedTenureMonths: 12,
+            requestedPurpose: 'business',
             status: 'accepted',
             urgency: 'high',
             createdAt: '2026-04-21T00:00:00.000Z',

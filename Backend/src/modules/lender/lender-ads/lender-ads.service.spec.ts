@@ -55,8 +55,8 @@ describe('LenderAdsService', () => {
       }),
     };
     const firebaseService = { getDb: () => db } as any;
-    const notificationsService = { createNotification: jest.fn() } as any;
-    const service = new LenderAdsService(firebaseService, notificationsService);
+    const notificationWriter = { create: jest.fn() } as any;
+    const service = new LenderAdsService(firebaseService, notificationWriter);
 
     jest
       .spyOn(firestoreQueryUtils, 'orderByDateAndId')

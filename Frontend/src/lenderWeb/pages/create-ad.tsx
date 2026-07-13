@@ -9,6 +9,8 @@ import {
 
 type CreateAdPageProps = {
   session: LenderSession
+  embedded?: boolean
+  onPublished?: () => void
 }
 
 type AdDraft = {
@@ -136,7 +138,11 @@ function buildOfferSummary(draft: AdDraft): string {
   return `${draft.processingTime}. ${draft.repaymentStyle}. ${draft.supportNote}`
 }
 
-export default function CreateAdPage({ session }: CreateAdPageProps) {
+export default function CreateAdPage({
+  session,
+  embedded = false,
+  onPublished,
+}: CreateAdPageProps) {
   const [draft, setDraft] = useState<AdDraft>(
     () =>
       parseStoredDraft(window.localStorage.getItem(getStorageKey(session.lenderId))) ??
@@ -240,6 +246,7 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
         [createdAd, ...current.filter((ad) => ad.id !== createdAd.id)].slice(0, 4),
       )
       setPublishMessage(`Ad published successfully as ${createdAd.id}.`)
+      onPublished?.()
     } catch (error) {
       setPublishError(
         error instanceof Error ? error.message : 'Failed to publish lender ad.',
@@ -252,13 +259,13 @@ export default function CreateAdPage({ session }: CreateAdPageProps) {
   const amountRange = `${formatCurrency(draft.minAmount)} - ${formatCurrency(draft.maxAmount)}`
   const previewStatus = recentAds[0]?.status ?? 'preview only'
   return (
-    <section className="dashboard-panel">
-      <header className="page-header">
+    <section className={embedded ? 'create-ad-embedded' : 'dashboard-panel'}>
+      {!embedded ? <header className="page-header">
         <div>
           <h1 className="page-title">Create Ad</h1>
           <p className="page-subtitle">Create a lending offer for borrower review.</p>
         </div>
-      </header>
+      </header> : null}
 
       <section className="create-ad-layout">
         <article className="card create-ad-form-card">

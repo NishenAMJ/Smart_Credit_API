@@ -15,7 +15,7 @@ import {
   readStringArray,
 } from '../../../firebase/firestore-query.utils';
 import { getAdStatus } from '../../../firebase/firestore-seed.utils';
-import { LenderNotificationsService } from '../lender-notifications/lender-notifications.service';
+import { LenderNotificationWriterService } from '../lender-notifications/lender-notification-writer.service';
 import {
   CreateLenderAdInput,
   LenderAdResponse,
@@ -26,7 +26,7 @@ import {
 export class LenderAdsService {
   constructor(
     private readonly firebaseService: FirebaseService,
-    private readonly lenderNotificationsService: LenderNotificationsService,
+    private readonly notificationWriter: LenderNotificationWriterService,
   ) {}
 
   async createAd(input: CreateLenderAdInput): Promise<LenderAdResponse> {
@@ -86,7 +86,7 @@ export class LenderAdsService {
     };
 
     await docRef.set(document);
-    await this.lenderNotificationsService.createNotification({
+    await this.notificationWriter.create({
       id: `ad-published-${docRef.id}`,
       lenderId: input.lenderId,
       category: 'ad',

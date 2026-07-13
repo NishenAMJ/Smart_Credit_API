@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Files, Megaphone } from 'lucide-react'
+import { Files, Megaphone, Plus, X } from 'lucide-react'
 import type { LenderView } from '../components/common/LenderSidebar'
+import CreateAdPage from './create-ad'
 import {
   fetchAnalyticsDrilldown,
   type AnalyticsDrilldownItem,
@@ -55,7 +56,6 @@ function formatDate(value: string | null): string {
 
 export default function ActiveAdsRequestsPage({
   session,
-  onNavigate,
 }: ActiveAdsRequestsPageProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
@@ -67,6 +67,8 @@ export default function ActiveAdsRequestsPage({
     useState<PendingRequestsResponse | null>(null)
   const [isRequestsLoading, setIsRequestsLoading] = useState(false)
   const [requestsError, setRequestsError] = useState<string | null>(null)
+  const [isCreateAdOpen, setIsCreateAdOpen] = useState(false)
+  const [adsRefreshKey, setAdsRefreshKey] = useState(0)
 
   const activeCursor = pageCursors[currentPage - 1] ?? null
   const ads = adsResponse?.items ?? []
@@ -137,7 +139,18 @@ export default function ActiveAdsRequestsPage({
     return () => {
       isMounted = false
     }
-  }, [activeCursor, currentPage, session.lenderId])
+  }, [activeCursor, currentPage, session.lenderId, adsRefreshKey])
+
+  useEffect(() => {
+    if (!isCreateAdOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsCreateAdOpen(false)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isCreateAdOpen])
 
   useEffect(() => {
     if (!selectedAd) {
@@ -201,10 +214,10 @@ export default function ActiveAdsRequestsPage({
         <div className="analytics-header-tools">
           <button
             type="button"
-            className="analytics-range-tab"
-            onClick={() => onNavigate('analytics')}
+            className="create-ad-button create-ad-button--primary"
+            onClick={() => setIsCreateAdOpen(true)}
           >
-            Back to Analytics
+            <Plus size={16} /> Create Ad
           </button>
         </div>
       </header>
@@ -366,6 +379,45 @@ export default function ActiveAdsRequestsPage({
           )}
         </article>
       </section>
+
+      {isCreateAdOpen ? (
+        <div
+          className="borrower-modal__backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsCreateAdOpen(false)
+          }}
+        >
+          <section
+            className="borrower-modal create-ad-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-ad-modal-title"
+          >
+            <header className="borrower-modal__header">
+              <div>
+                <h2 className="section-title" id="create-ad-modal-title">Create Ad</h2>
+                <p className="section-subtitle">Publish a new lending offer.</p>
+              </div>
+              <button
+                type="button"
+                className="borrower-modal__close"
+                aria-label="Close create ad form"
+                onClick={() => setIsCreateAdOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </header>
+            <div className="borrower-modal__body">
+              <CreateAdPage
+                session={session}
+                embedded
+                onPublished={() => setAdsRefreshKey((value) => value + 1)}
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   )
 }

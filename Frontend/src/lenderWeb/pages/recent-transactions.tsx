@@ -85,6 +85,7 @@ export default function RecentTransactionsPage({
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [reloadVersion, setReloadVersion] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
   const [selectedTransaction, setSelectedTransaction] =
@@ -106,33 +107,6 @@ export default function RecentTransactionsPage({
 
   const activeCursor = pageCursors[currentPage - 1] ?? null
 
-  async function loadTransactionsData(options?: {
-    cursor?: string | null
-    search?: string
-  }) {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const data = await fetchRecentTransactions(session.lenderId, {
-        pageSize: PAGE_SIZE,
-        cursor: options?.cursor ?? activeCursor,
-        includeSummary: false,
-        includeSearchCount: false,
-        search: options?.search ?? debouncedSearchQuery,
-      })
-      setResponse(data)
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : 'Failed to load recent transactions.',
-      )
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   useEffect(() => {
     setCurrentPage(1)
     setPageCursors([null])
@@ -143,16 +117,13 @@ export default function RecentTransactionsPage({
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery)
-    }, 250)
+      setCurrentPage(1)
+      setPageCursors([null])
+      setDebouncedSearchQuery(searchQuery.trim())
+    }, 600)
 
     return () => window.clearTimeout(handle)
   }, [searchQuery])
-
-  useEffect(() => {
-    setCurrentPage(1)
-    setPageCursors([null])
-  }, [debouncedSearchQuery])
 
   useEffect(() => {
     let isMounted = true
@@ -193,7 +164,13 @@ export default function RecentTransactionsPage({
     return () => {
       isMounted = false
     }
-  }, [activeCursor, currentPage, debouncedSearchQuery, session.lenderId])
+  }, [
+    activeCursor,
+    currentPage,
+    debouncedSearchQuery,
+    reloadVersion,
+    session.lenderId,
+  ])
 
   useEffect(() => {
     if (!selectedTransaction) {
@@ -330,10 +307,7 @@ export default function RecentTransactionsPage({
       })
       setCurrentPage(1)
       setPageCursors([null])
-      await loadTransactionsData({
-        cursor: null,
-        search: debouncedSearchQuery,
-      })
+      setReloadVersion((current) => current + 1)
     } catch (saveError) {
       setPaymentForm((current) => ({
         ...current,
@@ -358,6 +332,8 @@ export default function RecentTransactionsPage({
   const visibleEnd = response?.transactions.length
     ? visibleStart + response.transactions.length - 1
     : 0
+  const isInitialLoading = isLoading && !response
+  const isSearchPending = searchQuery.trim() !== debouncedSearchQuery
 
   function goToPreviousPage() {
     setCurrentPage((page) => Math.max(1, page - 1))
@@ -397,11 +373,11 @@ export default function RecentTransactionsPage({
           </div>
         </header>
 
-        {isLoading ? (
+        {isInitialLoading ? (
           <section className="card loading-card">
             <p>Loading loan activity ledger...</p>
           </section>
-        ) : error ? (
+        ) : error && !response ? (
           <section className="card error-card">
             <h2>Loan activity ledger is not available yet</h2>
             <p>{error}</p>
@@ -424,18 +400,40 @@ export default function RecentTransactionsPage({
                   </p>
                 </div>
 
-                <label className="search-field">
-                  <span className="search-field__icon" aria-hidden="true">
-                    Search
+                <div className="pending-requests-toolbar__controls">
+                  <label className="search-field">
+                    <span className="search-field__icon" aria-hidden="true">
+                      Search
+                    </span>
+                    <input
+                      className="input"
+                      type="search"
+                      placeholder="Search borrower, email, loan id, installment, status"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      aria-describedby="payments-search-status"
+                    />
+                  </label>
+                  <button
+                    className="pagination-button"
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => setReloadVersion((current) => current + 1)}
+                  >
+                    {isLoading ? 'Reloading...' : 'Reload'}
+                  </button>
+                  <span
+                    className="sr-only"
+                    id="payments-search-status"
+                    aria-live="polite"
+                  >
+                    {isSearchPending
+                      ? 'Search will update after 600 milliseconds.'
+                      : isLoading
+                        ? 'Reloading payment list.'
+                        : 'Payment list updated.'}
                   </span>
-                  <input
-                    className="input"
-                    type="search"
-                    placeholder="Search borrower, email, loan id, installment, status"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                  />
-                </label>
+                </div>
               </div>
 
               <div className="table-container">
@@ -451,7 +449,19 @@ export default function RecentTransactionsPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.length > 0 ? (
+                    {isLoading ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          Reloading payments...
+                        </td>
+                      </tr>
+                    ) : error ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          {error}
+                        </td>
+                      </tr>
+                    ) : transactions.length > 0 ? (
                       transactions.map((transaction) => (
                         <tr
                           key={transaction.transactionId}
@@ -536,7 +546,7 @@ export default function RecentTransactionsPage({
                     ) : (
                       <tr>
                         <td className="table-empty" colSpan={6}>
-                          {searchQuery
+                          {debouncedSearchQuery
                             ? 'No loan ledger entries match the current search.'
                             : 'No recent lender-linked payment activity is available yet.'}
                         </td>
@@ -548,7 +558,9 @@ export default function RecentTransactionsPage({
 
               <div className="table-footer">
                 <p>
-                  {`Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
+                  {isLoading
+                    ? 'Reloading the payment list...'
+                    : `Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
                 </p>
 
                 <div className="pagination">

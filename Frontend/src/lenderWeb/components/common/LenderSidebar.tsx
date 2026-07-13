@@ -1,16 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
-  BadgePlus,
-  Bell,
-  ChartNoAxesCombined,
-  ClipboardList,
   CreditCard,
   Landmark,
   LayoutDashboard,
   LogOut,
   Megaphone,
   PanelLeftClose,
-  Settings,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react'
 import type { LenderSession } from '../../lib/lender-session'
@@ -18,6 +14,7 @@ import type { LenderSession } from '../../lib/lender-session'
 type LenderView =
   | 'dashboard'
   | 'loans'
+  | 'borrowers'
   | 'recent-transactions'
   | 'analytics'
   | 'active-ads-requests'
@@ -35,13 +32,9 @@ type NavItem = {
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'loans', label: 'Loans', icon: Landmark },
+  { id: 'borrowers', label: 'Borrowers', icon: UsersRound },
   { id: 'recent-transactions', label: 'Payments', icon: CreditCard },
-  { id: 'pending-requests', label: 'Applications', icon: ClipboardList },
   { id: 'active-ads-requests', label: 'Advertisements', icon: Megaphone },
-  { id: 'analytics', label: 'Analytics', icon: ChartNoAxesCombined },
-  { id: 'create-ad', label: 'Create Ad', icon: BadgePlus },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
 const SIDEBAR_COLLAPSE_STORAGE_KEY = 'smart-credit:lender-sidebar-collapsed'

@@ -7,6 +7,7 @@ import ActiveAdsRequestsPage from './pages/active-ads-requests'
 import CreateAdPage from './pages/create-ad'
 import DashboardPage from './pages/dashboard'
 import LoansPage from './pages/loans'
+import BorrowersPage from './pages/borrowers'
 import AuthPage from './pages/auth'
 import PendingRequestsPage from './pages/pending-requests'
 import NotificationsPage from './pages/notifications'
@@ -77,6 +78,8 @@ function App() {
           <DashboardPage session={session} onNavigate={setActiveView} />
         ) : activeView === 'loans' ? (
           <LoansPage session={session} />
+        ) : activeView === 'borrowers' ? (
+          <BorrowersPage session={session} />
         ) : activeView === 'recent-transactions' ? (
           <RecentTransactionsPage session={session} />
         ) : activeView === 'analytics' ? (

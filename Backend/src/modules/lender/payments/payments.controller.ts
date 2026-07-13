@@ -19,13 +19,19 @@ import type {
   LoanLedgerDetailsResponse,
   RecordInstallmentPaymentInput,
 } from './payments.types';
+import { InstallmentPaymentService } from './installment-payment.service';
+import { PaymentLedgerDetailsService } from './payment-ledger-details.service';
 import { PaymentsService } from './payments.service';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('lender')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly installmentPaymentService: InstallmentPaymentService,
+    private readonly ledgerDetailsService: PaymentLedgerDetailsService,
+  ) {}
 
   @Get()
   getPayments(
@@ -52,10 +58,7 @@ export class PaymentsController {
     @Req() req: AuthenticatedRequest,
     @Param('loanId') loanId: string,
   ): Promise<LoanLedgerDetailsResponse> {
-    const details = await this.paymentsService.getLoanLedgerDetails(
-      req.user.sub,
-      loanId,
-    );
+    const details = await this.ledgerDetailsService.get(req.user.sub, loanId);
 
     if (!details) {
       throw new NotFoundException(
@@ -81,13 +84,12 @@ export class PaymentsController {
       throw new BadRequestException('A valid payment amount is required.');
     }
 
-    const details =
-      await this.paymentsService.recordInstallmentPayment(
-        req.user.sub,
-        loanId,
-        installmentId,
-        body,
-      );
+    const details = await this.installmentPaymentService.record(
+      req.user.sub,
+      loanId,
+      installmentId,
+      body,
+    );
 
     if (!details) {
       throw new NotFoundException(

@@ -53,6 +53,17 @@ export interface LoanLedgerInstallmentDetail {
   paidAmount: number;
   lastPaymentAt: string | null;
   note: string | null;
+  payments: LoanLedgerPaymentDetail[];
+}
+
+export interface LoanLedgerPaymentDetail {
+  id: string;
+  amount: number;
+  status: string;
+  type: string;
+  createdAt: string | null;
+  source: 'transaction';
+  note: string | null;
 }
 
 export interface LoanLedgerDetailsResponse {
