@@ -12,6 +12,7 @@ import { LenderAdsModule } from './modules/lender/lender-ads/lender-ads.module';
 import { LenderNotificationsModule } from './modules/lender/lender-notifications/lender-notifications.module';
 import { LenderProfileModule } from './modules/lender/lender-profile/lender-profile.module';
 import { LenderSettingsModule } from './modules/lender/lender-settings/lender-settings.module';
+import { LenderSmsModule } from './modules/lender/sms/lender-sms.module';
 import { LoanRequestsModule } from './modules/lender/loan-requests/loan-requests.module';
 import { PaymentsModule } from './modules/lender/payments/payments.module';
 import { LenderLoansModule } from './modules/lender/loans/lender-loans.module';
@@ -45,6 +46,7 @@ import { LocationModule } from './modules/location/location.module';
     LenderNotificationsModule,
     LenderProfileModule,
     LenderSettingsModule,
+    LenderSmsModule,
     LoanRequestsModule,
     PaymentsModule,
     LenderLoansModule,

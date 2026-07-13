@@ -1,10 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   DocumentData,
   Firestore,
   QueryDocumentSnapshot,
+  QuerySnapshot,
+  Timestamp,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
+import { LoanRequestDecisionResponse } from './loan-requests.dto';
 import {
   applyDateCursor,
   buildPageInfo,
@@ -54,15 +62,126 @@ type BorrowerProfile = {
 
 const PENDING_STATUSES = new Set([
   'open',
+  'submitted',
   'under_review',
   'matched',
   'approved',
   'pending_kyc',
 ]);
 
+const ACTIONABLE_STATUSES = new Set([
+  'open',
+  'submitted',
+  'under_review',
+  'matched',
+  'pending_kyc',
+]);
+
 @Injectable()
 export class LoanRequestsService {
   constructor(private readonly firebaseService: FirebaseService) {}
+
+  async decideRequest(
+    lenderId: string,
+    requestId: string,
+    decision: 'approve' | 'reject' | undefined,
+    note?: string,
+  ): Promise<LoanRequestDecisionResponse> {
+    const normalizedRequestId = requestId?.trim();
+    if (!normalizedRequestId) {
+      throw new BadRequestException('requestId is required.');
+    }
+    if (decision !== 'approve' && decision !== 'reject') {
+      throw new BadRequestException(
+        'decision must be either approve or reject.',
+      );
+    }
+
+    const db = this.firebaseService.getDb();
+    const applicationRef = db
+      .collection('loanApplications')
+      .doc(normalizedRequestId);
+
+    return db.runTransaction(async (transaction) => {
+      const applicationSnapshot = await transaction.get(applicationRef);
+      if (!applicationSnapshot.exists) {
+        throw new NotFoundException('Loan request was not found.');
+      }
+
+      const application = (applicationSnapshot.data() ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const listingId = readString(application.listingId);
+      const targetLenderId = readString(application.lenderId);
+      const matchedLenderIds = readStringArray(application.matchedLenderIds);
+      let isVisibleToLender =
+        targetLenderId === lenderId || matchedLenderIds.includes(lenderId);
+
+      let listing: Record<string, unknown> | undefined;
+      if (listingId) {
+        const listingSnapshot = await transaction.get(
+          db.collection('loanListings').doc(listingId),
+        );
+        listing = listingSnapshot.data() as Record<string, unknown> | undefined;
+        isVisibleToLender ||= readString(listing?.lenderId) === lenderId;
+      }
+
+      if (!isVisibleToLender) {
+        throw new NotFoundException('Loan request was not found.');
+      }
+
+      const currentStatus = readString(application.status) || 'unknown';
+      if (!ACTIONABLE_STATUSES.has(currentStatus)) {
+        throw new ConflictException(
+          `A request with status ${currentStatus} cannot be changed.`,
+        );
+      }
+
+      const now = Timestamp.now();
+      const status = decision === 'approve' ? 'approved' : 'rejected';
+      const decisionNote = note?.trim() || null;
+      const existingDecision = (
+        application.lenderDecision &&
+        typeof application.lenderDecision === 'object'
+          ? application.lenderDecision
+          : {}
+      ) as Record<string, unknown>;
+
+      transaction.update(applicationRef, {
+        status,
+        lenderDecision: {
+          approvedPrincipalMinor:
+            decision === 'approve'
+              ? readNumber(application.requestedPrincipalMinor)
+              : null,
+          annualInterestRate:
+            decision === 'approve'
+              ? readNumber(
+                  application.suggestedInterestRate,
+                  readNumber(
+                    existingDecision.annualInterestRate,
+                    readNumber(listing?.minInterestRateAnnual),
+                  ),
+                )
+              : null,
+          approvedTenureMonths:
+            decision === 'approve'
+              ? readNumber(application.requestedTenureMonths)
+              : null,
+          decisionNote,
+          decidedAt: now,
+        },
+        updatedAt: now,
+      });
+
+      return {
+        requestId: normalizedRequestId,
+        status,
+        updatedAt: now.toDate().toISOString(),
+      };
+    });
+  }
 
   async getPendingRequests(
     lenderId: string,
@@ -188,7 +307,7 @@ export class LoanRequestsService {
 
         return snapshot.docs;
       },
-      mapDoc: async (doc) => {
+      mapDoc: (doc) => {
         const request = this.mapLoanRequest(doc);
 
         if (!this.isRequestVisibleToLender(request, lenderId, adIds, adId)) {
@@ -216,7 +335,7 @@ export class LoanRequestsService {
     let hasMore = true;
 
     while (hasMore) {
-      const snapshot = await applyDateCursor(
+      const snapshot: QuerySnapshot<DocumentData> = await applyDateCursor(
         orderByDateAndId(db.collection('loanApplications'), 'createdAt'),
         cursor,
       )
@@ -349,7 +468,11 @@ export class LoanRequestsService {
 
     return new Map(
       snapshots.map((snapshot) => {
-        const data = snapshot.data();
+        const data = snapshot.data() as Record<string, unknown> | undefined;
+        const borrowerProfile =
+          data?.borrowerProfile && typeof data.borrowerProfile === 'object'
+            ? (data.borrowerProfile as Record<string, unknown>)
+            : null;
 
         return [
           snapshot.id,
@@ -364,11 +487,8 @@ export class LoanRequestsService {
               data && typeof data.email === 'string' ? data.email : 'No email',
             phone: data && typeof data.phone === 'string' ? data.phone : null,
             creditScore:
-              data &&
-              typeof data.borrowerProfile === 'object' &&
-              data.borrowerProfile !== null &&
-              typeof data.borrowerProfile.creditScore === 'number'
-                ? data.borrowerProfile.creditScore
+              borrowerProfile && typeof borrowerProfile.creditScore === 'number'
+                ? borrowerProfile.creditScore
                 : null,
             kycStatus:
               data && typeof data.kycStatus === 'string'

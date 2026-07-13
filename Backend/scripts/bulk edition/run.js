@@ -5,6 +5,7 @@ const { commitSetWrites } = require('../shared/firestore-helpers');
 const { buildSchemaV2Fixtures } = require('./fixtures');
 const { validateFixtures } = require('./validate');
 const { getSeedConfig } = require('./config');
+const { writeLoginDetails } = require('./login-details');
 
 const topLevelWrites = (db, collection, records, idField) =>
   records.map((data) => ({
@@ -26,6 +27,7 @@ async function runSeed() {
       `Seed would write ${counts.totalDocuments} documents, exceeding SEED_MAX_WRITES=${config.maxWrites}. Reduce the record counts or explicitly raise the guard after checking the Firebase quota.`,
     );
   }
+  writeLoginDetails(fixtures, config);
   console.log(
     `Validated ${counts.totalDocuments} documents. Writing batches of at most ${config.writeBatchSize} with ${config.writeDelayMs}ms between batches.`,
   );

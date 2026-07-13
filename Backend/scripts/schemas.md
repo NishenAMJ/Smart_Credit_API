@@ -598,6 +598,20 @@ lenderId: string
 lastSyncedAt: Timestamp
 ```
 
+Known lender SMS document (`sms_{lenderId}`):
+
+```text
+settingType: 'lender_sms'
+lenderId: string
+enabled: boolean
+updatedAt: Timestamp
+```
+
+The SMS switch is checked before every manual provider request and can also be
+reused by future automated SMS jobs. Successful deliveries add an `auditLogs`
+record with action `sms.sent`; provider credentials are environment variables
+and are never stored in Firestore.
+
 The collection is intended for additional platform settings, so other document
 IDs may use setting-specific attributes.
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Files, Megaphone, Plus, X } from 'lucide-react'
+import { BadgeCheck, Ban, Files, Megaphone, Plus, X } from 'lucide-react'
 import type { LenderView } from '../components/common/LenderSidebar'
 import CreateAdPage from './create-ad'
 import {
@@ -8,7 +8,10 @@ import {
   type AnalyticsDrilldownResponse,
 } from '../lib/analytics-api'
 import {
+  decideLoanRequest,
   fetchPendingRequests,
+  type LoanRequestDecision,
+  type PendingRequest,
   type PendingRequestsResponse,
 } from '../lib/pending-requests-api'
 import type { LenderSession } from '../lib/lender-session'
@@ -20,6 +23,13 @@ type ActiveAdsRequestsPageProps = {
 
 const ADS_PAGE_SIZE = 5
 const REQUEST_LIMIT = 30
+const ACTIONABLE_REQUEST_STATUSES = new Set([
+  'open',
+  'submitted',
+  'under_review',
+  'matched',
+  'pending_kyc',
+])
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', {
   style: 'currency',
@@ -67,6 +77,8 @@ export default function ActiveAdsRequestsPage({
     useState<PendingRequestsResponse | null>(null)
   const [isRequestsLoading, setIsRequestsLoading] = useState(false)
   const [requestsError, setRequestsError] = useState<string | null>(null)
+  const [decisionError, setDecisionError] = useState<string | null>(null)
+  const [decisionRequestId, setDecisionRequestId] = useState<string | null>(null)
   const [isCreateAdOpen, setIsCreateAdOpen] = useState(false)
   const [adsRefreshKey, setAdsRefreshKey] = useState(0)
 
@@ -142,15 +154,21 @@ export default function ActiveAdsRequestsPage({
   }, [activeCursor, currentPage, session.lenderId, adsRefreshKey])
 
   useEffect(() => {
-    if (!isCreateAdOpen) return
+    if (!isCreateAdOpen && !selectedAd) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsCreateAdOpen(false)
+      if (event.key !== 'Escape') return
+
+      if (isCreateAdOpen) {
+        setIsCreateAdOpen(false)
+      } else {
+        setSelectedAd(null)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isCreateAdOpen])
+  }, [isCreateAdOpen, selectedAd])
 
   useEffect(() => {
     if (!selectedAd) {
@@ -164,7 +182,7 @@ export default function ActiveAdsRequestsPage({
         setIsRequestsLoading(true)
         setRequestsError(null)
         setRequestsResponse(null)
-        const data = await fetchPendingRequests(session.lenderId, {
+        const data = await fetchPendingRequests({
           limit: REQUEST_LIMIT,
           adId: selectedAd.id,
           includeSummary: false,
@@ -195,6 +213,48 @@ export default function ActiveAdsRequestsPage({
       isMounted = false
     }
   }, [selectedAd, session.lenderId])
+
+  const handleDecision = async (
+    request: PendingRequest,
+    decision: LoanRequestDecision,
+  ) => {
+    try {
+      setDecisionRequestId(request.requestId)
+      setDecisionError(null)
+      const result = await decideLoanRequest(
+        request.requestId,
+        decision,
+        decision === 'approve'
+          ? 'Approved from the advertisement request review.'
+          : 'Rejected from the advertisement request review.',
+      )
+
+      setRequestsResponse((current) =>
+        current
+          ? {
+              ...current,
+              requests: current.requests.map((item) =>
+                item.requestId === result.requestId
+                  ? {
+                      ...item,
+                      status: result.status,
+                      updatedAt: result.updatedAt,
+                    }
+                  : item,
+              ),
+            }
+          : current,
+      )
+    } catch (decisionFailure) {
+      setDecisionError(
+        decisionFailure instanceof Error
+          ? decisionFailure.message
+          : 'Failed to update this borrower request.',
+      )
+    } finally {
+      setDecisionRequestId(null)
+    }
+  }
 
   return (
     <section className="dashboard-panel">
@@ -245,8 +305,7 @@ export default function ActiveAdsRequestsPage({
         </article>
       </section>
 
-      <section className="analytics-grid analytics-grid--secondary">
-        <article className="card analytics-card">
+      <section className="card analytics-card">
           <div className="analytics-card__header">
             <div>
               <h2 className="section-title">Active Ads</h2>
@@ -319,66 +378,147 @@ export default function ActiveAdsRequestsPage({
               </button>
             </div>
           </div>
-        </article>
-
-        <article className="card analytics-card">
-          <div className="analytics-card__header">
-            <div>
-              <h2 className="section-title">
-                {selectedAd ? 'Borrower Requests For Selected Ad' : 'Borrower Requests'}
-              </h2>
-              <p className="section-subtitle">
-                {selectedAd
-                  ? `Review borrower requests linked to ${selectedAd.title}.`
-                  : 'Choose an active ad first to inspect its borrower requests.'}
-              </p>
-            </div>
-          </div>
-
-          {!selectedAd ? (
-            <div className="borrower-modal__state">
-              Select an active ad from the left to load its borrower requests.
-            </div>
-          ) : requestsError ? (
-            <div className="borrower-modal__state borrower-modal__state--error">
-              {requestsError}
-            </div>
-          ) : isRequestsLoading ? (
-            <div className="borrower-modal__state">Loading borrower requests...</div>
-          ) : requests.length > 0 ? (
-            <div className="active-ads-request-list">
-              {requests.map((request) => (
-                <article className="analytics-drilldown-item" key={request.requestId}>
-                  <div className="analytics-drilldown-item__main">
-                    <h3 className="analytics-drilldown-item__title">
-                      {request.borrowerName}
-                    </h3>
-                    <p className="analytics-drilldown-item__subtitle">
-                      {request.purpose} · {request.borrowerEmail}
-                    </p>
-                  </div>
-                  <div className="analytics-drilldown-item__meta">
-                    <span className="badge badge-gray">{formatLabel(request.status)}</span>
-                    <p className="analytics-drilldown-item__metric">
-                      {formatCurrency(request.amount)}
-                    </p>
-                    <p className="analytics-drilldown-item__secondary">
-                      {request.tenureMonths} months · {formatLabel(request.urgency)}
-                    </p>
-                    <p className="analytics-drilldown-item__date">
-                      {formatDate(request.createdAt)}
-                    </p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="borrower-modal__state">
-              No borrower requests have reached this ad yet.
-            </div>
-          )}
-        </article>
       </section>
+
+      {selectedAd ? (
+        <div
+          className="borrower-modal__backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setSelectedAd(null)
+              setDecisionError(null)
+            }
+          }}
+        >
+          <section
+            className="borrower-modal pending-request-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ad-requests-modal-title"
+          >
+            <header className="borrower-modal__header">
+              <div>
+                <p className="eyebrow">Borrower requests</p>
+                <h2 className="section-title" id="ad-requests-modal-title">
+                  {selectedAd.title}
+                </h2>
+                <p className="section-subtitle">
+                  Review and decide requests submitted through this advertisement.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="borrower-modal__close"
+                aria-label="Close borrower requests"
+                onClick={() => {
+                  setSelectedAd(null)
+                  setDecisionError(null)
+                }}
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <div className="borrower-modal__body">
+              {decisionError ? (
+                <div className="request-decision-error" role="alert">
+                  {decisionError}
+                </div>
+              ) : null}
+
+              {requestsError ? (
+                <div className="borrower-modal__state borrower-modal__state--error">
+                  {requestsError}
+                </div>
+              ) : isRequestsLoading ? (
+                <div className="borrower-modal__state">
+                  Loading borrower requests...
+                </div>
+              ) : requests.length > 0 ? (
+                <div className="active-ads-request-list">
+                  {requests.map((request) => {
+                    const isActionable = ACTIONABLE_REQUEST_STATUSES.has(
+                      request.status,
+                    )
+                    const isUpdating = decisionRequestId === request.requestId
+
+                    return (
+                      <article
+                        className="active-ads-request-card"
+                        key={request.requestId}
+                      >
+                        <div className="analytics-drilldown-item">
+                          <div className="analytics-drilldown-item__main">
+                            <h3 className="analytics-drilldown-item__title">
+                              {request.borrowerName}
+                            </h3>
+                            <p className="analytics-drilldown-item__subtitle">
+                              {request.purpose} · {request.borrowerEmail}
+                            </p>
+                          </div>
+                          <div className="analytics-drilldown-item__meta">
+                            <span className="badge badge-gray">
+                              {formatLabel(request.status)}
+                            </span>
+                            <p className="analytics-drilldown-item__metric">
+                              {formatCurrency(request.amount)}
+                            </p>
+                            <p className="analytics-drilldown-item__date">
+                              {formatDate(request.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="active-ads-request-card__details">
+                          <span>{request.tenureMonths} month tenure</span>
+                          <span>{formatLabel(request.urgency)} urgency</span>
+                          <span>
+                            Credit score {request.borrowerCreditScore ?? 'unavailable'}
+                          </span>
+                          <span>KYC {formatLabel(request.borrowerKycStatus)}</span>
+                        </div>
+
+                        <div className="request-decision-actions">
+                          {isActionable ? (
+                            <>
+                              <button
+                                type="button"
+                                className="button button-secondary request-decision-button--reject"
+                                disabled={decisionRequestId !== null}
+                                onClick={() => void handleDecision(request, 'reject')}
+                              >
+                                <Ban size={16} /> Reject
+                              </button>
+                              <button
+                                type="button"
+                                className="button button-primary"
+                                disabled={decisionRequestId !== null}
+                                onClick={() => void handleDecision(request, 'approve')}
+                              >
+                                <BadgeCheck size={16} />
+                                {isUpdating ? 'Saving...' : 'Approve'}
+                              </button>
+                            </>
+                          ) : (
+                            <p className="request-decision-complete">
+                              This request already has a final decision.
+                            </p>
+                          )}
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="borrower-modal__state">
+                  No borrower requests have reached this ad yet.
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {isCreateAdOpen ? (
         <div

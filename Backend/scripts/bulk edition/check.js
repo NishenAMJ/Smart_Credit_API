@@ -3,6 +3,7 @@
 const { buildSchemaV2Fixtures } = require('./fixtures');
 const { validateFixtures } = require('./validate');
 const { getSeedConfig } = require('./config');
+const { writeLoginDetails } = require('./login-details');
 
 async function check() {
   const config = getSeedConfig();
@@ -15,6 +16,7 @@ async function check() {
       `Seed would write ${counts.totalDocuments} documents, exceeding SEED_MAX_WRITES=${config.maxWrites}.`,
     );
   }
+  writeLoginDetails(fixtures, config);
   console.log(JSON.stringify(counts, null, 2));
 }
 

@@ -175,4 +175,104 @@ describe('LoanRequestsService', () => {
       adTitle: 'Targeted ad',
     });
   });
+
+  it('allows the owning lender to approve an actionable ad request', async () => {
+    const applicationRef = { collection: 'loanApplications', id: 'req_1' };
+    const listingRef = { collection: 'loanListings', id: 'ad_1' };
+    const update = jest.fn();
+    const transaction = {
+      get: jest.fn((ref: typeof applicationRef) => {
+        if (ref.collection === 'loanApplications') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({
+              applicationId: 'req_1',
+              listingId: 'ad_1',
+              lenderId: 'lender_1',
+              status: 'submitted',
+              requestedPrincipalMinor: 5000000,
+              requestedTenureMonths: 12,
+            }),
+          });
+        }
+
+        return Promise.resolve({
+          exists: true,
+          data: () => ({
+            lenderId: 'lender_1',
+            minInterestRateAnnual: 11.5,
+          }),
+        });
+      }),
+      update,
+    };
+    const db = {
+      collection: jest.fn((name: string) => ({
+        doc: jest.fn(() =>
+          name === 'loanApplications' ? applicationRef : listingRef,
+        ),
+      })),
+      runTransaction: jest.fn(
+        (work: (value: typeof transaction) => Promise<unknown>) =>
+          work(transaction),
+      ),
+    };
+    const service = new LoanRequestsService({ getDb: () => db } as any);
+
+    const result = await service.decideRequest(
+      'lender_1',
+      'req_1',
+      'approve',
+      'Looks good',
+    );
+
+    expect(result).toMatchObject({ requestId: 'req_1', status: 'approved' });
+    expect(update).toHaveBeenCalledWith(
+      applicationRef,
+      expect.objectContaining({
+        status: 'approved',
+        lenderDecision: expect.objectContaining({
+          approvedPrincipalMinor: 5000000,
+          approvedTenureMonths: 12,
+          annualInterestRate: 11.5,
+          decisionNote: 'Looks good',
+        }),
+      }),
+    );
+  });
+
+  it('does not let a lender decide another lender request', async () => {
+    const transaction = {
+      get: jest
+        .fn()
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            listingId: 'ad_other',
+            lenderId: 'lender_other',
+            status: 'submitted',
+          }),
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({ lenderId: 'lender_other' }),
+        }),
+      update: jest.fn(),
+    };
+    const db = {
+      collection: jest.fn((name: string) => ({
+        doc: jest.fn((id: string) => ({ collection: name, id })),
+      })),
+      runTransaction: jest.fn(
+        (work: (value: typeof transaction) => Promise<unknown>) =>
+          work(transaction),
+      ),
+    };
+    const service = new LoanRequestsService({ getDb: () => db } as any);
+
+    await expect(
+      service.decideRequest('lender_1', 'req_1', 'reject'),
+    ).rejects.toThrow('Loan request was not found.');
+    expect(transaction.update).not.toHaveBeenCalled();
+  });
 });

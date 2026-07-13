@@ -13,6 +13,7 @@ canonical database model in `Backend/src/common/firestore/schema.ts`.
 | `fixtures.js`      | Defines the four stable development accounts and base records   |
 | `bulk-fixtures.js` | Generates the configurable bulk dataset and relationships       |
 | `validate.js`      | Checks IDs, references, credentials, installments, and balances |
+| `login-details.js` | Writes a local CSV containing the generated development logins  |
 
 The shared Firebase initialization and batch writer live in `../shared/`.
 
@@ -34,6 +35,17 @@ npm run seed:bulk
 `npm run seed:bulk` refuses to write unless `SEED_ENABLED=true`. The seeder uses
 merge upserts, deterministic document IDs, and never deletes database records.
 Running the same batch again updates the same seed documents.
+
+Each check or write also creates
+`scripts/bulk edition/login-details-{SEED_BATCH_ID}.csv`. The CSV contains the
+mock user ID, role, email, phone, and plaintext development password for every
+seeded account. It is permission-restricted and ignored by Git. Never use these
+credentials outside a development Firebase project.
+
+These users are stored in Firestore's `users` and `authCredentials`
+collections and sign in through the backend login endpoint. They are not
+Firebase Authentication users, so they do not appear in the Firebase console's
+Authentication user list.
 
 ## Environment settings
 

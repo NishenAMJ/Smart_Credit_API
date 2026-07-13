@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api-config'
+import { API_BASE_URL, getAuthHeaders } from './api-config'
 
 export type PendingRequestsSummary = {
   totalPendingRequests: number
@@ -57,14 +57,20 @@ export type FetchPendingRequestsOptions = {
   includeAllStatuses?: boolean
 }
 
+export type LoanRequestDecision = 'approve' | 'reject'
+
+export type LoanRequestDecisionResponse = {
+  requestId: string
+  status: 'approved' | 'rejected'
+  updatedAt: string
+}
+
 export async function fetchPendingRequests(
-  lenderId: string,
   options: number | FetchPendingRequestsOptions = 30,
 ): Promise<PendingRequestsResponse> {
   const normalizedOptions: FetchPendingRequestsOptions =
     typeof options === 'number' ? { limit: options } : options
   const searchParams = new URLSearchParams({
-    lenderId,
     limit: String(normalizedOptions.limit ?? 30),
   })
 
@@ -86,10 +92,39 @@ export async function fetchPendingRequests(
 
   const response = await fetch(
     `${API_BASE_URL}/loan-requests/pending?${searchParams.toString()}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {
     throw new Error(`Pending requests failed with status ${response.status}`)
+  }
+
+  return response.json()
+}
+
+export async function decideLoanRequest(
+  requestId: string,
+  decision: LoanRequestDecision,
+  note?: string,
+): Promise<LoanRequestDecisionResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/loan-requests/${encodeURIComponent(requestId)}/decision`,
+    {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ decision, note }),
+    },
+  )
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as
+      | { message?: string | string[] }
+      | null
+    const message = Array.isArray(payload?.message)
+      ? payload.message.join(' ')
+      : payload?.message
+
+    throw new Error(message || `Request decision failed with status ${response.status}`)
   }
 
   return response.json()

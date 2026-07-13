@@ -1,5 +1,5 @@
 export type LoanRequestDecisionResponse = {
   requestId: string;
-  status: string;
+  status: 'approved' | 'rejected';
   updatedAt: string;
 };

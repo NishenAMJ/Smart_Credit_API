@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LogOut,
   Megaphone,
+  MessageSquareText,
   PanelLeftClose,
   UsersRound,
   type LucideIcon,
@@ -22,6 +23,7 @@ type LenderView =
   | 'pending-requests'
   | 'settings'
   | 'notifications'
+  | 'sms'
 
 type NavItem = {
   id: LenderView
@@ -35,6 +37,7 @@ const navItems: NavItem[] = [
   { id: 'borrowers', label: 'Borrowers', icon: UsersRound },
   { id: 'recent-transactions', label: 'Payments', icon: CreditCard },
   { id: 'active-ads-requests', label: 'Advertisements', icon: Megaphone },
+  { id: 'sms', label: 'SMS', icon: MessageSquareText },
 ]
 
 const SIDEBAR_COLLAPSE_STORAGE_KEY = 'smart-credit:lender-sidebar-collapsed'
