@@ -367,6 +367,28 @@ describe('AuthService', () => {
     expect(response.user.role).toBe('admin');
   });
 
+  it('treats admin as exclusive when a legacy account contains mixed roles', async () => {
+    const user = buildUser({
+      userId: 'admin-1',
+      roles: ['borrower', 'lender', 'admin'],
+    });
+    queueQueryResult(user);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+    const response = await service.login({
+      identifier: 'nimal@example.com',
+      password: 'SmartPass123',
+    });
+
+    expect(jwtService.sign).toHaveBeenCalledWith({
+      sub: user.userId,
+      email: user.email,
+      role: 'admin',
+    });
+    expect(response.user.role).toBe('admin');
+    expect(response.availableRoles).toEqual(['admin']);
+  });
+
   it('logs in by phone using the normalized phone lookup', async () => {
     const user = buildUser({
       userId: 'borrower-2',

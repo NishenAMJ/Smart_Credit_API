@@ -462,16 +462,19 @@ export class AuthService {
 
   // Normalizes the stored role field so the rest of the service can treat it as an array.
   private getRoles(role: UserDocument['roles']): UserRole[] {
-    if (Array.isArray(role)) {
-      return role.filter(
-        (entry): entry is UserRole =>
-          typeof entry === 'string' && USER_ROLES.includes(entry as UserRole),
-      );
-    }
+    const normalizedRoles = Array.isArray(role)
+      ? role.filter(
+          (entry): entry is UserRole =>
+            typeof entry === 'string' && USER_ROLES.includes(entry as UserRole),
+        )
+      : typeof role === 'string' && USER_ROLES.includes(role as UserRole)
+        ? [role as UserRole]
+        : [];
+    const uniqueRoles = Array.from(new Set(normalizedRoles));
 
-    return typeof role === 'string' && USER_ROLES.includes(role as UserRole)
-      ? [role as UserRole]
-      : [];
+    // Administrator accounts are intentionally exclusive. Only borrower and
+    // lender roles may coexist on the same account.
+    return uniqueRoles.includes('admin') ? ['admin'] : uniqueRoles;
   }
 
   private hasRole(

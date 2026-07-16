@@ -27,16 +27,12 @@ type SharedSession = {
   user: SharedAuthUser;
 };
 type LoginRole = SharedAuthUser["role"];
+type SelectableRole = Exclude<LoginRole, "admin">;
 
 const ROLE_DETAILS: Record<
-  LoginRole,
+  SelectableRole,
   { label: string; description: string; destination: string }
 > = {
-  admin: {
-    label: "Administrator",
-    description: "Manage users, approvals, disputes, and platform activity.",
-    destination: "Admin dashboard",
-  },
   lender: {
     label: "Lender",
     description: "Manage loans, borrowers, collections, ads, and payments.",
@@ -132,7 +128,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   const [apiError, setApiError] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [roleOptions, setRoleOptions] = useState<LoginRole[]>([]);
+  const [roleOptions, setRoleOptions] = useState<SelectableRole[]>([]);
 
   const registerRoleLabel = "lender";
 
@@ -313,9 +309,13 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
             : [response.user.role],
         ),
       );
+      const selectableRoles = availableRoles.filter(
+        (role): role is SelectableRole =>
+          role === "borrower" || role === "lender",
+      );
 
-      if (availableRoles.length > 1) {
-        setRoleOptions(availableRoles);
+      if (!availableRoles.includes("admin") && selectableRoles.length > 1) {
+        setRoleOptions(selectableRoles);
         return;
       }
 
@@ -334,7 +334,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
     }
   }
 
-  async function handleRoleSelection(role: LoginRole) {
+  async function handleRoleSelection(role: SelectableRole) {
     resetMessages();
 
     try {
