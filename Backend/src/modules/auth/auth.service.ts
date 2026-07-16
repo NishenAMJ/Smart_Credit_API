@@ -161,6 +161,7 @@ export class AuthService {
     return {
       accessToken,
       user: this.toSafeUser(user, activeRole),
+      availableRoles: this.getRoles(user.roles),
     };
   }
 

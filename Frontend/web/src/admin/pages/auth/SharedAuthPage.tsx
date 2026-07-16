@@ -26,6 +26,28 @@ type SharedSession = {
   accessToken: string;
   user: SharedAuthUser;
 };
+type LoginRole = SharedAuthUser["role"];
+
+const ROLE_DETAILS: Record<
+  LoginRole,
+  { label: string; description: string; destination: string }
+> = {
+  admin: {
+    label: "Administrator",
+    description: "Manage users, approvals, disputes, and platform activity.",
+    destination: "Admin dashboard",
+  },
+  lender: {
+    label: "Lender",
+    description: "Manage loans, borrowers, collections, ads, and payments.",
+    destination: "Lender workspace",
+  },
+  borrower: {
+    label: "Borrower",
+    description: "Continue with your borrower account and mobile experience.",
+    destination: "Borrower session",
+  },
+};
 
 const STORAGE_KEY = "smart-credit-shared-auth-session";
 
@@ -110,6 +132,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   const [apiError, setApiError] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [roleOptions, setRoleOptions] = useState<LoginRole[]>([]);
 
   const registerRoleLabel = "lender";
 
@@ -146,6 +169,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
 
   function switchMode(nextMode: AuthMode) {
     resetMessages();
+    setRoleOptions([]);
     setMode(nextMode);
     if (nextMode === "register") {
       setRegisterStep("account");
@@ -281,6 +305,21 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
         loginIdentifier.trim(),
         loginPassword,
       );
+
+      const availableRoles = Array.from(
+        new Set(
+          response.availableRoles?.length
+            ? response.availableRoles
+            : [response.user.role],
+        ),
+      );
+
+      if (availableRoles.length > 1) {
+        setRoleOptions(availableRoles);
+        return;
+      }
+
+      setLoginPassword("");
       handleSuccessfulSession(
         {
           accessToken: response.accessToken,
@@ -293,6 +332,45 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleRoleSelection(role: LoginRole) {
+    resetMessages();
+
+    try {
+      setLoading(true);
+      const response = await loginWithRole(
+        loginIdentifier.trim(),
+        loginPassword,
+        role,
+      );
+
+      setRoleOptions([]);
+      setLoginPassword("");
+      handleSuccessfulSession(
+        {
+          accessToken: response.accessToken,
+          user: response.user,
+        },
+        role === "borrower"
+          ? "Signed in as a borrower. Continue in the Smart Credit mobile app for the borrower workspace."
+          : `Signed in as ${ROLE_DETAILS[role].label.toLowerCase()}.`,
+      );
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Role selection failed.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function cancelRoleSelection() {
+    setRoleOptions([]);
+    setLoginPassword("");
+    setInfoMessage(
+      "Role selection cancelled. Enter your password to sign in again.",
+    );
   }
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
@@ -966,6 +1044,79 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
           )}
         </div>
       </section>
+
+      {roleOptions.length > 1 ? (
+        <div
+          className="shared-auth-role-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target && !loading) {
+              cancelRoleSelection();
+            }
+          }}
+        >
+          <section
+            className="shared-auth-role-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="role-selection-title"
+          >
+            <div className="shared-auth-role-modal-heading">
+              <span className="shared-auth-kicker">
+                Multiple roles detected
+              </span>
+              <h2 id="role-selection-title">How would you like to continue?</h2>
+              <p>
+                This account has more than one role. Choose the workspace for
+                this session. You can sign out and choose another role later.
+              </p>
+            </div>
+
+            <div className="shared-auth-role-options">
+              {roleOptions.map((role) => {
+                const details = ROLE_DETAILS[role];
+
+                return (
+                  <button
+                    type="button"
+                    className="shared-auth-role-option"
+                    key={role}
+                    onClick={() => void handleRoleSelection(role)}
+                    disabled={loading}
+                  >
+                    <span
+                      className="shared-auth-role-option-icon"
+                      aria-hidden="true"
+                    >
+                      {details.label.slice(0, 1)}
+                    </span>
+                    <span className="shared-auth-role-option-copy">
+                      <strong>Continue as {details.label}</strong>
+                      <small>{details.description}</small>
+                      <em>{details.destination}</em>
+                    </span>
+                    <span
+                      className="shared-auth-role-option-arrow"
+                      aria-hidden="true"
+                    >
+                      →
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              className="shared-auth-role-cancel"
+              onClick={cancelRoleSelection}
+              disabled={loading}
+            >
+              {loading ? "Opening workspace..." : "Cancel"}
+            </button>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

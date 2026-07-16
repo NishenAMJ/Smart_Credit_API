@@ -5,7 +5,11 @@ import { Timestamp } from 'firebase-admin/firestore';
 
 import { FirebaseService } from '../../firebase/firebase.service';
 import { AuthService } from './auth.service';
-import type { UserDocument, UserRole } from './auth.types';
+import type {
+  AuthCredentialDocument,
+  UserDocument,
+  UserRole,
+} from './auth.types';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn(),
@@ -33,31 +37,49 @@ describe('AuthService', () => {
   };
   let createdDocRef: UserDocRefMock;
   let existingDocRefs: Map<string, UserDocRefMock>;
+  let credentialDocRefs: Map<string, UserDocRefMock>;
+  let batch: { create: jest.Mock; commit: jest.Mock };
   let queryResults: QuerySnapshotMock[];
   let jwtService: jest.Mocked<Pick<JwtService, 'sign'>>;
 
   function buildUser(overrides: Partial<UserDocument> = {}): UserDocument {
     return {
-      uid: 'user-1',
-      role: ['borrower'],
+      userId: 'user-1',
+      roles: ['borrower'],
       fullName: 'Nimal Perera',
-      photoURL: '',
-      phone: '0771234567',
+      photoUrl: null,
+      phone: '+94771234567',
       email: 'nimal@example.com',
-      emailLower: 'nimal@example.com',
-      phoneNormalized: '+94771234567',
-      passwordHash: 'stored-hash',
-      creditScore: 640,
-      rating: 4.8,
-      totalLoansCompleted: 3,
-      totalAmountLent: 0,
-      totalAmountBorrowed: 150000,
+      borrowerProfile: {
+        dateOfBirth: null,
+        occupation: null,
+        monthlyIncomeMinor: null,
+        creditScore: 640,
+      },
+      lenderProfile: null,
       kycStatus: 'approved',
       accountStatus: 'active',
-      authProvider: 'local',
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
+      lastLoginAt: null,
       ...overrides,
+    };
+  }
+
+  function buildCredentials(
+    userId: string,
+    passwordHash = 'stored-hash',
+  ): AuthCredentialDocument {
+    const now = Timestamp.now();
+
+    return {
+      userId,
+      passwordHash,
+      passwordChangedAt: now,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      createdAt: now,
+      updatedAt: now,
     };
   }
 
@@ -76,7 +98,7 @@ describe('AuthService', () => {
   }
 
   function setStoredUser(user: UserDocument): void {
-    const docRef = usersCollection.doc(user.uid) as UserDocRefMock;
+    const docRef = usersCollection.doc(user.userId) as UserDocRefMock;
     docRef.get.mockResolvedValue({
       exists: true,
       data: () => user,
@@ -92,6 +114,11 @@ describe('AuthService', () => {
       get: jest.fn(),
     };
     existingDocRefs = new Map<string, UserDocRefMock>();
+    credentialDocRefs = new Map<string, UserDocRefMock>();
+    batch = {
+      create: jest.fn(),
+      commit: jest.fn().mockResolvedValue(undefined),
+    };
 
     usersCollection = {
       doc: jest.fn((id?: string) => {
@@ -120,11 +147,36 @@ describe('AuthService', () => {
       get: jest.fn(),
     };
 
+    const credentialsCollection = {
+      doc: jest.fn((id: string) => {
+        if (!credentialDocRefs.has(id)) {
+          const ref: UserDocRefMock = {
+            id,
+            set: jest.fn(),
+            update: jest.fn(),
+            get: jest.fn(),
+          };
+          ref.get.mockResolvedValue({
+            exists: true,
+            data: () => buildCredentials(id),
+          });
+          credentialDocRefs.set(id, ref);
+        }
+
+        return credentialDocRefs.get(id);
+      }),
+    };
+
     const firebaseService = {
       db: {
+        batch: jest.fn(() => batch),
         collection: jest.fn((name: string) => {
           if (name === 'users') {
             return usersCollection;
+          }
+
+          if (name === 'authCredentials') {
+            return credentialsCollection;
           }
 
           return {
@@ -168,19 +220,25 @@ describe('AuthService', () => {
     });
 
     expect(bcrypt.hash).toHaveBeenCalledWith('SmartPass123', 10);
-    expect(createdDocRef.set).toHaveBeenCalledWith(
+    expect(batch.create).toHaveBeenCalledWith(
+      createdDocRef,
       expect.objectContaining({
-        uid: 'generated-user-id',
+        userId: 'generated-user-id',
+        roles: ['borrower'],
         fullName: 'Nimal Perera',
-        email: 'Nimal@Example.com',
-        emailLower: 'nimal@example.com',
-        phone: '077 123 4567',
-        phoneNormalized: '+94771234567',
-        passwordHash: 'hashed-password',
+        email: 'nimal@example.com',
+        phone: '+94771234567',
         accountStatus: 'active',
-        authProvider: 'local',
       }),
     );
+    expect(batch.create).toHaveBeenCalledWith(
+      credentialDocRefs.get('generated-user-id'),
+      expect.objectContaining({
+        userId: 'generated-user-id',
+        passwordHash: 'hashed-password',
+      }),
+    );
+    expect(batch.commit).toHaveBeenCalled();
     expect(response).toEqual(
       expect.objectContaining({
         message: 'Account created successfully. Please log in to continue.',
@@ -211,8 +269,7 @@ describe('AuthService', () => {
 
   it('logs in by email and updates last login metadata', async () => {
     const user = buildUser({
-      role: ['borrower', 'lender'],
-      passwordHash: 'stored-hash',
+      roles: ['borrower', 'lender'],
     });
     queueQueryResult(user);
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
@@ -223,11 +280,11 @@ describe('AuthService', () => {
     });
 
     expect(jwtService.sign).toHaveBeenCalledWith({
-      sub: user.uid,
+      sub: user.userId,
       email: user.email,
       role: 'borrower',
     });
-    expect(existingDocRefs.get(user.uid)?.update).toHaveBeenCalledWith(
+    expect(existingDocRefs.get(user.userId)?.update).toHaveBeenCalledWith(
       expect.objectContaining({
         lastLoginAt: expect.any(Object),
         updatedAt: expect.any(Object),
@@ -236,8 +293,9 @@ describe('AuthService', () => {
     expect(response).toEqual(
       expect.objectContaining({
         accessToken: 'signed-jwt',
+        availableRoles: ['borrower', 'lender'],
         user: expect.objectContaining({
-          uid: user.uid,
+          uid: user.userId,
           role: 'borrower',
         }),
       }),
@@ -246,9 +304,8 @@ describe('AuthService', () => {
 
   it('updates the stored password hash after verifying the current password', async () => {
     const user = buildUser({
-      uid: 'admin-1',
-      role: ['admin'],
-      passwordHash: 'stored-hash',
+      userId: 'admin-1',
+      roles: ['admin'],
     });
     setStoredUser(user);
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
@@ -261,7 +318,7 @@ describe('AuthService', () => {
 
     expect(bcrypt.compare).toHaveBeenCalledWith('OldPass123', 'stored-hash');
     expect(bcrypt.hash).toHaveBeenCalledWith('NewPass123', 10);
-    expect(existingDocRefs.get('admin-1')?.update).toHaveBeenCalledWith(
+    expect(credentialDocRefs.get('admin-1')?.update).toHaveBeenCalledWith(
       expect.objectContaining({
         passwordHash: 'new-hash',
         updatedAt: expect.any(Object),
@@ -274,9 +331,8 @@ describe('AuthService', () => {
 
   it('rejects password changes when the current password is wrong', async () => {
     const user = buildUser({
-      uid: 'admin-1',
-      role: ['admin'],
-      passwordHash: 'stored-hash',
+      userId: 'admin-1',
+      roles: ['admin'],
     });
     setStoredUser(user);
     (bcrypt.compare as jest.Mock).mockResolvedValue(false);
@@ -291,9 +347,8 @@ describe('AuthService', () => {
 
   it('accepts a legacy string role and returns admin correctly', async () => {
     const user = buildUser({
-      uid: 'admin-1',
-      role: 'admin' as UserRole,
-      passwordHash: 'stored-hash',
+      userId: 'admin-1',
+      roles: 'admin' as unknown as UserRole[],
       accountStatus: 'active',
     });
     queueQueryResult(user);
@@ -305,7 +360,7 @@ describe('AuthService', () => {
     });
 
     expect(jwtService.sign).toHaveBeenCalledWith({
-      sub: user.uid,
+      sub: user.userId,
       email: user.email,
       role: 'admin',
     });
@@ -314,8 +369,8 @@ describe('AuthService', () => {
 
   it('logs in by phone using the normalized phone lookup', async () => {
     const user = buildUser({
-      uid: 'borrower-2',
-      phoneNormalized: '+94771234568',
+      userId: 'borrower-2',
+      phone: '+94771234568',
     });
     queueQueryResult(user);
     queueQueryResult(null);
@@ -327,7 +382,7 @@ describe('AuthService', () => {
     });
 
     expect(usersCollection.where).toHaveBeenCalledWith(
-      'phoneNormalized',
+      'phone',
       '==',
       '+94771234568',
     );
@@ -335,7 +390,7 @@ describe('AuthService', () => {
 
   it('rejects blocked or suspended accounts before password comparison', async () => {
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-    queueQueryResult(buildUser({ accountStatus: 'blocked' }));
+    queueQueryResult(buildUser({ accountStatus: 'suspended' }));
 
     await expect(
       service.login({
@@ -348,7 +403,7 @@ describe('AuthService', () => {
   });
 
   it('rejects invalid passwords or unavailable roles', async () => {
-    queueQueryResult(buildUser({ role: ['borrower'] }));
+    queueQueryResult(buildUser({ roles: ['borrower'] }));
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
     await expect(
@@ -362,8 +417,7 @@ describe('AuthService', () => {
 
   it('uses the requested role when it is allowed for the account', async () => {
     const user = buildUser({
-      role: ['borrower', 'lender'],
-      passwordHash: 'stored-hash',
+      roles: ['borrower', 'lender'],
     });
     queueQueryResult(user);
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
@@ -375,20 +429,21 @@ describe('AuthService', () => {
     });
 
     expect(jwtService.sign).toHaveBeenCalledWith({
-      sub: user.uid,
+      sub: user.userId,
       email: user.email,
       role: 'lender',
     });
     expect(response.user.role).toBe('lender');
+    expect(response.availableRoles).toEqual(['borrower', 'lender']);
   });
 
   it('returns the stored session status and falls back to the first available role', async () => {
     const user = buildUser({
-      role: ['lender'] as UserRole[],
+      roles: ['lender'] as UserRole[],
     });
     setStoredUser(user);
 
-    const response = await service.getSessionStatus(user.uid, 'borrower');
+    const response = await service.getSessionStatus(user.userId, 'borrower');
 
     expect(response).toEqual(
       expect.objectContaining({
@@ -398,7 +453,7 @@ describe('AuthService', () => {
         accountStatus: 'active',
         kycStatus: 'approved',
         user: expect.objectContaining({
-          uid: user.uid,
+          uid: user.userId,
           role: 'lender',
         }),
       }),

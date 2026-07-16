@@ -3,7 +3,11 @@
   display: grid;
   grid-template-columns: minmax(320px, 1.05fr) minmax(420px, 0.95fr);
   background:
-    radial-gradient(circle at 20% 20%, rgba(0, 122, 255, 0.06), transparent 26%),
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(0, 122, 255, 0.06),
+      transparent 26%
+    ),
     linear-gradient(135deg, #f9fafc 0%, #f1f4f9 100%);
 }
 
@@ -13,8 +17,16 @@
 
 .shared-auth-hero {
   background:
-    radial-gradient(circle at top left, rgba(0, 122, 255, 0.16), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.06), transparent 24%),
+    radial-gradient(
+      circle at top left,
+      rgba(0, 122, 255, 0.16),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(255, 255, 255, 0.06),
+      transparent 24%
+    ),
     linear-gradient(180deg, #09182d 0%, #081221 100%);
   color: #fff;
   padding: 56px 48px;
@@ -320,7 +332,10 @@
 .shared-auth-role-chip {
   border: none;
   cursor: pointer;
-  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
 }
 
 .shared-auth-primary:hover,
@@ -495,6 +510,143 @@
   text-align: right;
 }
 
+.shared-auth-role-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 18, 33, 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.shared-auth-role-modal {
+  width: min(100%, 620px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 24px;
+  background: #fff;
+  padding: 28px;
+  box-shadow: 0 32px 90px rgba(8, 18, 33, 0.34);
+}
+
+.shared-auth-role-modal-heading {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.shared-auth-role-modal-heading .shared-auth-kicker {
+  justify-self: start;
+}
+
+.shared-auth-role-modal-heading h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+  letter-spacing: -0.025em;
+}
+
+.shared-auth-role-modal-heading p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.65;
+}
+
+.shared-auth-role-options {
+  display: grid;
+  gap: 12px;
+}
+
+.shared-auth-role-option {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid #dbe4ef;
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.shared-auth-role-option:hover:not(:disabled),
+.shared-auth-role-option:focus-visible {
+  border-color: #60a5fa;
+  background: #f8fbff;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.1);
+  outline: none;
+}
+
+.shared-auth-role-option:disabled,
+.shared-auth-role-cancel:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.shared-auth-role-option-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #eaf2ff;
+  color: #0059c9;
+  font-weight: 800;
+}
+
+.shared-auth-role-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.shared-auth-role-option-copy strong {
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.shared-auth-role-option-copy small {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.shared-auth-role-option-copy em {
+  color: #007aff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.shared-auth-role-option-arrow {
+  color: #007aff;
+  font-size: 22px;
+}
+
+.shared-auth-role-cancel {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 18px;
+  border: none;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 @media (max-width: 960px) {
   .shared-auth-page {
     grid-template-columns: 1fr;
@@ -526,5 +678,22 @@
 
   .shared-auth-shell {
     max-width: 100%;
+  }
+
+  .shared-auth-role-modal-backdrop {
+    padding: 14px;
+  }
+
+  .shared-auth-role-modal {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .shared-auth-role-option {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .shared-auth-role-option-arrow {
+    display: none;
   }
 }

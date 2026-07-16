@@ -1,17 +1,16 @@
-// Shared lender shell that keeps the sidebar persistent while page content swaps by view.
-import type { ReactNode } from "react";
-import LenderSidebar from "../common/LenderSidebar";
-import type { LenderView } from "../../config/lender-views";
-import type { LenderSession } from "../../lib/lender-session";
+import type { ReactNode } from 'react'
+import LenderSidebar from '../common/LenderSidebar'
+import type { LenderView } from '../common/LenderSidebar'
+import type { LenderSession } from '../../lib/lender-session'
 
 type LenderLayoutProps = {
-  activeView: LenderView;
-  onNavigate: (view: LenderView) => void;
-  session: LenderSession;
-  onOpenProfile: () => void;
-  onLogout: () => void;
-  children: ReactNode;
-};
+  activeView: LenderView
+  onNavigate: (view: LenderView) => void
+  session: LenderSession
+  onOpenProfile: () => void
+  onLogout: () => void
+  children: ReactNode
+}
 
 export default function LenderLayout({
   activeView,
@@ -32,5 +31,5 @@ export default function LenderLayout({
       />
       <main className="lender-layout__content">{children}</main>
     </div>
-  );
+  )
 }

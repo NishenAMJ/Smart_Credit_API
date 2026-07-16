@@ -1,63 +1,82 @@
-// Lender profile read/write helpers used by the profile modal.
-import { fetchLenderApi, parseApiError } from "./api-client";
+import { API_BASE_URL } from './api-config'
 
 export type LenderProfile = {
-  lenderId: string;
-  fullName: string;
-  email: string;
-  phone: string | null;
-  address: string | null;
-  city: string | null;
-  district: string | null;
-  businessName: string | null;
-  businessRegistrationNo: string | null;
-  kycStatus: string;
-  responseTimeHours: number;
-  preferredRegions: string[];
-  availableCapital: number;
-  rating: number | null;
-  profilePhotoUrl: string | null;
-  updatedAt: string | null;
-};
+  lenderId: string
+  fullName: string
+  email: string
+  phone: string | null
+  address: string | null
+  city: string | null
+  district: string | null
+  businessName: string | null
+  businessRegistrationNo: string | null
+  kycStatus: string
+  responseTimeHours: number
+  preferredRegions: string[]
+  availableCapital: number
+  rating: number | null
+  profilePhotoUrl: string | null
+  updatedAt: string | null
+}
 
 export type UpdateLenderProfilePayload = {
-  fullName: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  district: string;
-  businessName: string;
-  responseTimeHours: number;
-  preferredRegions: string[];
-};
+  fullName: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  district: string
+  businessName: string
+  responseTimeHours: number
+  preferredRegions: string[]
+}
 
-export async function fetchLenderProfile(): Promise<LenderProfile> {
-  // Always fetches the current lender profile rather than relying on possibly stale session copy.
-  const response = await fetchLenderApi("/lender-profile/me");
+async function parseError(response: Response, fallback: string): Promise<never> {
+  try {
+    const body = (await response.json()) as { message?: string | string[] }
+    const message = Array.isArray(body.message)
+      ? body.message.join(', ')
+      : body.message
+    throw new Error(message || fallback)
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error
+    }
+
+    throw new Error(fallback)
+  }
+}
+
+export async function fetchLenderProfile(lenderId: string): Promise<LenderProfile> {
+  const response = await fetch(
+    `${API_BASE_URL}/lender-profile/${encodeURIComponent(lenderId)}`,
+  )
 
   if (!response.ok) {
-    return parseApiError(response, "Failed to load lender profile.");
+    return parseError(response, 'Failed to load lender profile.')
   }
 
-  return response.json();
+  return response.json()
 }
 
 export async function updateLenderProfile(
+  lenderId: string,
   payload: UpdateLenderProfilePayload,
 ): Promise<LenderProfile> {
-  // Sends a trimmed profile payload and expects the saved server copy back for UI resync.
-  const response = await fetchLenderApi("/lender-profile/me", {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${API_BASE_URL}/lender-profile/${encodeURIComponent(lenderId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+  )
 
   if (!response.ok) {
-    return parseApiError(response, "Failed to update lender profile.");
+    return parseError(response, 'Failed to update lender profile.')
   }
 
-  return response.json();
+  return response.json()
 }

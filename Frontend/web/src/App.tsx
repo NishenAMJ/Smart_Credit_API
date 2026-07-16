@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AdminRoutes from "./admin/AdminRoutes";
 import SharedAuthPage from "./admin/pages/auth/SharedAuthPage";
-import LenderEntry from "./lender/LenderEntry";
+import LenderApp from "./lender/App";
 
 export default function App() {
   return (
@@ -13,7 +13,7 @@ export default function App() {
         element={<SharedAuthPage initialMode="register" />}
       />
       <Route path="/admin/*" element={<AdminRoutes />} />
-      <Route path="/lender/*" element={<LenderEntry />} />
+      <Route path="/lender/*" element={<LenderApp />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

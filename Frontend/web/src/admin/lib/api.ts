@@ -22,7 +22,7 @@ export type AdStatus =
   | "rejected"
   | "active"
   | "closed";
-export type WebLoginRole = "admin" | "lender";
+export type WebLoginRole = AdminUserRole;
 export type PublicSignupRole = "borrower" | "lender";
 export type SubmitKycPayload = {
   documentType: string;
@@ -160,7 +160,12 @@ export interface KycDocument {
   originalFilename?: string;
   documentUrl?: string;
   status: "pending" | "approved" | "rejected";
-  documentStatus?: "pending_review" | "approved" | "rejected" | "expired" | "deleted";
+  documentStatus?:
+    | "pending_review"
+    | "approved"
+    | "rejected"
+    | "expired"
+    | "deleted";
   submittedAt?: FirestoreTimestamp;
   reviewedAt?: FirestoreTimestamp;
   reviewedBy?: string;
