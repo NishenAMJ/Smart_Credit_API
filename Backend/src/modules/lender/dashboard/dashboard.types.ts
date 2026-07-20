@@ -9,6 +9,7 @@ export interface DashboardBorrower {
   id: string;
   fullName: string;
   email: string;
+  phone: string | null;
   creditScore: number | null;
   kycStatus: string;
   loanCount: number;
@@ -17,6 +18,7 @@ export interface DashboardBorrower {
   outstandingAmount: number;
   latestLoanStatus: string;
   latestLoanCreatedAt: string | null;
+  firstLoanCreatedAt: string | null;
   isActive: boolean;
   createdAt: string | null;
 }

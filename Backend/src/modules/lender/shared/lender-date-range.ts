@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
-export type PaymentDateRange = {
+export type LenderDateRange = {
   value: string;
   start: Date;
   end: Date;
@@ -31,7 +31,7 @@ function parseCalendarDate(value: string, label: string): Date {
 
 export function parseOptionalSriLankaDayRange(
   value: string | null | undefined,
-): PaymentDateRange | null {
+): LenderDateRange | null {
   if (!value) return null;
   return parseSriLankaDateRange(value, value);
 }
@@ -39,7 +39,7 @@ export function parseOptionalSriLankaDayRange(
 export function parseSriLankaDateRange(
   startDate: string | null | undefined,
   endDate: string | null | undefined,
-): PaymentDateRange {
+): LenderDateRange {
   if (!startDate || !endDate) {
     throw new BadRequestException('Start date and end date are required.');
   }
@@ -58,9 +58,9 @@ export function parseSriLankaDateRange(
   };
 }
 
-export function isWithinPaymentDateRange(
+export function isWithinLenderDateRange(
   date: Date | null,
-  range: PaymentDateRange | null,
+  range: LenderDateRange | null,
 ): boolean {
   if (!range) return true;
   const timestamp = date?.getTime();

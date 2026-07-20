@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PaymentsDataService } from './payments-data.service';
 import {
-  isWithinPaymentDateRange,
+  isWithinLenderDateRange,
   parseSriLankaDateRange,
-} from './payment-date-range';
+} from '../shared/lender-date-range';
 import { isCollectedRepayment } from './payment-transaction.utils';
 
 export type PaymentsCsvExport = {
@@ -31,7 +31,7 @@ export class PaymentsExportService {
         context.loanIds.has(transaction.loanId) &&
         transaction.amount > 0 &&
         isCollectedRepayment(transaction.type, transaction.status) &&
-        isWithinPaymentDateRange(transaction.createdAt, range),
+        isWithinLenderDateRange(transaction.createdAt, range),
     );
     const rows = transactions.map((transaction) => {
       const loan = transaction.loanId

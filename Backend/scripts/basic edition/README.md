@@ -4,6 +4,9 @@ This edition creates a small but complete dataset for normal development. It
 uses the same canonical attributes, validation, batching, and relationships as
 the bulk edition.
 
+The generated login reference for this edition is documented in
+[`LOGIN_DETAILS.md`](./LOGIN_DETAILS.md).
+
 ## Default generated data
 
 | Record type  | Additional records |

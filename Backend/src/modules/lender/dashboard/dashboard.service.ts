@@ -88,6 +88,25 @@ export class DashboardService {
     };
   }
 
+  async getBorrowersForExport(lenderId: string): Promise<DashboardBorrower[]> {
+    const db = this.firebaseService.getDb();
+    const loansSnapshot = await db
+      .collection('loans')
+      .where('lenderId', '==', lenderId)
+      .get();
+    const lenderLoans = await Promise.all(
+      loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
+    );
+    const result = await this.getRecentBorrowers(
+      db,
+      lenderLoans,
+      Number.MAX_SAFE_INTEGER,
+      null,
+    );
+
+    return result.borrowers;
+  }
+
   async getBorrowerDetails(
     lenderId: string,
     borrowerId: string,
@@ -364,6 +383,7 @@ export class DashboardService {
           userData?.displayName,
         ) ?? 'Unnamed borrower',
       email: readString(userData?.email) ?? 'No email',
+      phone: readString(userData?.phone),
       creditScore:
         this.readBorrowerCreditScore(userData) ??
         this.toNullableNumber(relation.borrowerCreditScore),
@@ -382,6 +402,10 @@ export class DashboardService {
       ),
       latestLoanStatus: readString(relation.latestLoanStatus) ?? 'unknown',
       latestLoanCreatedAt: createdAt,
+      firstLoanCreatedAt:
+        this.toIsoString(relation.firstLoanCreatedAt) ??
+        this.toIsoString(relation.createdAt) ??
+        createdAt,
       isActive: userData?.accountStatus
         ? userData.accountStatus === 'active'
         : userData?.isActive !== false,
@@ -415,6 +439,12 @@ export class DashboardService {
 
       return rightTime - leftTime;
     })[0];
+    const firstLoan = loans.slice().sort((left, right) => {
+      const leftTime = left.createdAt ? left.createdAt.getTime() : Infinity;
+      const rightTime = right.createdAt ? right.createdAt.getTime() : Infinity;
+
+      return leftTime - rightTime;
+    })[0];
 
     return {
       id: borrowerId,
@@ -423,6 +453,7 @@ export class DashboardService {
           ? data.fullName
           : 'Unnamed borrower',
       email: typeof data.email === 'string' ? data.email : 'No email',
+      phone: typeof data.phone === 'string' ? data.phone : null,
       creditScore: this.readBorrowerCreditScore(data),
       kycStatus:
         typeof data.kycStatus === 'string' ? data.kycStatus : 'not_submitted',
@@ -433,6 +464,9 @@ export class DashboardService {
       latestLoanStatus: latestLoan?.status ?? 'unknown',
       latestLoanCreatedAt: latestLoan?.createdAt
         ? latestLoan.createdAt.toISOString()
+        : null,
+      firstLoanCreatedAt: firstLoan?.createdAt
+        ? firstLoan.createdAt.toISOString()
         : null,
       isActive: data.accountStatus
         ? data.accountStatus === 'active'

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Search, ShieldCheck, UsersRound } from "lucide-react";
 import BorrowerSidePanel from "../components/borrowers/BorrowerSidePanel";
+import BorrowerCsvExport from "../components/borrowers/BorrowerCsvExport";
 import {
   fetchDashboardBorrowers,
   type DashboardBorrower,
@@ -116,6 +117,7 @@ export default function BorrowersPage({ session }: { session: LenderSession }) {
               Review the borrowers who currently have loans with you.
             </p>
           </div>
+          <BorrowerCsvExport />
         </header>
 
         <section className="card borrowers-card">
@@ -153,9 +155,17 @@ export default function BorrowersPage({ session }: { session: LenderSession }) {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td className="table-empty" colSpan={7}>Loading borrowers...</td></tr>
+                  <tr>
+                    <td className="table-empty" colSpan={7}>
+                      Loading borrowers...
+                    </td>
+                  </tr>
                 ) : error ? (
-                  <tr><td className="table-empty" colSpan={7}>{error}</td></tr>
+                  <tr>
+                    <td className="table-empty" colSpan={7}>
+                      {error}
+                    </td>
+                  </tr>
                 ) : visibleBorrowers.length > 0 ? (
                   visibleBorrowers.map((borrower) => (
                     <tr
@@ -174,7 +184,8 @@ export default function BorrowersPage({ session }: { session: LenderSession }) {
                       <td>{borrower.creditScore ?? "N/A"}</td>
                       <td>
                         <span className="badge badge-gray">
-                          <ShieldCheck size={14} /> {formatLabel(borrower.kycStatus)}
+                          <ShieldCheck size={14} />{" "}
+                          {formatLabel(borrower.kycStatus)}
                         </span>
                       </td>
                       <td>{borrower.loanCount}</td>
@@ -184,7 +195,9 @@ export default function BorrowersPage({ session }: { session: LenderSession }) {
                           {formatLabel(borrower.latestLoanStatus)}
                         </span>
                       </td>
-                      <td><ChevronRight size={18} aria-hidden="true" /></td>
+                      <td>
+                        <ChevronRight size={18} aria-hidden="true" />
+                      </td>
                     </tr>
                   ))
                 ) : (
