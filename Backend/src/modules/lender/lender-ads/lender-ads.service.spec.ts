@@ -10,6 +10,10 @@ function createDoc(id: string, data: Record<string, unknown>) {
 }
 
 describe('LenderAdsService', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('returns paginated ads from the canonical loan listings collection', async () => {
     const query = {
       limit: jest.fn().mockReturnValue({
@@ -72,5 +76,60 @@ describe('LenderAdsService', () => {
     expect(result.ads[0].status).toBe('active');
     expect(result.pageInfo.hasMore).toBe(true);
     expect(result.pageInfo.nextCursor).toBeTruthy();
+  });
+
+  it('falls back to lender-scoped in-memory ordering while the index builds', async () => {
+    const missingIndexError = {
+      code: 9,
+      details: 'The query requires an index.',
+    };
+    const indexedQuery = {
+      limit: jest.fn().mockReturnValue({
+        get: jest.fn().mockRejectedValue(missingIndexError),
+      }),
+    };
+    const unindexedQuery = {
+      get: jest.fn().mockResolvedValue({
+        docs: [
+          createDoc('ad_old', {
+            lenderId: 'lender_1',
+            title: 'Older ad',
+            createdAt: '2026-04-18T00:00:00.000Z',
+          }),
+          createDoc('ad_new', {
+            lenderId: 'lender_1',
+            title: 'Newer ad',
+            createdAt: '2026-04-20T00:00:00.000Z',
+          }),
+          createDoc('ad_middle', {
+            lenderId: 'lender_1',
+            title: 'Middle ad',
+            createdAt: '2026-04-19T00:00:00.000Z',
+          }),
+        ],
+      }),
+    };
+    const where = jest.fn().mockReturnValue(unindexedQuery);
+    const db = {
+      collection: jest.fn().mockReturnValue({ where }),
+    };
+    const service = new LenderAdsService(
+      { getDb: () => db } as any,
+      { create: jest.fn() } as any,
+    );
+
+    jest
+      .spyOn(firestoreQueryUtils, 'orderByDateAndId')
+      .mockReturnValue(indexedQuery as never);
+    jest
+      .spyOn(firestoreQueryUtils, 'applyDateCursor')
+      .mockReturnValue(indexedQuery as never);
+
+    const result = await service.getAdsForLender('lender_1', 2);
+
+    expect(result.ads.map((ad) => ad.id)).toEqual(['ad_new', 'ad_middle']);
+    expect(result.pageInfo.hasMore).toBe(true);
+    expect(result.pageInfo.nextCursor).toBeTruthy();
+    expect(where).toHaveBeenCalledWith('lenderId', '==', 'lender_1');
   });
 });

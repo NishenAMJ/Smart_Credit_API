@@ -2,13 +2,19 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Timestamp } from 'firebase-admin/firestore';
+import {
+  DocumentData,
+  QueryDocumentSnapshot,
+  Timestamp,
+} from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   applyDateCursor,
   buildPageInfo,
+  decodeCursor,
   orderByDateAndId,
   readDate,
   readNumber,
@@ -24,6 +30,8 @@ import {
 
 @Injectable()
 export class LenderAdsService {
+  private readonly logger = new Logger(LenderAdsService.name);
+
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly notificationWriter: LenderNotificationWriterService,
@@ -141,18 +149,74 @@ export class LenderAdsService {
   ): Promise<LenderAdsListResponse> {
     const safePageSize = Math.min(Math.max(pageSize, 1), 12);
     const collection = this.firebaseService.getDb().collection('loanListings');
-    const snapshot = await applyDateCursor(
-      orderByDateAndId(
-        collection.where('lenderId', '==', lenderId),
-        'createdAt',
-      ),
-      cursor,
-    )
-      .limit(safePageSize + 1)
-      .get();
 
-    const items = snapshot.docs
-      .slice(0, safePageSize)
+    try {
+      const snapshot = await applyDateCursor(
+        orderByDateAndId(
+          collection.where('lenderId', '==', lenderId),
+          'createdAt',
+        ),
+        cursor,
+      )
+        .limit(safePageSize + 1)
+        .get();
+
+      return this.buildAdsPage(
+        lenderId,
+        snapshot.docs,
+        safePageSize,
+        snapshot.docs.length > safePageSize,
+      );
+    } catch (error) {
+      if (!this.isMissingIndexError(error)) {
+        throw error;
+      }
+
+      this.logger.warn(
+        'The lender ads composite index is unavailable. Using in-memory ordering until the Firestore index is ready.',
+      );
+      const snapshot = await collection.where('lenderId', '==', lenderId).get();
+      const orderedDocs = snapshot.docs.slice().sort((left, right) => {
+        const leftTime = readDate(left.get('createdAt'))?.getTime() ?? 0;
+        const rightTime = readDate(right.get('createdAt'))?.getTime() ?? 0;
+
+        return rightTime - leftTime || right.id.localeCompare(left.id);
+      });
+      const decodedCursor = decodeCursor(cursor);
+      const startIndex = decodedCursor
+        ? orderedDocs.findIndex((doc) => {
+            const dateTime = readDate(doc.get('createdAt'))?.getTime() ?? 0;
+            const cursorTime = decodedCursor.date.getTime();
+            return (
+              dateTime < cursorTime ||
+              (dateTime === cursorTime &&
+                doc.id.localeCompare(decodedCursor.id) < 0)
+            );
+          })
+        : 0;
+      const safeStartIndex = startIndex < 0 ? orderedDocs.length : startIndex;
+      const pagedDocs = orderedDocs.slice(
+        safeStartIndex,
+        safeStartIndex + safePageSize + 1,
+      );
+
+      return this.buildAdsPage(
+        lenderId,
+        pagedDocs,
+        safePageSize,
+        pagedDocs.length > safePageSize,
+      );
+    }
+  }
+
+  private buildAdsPage(
+    lenderId: string,
+    docs: QueryDocumentSnapshot<DocumentData>[],
+    pageSize: number,
+    hasMore: boolean,
+  ): LenderAdsListResponse {
+    const items = docs
+      .slice(0, pageSize)
       .map((doc) => this.mapLenderAd(doc.id, lenderId, doc.data()));
 
     return {
@@ -164,10 +228,23 @@ export class LenderAdsService {
           cursorDate: item.createdAt ? new Date(item.createdAt) : null,
           cursorId: item.id,
         })),
-        safePageSize,
-        snapshot.docs.length > safePageSize,
+        pageSize,
+        hasMore,
       ),
     };
+  }
+
+  private isMissingIndexError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const candidate = error as { code?: unknown; details?: unknown };
+    return (
+      candidate.code === 9 &&
+      typeof candidate.details === 'string' &&
+      candidate.details.toLowerCase().includes('requires an index')
+    );
   }
 
   async updateAdFromMobile(

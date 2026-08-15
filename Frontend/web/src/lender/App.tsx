@@ -1,3 +1,4 @@
+import './index.css'
 import './App.css'
 import LenderLayout from './components/layout/LenderLayout'
 import type { LenderView } from './components/common/LenderSidebar'
