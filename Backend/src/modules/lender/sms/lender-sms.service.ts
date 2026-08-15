@@ -1,10 +1,10 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { Firestore, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
@@ -17,14 +17,7 @@ import type {
   SmsBorrowerSearchResponse,
   SmsDeliveryResult,
 } from './lender-sms.types';
-
-type SmsProviderConfig = {
-  url: string;
-  token: string;
-  sender: string;
-  tokenHeader: string;
-  tokenPrefix: string;
-};
+import { SMS_PROVIDER, type SmsProvider } from './providers/sms-provider';
 
 const MAX_RECIPIENTS = 50;
 const MAX_MESSAGE_LENGTH = 480;
@@ -33,7 +26,7 @@ const MAX_MESSAGE_LENGTH = 480;
 export class LenderSmsService {
   constructor(
     private readonly firebaseService: FirebaseService,
-    private readonly configService: ConfigService,
+    @Inject(SMS_PROVIDER) private readonly smsProvider: SmsProvider,
   ) {}
 
   async getSettings(lenderId: string): Promise<LenderSmsSettings> {
@@ -42,12 +35,11 @@ export class LenderSmsService {
       lenderId,
     ).get();
     const data = (snapshot.data() ?? {}) as Record<string, unknown>;
-    const provider = this.getProviderConfig();
 
     return {
       enabled: data.enabled === true,
-      configured: Boolean(provider),
-      sender: provider?.sender ?? null,
+      configured: this.smsProvider.isConfigured(),
+      sender: this.smsProvider.getSenderId(),
       updatedAt: readDate(data.updatedAt)?.toISOString() ?? null,
     };
   }
@@ -73,8 +65,8 @@ export class LenderSmsService {
 
     return {
       enabled,
-      configured: Boolean(this.getProviderConfig()),
-      sender: this.getProviderConfig()?.sender ?? null,
+      configured: this.smsProvider.isConfigured(),
+      sender: this.smsProvider.getSenderId(),
       updatedAt: now.toDate().toISOString(),
     };
   }
@@ -134,8 +126,7 @@ export class LenderSmsService {
       );
     }
 
-    const provider = this.getProviderConfig();
-    if (!provider) {
+    if (!this.smsProvider.isConfigured()) {
       throw new ServiceUnavailableException(
         'SMS provider is not configured on the server.',
       );
@@ -170,11 +161,10 @@ export class LenderSmsService {
 
       try {
         await this.assertEnabled(db, lenderId);
-        const providerMessageId = await this.sendToProvider(
-          provider,
-          borrower.phone,
+        const providerMessageId = await this.smsProvider.send({
+          to: borrower.phone,
           message,
-        );
+        });
         results.push({
           borrowerId,
           phone: borrower.phone,
@@ -270,64 +260,6 @@ export class LenderSmsService {
         },
       ];
     });
-  }
-
-  private getProviderConfig(): SmsProviderConfig | null {
-    const url = this.configService.get<string>('SMS_API_URL')?.trim();
-    const token = this.configService.get<string>('SMS_API_TOKEN')?.trim();
-    const sender = this.configService.get<string>('SMS_SENDER_ID')?.trim();
-    if (!url || !token || !sender) return null;
-
-    return {
-      url,
-      token,
-      sender,
-      tokenHeader:
-        this.configService.get<string>('SMS_API_TOKEN_HEADER')?.trim() ||
-        'Authorization',
-      tokenPrefix:
-        this.configService.get<string>('SMS_API_TOKEN_PREFIX')?.trim() ??
-        'Bearer',
-    };
-  }
-
-  private async sendToProvider(
-    provider: SmsProviderConfig,
-    phone: string,
-    message: string,
-  ): Promise<string | null> {
-    const tokenValue = provider.tokenPrefix
-      ? `${provider.tokenPrefix} ${provider.token}`
-      : provider.token;
-    const response = await fetch(provider.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        [provider.tokenHeader]: tokenValue,
-      },
-      body: JSON.stringify({
-        sender: provider.sender,
-        to: phone,
-        message,
-      }),
-    });
-
-    const responseText = await response.text();
-    if (!response.ok) {
-      throw new Error(`SMS provider returned status ${response.status}.`);
-    }
-
-    try {
-      const payload = JSON.parse(responseText) as unknown;
-      if (payload && typeof payload === 'object') {
-        const record = payload as Record<string, unknown>;
-        return readString(record.messageId, record.id);
-      }
-    } catch {
-      // A successful provider response does not have to be JSON.
-    }
-
-    return null;
   }
 
   private async writeAuditLogs(

@@ -1,15 +1,11 @@
 import { ConflictException } from '@nestjs/common';
 import { LenderSmsService } from './lender-sms.service';
 
-const providerValues: Record<string, string> = {
-  SMS_API_URL: 'https://sms.example/messages',
-  SMS_API_TOKEN: 'test-token',
-  SMS_SENDER_ID: 'SmartCredit',
-};
-
-function createConfigService(values = providerValues) {
+function createSmsProvider() {
   return {
-    get: jest.fn((key: string) => values[key]),
+    isConfigured: jest.fn().mockReturnValue(true),
+    getSenderId: jest.fn().mockReturnValue('SmartCredit'),
+    send: jest.fn().mockResolvedValue('provider_1'),
   };
 }
 
@@ -27,7 +23,7 @@ describe('LenderSmsService', () => {
     };
     const service = new LenderSmsService(
       { getDb: () => db } as any,
-      createConfigService() as any,
+      createSmsProvider(),
     );
 
     await expect(service.getSettings('lender_1')).resolves.toMatchObject({
@@ -46,7 +42,7 @@ describe('LenderSmsService', () => {
     };
     const service = new LenderSmsService(
       { getDb: () => db } as any,
-      createConfigService() as any,
+      createSmsProvider(),
     );
 
     await expect(
@@ -88,14 +84,10 @@ describe('LenderSmsService', () => {
       ]),
       batch: jest.fn(() => ({ set: auditSet, commit: auditCommit })),
     };
-    jest.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: () => Promise.resolve('{"messageId":"provider_1"}'),
-    } as Response);
+    const smsProvider = createSmsProvider();
     const service = new LenderSmsService(
       { getDb: () => db } as any,
-      createConfigService() as any,
+      smsProvider,
     );
 
     const result = await service.send('lender_1', {
@@ -104,17 +96,10 @@ describe('LenderSmsService', () => {
     });
 
     expect(result).toMatchObject({ attempted: 1, sent: 1, failed: 0 });
-    expect(fetch).toHaveBeenCalledWith(
-      'https://sms.example/messages',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          sender: 'SmartCredit',
-          to: '+94770000001',
-          message: 'Payment reminder',
-        }),
-      }),
-    );
+    expect(smsProvider.send).toHaveBeenCalledWith({
+      to: '+94770000001',
+      message: 'Payment reminder',
+    });
     expect(auditSet).toHaveBeenCalledTimes(1);
     expect(auditCommit).toHaveBeenCalledTimes(1);
   });

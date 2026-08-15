@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 import BorrowerSidePanel from '../components/borrowers/BorrowerSidePanel'
 import PaymentCsvExport from '../components/payments/PaymentCsvExport'
 import type { LenderSession } from '../lib/lender-session'
@@ -179,12 +180,19 @@ export default function RecentTransactionsPage({
                 />
               </label>
               <button
-                className="pagination-button"
+                className="payment-reload-button"
                 type="button"
                 disabled={isLoading}
                 onClick={() => setReloadVersion((version) => version + 1)}
               >
-                {isLoading ? 'Reloading...' : 'Reload'}
+                <RefreshCw
+                  aria-hidden="true"
+                  className={
+                    isLoading ? 'payment-reload-button__icon--spinning' : ''
+                  }
+                  size={14}
+                />
+                {isLoading ? 'Reloading' : 'Reload'}
               </button>
               <span
                 className="sr-only"
