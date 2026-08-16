@@ -43,7 +43,11 @@ firebase-service-account.json
 smart-credit-b0f6d-firebase-adminsdk-fbsvc-3ffa5833f5
 
 # Dev/Seed utility scripts
-scripts/bulk edition/login-details-*.csv
+# Generated seed-account credentials (Markdown and legacy CSV formats)
+scripts/basic edition/LOGIN_DETAILS.*
+scripts/basic edition/login-details-*
+scripts/bulk edition/LOGIN_DETAILS.*
+scripts/bulk edition/login-details-*
 add-more-kyc.js
 check-admin.js
 check-txns.js
