@@ -34,6 +34,18 @@ npm run seed:basic:check
 npm run seed:bulk
 ```
 
+For every fresh Firebase project, deploy the canonical Firestore indexes from
+the repository root before opening the application:
+
+```bash
+firebase deploy --only firestore:indexes --project YOUR_FIREBASE_PROJECT_ID
+```
+
+The same definition is mirrored at
+[`../firestore.indexes.json`](../firestore.indexes.json) for script users. Index
+creation is asynchronous, so wait until Firebase reports that the indexes are
+enabled before testing dashboards or the AI assistant.
+
 `npm run seed:bulk` refuses to write unless `SEED_ENABLED=true`. The seeder uses
 merge upserts, deterministic document IDs, and never deletes database records.
 Running the same batch again updates the same seed documents.
