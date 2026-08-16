@@ -128,6 +128,22 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
           <Text style={styles.errorText}>{errorMessage}</Text>
         ) : null}
 
+        <TouchableOpacity
+          style={styles.assistantCard}
+          onPress={() => navigation.navigate("AiAssistant")}
+        >
+          <View style={styles.assistantIconWrap}>
+            <Feather name="message-circle" size={22} color={COLORS.primary} />
+          </View>
+          <View style={styles.assistantCopy}>
+            <Text style={styles.assistantTitle}>Ask the AI Assistant</Text>
+            <Text style={styles.assistantSubtitle}>
+              Get read-only help with your loans, payments, applications, and KYC status.
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+
         <View style={styles.quickActionRow}>
           {supportQuickActions.map((action) => (
             <TouchableOpacity
@@ -234,6 +250,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginBottom: SPACING.lg,
+  },
+  assistantCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
+    borderRadius: BORDER_RADIUS.large,
+    borderWidth: 1,
+    borderColor: "#CFE2FF",
+    backgroundColor: "#F4F8FF",
+  },
+  assistantIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E3EFFF",
+  },
+  assistantCopy: {
+    flex: 1,
+  },
+  assistantTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  assistantSubtitle: {
+    marginTop: 3,
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
   },
   errorText: {
     color: COLORS.error ?? "#DC2626",
