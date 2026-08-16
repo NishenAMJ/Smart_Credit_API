@@ -1,53 +1,53 @@
-import './index.css'
-import './App.css'
-import LenderLayout from './components/layout/LenderLayout'
-import type { LenderView } from './components/common/LenderSidebar'
-import { useState } from 'react'
-import AnalyticsPage from './pages/analytics'
-import ActiveAdsRequestsPage from './pages/active-ads-requests'
-import CreateAdPage from './pages/create-ad'
-import DashboardPage from './pages/dashboard'
-import LoansPage from './pages/loans'
-import BorrowersPage from './pages/borrowers'
-import AuthPage from './pages/auth'
-import PendingRequestsPage from './pages/pending-requests'
-import NotificationsPage from './pages/notifications'
-import RecentTransactionsPage from './pages/recent-transactions'
-import DailyCollectionPage from './pages/daily-collection'
-import SettingsPage from './pages/settings'
-import SmsPage from './pages/sms'
-import LenderProfileModal from './components/profile/LenderProfileModal'
+import "./index.css";
+import "./App.css";
+import LenderLayout from "./components/layout/LenderLayout";
+import type { LenderView } from "./components/common/LenderSidebar";
+import { useState } from "react";
+import AnalyticsPage from "./pages/analytics";
+import ActiveAdsRequestsPage from "./pages/active-ads-requests";
+import CreateAdPage from "./pages/create-ad";
+import DashboardPage from "./pages/dashboard";
+import LoansPage from "./pages/loans";
+import BorrowersPage from "./pages/borrowers";
+import AuthPage from "./pages/auth";
+import PendingRequestsPage from "./pages/pending-requests";
+import NotificationsPage from "./pages/notifications";
+import RecentTransactionsPage from "./pages/recent-transactions";
+import DailyCollectionPage from "./pages/daily-collection";
+import SettingsPage from "./pages/settings";
+import SmsPage from "./pages/sms";
+import LenderProfileModal from "./components/profile/LenderProfileModal";
 import {
   clearStoredSession,
   getStoredSession,
   updateStoredSession,
   type LenderSession,
-} from './lib/lender-session'
-import type { LenderProfile } from './lib/lender-profile-api'
-import AiAssistant from './components/assistant/AiAssistant'
+} from "./lib/lender-session";
+import type { LenderProfile } from "./lib/lender-profile-api";
+import AiAssistant from "../components/assistant/AiAssistant";
 
 function App() {
-  const [activeView, setActiveView] = useState<LenderView>('dashboard')
+  const [activeView, setActiveView] = useState<LenderView>("dashboard");
   const [session, setSession] = useState<LenderSession | null>(() =>
     getStoredSession(),
-  )
-  const [isProfileOpen, setIsProfileOpen] = useState(false)
+  );
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   function handleLogin(input: LenderSession) {
-    updateStoredSession(input)
-    setSession(input)
-    setActiveView('dashboard')
+    updateStoredSession(input);
+    setSession(input);
+    setActiveView("dashboard");
   }
 
   function handleLogout() {
-    clearStoredSession()
-    setSession(null)
-    setActiveView('dashboard')
+    clearStoredSession();
+    setSession(null);
+    setActiveView("dashboard");
   }
 
   function handleProfileSaved(profile: LenderProfile) {
     if (!session) {
-      return
+      return;
     }
 
     const nextSession: LenderSession = {
@@ -55,18 +55,18 @@ function App() {
       displayName: profile.businessName || profile.fullName,
       email: profile.email,
       accessToken: session.accessToken,
-    }
+    };
 
-    updateStoredSession(nextSession)
-    setSession(nextSession)
+    updateStoredSession(nextSession);
+    setSession(nextSession);
   }
 
   const fallbackViewLabel = String(activeView)
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (character: string) => character.toUpperCase())
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (character: string) => character.toUpperCase());
 
   if (!session) {
-    return <AuthPage onLogin={handleLogin} />
+    return <AuthPage onLogin={handleLogin} />;
   }
 
   return (
@@ -78,46 +78,44 @@ function App() {
         onOpenProfile={() => setIsProfileOpen(true)}
         onLogout={handleLogout}
       >
-        {activeView === 'dashboard' ? (
+        {activeView === "dashboard" ? (
           <DashboardPage session={session} onNavigate={setActiveView} />
-        ) : activeView === 'loans' ? (
+        ) : activeView === "loans" ? (
           <LoansPage session={session} />
-        ) : activeView === 'borrowers' ? (
+        ) : activeView === "borrowers" ? (
           <BorrowersPage session={session} />
-        ) : activeView === 'recent-transactions' ? (
+        ) : activeView === "recent-transactions" ? (
           <RecentTransactionsPage session={session} />
-        ) : activeView === 'daily-collection' ? (
+        ) : activeView === "daily-collection" ? (
           <DailyCollectionPage session={session} onNavigate={setActiveView} />
-        ) : activeView === 'analytics' ? (
+        ) : activeView === "analytics" ? (
           <AnalyticsPage session={session} onNavigate={setActiveView} />
-        ) : activeView === 'active-ads-requests' ? (
+        ) : activeView === "active-ads-requests" ? (
           <ActiveAdsRequestsPage session={session} onNavigate={setActiveView} />
-        ) : activeView === 'create-ad' ? (
+        ) : activeView === "create-ad" ? (
           <CreateAdPage session={session} />
-        ) : activeView === 'pending-requests' ? (
+        ) : activeView === "pending-requests" ? (
           <PendingRequestsPage session={session} />
-        ) : activeView === 'settings' ? (
+        ) : activeView === "settings" ? (
           <SettingsPage
             session={session}
             onLogout={handleLogout}
             onOpenProfile={() => setIsProfileOpen(true)}
           />
-        ) : activeView === 'notifications' ? (
+        ) : activeView === "notifications" ? (
           <NotificationsPage session={session} onNavigate={setActiveView} />
-        ) : activeView === 'sms' ? (
+        ) : activeView === "sms" ? (
           <SmsPage session={session} />
         ) : (
           <section className="dashboard-panel">
             <header className="page-header">
               <div>
                 <p className="eyebrow">Lender module</p>
-                <h1 className="page-title">
-                  {fallbackViewLabel}
-                </h1>
+                <h1 className="page-title">{fallbackViewLabel}</h1>
                 <p className="page-subtitle">
-                  This lender page is reserved in the new app shell. We can build
-                  this module next using the same sidebar layout and style-audit
-                  tokens.
+                  This lender page is reserved in the new app shell. We can
+                  build this module next using the same sidebar layout and
+                  style-audit tokens.
                 </p>
                 <p className="dashboard-context-pill">
                   Signed in as {session.displayName}
@@ -143,9 +141,9 @@ function App() {
         onClose={() => setIsProfileOpen(false)}
         onProfileSaved={handleProfileSaved}
       />
-      <AiAssistant session={session} />
+      <AiAssistant accessToken={session.accessToken} role="lender" />
     </>
-  )
+  );
 }
 
-export default App
+export default App;

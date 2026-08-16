@@ -23,6 +23,7 @@ import { getApiErrorMessage } from "../../api/api-error";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { useAuth } from "../../context/AuthContext";
+import AssistantMarkdown from "../../components/common/AssistantMarkdown";
 
 export default function AiAssistantScreen() {
   const navigation = useNavigation();
@@ -75,7 +76,9 @@ export default function AiAssistantScreen() {
 
   useEffect(() => {
     if (messages.length > 0) {
-      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+      requestAnimationFrame(() =>
+        listRef.current?.scrollToEnd({ animated: true }),
+      );
     }
   }, [messages, sending]);
 
@@ -124,7 +127,9 @@ export default function AiAssistantScreen() {
         content,
       );
       setMessages((current) => [
-        ...current.filter((message) => message.messageId !== optimistic.messageId),
+        ...current.filter(
+          (message) => message.messageId !== optimistic.messageId,
+        ),
         response.userMessage,
         response.assistantMessage,
       ]);
@@ -158,7 +163,11 @@ export default function AiAssistantScreen() {
               onPress={() => navigation.goBack()}
               accessibilityLabel="Go back"
             >
-              <Feather name="chevron-left" size={23} color={COLORS.textPrimary} />
+              <Feather
+                name="chevron-left"
+                size={23}
+                color={COLORS.textPrimary}
+              />
             </TouchableOpacity>
             <View style={styles.iconWrap}>
               <Feather name="message-circle" size={20} color={COLORS.primary} />
@@ -218,14 +227,13 @@ export default function AiAssistantScreen() {
                     item.role === "user" && styles.userMessageBubble,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.messageText,
-                      item.role === "user" && styles.userMessageText,
-                    ]}
-                  >
-                    {item.content}
-                  </Text>
+                  {item.role === "assistant" ? (
+                    <AssistantMarkdown content={item.content} />
+                  ) : (
+                    <Text style={[styles.messageText, styles.userMessageText]}>
+                      {item.content}
+                    </Text>
+                  )}
                 </View>
               </View>
             )}
@@ -257,7 +265,8 @@ export default function AiAssistantScreen() {
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (!draft.trim() || loading || sending) && styles.sendButtonDisabled,
+                (!draft.trim() || loading || sending) &&
+                  styles.sendButtonDisabled,
               ]}
               onPress={() => void sendMessage()}
               disabled={!draft.trim() || loading || sending}
@@ -312,8 +321,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
-  title: { marginTop: 2, color: COLORS.textPrimary, fontSize: 19, fontWeight: "700" },
-  newChatButton: { flexDirection: "row", alignItems: "center", gap: 4, padding: 8 },
+  title: {
+    marginTop: 2,
+    color: COLORS.textPrimary,
+    fontSize: 19,
+    fontWeight: "700",
+  },
+  newChatButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    padding: 8,
+  },
   newChatText: { color: COLORS.primary, fontSize: 12, fontWeight: "700" },
   centerState: { flex: 1, alignItems: "center", justifyContent: "center" },
   centerStateText: { marginTop: 12, color: COLORS.textSecondary, fontSize: 14 },
@@ -336,11 +355,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: SPACING.lg,
   },
-  welcomeTitle: { color: COLORS.textPrimary, fontSize: 18, fontWeight: "700", textAlign: "center" },
-  welcomeText: { marginTop: 10, color: COLORS.textSecondary, fontSize: 14, lineHeight: 21, textAlign: "center" },
+  welcomeTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  welcomeText: {
+    marginTop: 10,
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+  },
   messageRow: { maxWidth: "88%", alignSelf: "flex-start" },
   userMessageRow: { alignSelf: "flex-end" },
-  messageLabel: { marginBottom: 5, marginHorizontal: 4, color: "#708097", fontSize: 10, fontWeight: "700" },
+  messageLabel: {
+    marginBottom: 5,
+    marginHorizontal: 4,
+    color: "#708097",
+    fontSize: 10,
+    fontWeight: "700",
+  },
   messageBubble: {
     paddingHorizontal: 13,
     paddingVertical: 11,
@@ -350,16 +386,56 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DCE4EF",
   },
-  userMessageBubble: { backgroundColor: COLORS.primary, borderColor: COLORS.primary, borderBottomLeftRadius: 15, borderBottomRightRadius: 4 },
+  userMessageBubble: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 4,
+  },
   messageText: { color: "#26344D", fontSize: 14, lineHeight: 21 },
   userMessageText: { color: "#FFFFFF" },
-  typingRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 6 },
+  typingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingTop: 6,
+  },
   typingText: { color: COLORS.textSecondary, fontSize: 13 },
-  errorText: { paddingHorizontal: SPACING.lg, paddingVertical: 8, backgroundColor: "#FFF2F3", color: "#B42335", fontSize: 12 },
-  composerWrap: { padding: 12, paddingBottom: Platform.OS === "ios" ? 8 : 12, borderTopWidth: 1, borderTopColor: "#E2E8F1", backgroundColor: COLORS.surface },
+  errorText: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 8,
+    backgroundColor: "#FFF2F3",
+    color: "#B42335",
+    fontSize: 12,
+  },
+  composerWrap: {
+    padding: 12,
+    paddingBottom: Platform.OS === "ios" ? 8 : 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F1",
+    backgroundColor: COLORS.surface,
+  },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  input: { flex: 1, minHeight: 44, maxHeight: 110, paddingHorizontal: 13, paddingVertical: 11, borderWidth: 1, borderColor: "#C9D4E2", borderRadius: 13, color: COLORS.textPrimary, fontSize: 14 },
-  sendButton: { width: 44, height: 44, borderRadius: 13, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },
+  input: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 110,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: "#C9D4E2",
+    borderRadius: 13,
+    color: COLORS.textPrimary,
+    fontSize: 14,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   sendButtonDisabled: { opacity: 0.45 },
   notice: { marginTop: 7, color: "#7C899B", fontSize: 10, textAlign: "center" },
 });
