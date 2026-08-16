@@ -1,6 +1,7 @@
 # Smart Credit AI Assistant
 
-This module is a read-only assistant for authenticated borrower and lender roles.
+This module is a read-only assistant for authenticated borrower, lender, and
+admin roles.
 It is intentionally separate from the human-to-human `chat` module.
 
 ## Security boundary
@@ -10,6 +11,8 @@ It is intentionally separate from the human-to-human `chat` module.
   or lender ID.
 - The role router exposes only the tools for the active JWT role.
 - Every detail tool verifies ownership before returning a record.
+- Admin tools return bounded, field-allowlisted operational summaries and never
+  raw Firestore records.
 - The assistant has no create, update, approval, repayment-recording, SMS, KYC,
   dispute-resolution, or deletion tools.
 - Tool results omit credentials, tokens, NICs, bank data, private file URLs, and
@@ -17,10 +20,12 @@ It is intentionally separate from the human-to-human `chat` module.
 
 ## Configuration
 
-Keep the feature disabled until the server has a valid provider key:
+Keep the feature disabled until the server has a valid provider key. Select
+either `openai` or `gemini`:
 
 ```env
 AI_ASSISTANT_ENABLED=true
+AI_PROVIDER=openai
 OPENAI_API_KEY=your_server_side_key
 OPENAI_MODEL=gpt-5.6-terra
 AI_MESSAGE_LIMIT_PER_5_MINUTES=20
@@ -28,11 +33,20 @@ AI_CONVERSATION_RETENTION_DAYS=30
 AI_SAFETY_IDENTIFIER_SALT=a_private_random_value
 ```
 
-Never expose `OPENAI_API_KEY` through a frontend environment variable.
+For Gemini:
+
+```env
+AI_ASSISTANT_ENABLED=true
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_server_side_key
+GEMINI_MODEL=gemini-flash-latest
+```
+
+Never expose provider API keys through frontend environment variables.
 
 ## API
 
-All routes require a borrower or lender bearer token.
+All routes require a borrower, lender, or admin bearer token.
 
 ```text
 POST   /api/ai-assistant/conversations
@@ -43,6 +57,11 @@ DELETE /api/ai-assistant/conversations/:id
 ```
 
 `DELETE` archives the conversation; it does not remove its audit history.
+
+Admin access is intentionally read-only. The assistant can summarize users,
+KYC submissions, listings, loans, transactions, disputes, legal documents, and
+audit activity, but it cannot approve, reject, suspend, resolve, reverse, or
+otherwise change application data.
 
 ## Firestore
 

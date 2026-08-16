@@ -4,7 +4,7 @@ export const AI_ASSISTANT_PROVIDER = 'AI_ASSISTANT_PROVIDER';
 
 export type AiAssistantRole = Extract<
   AuthenticatedUser['role'],
-  'borrower' | 'lender'
+  'borrower' | 'lender' | 'admin'
 >;
 
 export type AiToolDefinition = {

@@ -61,15 +61,34 @@ export class AiConversationRepository {
     user: AuthenticatedUser,
     role: AiAssistantRole,
   ): Promise<AiConversation[]> {
-    const snapshot = await this.collection
-      .where('userId', '==', user.sub)
-      .where('userRole', '==', role)
-      .orderBy('updatedAt', 'desc')
-      .limit(30)
-      .get();
-    return snapshot.docs
+    let documents: FirebaseFirestore.QueryDocumentSnapshot[];
+    try {
+      const snapshot = await this.collection
+        .where('userId', '==', user.sub)
+        .where('userRole', '==', role)
+        .orderBy('updatedAt', 'desc')
+        .limit(30)
+        .get();
+      documents = snapshot.docs;
+    } catch (error) {
+      if (!this.requiresCompositeIndex(error)) throw error;
+      const fallback = await this.collection
+        .where('userId', '==', user.sub)
+        .limit(100)
+        .get();
+      documents = fallback.docs;
+    }
+
+    return documents
       .map((doc) => this.mapConversation(doc.id, doc.data()))
-      .filter((conversation) => conversation.status === 'active');
+      .filter(
+        (conversation) =>
+          conversation.status === 'active' && conversation.userRole === role,
+      )
+      .sort((left, right) =>
+        String(right.updatedAt).localeCompare(String(left.updatedAt)),
+      )
+      .slice(0, 30);
   }
 
   async assertOwned(
@@ -210,5 +229,16 @@ export class AiConversationRepository {
       model: typeof data.model === 'string' ? data.model : null,
       createdAt: toIso(data.createdAt),
     };
+  }
+
+  private requiresCompositeIndex(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const candidate = error as { code?: unknown; message?: unknown };
+    const message =
+      typeof candidate.message === 'string' ? candidate.message : '';
+    return (
+      candidate.code === 9 ||
+      message.toLowerCase().includes('requires an index')
+    );
   }
 }

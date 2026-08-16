@@ -20,7 +20,7 @@ import { SendAiMessageDto } from './dto/send-ai-message.dto';
 
 @Controller('ai-assistant')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('borrower', 'lender')
+@Roles('borrower', 'lender', 'admin')
 export class AiAssistantController {
   constructor(private readonly aiAssistantService: AiAssistantService) {}
 
