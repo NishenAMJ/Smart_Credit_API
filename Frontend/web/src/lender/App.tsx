@@ -24,6 +24,7 @@ import {
   type LenderSession,
 } from './lib/lender-session'
 import type { LenderProfile } from './lib/lender-profile-api'
+import AiAssistant from './components/assistant/AiAssistant'
 
 function App() {
   const [activeView, setActiveView] = useState<LenderView>('dashboard')
@@ -142,6 +143,7 @@ function App() {
         onClose={() => setIsProfileOpen(false)}
         onProfileSaved={handleProfileSaved}
       />
+      <AiAssistant session={session} />
     </>
   )
 }

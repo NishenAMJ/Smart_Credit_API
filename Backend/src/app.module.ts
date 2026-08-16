@@ -27,8 +27,8 @@ import { LenderMobileModule } from './modules/lender_mobile/lender_mobile.module
 import { ReportsModule } from './modules/reports/reports.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { QrScannerModule } from './modules/qrScanner/qr-scanner.module';
-
 import { LocationModule } from './modules/location/location.module';
+import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
 
 @Module({
   imports: [
@@ -60,8 +60,8 @@ import { LocationModule } from './modules/location/location.module';
     ReportsModule,
     DisputesModule,
     QrScannerModule,
-
     LocationModule,
+    AiAssistantModule,
   ],
   controllers: [AppController],
   providers: [AppService],

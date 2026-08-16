@@ -40,6 +40,7 @@ export type BorrowerStackParamList = {
   BorrowerChat: NavigatorScreenParams<ChatStackParamList> | undefined;
   LoanAgreement: { initialLoanId?: string } | undefined;
   NearbyLendersMap: undefined;
+  AiAssistant: undefined;
 };
 
 export type BorrowerNavigation =

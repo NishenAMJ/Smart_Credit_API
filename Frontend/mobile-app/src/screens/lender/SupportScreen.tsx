@@ -167,6 +167,23 @@ export default function SupportScreen({ navigation }: any) {
           </Text>
         </View>
 
+        <TouchableOpacity
+          style={styles.assistantCard}
+          onPress={() => navigation.navigate('AiAssistant')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.assistantIcon}>
+            <Feather name="message-circle" size={21} color={COLORS.primary} />
+          </View>
+          <View style={styles.assistantCopy}>
+            <Text style={styles.assistantTitle}>Ask the AI Assistant</Text>
+            <Text style={commonStyles.textSecondary}>
+              Review your loans, borrowers, payments, collections, and advertisements.
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={19} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+
         {/* ── CONTACT OPTIONS ─────────────────────── */}
         <Text style={commonStyles.sectionTitle}>Contact Us</Text>
         <View style={styles.contactList}>
@@ -412,6 +429,35 @@ const styles = StyleSheet.create({
   introDesc: {
     textAlign: 'center',
     lineHeight: 20,
+  },
+  assistantCard: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CFE2FF',
+    backgroundColor: '#F4F8FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  assistantIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E3EFFF',
+  },
+  assistantCopy: {
+    flex: 1,
+  },
+  assistantTitle: {
+    marginBottom: 3,
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
   },
 
   // Contact list
