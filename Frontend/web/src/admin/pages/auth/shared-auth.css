@@ -1,7 +1,8 @@
 .shared-auth-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
-  grid-template-columns: minmax(320px, 1.05fr) minmax(420px, 0.95fr);
+  place-items: center;
+  padding: clamp(24px, 4vw, 56px);
   background:
     radial-gradient(
       circle at 20% 20%,
@@ -9,6 +10,19 @@
       transparent 26%
     ),
     linear-gradient(135deg, #f9fafc 0%, #f1f4f9 100%);
+}
+
+.shared-auth-layout {
+  width: min(1240px, 100%);
+  height: min(760px, calc(100dvh - 48px));
+  min-height: 620px;
+  display: grid;
+  grid-template-columns: minmax(340px, 1.02fr) minmax(420px, 0.98fr);
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 30px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.14);
 }
 
 .shared-auth-page * {
@@ -29,7 +43,8 @@
     ),
     linear-gradient(180deg, #09182d 0%, #081221 100%);
   color: #fff;
-  padding: 56px 48px;
+  height: 100%;
+  padding: clamp(36px, 4vw, 56px);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -75,7 +90,7 @@
 
 .shared-auth-copy h1 {
   margin: 0;
-  font-size: clamp(40px, 5vw, 64px);
+  font-size: clamp(38px, 4.6vw, 60px);
   line-height: 1.06;
   letter-spacing: -0.04em;
   max-width: 520px;
@@ -123,15 +138,40 @@
 
 .shared-auth-panel {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 32px;
-  min-height: 100vh;
+  justify-content: flex-start;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  padding: clamp(32px, 4vw, 52px);
+  background: #fff;
+  scrollbar-gutter: stable;
 }
 
 .shared-auth-shell {
   width: 100%;
-  max-width: 620px;
+  max-width: 560px;
+  margin-block: auto;
+}
+
+.shared-auth-mobile-brand {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.shared-auth-mobile-brand strong {
+  display: block;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.shared-auth-mobile-brand p {
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .shared-auth-heading {
@@ -224,7 +264,8 @@
 .shared-auth-card {
   background: #fff;
   border-radius: 22px;
-  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.08);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.07);
   padding: 28px;
 }
 
@@ -298,6 +339,47 @@
   border: 1px solid #cbd5e1;
   background: #fff;
   color: #0f172a;
+  font: inherit;
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.shared-auth-field input:focus,
+.shared-auth-field select:focus {
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+}
+
+.shared-auth-password-control {
+  position: relative;
+}
+
+.shared-auth-password-control input {
+  padding-right: 70px;
+}
+
+.shared-auth-password-control button {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  min-width: 52px;
+  min-height: 34px;
+  padding: 0 10px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 9px;
+  background: #eef5ff;
+  color: #0066d6;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shared-auth-password-control button:focus-visible {
+  outline: 3px solid rgba(0, 122, 255, 0.2);
+  outline-offset: 1px;
 }
 
 .shared-auth-grid {
@@ -649,24 +731,92 @@
 
 @media (max-width: 960px) {
   .shared-auth-page {
+    padding: 24px;
+  }
+
+  .shared-auth-layout {
+    height: auto;
+    min-height: calc(100dvh - 48px);
     grid-template-columns: 1fr;
+    border-radius: 26px;
   }
 
   .shared-auth-hero {
-    min-height: auto;
-    gap: 32px;
+    display: none;
   }
 
   .shared-auth-panel {
-    min-height: auto;
-    padding-top: 0;
+    height: auto;
+    min-height: calc(100dvh - 48px);
+    align-items: flex-start;
+    overflow-y: visible;
+    padding: 36px;
+  }
+
+  .shared-auth-shell {
+    margin-block: 0;
+  }
+
+  .shared-auth-mobile-brand {
+    display: flex;
   }
 }
 
 @media (max-width: 640px) {
-  .shared-auth-hero,
+  .shared-auth-page {
+    padding: 12px;
+  }
+
+  .shared-auth-layout,
   .shared-auth-panel {
-    padding: 24px;
+    min-height: calc(100dvh - 24px);
+  }
+
+  .shared-auth-layout {
+    border-radius: 22px;
+  }
+
+  .shared-auth-panel {
+    padding: 22px 18px;
+  }
+
+  .shared-auth-mobile-brand {
+    margin-bottom: 20px;
+  }
+
+  .shared-auth-heading {
+    margin-bottom: 16px;
+  }
+
+  .shared-auth-heading h2 {
+    font-size: 28px;
+  }
+
+  .shared-auth-heading p {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .shared-auth-kicker-row {
+    display: none;
+  }
+
+  .shared-auth-mode-switch {
+    margin-bottom: 18px;
+  }
+
+  .shared-auth-card {
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .shared-auth-form {
+    gap: 16px;
+  }
+
+  .shared-auth-field-card {
+    padding: 16px;
+    border-radius: 15px;
   }
 
   .shared-auth-grid.two-column,

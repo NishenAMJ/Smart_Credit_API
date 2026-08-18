@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import SharedAuthPage from "./admin/pages/auth/SharedAuthPage";
+import WelcomePage from "./welcome/WelcomePage";
 
 const AdminRoutes = lazy(() => import("./admin/AdminRoutes"));
 const LenderApp = lazy(() => import("./lender/App"));
@@ -15,7 +16,8 @@ export default function App() {
       }
     >
       <Routes>
-        <Route path="/" element={<SharedAuthPage initialMode="login" />} />
+        <Route path="/" element={<WelcomePage />} />
+        <Route path="/welcome" element={<WelcomePage />} />
         <Route
           path="/signin"
           element={<SharedAuthPage initialMode="login" />}
@@ -26,7 +28,7 @@ export default function App() {
         />
         <Route path="/admin/*" element={<AdminRoutes />} />
         <Route path="/lender/*" element={<LenderApp />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/welcome" replace />} />
       </Routes>
     </Suspense>
   );
