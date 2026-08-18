@@ -5,6 +5,7 @@ import {
   FileSignature,
   RefreshCw,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import type { SharedLegalDocument } from "../../legal/types";
 import {
@@ -34,7 +35,9 @@ function money(minor: number): string {
 }
 
 function label(value: string): string {
-  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export default function LenderAgreementsPage({
@@ -59,11 +62,16 @@ export default function LenderAgreementsPage({
       setRecords(response.documents);
       if (selected) {
         setSelected(
-          response.documents.find((record) => record.id === selected.id) ?? selected,
+          response.documents.find((record) => record.id === selected.id) ??
+            selected,
         );
       }
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Unable to load agreements.");
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load agreements.",
+      );
     } finally {
       setLoading(false);
     }
@@ -86,7 +94,12 @@ export default function LenderAgreementsPage({
         else setError("No agreement exists for this loan yet.");
       })
       .catch((nextError) => {
-        if (mounted) setError(nextError instanceof Error ? nextError.message : "Unable to load agreement.");
+        if (mounted)
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : "Unable to load agreement.",
+          );
       })
       .finally(() => {
         if (mounted) {
@@ -98,6 +111,15 @@ export default function LenderAgreementsPage({
       mounted = false;
     };
   }, [initialLoanId, onInitialLoanHandled]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelected(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selected]);
 
   const pendingCount = useMemo(
     () => records.filter((record) => record.status !== "fully_accepted").length,
@@ -116,7 +138,11 @@ export default function LenderAgreementsPage({
       setConsentAccepted(false);
       await loadList();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Unable to sign agreement.");
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to sign agreement.",
+      );
     } finally {
       setBusy(false);
     }
@@ -132,7 +158,11 @@ export default function LenderAgreementsPage({
       setNotice(response.message ?? "Agreement finalization completed.");
       await loadList();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Unable to finalize agreement.");
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to finalize agreement.",
+      );
     } finally {
       setBusy(false);
     }
@@ -145,7 +175,11 @@ export default function LenderAgreementsPage({
     try {
       await downloadLenderAgreement(selected);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Unable to download agreement.");
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to download agreement.",
+      );
     } finally {
       setBusy(false);
     }
@@ -159,80 +193,224 @@ export default function LenderAgreementsPage({
         <div>
           <p className="eyebrow">Contracts</p>
           <h1 className="page-title">Agreements</h1>
-          <p className="page-subtitle">Review and sign first, then the borrower signs after the external transfer step. Smart Credit does not execute or verify that transfer.</p>
+          <p className="page-subtitle">
+            Review and sign first, then the borrower signs after the external
+            transfer step. Smart Credit does not execute or verify that
+            transfer.
+          </p>
         </div>
-        <button className="pagination-button" type="button" disabled={loading} onClick={() => void loadList()}>
+        <button
+          className="pagination-button"
+          type="button"
+          disabled={loading}
+          onClick={() => void loadList()}
+        >
           <RefreshCw size={16} /> Refresh
         </button>
       </header>
 
       <section className="summary-grid" aria-label="Agreement summary">
         <article className="card metric-card">
-          <div className="metric-icon metric-icon--primary"><FileSignature size={22} /></div>
-          <div className="metric-copy"><p className="metric-label">Total agreements</p><p className="metric-value">{loading ? "--" : records.length}</p></div>
+          <div className="metric-icon metric-icon--primary">
+            <FileSignature size={22} />
+          </div>
+          <div className="metric-copy">
+            <p className="metric-label">Total agreements</p>
+            <p className="metric-value">{loading ? "--" : records.length}</p>
+          </div>
         </article>
         <article className="card metric-card">
-          <div className="metric-icon metric-icon--warning"><ShieldCheck size={22} /></div>
-          <div className="metric-copy"><p className="metric-label">Awaiting completion</p><p className="metric-value">{loading ? "--" : pendingCount}</p></div>
+          <div className="metric-icon metric-icon--warning">
+            <ShieldCheck size={22} />
+          </div>
+          <div className="metric-copy">
+            <p className="metric-label">Awaiting completion</p>
+            <p className="metric-value">{loading ? "--" : pendingCount}</p>
+          </div>
         </article>
       </section>
 
-      {error ? <p className="create-ad-banner create-ad-banner--error">{error}</p> : null}
-      {notice ? <p className="create-ad-banner create-ad-banner--primary">{notice}</p> : null}
+      {error ? (
+        <p className="create-ad-banner create-ad-banner--error">{error}</p>
+      ) : null}
+      {notice ? (
+        <p className="create-ad-banner create-ad-banner--primary">{notice}</p>
+      ) : null}
 
-      <div className="lender-agreements__layout">
-        <section className="card lender-agreements__list" aria-label="Loan agreements">
-          {loading ? <p className="lender-agreements__state">Loading agreements...</p> : records.length ? records.map((record) => (
+      <section
+        className="card lender-agreements__list"
+        aria-label="Loan agreements"
+      >
+        {loading ? (
+          <p className="lender-agreements__state">Loading agreements...</p>
+        ) : records.length ? (
+          records.map((record) => (
             <button
               type="button"
               key={record.id}
               className={`lender-agreements__record${selected?.id === record.id ? " lender-agreements__record--active" : ""}`}
-              onClick={() => { setSelected(record); setConsentAccepted(false); setNotice(""); }}
+              onClick={() => {
+                setSelected(record);
+                setConsentAccepted(false);
+                setNotice("");
+              }}
             >
-              <span><strong>{record.borrower.fullName}</strong><small>Version {record.version} · {label(record.status)}</small></span>
+              <span>
+                <strong>{record.borrower.fullName}</strong>
+                <small>
+                  Version {record.version} · {label(record.status)}
+                </small>
+              </span>
               <span>{money(record.terms.principalMinor)}</span>
             </button>
-          )) : <p className="lender-agreements__state">No agreements are available.</p>}
-        </section>
+          ))
+        ) : (
+          <p className="lender-agreements__state">
+            No agreements are available.
+          </p>
+        )}
+      </section>
 
-        <section className="card lender-agreements__detail">
-          {!selected ? <div className="lender-agreements__empty"><FileSignature size={34} /><h2>Select an agreement</h2><p>Choose a borrower contract to review its current version.</p></div> : (
-            <>
-              <div className="lender-agreements__detail-header">
-                <div><p className="eyebrow">Version {selected.version}</p><h2>{selected.title}</h2><p>{selected.summary}</p></div>
-                <span className={`badge badge-${selected.status}`}>{label(selected.status)}</span>
+      {selected ? (
+        <div
+          className="lender-agreements__backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSelected(null);
+          }}
+        >
+          <section
+            className="card lender-agreements__detail"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lender-agreement-dialog-title"
+          >
+            <div className="lender-agreements__detail-header">
+              <div>
+                <p className="eyebrow">Version {selected.version}</p>
+                <h2 id="lender-agreement-dialog-title">{selected.title}</h2>
+                <p>{selected.summary}</p>
               </div>
-
-              <div className="lender-agreements__terms">
-                <div><span>Principal</span><strong>{money(selected.terms.principalMinor)}</strong></div>
-                <div><span>Interest</span><strong>{selected.terms.annualInterestRate}% p.a.</strong></div>
-                <div><span>Tenure</span><strong>{selected.terms.tenureMonths} months</strong></div>
-                <div><span>Monthly installment</span><strong>{money(selected.terms.monthlyInstallmentMinor)}</strong></div>
-                <div><span>Total repayable</span><strong>{money(selected.terms.totalRepayableMinor)}</strong></div>
-                <div><span>First due date</span><strong>One month after activation</strong></div>
+              <div className="lender-agreements__detail-controls">
+                <span className={`badge badge-${selected.status}`}>
+                  {label(selected.status)}
+                </span>
+                <button
+                  type="button"
+                  className="lender-agreements__close"
+                  aria-label="Close agreement"
+                  onClick={() => setSelected(null)}
+                >
+                  <X size={19} />
+                </button>
               </div>
+            </div>
 
-              <div className="lender-agreements__signatures">
-                <p><CheckCircle2 size={16} /> Borrower: {selected.borrowerAcceptance.accepted ? `${selected.borrowerAcceptance.signedName} signed` : lenderSigned ? "Waiting to sign after the external transfer step" : "Waiting for your lender signature first"}</p>
-                <p><CheckCircle2 size={16} /> Lender: {lenderSigned ? `${selected.lenderAcceptance.signedName} signed` : "Awaiting your signature"}</p>
+            <div className="lender-agreements__terms">
+              <div>
+                <span>Principal</span>
+                <strong>{money(selected.terms.principalMinor)}</strong>
               </div>
+              <div>
+                <span>Interest</span>
+                <strong>{selected.terms.annualInterestRate}% p.a.</strong>
+              </div>
+              <div>
+                <span>Tenure</span>
+                <strong>{selected.terms.tenureMonths} months</strong>
+              </div>
+              <div>
+                <span>Monthly installment</span>
+                <strong>{money(selected.terms.monthlyInstallmentMinor)}</strong>
+              </div>
+              <div>
+                <span>Total repayable</span>
+                <strong>{money(selected.terms.totalRepayableMinor)}</strong>
+              </div>
+              <div>
+                <span>First due date</span>
+                <strong>One month after activation</strong>
+              </div>
+            </div>
 
-              {!selected.legacyReadOnly && !lenderSigned ? (
-                <div className="lender-agreements__sign-form">
-                  <label><span>Legal signing name</span><input className="input" value={signedName} onChange={(event) => setSignedName(event.target.value)} /></label>
-                  <label className="lender-agreements__consent"><input type="checkbox" checked={consentAccepted} onChange={(event) => setConsentAccepted(event.target.checked)} /><span>I reviewed version {selected.version}, agree to the displayed terms, and intend my typed name to be the lender-first electronic signature before the borrower signs.</span></label>
-                  <button className="button button-primary" type="button" disabled={busy || !signedName.trim() || !consentAccepted} onClick={() => void handleSign()}><FileSignature size={17} /> Sign agreement</button>
-                </div>
+            <div className="lender-agreements__signatures">
+              <p>
+                <CheckCircle2 size={16} /> Borrower:{" "}
+                {selected.borrowerAcceptance.accepted
+                  ? `${selected.borrowerAcceptance.signedName} signed`
+                  : lenderSigned
+                    ? "Waiting to sign after the external transfer step"
+                    : "Waiting for your lender signature first"}
+              </p>
+              <p>
+                <CheckCircle2 size={16} /> Lender:{" "}
+                {lenderSigned
+                  ? `${selected.lenderAcceptance.signedName} signed`
+                  : "Awaiting your signature"}
+              </p>
+            </div>
+
+            {!selected.legacyReadOnly && !lenderSigned ? (
+              <div className="lender-agreements__sign-form">
+                <label>
+                  <span>Legal signing name</span>
+                  <input
+                    className="input"
+                    value={signedName}
+                    onChange={(event) => setSignedName(event.target.value)}
+                  />
+                </label>
+                <label className="lender-agreements__consent">
+                  <input
+                    type="checkbox"
+                    checked={consentAccepted}
+                    onChange={(event) =>
+                      setConsentAccepted(event.target.checked)
+                    }
+                  />
+                  <span>
+                    I reviewed version {selected.version}, agree to the
+                    displayed terms, and intend my typed name to be the
+                    lender-first electronic signature before the borrower signs.
+                  </span>
+                </label>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  disabled={busy || !signedName.trim() || !consentAccepted}
+                  onClick={() => void handleSign()}
+                >
+                  <FileSignature size={17} /> Sign agreement
+                </button>
+              </div>
+            ) : null}
+
+            <div className="lender-agreements__actions">
+              {selected.status === "finalization_failed" ? (
+                <button
+                  className="button button-primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handleRetry()}
+                >
+                  <RefreshCw size={17} /> Retry finalization
+                </button>
               ) : null}
-
-              <div className="lender-agreements__actions">
-                {selected.status === "finalization_failed" ? <button className="button button-primary" type="button" disabled={busy} onClick={() => void handleRetry()}><RefreshCw size={17} /> Retry finalization</button> : null}
-                <button className="button button-secondary" type="button" disabled={busy} onClick={() => void handleDownload()}><Download size={17} /> {selected.pdfAvailable ? "Download signed PDF" : "Download draft PDF"}</button>
-              </div>
-            </>
-          )}
-        </section>
-      </div>
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => void handleDownload()}
+              >
+                <Download size={17} />{" "}
+                {selected.pdfAvailable
+                  ? "Download signed PDF"
+                  : "Download draft PDF"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

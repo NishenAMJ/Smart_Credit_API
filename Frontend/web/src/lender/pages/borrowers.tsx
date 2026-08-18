@@ -27,7 +27,13 @@ function formatLabel(value: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function BorrowersPage({ session }: { session: LenderSession }) {
+export default function BorrowersPage({
+  session,
+  onOpenAgreement,
+}: {
+  session: LenderSession;
+  onOpenAgreement?: (loanId: string) => void;
+}) {
   const [borrowers, setBorrowers] = useState<DashboardBorrower[]>([]);
   const [pageInfo, setPageInfo] = useState<
     DashboardBorrowersResponse["pageInfo"]
@@ -239,6 +245,7 @@ export default function BorrowersPage({ session }: { session: LenderSession }) {
         <BorrowerSidePanel
           session={session}
           borrowerId={selectedBorrowerId}
+          onOpenAgreement={onOpenAgreement}
           onClose={() => setSelectedBorrowerId(null)}
         />
       ) : null}
