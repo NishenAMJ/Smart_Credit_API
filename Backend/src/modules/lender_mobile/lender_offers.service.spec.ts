@@ -41,7 +41,8 @@ describe('LenderOffersService', () => {
     });
 
     expect(lenderAdsService.createAd).toHaveBeenCalledWith(
-      expect.objectContaining({ lenderId: 'lender_1', minAmount: 50000 }),
+      'lender_1',
+      expect.objectContaining({ minAmount: 50000 }),
     );
     expect(result.id).toBe('listing_1');
     expect(result.status).toBe('pending_review');

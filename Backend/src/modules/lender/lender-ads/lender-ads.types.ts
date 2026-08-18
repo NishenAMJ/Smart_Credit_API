@@ -5,8 +5,6 @@ export interface CursorPageInfo {
 }
 
 export interface CreateLenderAdInput {
-  lenderId: string;
-  lenderName: string | null;
   headline: string;
   minAmount: number;
   maxAmount: number;
