@@ -1,0 +1,168 @@
+.lender-agreements__layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr);
+  gap: 20px;
+}
+
+.lender-agreements__list,
+.lender-agreements__detail {
+  padding: 18px;
+}
+
+.lender-agreements__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: start;
+}
+
+.lender-agreements__record {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.lender-agreements__record span:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lender-agreements__record small {
+  color: #64748b;
+}
+
+.lender-agreements__record--active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.lender-agreements__detail {
+  min-height: 420px;
+}
+
+.lender-agreements__empty,
+.lender-agreements__state {
+  color: #64748b;
+  text-align: center;
+  padding: 42px 20px;
+}
+
+.lender-agreements__empty {
+  min-height: 360px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+}
+
+.lender-agreements__detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.lender-agreements__detail-header h2 {
+  margin: 3px 0 6px;
+}
+
+.lender-agreements__detail-header p:last-child {
+  color: #64748b;
+}
+
+.lender-agreements__terms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 0;
+}
+
+.lender-agreements__terms div {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.lender-agreements__terms span,
+.lender-agreements__sign-form label > span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lender-agreements__signatures {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.lender-agreements__signatures p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lender-agreements__sign-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.lender-agreements__sign-form > label:first-child {
+  display: grid;
+  gap: 7px;
+}
+
+.lender-agreements__consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.lender-agreements__consent input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+}
+
+.lender-agreements__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .lender-agreements__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .lender-agreements__terms {
+    grid-template-columns: 1fr;
+  }
+
+  .lender-agreements__detail-header {
+    flex-direction: column;
+  }
+}

@@ -5,19 +5,26 @@ canonical database model in `Backend/src/common/firestore/schema.ts`.
 
 ## Files
 
-| File               | Responsibility                                                  |
-| ------------------ | --------------------------------------------------------------- |
-| `run.js`           | Validates fixtures and writes them to Firestore in batches      |
-| `check.js`         | Builds and validates data without connecting to Firestore       |
-| `config.js`        | Reads and validates seed settings from `Backend/.env`           |
-| `fixtures.js`      | Defines the four stable development accounts and base records   |
-| `bulk-fixtures.js` | Generates the configurable bulk dataset and relationships       |
-| `validate.js`      | Checks IDs, references, credentials, installments, and balances |
+| File               | Responsibility                                                   |
+| ------------------ | ---------------------------------------------------------------- |
+| `run.js`           | Main entry point; validates data and runs all collection scripts |
+| `check.js`         | Builds and validates data without connecting to Firestore        |
+| `config.js`        | Reads and validates seed settings from `Backend/.env`            |
+| `fixtures.js`      | Defines the four stable development accounts and base records    |
+| `bulk-fixtures.js` | Generates the configurable bulk dataset and relationships        |
+| `validate.js`      | Checks IDs, references, credentials, installments, and balances  |
+| `collections/`     | One writer definition per Firestore collection/path              |
 
 The shared Firebase initialization and batch writer live in `../shared/`.
 
+To add or inspect a collection, start with `collections/README.md`. The
+`collections/index.js` registry is the complete write order used by both the
+bulk and basic editions.
+
 The generated login reference for this edition is documented in
 [`LOGIN_DETAILS.md`](./LOGIN_DETAILS.md).
+Agreement signing, Cloudinary setup, and migration are documented in
+[`../LOAN_AGREEMENTS.md`](../LOAN_AGREEMENTS.md).
 
 ## Commands
 
@@ -121,6 +128,8 @@ are string IDs rather than Firestore document references.
 | `conversations/{conversationId}/messages` | `messageId`       | `conversationId`, `messageId`, `senderId`, `type`, `text`, `documentId`, `readByUserIds`, sent/edit/delete timestamps                                                                                       |
 | `legalDocuments`                          | `legalDocumentId` | `legalDocumentId`, `type`, `version`, `title`, `content`, `status`, `publishedAt`, `createdByAdminId`, timestamps                                                                                           |
 | `legalAcceptances`                        | `acceptanceId`    | `acceptanceId`, `userId`, `legalDocumentId`, `documentVersion`, `acceptedAt`, `ipAddressHash`, `userAgent`                                                                                                  |
+| `loanAgreements`                          | `agreementId`     | Versioned immutable loan terms, participant snapshots, terms hash, signature summary, finalization and signed-PDF state                                                                                     |
+| `loanAgreementAcceptances`                | `acceptanceId`    | Append-only borrower/lender consent evidence bound to an agreement version and terms hash                                                                                                                    |
 | `userLocations`                           | Same as `userId`  | `userId`, `role`, `latitude`, `longitude`, `geohash`, `city`, `district`, `updatedAt`                                                                                                                       |
 | `auditLogs`                               | `auditLogId`      | `auditLogId`, actor fields, `action`, entity fields, `before`, `after`, `metadata`, `createdAt`                                                                                                             |
 

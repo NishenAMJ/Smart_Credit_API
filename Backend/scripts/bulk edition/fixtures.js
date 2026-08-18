@@ -506,6 +506,8 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
     messages,
     legalDocuments,
     legalAcceptances,
+    loanAgreements: [],
+    loanAgreementAcceptances: [],
     userLocations,
     auditLogs,
   };

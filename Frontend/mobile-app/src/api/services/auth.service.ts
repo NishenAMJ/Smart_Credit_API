@@ -7,6 +7,7 @@ import type {
   DashboardResponse,
   KycSubmissionResponse,
   LegalDocument,
+  LegalDocumentsResponse,
   LegalDocumentResponse,
   LoginPayload,
   MyKycSubmissionResponse,
@@ -84,7 +85,12 @@ export async function getLatestLegalDocument(loanId: string) {
 
 export async function acceptLegalDocument(
   documentId: string,
-  payload: { signedName: string },
+  payload: {
+    signedName: string;
+    consentAccepted: true;
+    agreementVersion: number;
+    termsHash: string;
+  },
 ) {
   const response = await apiClient.post<LegalDocumentResponse>(
     ENDPOINTS.legal.accept(documentId),
@@ -93,8 +99,15 @@ export async function acceptLegalDocument(
   return response.data;
 }
 
+export async function retryLegalDocumentFinalization(documentId: string) {
+  const response = await apiClient.post<LegalDocumentResponse>(
+    ENDPOINTS.legal.finalize(documentId),
+  );
+  return response.data;
+}
+
 export async function listLegalDocuments() {
-  const response = await apiClient.get<{ documents: LegalDocument[] }>(
+  const response = await apiClient.get<LegalDocumentsResponse>(
     ENDPOINTS.legal.list,
   );
   return response.data;

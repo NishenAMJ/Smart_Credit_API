@@ -178,7 +178,8 @@ export default function AgreementsPage({
               "all",
               "fully_accepted",
               "partially_accepted",
-              "generated",
+              "awaiting_signatures",
+              "finalization_failed",
             ] as const
           ).map((status) => (
             <button

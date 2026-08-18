@@ -307,6 +307,15 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
 
         <View style={styles.buttonGroup}>
           <TouchableOpacity
+            style={commonStyles.primaryButton}
+            onPress={() =>
+              navigation.navigate("LoanAgreement", { initialLoanId: loanId })
+            }
+          >
+            <Feather name="file-text" size={18} color="#fff" />
+            <Text style={commonStyles.buttonText}>View Agreement</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[
               commonStyles.primaryButton,
               { backgroundColor: COLORS.success },

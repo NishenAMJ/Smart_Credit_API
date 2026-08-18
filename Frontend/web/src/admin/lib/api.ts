@@ -787,3 +787,37 @@ export function getLegalAgreements() {
     auth: true,
   });
 }
+
+export async function downloadLegalAgreement(
+  documentId: string,
+  pdfDownloadPath?: string,
+): Promise<void> {
+  const token = getAdminToken();
+  if (!token) {
+    throw new Error("You are not signed in.");
+  }
+
+  const path =
+    pdfDownloadPath ??
+    `/api/legal/documents/${encodeURIComponent(documentId)}/download`;
+  const apiOrigin = API_BASE_URL.replace(/\/api\/?$/, "");
+  const url = path.startsWith("/api")
+    ? `${apiOrigin}${path}`
+    : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    throw new Error("Agreement PDF download failed.");
+  }
+
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = `smart-credit-agreement-${documentId}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}

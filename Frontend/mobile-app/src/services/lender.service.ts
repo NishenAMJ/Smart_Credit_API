@@ -21,8 +21,7 @@
  *   GET  /lender/:lenderId/offers                           → LoanOffersService.getMyOffers
  *   POST  /lender-mobile/offers?lenderId=                   → LoanOffersService.createOffer
  *   PATCH /lender-mobile/offers/:id?lenderId=               → LoanOffersService.updateOffer
- *   POST  /lender-mobile/loan-requests/:id/approve?lenderId → LoanRequestsService.approveRequest
- *   POST  /lender-mobile/loan-requests/:id/reject?lenderId  → LoanRequestsService.rejectRequest
+ *   POST  /loan-requests/:id/decision                       → LoanRequestsService.decideRequest
  *   GET  /lender-mobile/payment-reminders?lenderId=         → PaymentRemindersService.getReminders
  *
  * @format
@@ -140,26 +139,24 @@ export const LoanRequestsService = {
 
   /**
    * Approve a loan request.
-   * POST /api/lender-mobile/loan-requests/:appId/approve?lenderId=
+   * POST /api/loan-requests/:appId/decision
    */
   approveRequest: async (appId: string, notes?: string) => {
-    const lenderId = getLenderId();
-    return api.post(
-      `/lender-mobile/loan-requests/${appId}/approve?lenderId=${lenderId}`,
-      notes ? { notes } : undefined,
-    );
+    return api.post(`/loan-requests/${appId}/decision`, {
+      decision: "approve",
+      note: notes,
+    });
   },
 
   /**
    * Reject a loan request.
-   * POST /api/lender-mobile/loan-requests/:appId/reject?lenderId=
+   * POST /api/loan-requests/:appId/decision
    */
   rejectRequest: async (appId: string, reason: string) => {
-    const lenderId = getLenderId();
-    return api.post(
-      `/lender-mobile/loan-requests/${appId}/reject?lenderId=${lenderId}`,
-      { reason },
-    );
+    return api.post(`/loan-requests/${appId}/decision`, {
+      decision: "reject",
+      note: reason,
+    });
   },
 };
 

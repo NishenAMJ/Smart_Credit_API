@@ -4,6 +4,11 @@ This edition creates a small but complete dataset for normal development. It
 uses the same canonical attributes, validation, batching, and relationships as
 the bulk edition.
 
+Both editions also share the one-file-per-collection registry in
+[`../bulk edition/collections`](../bulk%20edition/collections). The basic runner
+only applies smaller settings before invoking the shared main seed script, so a
+new collection should be registered once rather than copied between editions.
+
 The generated login reference for this edition is documented in
 [`LOGIN_DETAILS.md`](./LOGIN_DETAILS.md).
 
@@ -60,3 +65,5 @@ Optional basic-only overrides are `BASIC_SEED_RANDOM_SEED`,
 
 See [`../schemas.md`](../schemas.md) for the complete collection and attribute
 inventory shared by both editions and used by the runtime backend.
+Cloudinary setup, signing lifecycle, and safe legacy migration are documented
+in [`../LOAN_AGREEMENTS.md`](../LOAN_AGREEMENTS.md).

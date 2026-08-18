@@ -1,11 +1,10 @@
 import { Module, Logger } from '@nestjs/common';
 import { FirebaseModule } from '../../firebase/firebase.module';
 import { LenderAdsModule } from '../lender/lender-ads/lender-ads.module';
+import { LoanRequestsModule } from '../lender/loan-requests/loan-requests.module';
 
 import { LenderMobileController } from './lender_mobile.controller';
 import { LenderMobileService } from './lender_mobile.service';
-import { LenderApplicationsController } from './lender_applications.controller';
-import { LenderApplicationsService } from './lender_applications.service';
 import { LenderBorrowersController } from './lender_borrowers.controller';
 import { LenderBorrowersService } from './lender_borrowers.service';
 import { LenderOffersController } from './lender_offers.controller';
@@ -16,10 +15,9 @@ import { LenderRemindersController } from './lender_reminders.controller';
 import { LenderRemindersService } from './lender_reminders.service';
 
 @Module({
-  imports: [FirebaseModule, LenderAdsModule],
+  imports: [FirebaseModule, LenderAdsModule, LoanRequestsModule],
   controllers: [
     LenderMobileController,
-    LenderApplicationsController,
     LenderBorrowersController,
     LenderOffersController,
     LenderRequestsController,
@@ -28,7 +26,6 @@ import { LenderRemindersService } from './lender_reminders.service';
   providers: [
     Logger,
     LenderMobileService,
-    LenderApplicationsService,
     LenderBorrowersService,
     LenderOffersService,
     LenderRequestsService,
@@ -36,7 +33,6 @@ import { LenderRemindersService } from './lender_reminders.service';
   ],
   exports: [
     LenderMobileService,
-    LenderApplicationsService,
     LenderOffersService,
     LenderRequestsService,
     LenderRemindersService,

@@ -2,7 +2,7 @@ import "./index.css";
 import "./App.css";
 import LenderLayout from "./components/layout/LenderLayout";
 import type { LenderView } from "./components/common/LenderSidebar";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import AnalyticsPage from "./pages/analytics";
 import ActiveAdsRequestsPage from "./pages/active-ads-requests";
 import CreateAdPage from "./pages/create-ad";
@@ -16,6 +16,7 @@ import RecentTransactionsPage from "./pages/recent-transactions";
 import DailyCollectionPage from "./pages/daily-collection";
 import SettingsPage from "./pages/settings";
 import SmsPage from "./pages/sms";
+import LenderAgreementsPage from "./pages/agreements";
 import LenderProfileModal from "./components/profile/LenderProfileModal";
 import {
   clearStoredSession,
@@ -32,6 +33,14 @@ function App() {
     getStoredSession(),
   );
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [agreementLoanId, setAgreementLoanId] = useState<string | null>(null);
+
+  const clearAgreementLoanId = useCallback(() => setAgreementLoanId(null), []);
+
+  function openLoanAgreement(loanId: string) {
+    setAgreementLoanId(loanId);
+    setActiveView("agreements");
+  }
 
   function handleLogin(input: LenderSession) {
     updateStoredSession(input);
@@ -81,7 +90,7 @@ function App() {
         {activeView === "dashboard" ? (
           <DashboardPage session={session} onNavigate={setActiveView} />
         ) : activeView === "loans" ? (
-          <LoansPage session={session} />
+          <LoansPage session={session} onOpenAgreement={openLoanAgreement} />
         ) : activeView === "borrowers" ? (
           <BorrowersPage session={session} />
         ) : activeView === "recent-transactions" ? (
@@ -106,6 +115,12 @@ function App() {
           <NotificationsPage session={session} onNavigate={setActiveView} />
         ) : activeView === "sms" ? (
           <SmsPage session={session} />
+        ) : activeView === "agreements" ? (
+          <LenderAgreementsPage
+            session={session}
+            initialLoanId={agreementLoanId}
+            onInitialLoanHandled={clearAgreementLoanId}
+          />
         ) : (
           <section className="dashboard-panel">
             <header className="page-header">
