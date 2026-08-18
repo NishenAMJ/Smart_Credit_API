@@ -5,6 +5,13 @@ export type SmsSettings = {
   configured: boolean;
   sender: string | null;
   updatedAt: string | null;
+  paymentReceived: PaymentReceivedSmsSettings;
+};
+
+export type PaymentReceivedSmsSettings = {
+  enabled: boolean;
+  template: string;
+  updatedAt: string | null;
 };
 
 export type SmsBorrower = {
@@ -58,6 +65,21 @@ export async function updateSmsEnabled(enabled: boolean): Promise<SmsSettings> {
     body: JSON.stringify({ enabled }),
   });
   return parseResponse(response, "Failed to update SMS settings.");
+}
+
+export async function updatePaymentReceivedSms(
+  enabled: boolean,
+  template: string,
+): Promise<PaymentReceivedSmsSettings> {
+  const response = await fetch(`${API_BASE_URL}/lender/sms/payment-received`, {
+    method: "PATCH",
+    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ enabled, template }),
+  });
+  return parseResponse(
+    response,
+    "Failed to save the payment received message.",
+  );
 }
 
 export async function searchSmsBorrowers(

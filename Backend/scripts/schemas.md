@@ -1,6 +1,6 @@
 # Smart Credit Firestore Schemas
 
-Last audited: 2026-07-13
+Last audited: 2026-08-18
 
 This document inventories every Firestore collection path referenced by the
 backend or database seed scripts. The schema-v2 seed fields are the canonical
@@ -43,6 +43,7 @@ canonical model.
 | `lenderSettings`                          | Same as `lenderId`               | No                        |
 | `lenderNotificationSync`                  | Same as `lenderId`               | No (read only at present) |
 | `systemSettings`                          | Setting-specific ID              | No                        |
+| `smsDeliveries`                           | Deterministic event ID            | No                        |
 
 ## Canonical collections
 
@@ -598,16 +599,46 @@ Known lender SMS document (`sms_{lenderId}`):
 settingType: 'lender_sms'
 lenderId: string
 enabled: boolean
+paymentReceived: {
+  enabled: boolean
+  template: string
+  updatedAt: Timestamp
+}
 updatedAt: Timestamp
 ```
 
-The SMS switch is checked before every manual provider request and can also be
-reused by future automated SMS jobs. Successful deliveries add an `auditLogs`
-record with action `sms.sent`; provider credentials are environment variables
+The main SMS switch is checked before every manual and automatic provider
+request. When both switches are enabled, a successfully recorded installment
+payment renders the saved template with `{{borrowerName}}`, `{{amount}}`,
+`{{paymentDate}}`, and `{{remainingBalance}}`. Successful manual deliveries add
+an `auditLogs` record with action `sms.sent`; successful automatic deliveries
+use `sms.payment_received.sent`. Provider credentials are environment variables
 and are never stored in Firestore.
 
 The collection is intended for additional platform settings, so other document
 IDs may use setting-specific attributes.
+
+### `smsDeliveries/{deliveryId}`
+
+Automatic payment messages use the deterministic ID
+`payment_received_{transactionId}` so the same repayment cannot send twice.
+
+```text
+deliveryId: string
+type: 'payment_received'
+status: 'sent'
+lenderId: string
+borrowerId: string
+loanId: string
+transactionId: string
+providerMessageId: string | null
+messageHash: string
+createdAt: Timestamp
+sentAt: Timestamp
+```
+
+The borrower phone number, message content, and SMS credentials are not stored
+in this delivery record.
 
 ## Required relationship rules
 

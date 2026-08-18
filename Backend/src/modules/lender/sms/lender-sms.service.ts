@@ -17,6 +17,7 @@ import type {
   SmsBorrowerSearchResponse,
   SmsDeliveryResult,
 } from './lender-sms.types';
+import { readPaymentReceivedSmsSettings } from './payment-received-sms.service';
 import { SMS_PROVIDER, type SmsProvider } from './providers/sms-provider';
 
 const MAX_RECIPIENTS = 50;
@@ -41,6 +42,7 @@ export class LenderSmsService {
       configured: this.smsProvider.isConfigured(),
       sender: this.smsProvider.getSenderId(),
       updatedAt: readDate(data.updatedAt)?.toISOString() ?? null,
+      paymentReceived: readPaymentReceivedSmsSettings(data),
     };
   }
 
@@ -63,12 +65,7 @@ export class LenderSmsService {
       { merge: true },
     );
 
-    return {
-      enabled,
-      configured: this.smsProvider.isConfigured(),
-      sender: this.smsProvider.getSenderId(),
-      updatedAt: now.toDate().toISOString(),
-    };
+    return this.getSettings(lenderId);
   }
 
   async searchBorrowers(

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  BellRing,
   Check,
   MessageSquareText,
   Search,
@@ -13,6 +14,7 @@ import {
   fetchSmsSettings,
   searchSmsBorrowers,
   sendBorrowerSms,
+  updatePaymentReceivedSms,
   updateSmsEnabled,
   type SendSmsResponse,
   type SmsBorrower,
@@ -35,6 +37,9 @@ export default function SmsPage({ session }: SmsPageProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState("");
+  const [isSavingPaymentMessage, setIsSavingPaymentMessage] = useState(false);
+  const [paymentMessageSaved, setPaymentMessageSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<SendSmsResponse | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
@@ -54,6 +59,7 @@ export default function SmsPage({ session }: SmsPageProps) {
         ]);
         if (!isMounted) return;
         setSettings(nextSettings);
+        setPaymentMessage(nextSettings.paymentReceived.template);
         setBorrowers(nextBorrowers);
       } catch (loadError) {
         if (isMounted) {
@@ -179,6 +185,32 @@ export default function SmsPage({ session }: SmsPageProps) {
     }
   };
 
+  const savePaymentMessage = async (enabled: boolean) => {
+    if (!settings || !paymentMessage.trim()) return;
+    try {
+      setIsSavingPaymentMessage(true);
+      setPaymentMessageSaved(false);
+      setError(null);
+      const paymentReceived = await updatePaymentReceivedSms(
+        enabled,
+        paymentMessage,
+      );
+      setSettings((current) =>
+        current ? { ...current, paymentReceived } : current,
+      );
+      setPaymentMessage(paymentReceived.template);
+      setPaymentMessageSaved(true);
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to save the payment received message.",
+      );
+    } finally {
+      setIsSavingPaymentMessage(false);
+    }
+  };
+
   return (
     <section className="dashboard-panel sms-page">
       <header className="page-header">
@@ -217,8 +249,8 @@ export default function SmsPage({ session }: SmsPageProps) {
       {error ? <div className="sms-alert sms-alert--error">{error}</div> : null}
       {!isLoading && settings && !settings.configured ? (
         <div className="sms-alert sms-alert--warning">
-          Add SMS_API_URL, SMS_API_TOKEN, and SMS_SENDER_ID to Backend/.env
-          before sending. The token is never exposed to this page.
+          SMS delivery is not configured on the server. Contact the system
+          administrator before sending messages.
         </div>
       ) : null}
       {sendResult ? (
@@ -270,7 +302,9 @@ export default function SmsPage({ session }: SmsPageProps) {
                         <button
                           type="button"
                           className="borrower-name borrower-name--button"
-                          onClick={() => setSelectedBorrowerId(borrower.borrowerId)}
+                          onClick={() =>
+                            setSelectedBorrowerId(borrower.borrowerId)
+                          }
                         >
                           {borrower.fullName}
                         </button>
@@ -367,6 +401,93 @@ export default function SmsPage({ session }: SmsPageProps) {
           </section>
         </div>
       )}
+
+      {!isLoading && settings ? (
+        <section className="card sms-payment-automation">
+          <div className="sms-payment-automation__header">
+            <div className="sms-payment-automation__title">
+              <span className="sms-payment-automation__icon" aria-hidden="true">
+                <BellRing size={20} />
+              </span>
+              <div>
+                <h2 className="section-title">Payment received message</h2>
+                <p className="section-subtitle">
+                  Automatically notify the borrower after an installment is
+                  recorded successfully.
+                </p>
+              </div>
+            </div>
+            <div className="sms-payment-automation__switch">
+              <span>
+                {settings.paymentReceived.enabled ? "Enabled" : "Paused"}
+              </span>
+              <button
+                type="button"
+                className={`sms-switch${settings.paymentReceived.enabled ? " sms-switch--enabled" : ""}`}
+                role="switch"
+                aria-checked={settings.paymentReceived.enabled}
+                aria-label="Send the saved message when a payment is received"
+                disabled={isSavingPaymentMessage || !paymentMessage.trim()}
+                onClick={() =>
+                  void savePaymentMessage(!settings.paymentReceived.enabled)
+                }
+              >
+                <span />
+              </button>
+            </div>
+          </div>
+
+          <div className="sms-payment-automation__body">
+            <label className="sms-message-field">
+              <span>Saved message</span>
+              <textarea
+                value={paymentMessage}
+                maxLength={MAX_MESSAGE_LENGTH}
+                rows={5}
+                placeholder="Write the confirmation sent after a payment..."
+                onChange={(event) => {
+                  setPaymentMessage(event.target.value);
+                  setPaymentMessageSaved(false);
+                }}
+              />
+              <small>
+                {paymentMessage.length}/{MAX_MESSAGE_LENGTH} characters
+              </small>
+            </label>
+
+            <div className="sms-template-help">
+              <p>Available details</p>
+              <div>
+                <code>{"{{borrowerName}}"}</code>
+                <code>{"{{amount}}"}</code>
+                <code>{"{{paymentDate}}"}</code>
+                <code>{"{{remainingBalance}}"}</code>
+              </div>
+            </div>
+
+            <div className="sms-payment-automation__actions">
+              <p>
+                {!settings.enabled
+                  ? "Turn on the main SMS sending switch before automatic messages can be sent."
+                  : paymentMessageSaved
+                    ? "Payment received message saved."
+                    : "Only future recorded payments will use this message."}
+              </p>
+              <button
+                type="button"
+                className="button button-primary"
+                disabled={isSavingPaymentMessage || !paymentMessage.trim()}
+                onClick={() =>
+                  void savePaymentMessage(settings.paymentReceived.enabled)
+                }
+              >
+                <Check size={17} />
+                {isSavingPaymentMessage ? "Saving..." : "Save message"}
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {selectedBorrowerId ? (
         <BorrowerSidePanel

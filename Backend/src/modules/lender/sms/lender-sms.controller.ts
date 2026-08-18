@@ -13,18 +13,24 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { LenderSmsService } from './lender-sms.service';
+import { PaymentReceivedSmsService } from './payment-received-sms.service';
 import type {
   LenderSmsSettings,
   SendSmsInput,
   SendSmsResponse,
   SmsBorrowerSearchResponse,
+  PaymentReceivedSmsSettings,
+  UpdatePaymentReceivedSmsInput,
 } from './lender-sms.types';
 
 @Controller('lender/sms')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('lender')
 export class LenderSmsController {
-  constructor(private readonly smsService: LenderSmsService) {}
+  constructor(
+    private readonly smsService: LenderSmsService,
+    private readonly paymentReceivedSmsService: PaymentReceivedSmsService,
+  ) {}
 
   @Get('settings')
   getSettings(
@@ -39,6 +45,17 @@ export class LenderSmsController {
     @Body() body: { enabled?: boolean },
   ): Promise<LenderSmsSettings> {
     return this.smsService.setEnabled(request.user.sub, body?.enabled);
+  }
+
+  @Patch('payment-received')
+  updatePaymentReceivedSettings(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: UpdatePaymentReceivedSmsInput,
+  ): Promise<PaymentReceivedSmsSettings> {
+    return this.paymentReceivedSmsService.updateSettings(
+      request.user.sub,
+      body,
+    );
   }
 
   @Get('borrowers')
