@@ -35,17 +35,29 @@ npm run seed:basic:check
 npm run seed:basic
 ```
 
-Before using a newly created Firebase project, deploy the canonical Firestore
-indexes from the repository root:
+Before using a newly created Firebase project, check and deploy the canonical
+Firestore indexes with the same service-account configuration used by the seed:
 
 ```bash
-firebase deploy --only firestore:indexes --project YOUR_FIREBASE_PROJECT_ID
+npm run firestore:indexes:check
+npm run firestore:indexes:deploy
 ```
 
 The deployable index definition is mirrored at
-[`../firestore.indexes.json`](../firestore.indexes.json) for script users. Wait
-until Firebase reports that the indexes are enabled before loading dashboards
-or the AI assistant.
+[`../firestore.indexes.json`](../firestore.indexes.json) for script users. Index
+deployment is intentionally separate from data seeding because index creation is
+asynchronous and requires Firestore index-management permission. Wait until
+Firebase reports that the indexes are ready before loading dashboards or the AI
+assistant.
+
+The service account needs the `Cloud Datastore Index Admin`
+(`roles/datastore.indexAdmin`) role for deployment. If your project uses a
+Firebase CLI user instead, run `npx firebase-tools login` and then deploy from
+the repository root with:
+
+```bash
+npx firebase-tools deploy --only firestore:indexes --project YOUR_FIREBASE_PROJECT_ID
+```
 
 The write command requires `SEED_ENABLED=true` in `Backend/.env`.
 

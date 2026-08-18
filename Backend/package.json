@@ -28,7 +28,9 @@
     "backfill:auth-users": "node scripts/backfill-auth-users.js",
     "migrate:loan-agreements": "node scripts/migrate-loan-agreements.js",
     "migrate:loan-agreements:apply": "node scripts/migrate-loan-agreements.js --apply",
-    "create:admin": "node scripts/create-admin-user.js"
+    "create:admin": "node scripts/create-admin-user.js",
+    "firestore:indexes:check": "node scripts/deploy-firestore-indexes.js --check",
+    "firestore:indexes:deploy": "node scripts/deploy-firestore-indexes.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
