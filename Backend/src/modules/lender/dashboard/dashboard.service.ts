@@ -429,6 +429,13 @@ export class DashboardService {
         .get();
 
       if (snapshot.empty) {
+        if (searchTerm) {
+          return {
+            borrowers: [],
+            pageInfo: this.createEmptyPageInfo(pageSize),
+          };
+        }
+
         return null;
       }
 

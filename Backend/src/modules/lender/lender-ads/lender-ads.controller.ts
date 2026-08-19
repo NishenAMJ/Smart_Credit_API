@@ -23,6 +23,8 @@ type CreateLenderAdBody = {
   lenderId?: string;
   lenderName?: string | null;
   headline?: string;
+  title?: string;
+  description?: string;
   minAmount?: number | string;
   maxAmount?: number | string;
   interestRate?: number | string;
@@ -32,6 +34,8 @@ type CreateLenderAdBody = {
   repaymentStyle?: string;
   requirements?: string;
   supportNote?: string;
+  location?: string;
+  preferredPurposes?: string[] | string;
 };
 
 @Controller('lender-ads')
@@ -68,23 +72,52 @@ export class LenderAdsController {
     lenderId: string,
     body: CreateLenderAdBody,
   ): CreateLenderAdInput {
+    const headline =
+      typeof body.headline === 'string' && body.headline.trim().length > 0
+        ? body.headline
+        : typeof body.title === 'string' && body.title.trim().length > 0
+          ? body.title
+          : '';
+    const borrowerFocus =
+      typeof body.borrowerFocus === 'string' ? body.borrowerFocus : '';
+    const supportNote =
+      typeof body.supportNote === 'string' ? body.supportNote : '';
+    const description =
+      typeof body.description === 'string' ? body.description : '';
+    const preferredPurposes = Array.isArray(body.preferredPurposes)
+      ? body.preferredPurposes.filter(
+          (value): value is string => typeof value === 'string',
+        )
+      : typeof body.preferredPurposes === 'string'
+        ? body.preferredPurposes
+            .split(/[;,|/]/)
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0)
+        : [];
+
     return {
       lenderId,
       lenderName: null,
-      headline: typeof body.headline === 'string' ? body.headline : '',
+      headline,
+      title: headline,
+      description,
       minAmount: this.toNumber(body.minAmount, 'minAmount'),
       maxAmount: this.toNumber(body.maxAmount, 'maxAmount'),
       interestRate: this.toNumber(body.interestRate, 'interestRate'),
       tenureMonths: this.toNumber(body.tenureMonths, 'tenureMonths'),
-      borrowerFocus:
-        typeof body.borrowerFocus === 'string' ? body.borrowerFocus : '',
+      borrowerFocus,
       processingTime:
         typeof body.processingTime === 'string' ? body.processingTime : '',
       repaymentStyle:
         typeof body.repaymentStyle === 'string' ? body.repaymentStyle : '',
       requirements:
         typeof body.requirements === 'string' ? body.requirements : '',
-      supportNote: typeof body.supportNote === 'string' ? body.supportNote : '',
+      supportNote,
+      location:
+        typeof body.location === 'string' && body.location.trim().length > 0
+          ? body.location.trim()
+          : undefined,
+      preferredPurposes,
     };
   }
 

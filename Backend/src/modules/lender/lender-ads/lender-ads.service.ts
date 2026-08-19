@@ -55,17 +55,27 @@ export class LenderAdsService {
       Number.isFinite(lenderData.responseTimeHours)
         ? lenderData.responseTimeHours
         : 24;
+    const description =
+      input.description && input.description.trim().length > 0
+        ? input.description.trim()
+        : `${input.borrowerFocus.trim()}. ${input.supportNote.trim()}`;
     const document = {
       adId: docRef.id,
       lenderId: input.lenderId,
+      headline: title,
       title,
-      description: `${input.borrowerFocus.trim()}. ${input.supportNote.trim()}`,
+      description,
+      borrowerFocus: input.borrowerFocus,
+      processingTime: input.processingTime,
+      repaymentStyle: input.repaymentStyle,
+      requirements: input.requirements,
+      supportNote: input.supportNote,
       minAmount: input.minAmount,
       maxAmount: input.maxAmount,
       preferredInterestRate: input.interestRate,
       minTenureMonths: Math.min(6, input.tenureMonths),
       maxTenureMonths: input.tenureMonths,
-      location,
+      location: input.location?.trim() || location,
       preferredPurposes,
       status: 'pending',
       isBoosted: false,
@@ -73,14 +83,20 @@ export class LenderAdsService {
       applicationCount: 0,
       fundedLoansCount: 0,
       responseTimeHours,
+      lenderName,
+      lenderPhotoURL: null,
+      lenderRating: null,
+      imageUrl: '',
       expiresAt,
       createdAt: now,
       updatedAt: now,
       searchKeywords: this.buildSearchKeywords([
         lenderName ?? '',
-        location,
+        input.location?.trim() || location,
         title,
         preferredPurposes.join(' '),
+        input.borrowerFocus,
+        input.repaymentStyle,
       ]),
       seedBatchId: `manual_${input.lenderId}_${now.toDate().getTime()}`,
       source: 'create_ad_page',
@@ -269,28 +285,55 @@ export class LenderAdsService {
     lenderId: string,
     data: Record<string, unknown>,
   ): LenderAdResponse {
+    const title =
+      typeof data.title === 'string' && data.title.trim().length > 0
+        ? data.title
+        : typeof data.headline === 'string' && data.headline.trim().length > 0
+          ? data.headline
+          : 'Untitled ad';
+    const description =
+      typeof data.description === 'string' && data.description.trim().length > 0
+        ? data.description
+        : typeof data.supportNote === 'string'
+          ? data.supportNote
+          : '';
+    const location =
+      typeof data.location === 'string' && data.location.trim().length > 0
+        ? data.location
+        : typeof data.city === 'string' && data.city.trim().length > 0
+          ? data.city
+          : '';
+    const lenderName =
+      typeof data.lenderName === 'string' && data.lenderName.trim().length > 0
+        ? data.lenderName
+        : typeof data.businessName === 'string' && data.businessName.trim().length > 0
+          ? data.businessName
+          : typeof data.fullName === 'string' && data.fullName.trim().length > 0
+            ? data.fullName
+            : null;
+
     return {
       id,
       adId: typeof data.adId === 'string' ? data.adId : id,
       lenderId: typeof data.lenderId === 'string' ? data.lenderId : lenderId,
-      title:
-        typeof data.title === 'string' && data.title.trim().length > 0
-          ? data.title
-          : 'Untitled ad',
-      description: typeof data.description === 'string' ? data.description : '',
-      minAmount: this.toNumber(data.minAmount),
-      maxAmount: this.toNumber(data.maxAmount),
-      preferredInterestRate: this.toNumber(data.preferredInterestRate),
-      maxTenureMonths: this.toNumber(data.maxTenureMonths),
-      location: typeof data.location === 'string' ? data.location : '',
-      preferredPurposes: readStringArray(data.preferredPurposes),
+      title,
+      description,
+      minAmount: this.toNumber(data.minAmount ?? data.amount),
+      maxAmount: this.toNumber(data.maxAmount ?? data.amount),
+      preferredInterestRate: this.toNumber(
+        data.preferredInterestRate ?? data.interestRate,
+      ),
+      minTenureMonths: this.toNumber(data.minTenureMonths ?? data.tenureMonths),
+      maxTenureMonths: this.toNumber(data.maxTenureMonths ?? data.tenureMonths),
+      location,
+      preferredPurposes: readStringArray(data.preferredPurposes ?? data.purposeTags),
       status: getAdStatus(data),
       isBoosted: data.isBoosted === true,
       availableCapital: this.toNumber(data.availableCapital ?? data.maxAmount),
       applicationCount: this.toNumber(data.applicationCount),
       fundedLoansCount: this.toNumber(data.fundedLoansCount),
       responseTimeHours: this.toNumber(data.responseTimeHours),
-      lenderName: typeof data.lenderName === 'string' ? data.lenderName : null,
+      lenderName,
       expiresAt: this.toIsoString(data.expiresAt),
       createdAt: this.toIsoString(data.createdAt),
       updatedAt: this.toIsoString(data.updatedAt),
@@ -301,6 +344,11 @@ export class LenderAdsService {
         : [],
       seedBatchId: typeof data.seedBatchId === 'string' ? data.seedBatchId : '',
       source: typeof data.source === 'string' ? data.source : 'unknown',
+      lenderPhotoURL:
+        typeof data.lenderPhotoURL === 'string' ? data.lenderPhotoURL : null,
+      lenderRating:
+        typeof data.lenderRating === 'number' ? data.lenderRating : undefined,
+      imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : '',
     };
   }
 }
