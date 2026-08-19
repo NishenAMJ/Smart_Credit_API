@@ -17,6 +17,8 @@ export const COLLECTIONS = {
   messages: 'messages',
   legalDocuments: 'legalDocuments',
   legalAcceptances: 'legalAcceptances',
+  loanAgreements: 'loanAgreements',
+  loanAgreementAcceptances: 'loanAgreementAcceptances',
   userLocations: 'userLocations',
   auditLogs: 'auditLogs',
   systemSettings: 'systemSettings',
@@ -161,6 +163,8 @@ export interface LoanDocument {
   maturityDate: Timestamp | null;
   completedAt: Timestamp | null;
   termsVersion: number;
+  currentAgreementId?: string;
+  agreementStatus?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

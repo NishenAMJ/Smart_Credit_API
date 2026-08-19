@@ -203,9 +203,21 @@
   color: #92400e;
 }
 
-.badge-generated {
+.badge-awaiting_signatures,
+.badge-superseded,
+.badge-cancelled {
   background: #e2e8f0;
   color: #475569;
+}
+
+.badge-finalizing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge-finalization_failed {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 /* Action Buttons */

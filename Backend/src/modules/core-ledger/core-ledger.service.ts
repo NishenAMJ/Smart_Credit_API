@@ -8,9 +8,13 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
 import {
   COLLECTIONS,
-  installmentIdFor,
   repaymentTransactionIdFor,
 } from '../../common/firestore/schema';
+import {
+  buildLoanAgreement,
+  loanAgreementIdFor,
+} from '../legal/loan-agreement.builder';
+import type { LoanAgreementParty } from '../legal/legal.types';
 
 export interface ApproveApplicationInput {
   approvedPrincipalMinor: number;
@@ -34,13 +38,15 @@ export class CoreLedgerService {
     applicationId: string,
     lenderId: string,
     input: ApproveApplicationInput,
-  ): Promise<{ loanId: string }> {
+  ): Promise<{ loanId: string; agreementId: string }> {
     this.validateApproval(input);
     const db = this.firebaseService.db;
     const applicationRef = db
       .collection(COLLECTIONS.loanApplications)
       .doc(applicationId);
     const loanRef = db.collection(COLLECTIONS.loans).doc();
+    const agreementId = loanAgreementIdFor(loanRef.id, 1);
+    const agreementRef = db.collection('loanAgreements').doc(agreementId);
 
     await db.runTransaction(async (transaction) => {
       const applicationSnapshot = await transaction.get(applicationRef);
@@ -49,9 +55,6 @@ export class CoreLedgerService {
       }
 
       const application = applicationSnapshot.data() ?? {};
-      if (application.lenderId !== lenderId) {
-        throw new NotFoundException(`Application ${applicationId} not found.`);
-      }
       if (
         !['submitted', 'under_review', 'approved'].includes(application.status)
       ) {
@@ -63,6 +66,38 @@ export class CoreLedgerService {
         throw new ConflictException('Application already has a loan.');
       }
 
+      const listingId = String(application.listingId ?? '');
+      const borrowerId = String(application.borrowerId ?? '');
+      if (!listingId || !borrowerId) {
+        throw new BadRequestException(
+          'Application listing and borrower references are required.',
+        );
+      }
+      const [listingSnapshot, lenderSnapshot, borrowerSnapshot] =
+        await Promise.all([
+          transaction.get(db.collection(COLLECTIONS.loanListings).doc(listingId)),
+          transaction.get(db.collection(COLLECTIONS.users).doc(lenderId)),
+          transaction.get(db.collection(COLLECTIONS.users).doc(borrowerId)),
+        ]);
+      if (!listingSnapshot.exists) {
+        throw new NotFoundException('The application listing no longer exists.');
+      }
+      if (!lenderSnapshot.exists || !borrowerSnapshot.exists) {
+        throw new NotFoundException('A loan participant no longer exists.');
+      }
+      const listing = listingSnapshot.data() ?? {};
+      const matchedLenders = Array.isArray(application.matchedLenderIds)
+        ? application.matchedLenderIds
+        : [];
+      if (
+        application.lenderId !== lenderId &&
+        listing.lenderId !== lenderId &&
+        !matchedLenders.includes(lenderId)
+      ) {
+        throw new NotFoundException(`Application ${applicationId} not found.`);
+      }
+      this.validateAgainstListing(input, listing);
+
       const principal = Math.trunc(input.approvedPrincipalMinor);
       const interest = Math.round(
         principal *
@@ -72,14 +107,45 @@ export class CoreLedgerService {
       const total = principal + interest;
       const baseInstallment = Math.floor(total / input.approvedTenureMonths);
       const now = Timestamp.now();
-      const firstDue = this.addMonths(now.toDate(), 1);
+      const terms = {
+        currency: 'LKR' as const,
+        principalMinor: principal,
+        annualInterestRate: input.annualInterestRate,
+        interestAmountMinor: interest,
+        totalRepayableMinor: total,
+        monthlyInstallmentMinor: baseInstallment,
+        tenureMonths: input.approvedTenureMonths,
+        repaymentFrequency: 'monthly' as const,
+        repaymentStartRule: 'one_month_after_activation' as const,
+      };
+      const agreement = buildLoanAgreement({
+        agreementId,
+        loanId: loanRef.id,
+        applicationId,
+        listingId,
+        version: 1,
+        borrower: this.toAgreementParty(
+          borrowerSnapshot.data() ?? {},
+          borrowerId,
+          'borrower',
+        ),
+        lender: this.toAgreementParty(
+          lenderSnapshot.data() ?? {},
+          lenderId,
+          'lender',
+        ),
+        terms,
+        generatedByUserId: lenderId,
+        generatedByRole: 'lender',
+        now,
+      });
 
       transaction.set(loanRef, {
         loanId: loanRef.id,
         applicationId,
-        listingId: application.listingId,
+        listingId,
         lenderId,
-        borrowerId: application.borrowerId,
+        borrowerId,
         currency: 'LKR',
         principalMinor: principal,
         annualInterestRate: input.annualInterestRate,
@@ -92,46 +158,16 @@ export class CoreLedgerService {
         status: 'pending_disbursement',
         approvedAt: now,
         disbursedAt: null,
-        firstPaymentDueAt: Timestamp.fromDate(firstDue),
-        maturityDate: Timestamp.fromDate(
-          this.addMonths(firstDue, input.approvedTenureMonths - 1),
-        ),
+        firstPaymentDueAt: null,
+        maturityDate: null,
         completedAt: null,
         termsVersion: 1,
+        currentAgreementId: agreementId,
+        agreementStatus: 'awaiting_signatures',
         createdAt: now,
         updatedAt: now,
       });
-
-      for (
-        let sequence = 1;
-        sequence <= input.approvedTenureMonths;
-        sequence += 1
-      ) {
-        const installmentId = installmentIdFor(sequence);
-        const amountDue =
-          sequence === input.approvedTenureMonths
-            ? total - baseInstallment * (input.approvedTenureMonths - 1)
-            : baseInstallment;
-        transaction.set(
-          loanRef.collection(COLLECTIONS.installments).doc(installmentId),
-          {
-            installmentId,
-            loanId: loanRef.id,
-            lenderId,
-            borrowerId: application.borrowerId,
-            sequence,
-            currency: 'LKR',
-            amountDueMinor: amountDue,
-            status: 'scheduled',
-            dueAt: Timestamp.fromDate(this.addMonths(firstDue, sequence - 1)),
-            paidTransactionId: null,
-            paidAt: null,
-            note: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-        );
-      }
+      transaction.set(agreementRef, agreement);
 
       transaction.update(applicationRef, {
         status: 'converted',
@@ -147,7 +183,7 @@ export class CoreLedgerService {
       });
     });
 
-    return { loanId: loanRef.id };
+    return { loanId: loanRef.id, agreementId };
   }
 
   async settleInstallment(
@@ -274,6 +310,56 @@ export class CoreLedgerService {
         'approvedTenureMonths must be between 1 and 120.',
       );
     }
+  }
+
+  private validateAgainstListing(
+    input: ApproveApplicationInput,
+    listing: Record<string, unknown>,
+  ): void {
+    const minAmount = Number(listing.minAmountMinor ?? 0);
+    const maxAmount = Number(listing.maxAmountMinor ?? Number.MAX_SAFE_INTEGER);
+    const minRate = Number(listing.minInterestRateAnnual ?? 0);
+    const maxRate = Number(listing.maxInterestRateAnnual ?? 100);
+    const minTenure = Number(listing.minTenureMonths ?? 1);
+    const maxTenure = Number(listing.maxTenureMonths ?? 120);
+    if (
+      input.approvedPrincipalMinor < minAmount ||
+      input.approvedPrincipalMinor > maxAmount
+    ) {
+      throw new BadRequestException(
+        'Approved principal is outside the listing amount range.',
+      );
+    }
+    if (
+      input.annualInterestRate < minRate ||
+      input.annualInterestRate > maxRate
+    ) {
+      throw new BadRequestException(
+        'Approved interest rate is outside the listing rate range.',
+      );
+    }
+    if (
+      input.approvedTenureMonths < minTenure ||
+      input.approvedTenureMonths > maxTenure
+    ) {
+      throw new BadRequestException(
+        'Approved tenure is outside the listing tenure range.',
+      );
+    }
+  }
+
+  private toAgreementParty(
+    data: Record<string, unknown>,
+    userId: string,
+    role: 'borrower' | 'lender',
+  ): LoanAgreementParty {
+    return {
+      userId,
+      fullName: typeof data.fullName === 'string' ? data.fullName : 'Unknown',
+      email: typeof data.email === 'string' ? data.email : '',
+      phone: typeof data.phone === 'string' ? data.phone : '',
+      role,
+    };
   }
 
   private addMonths(date: Date, months: number): Date {

@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleDollarSign,
+  FileSignature,
   Landmark,
   ReceiptText,
   X,
@@ -20,6 +21,7 @@ type LoanDetailsModalProps = {
   borrowerName?: string | null
   initialShowPayments?: boolean
   onPaymentRecorded?: () => void
+  onOpenAgreement?: (loanId: string) => void
   onClose: () => void
 }
 
@@ -100,6 +102,7 @@ export default function LoanDetailsModal({
   borrowerName,
   initialShowPayments = false,
   onPaymentRecorded,
+  onOpenAgreement,
   onClose,
 }: LoanDetailsModalProps) {
   const [details, setDetails] = useState<LoanLedgerDetailsResponse | null>(null)
@@ -298,6 +301,18 @@ export default function LoanDetailsModal({
               </div>
 
               <div className="loan-details-actions">
+                {onOpenAgreement ? (
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={() => {
+                      onClose()
+                      onOpenAgreement(loanId)
+                    }}
+                  >
+                    <FileSignature size={18} /> Agreement
+                  </button>
+                ) : null}
                 <button
                   className="loan-details-payments-toggle"
                   type="button"

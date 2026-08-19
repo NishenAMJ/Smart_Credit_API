@@ -1,378 +1,745 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
-  BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-import * as crypto from 'crypto';
+import { ConfigService } from '@nestjs/config';
+import { createHash, createHmac } from 'crypto';
+import { Timestamp, type CollectionReference } from 'firebase-admin/firestore';
 import puppeteer from 'puppeteer';
-import { type CollectionReference, Timestamp } from 'firebase-admin/firestore';
 
+import { installmentIdFor } from '../../common/firestore/schema';
 import { FirebaseService } from '../../firebase/firebase.service';
 import type { UserRole, UserDocument } from '../auth/auth.types';
 import { AuthService } from '../auth/auth.service';
-import { MediaService } from '../media/media.service';
 import { DocumentsService } from '../documents/documents.service';
+import { MediaService } from '../media/media.service';
 import type {
   AcceptLegalDocumentResponseDto,
   LegalDocumentDto,
+  ListLegalDocumentsResponseDto,
 } from './dto/legal-document.dto';
+import {
+  agreementAcceptanceIdFor,
+  buildAgreementHtml,
+  buildLoanAgreement,
+  disbursementTransactionIdFor,
+  loanAgreementIdFor,
+} from './loan-agreement.builder';
 import type {
-  LegalDocument,
-  LegalDocumentParty,
-  LegalPartySignatureAudit,
+  AcceptLoanAgreementInput,
+  LoanAgreementAcceptanceDocument,
+  LoanAgreementDocument,
+  LoanAgreementParty,
+  LoanAgreementTerms,
 } from './legal.types';
 
-type LoanRecord = {
-  id: string;
+type CanonicalLoanRecord = {
+  loanId: string;
+  applicationId: string;
+  listingId: string;
   borrowerId: string;
   lenderId: string;
-  amount?: number;
-  interestRate?: number;
-  durationMonths?: number;
-  repaymentSchedule?: string;
-  status?: string;
-  nextDueDate?: Timestamp;
+  termsVersion: number;
+  terms: LoanAgreementTerms;
 };
 
 @Injectable()
 export class LegalService {
-  private readonly legalCollection: CollectionReference<LegalDocument>;
+  private readonly agreements: CollectionReference<LoanAgreementDocument>;
+  private readonly acceptances: CollectionReference<LoanAgreementAcceptanceDocument>;
 
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly authService: AuthService,
     private readonly mediaService: MediaService,
     private readonly documentsService: DocumentsService,
+    private readonly configService: ConfigService,
   ) {
-    this.legalCollection = this.firebaseService.db.collection(
-      'legalDocuments',
-    ) as CollectionReference<LegalDocument>;
+    this.agreements = this.firebaseService.db.collection(
+      'loanAgreements',
+    ) as CollectionReference<LoanAgreementDocument>;
+    this.acceptances = this.firebaseService.db.collection(
+      'loanAgreementAcceptances',
+    ) as CollectionReference<LoanAgreementAcceptanceDocument>;
   }
 
-  // Creates or refreshes the legal agreement snapshot for a loan using the latest borrower, lender, and loan data.
   async generateLoanAgreement(
     loanId: string,
     userId: string,
     userRole: UserRole,
   ): Promise<LegalDocumentDto> {
-    const loan = await this.getLoanById(loanId);
-    await this.assertLoanAccess(loan, userId, userRole);
+    if (userRole !== 'lender') {
+      throw new ForbiddenException(
+        'Only the lender on a loan can generate an agreement.',
+      );
+    }
 
-    const [borrower, lender] = await Promise.all([
+    const loan = await this.getCanonicalLoan(loanId);
+    this.assertLoanAccess(loan, userId, userRole);
+    const [borrower, lender, existing] = await Promise.all([
       this.authService.getUserById(loan.borrowerId),
       this.authService.getUserById(loan.lenderId),
+      this.getLatestLoanAgreementRecord(loanId),
     ]);
-
-    // Reuse the latest document record so signatures are preserved when the agreement is regenerated.
-    const existing = await this.getLatestLoanDocumentRecord(loanId);
-    const legalRef = existing
-      ? this.legalCollection.doc(existing.id)
-      : this.legalCollection.doc();
-    const now = Timestamp.now();
-
-    const document: LegalDocument = {
-      id: legalRef.id,
+    const nextVersion = existing?.version ?? loan.termsVersion ?? 1;
+    const agreementId = loanAgreementIdFor(loanId, nextVersion);
+    const candidate = buildLoanAgreement({
+      agreementId,
       loanId,
-      title: `Smart Credit+ Loan Agreement - ${loanId}`,
-      summary: this.buildSummary(borrower, lender, loan),
-      documentType: 'loan_agreement',
-      status: existing ? this.resolveExistingStatus(existing) : 'generated',
+      applicationId: loan.applicationId,
+      listingId: loan.listingId,
+      version: nextVersion,
+      borrower: this.toParty(borrower, 'borrower'),
+      lender: this.toParty(lender, 'lender'),
+      terms: loan.terms,
       generatedByUserId: userId,
       generatedByRole: userRole,
-      generatedAt: existing?.generatedAt ?? now,
-      updatedAt: now,
-      borrower: this.toPartyDto(borrower, 'borrower'),
-      lender: this.toPartyDto(lender, 'lender'),
-      loanSnapshot: {
-        loanId,
-        amount: this.readNumber(loan.amount),
-        interestRate: this.readNumber(loan.interestRate),
-        durationMonths: this.readNumber(loan.durationMonths),
-        repaymentSchedule:
-          this.readString(loan.repaymentSchedule) || 'Monthly repayment',
-        status: this.readString(loan.status) || 'pending',
-        ...(loan.nextDueDate ? { nextDueDate: loan.nextDueDate } : {}),
-      },
-      htmlContent: '',
-      borrowerAccepted: existing?.borrowerAccepted ?? false,
-      lenderAccepted: existing?.lenderAccepted ?? false,
-      ...(existing?.borrowerAcceptedAt
-        ? { borrowerAcceptedAt: existing.borrowerAcceptedAt }
-        : {}),
-      ...(existing?.lenderAcceptedAt
-        ? { lenderAcceptedAt: existing.lenderAcceptedAt }
-        : {}),
-      pdfDownloadPath: `/api/legal/documents/${legalRef.id}/download`,
-    };
+      now: Timestamp.now(),
+    });
 
-    document.status = this.resolveDocumentStatus(document);
-    document.htmlContent = this.buildAgreementHtml(document);
-    await legalRef.set(document);
+    if (existing?.termsHash === candidate.termsHash) {
+      return this.toDto(existing);
+    }
 
-    return this.toDto(document);
+    const version = existing ? existing.version + 1 : nextVersion;
+    const next = buildLoanAgreement({
+      ...candidate,
+      agreementId: loanAgreementIdFor(loanId, version),
+      version,
+      now: Timestamp.now(),
+    });
+
+    await this.firebaseService.db.runTransaction(async (transaction) => {
+      if (existing) {
+        transaction.update(this.agreements.doc(existing.agreementId), {
+          status: 'superseded',
+          updatedAt: Timestamp.now(),
+        });
+      }
+      transaction.set(this.agreements.doc(next.agreementId), next);
+      transaction.update(
+        this.firebaseService.db.collection('loans').doc(loanId),
+        {
+          currentAgreementId: next.agreementId,
+          agreementStatus: next.status,
+          termsVersion: version,
+          updatedAt: Timestamp.now(),
+        },
+      );
+    });
+
+    return this.toDto(next);
   }
 
-  // Returns a single document only if the caller belongs to that agreement or is an admin.
   async getDocumentById(
-    documentId: string,
+    agreementId: string,
     userId: string,
     userRole: UserRole,
   ): Promise<LegalDocumentDto> {
-    const doc = await this.legalCollection.doc(documentId).get();
-
-    if (!doc.exists) {
-      throw new NotFoundException('Legal document not found.');
-    }
-
-    const document = doc.data() as LegalDocument;
-    this.assertDocumentAccess(document, userId, userRole);
-    return this.toDto(document);
+    const agreement = await this.getAgreementRecord(agreementId);
+    this.assertAgreementAccess(agreement, userId, userRole);
+    return this.toDto(agreement);
   }
 
-  // Gets the newest legal document created for a loan, if one exists.
   async getLatestLoanDocument(
     loanId: string,
     userId: string,
     userRole: UserRole,
   ): Promise<LegalDocumentDto | null> {
-    const loan = await this.getLoanById(loanId);
-    await this.assertLoanAccess(loan, userId, userRole);
-    const document = await this.getLatestLoanDocumentRecord(loanId);
-    return document ? this.toDto(document) : null;
+    const loan = await this.getCanonicalLoan(loanId);
+    this.assertLoanAccess(loan, userId, userRole);
+    const agreement = await this.getLatestLoanAgreementRecord(loanId);
+    return agreement ? this.toDto(agreement) : null;
   }
 
-  // Lists documents scoped to the current party, while admins can review everything.
   async listDocuments(
     userId: string,
     userRole: UserRole,
-  ): Promise<LegalDocumentDto[]> {
-    let query: FirebaseFirestore.Query<LegalDocument> = this.legalCollection;
+    options: { pageSize?: number; cursor?: string; status?: string } = {},
+  ): Promise<ListLegalDocumentsResponseDto> {
+    const pageSize = Math.min(Math.max(options.pageSize ?? 20, 1), 50);
+    let query: FirebaseFirestore.Query<LoanAgreementDocument> = this.agreements;
 
     if (userRole === 'borrower') {
-      query = query.where('borrower.userId', '==', userId);
+      query = query.where('borrowerId', '==', userId);
     } else if (userRole === 'lender') {
-      query = query.where('lender.userId', '==', userId);
+      query = query.where('lenderId', '==', userId);
     }
-    // admin gets all documents
+    if (options.status) {
+      query = query.where('status', '==', options.status);
+    }
+    query = query.orderBy('updatedAt', 'desc');
 
-    const snapshot = await query.orderBy('updatedAt', 'desc').get();
-    return snapshot.docs.map((doc) => this.toDto(doc.data() as LegalDocument));
+    if (options.cursor) {
+      const cursor = await this.agreements.doc(options.cursor).get();
+      if (cursor.exists) {
+        query = query.startAfter(cursor);
+      }
+    }
+
+    const snapshot = await query.limit(pageSize + 1).get();
+    const pageDocs = snapshot.docs.slice(0, pageSize);
+    return {
+      documents: pageDocs.map((doc) => this.toDto(doc.data())),
+      pageInfo: {
+        hasMore: snapshot.size > pageSize,
+        nextCursor:
+          snapshot.size > pageSize
+            ? (pageDocs[pageDocs.length - 1]?.id ?? null)
+            : null,
+      },
+    };
   }
 
-  // Marks the borrower's or lender's acceptance and generates the signed PDF once both parties agree.
   async acceptDocument(
-    documentId: string,
+    agreementId: string,
     userId: string,
     userRole: UserRole,
-    signatureAudit: LegalPartySignatureAudit,
+    input: AcceptLoanAgreementInput,
   ): Promise<AcceptLegalDocumentResponseDto> {
-    const docRef = this.legalCollection.doc(documentId);
-    const snapshot = await docRef.get();
-
-    if (!snapshot.exists) {
-      throw new NotFoundException('Legal document not found.');
-    }
-
-    const document = snapshot.data() as LegalDocument;
-    this.assertDocumentAccess(document, userId, userRole);
-
     if (userRole === 'admin') {
       throw new ForbiddenException(
-        'Admin users can review legal documents but cannot accept them on behalf of parties.',
+        'Admins can review agreements but cannot sign for either party.',
       );
     }
-
-    const now = Timestamp.now();
-    const signedName = this.readString(signatureAudit.signedName).trim();
-
-    if (!signedName) {
-      throw new BadRequestException('Signed name is required.');
+    if (userRole !== 'borrower' && userRole !== 'lender') {
+      throw new ForbiddenException('Only a borrower or lender can sign.');
     }
+    this.validateAcceptanceInput(input);
 
-    const updateData: Partial<LegalDocument> = {
-      updatedAt: now,
-    };
+    const agreementRef = this.agreements.doc(agreementId);
+    const acceptanceRef = this.acceptances.doc(
+      agreementAcceptanceIdFor(agreementId, userRole),
+    );
+    const auditSalt = this.getAuditSalt();
 
-    if (userRole === 'borrower') {
-      if (document.borrower.userId !== userId) {
-        throw new ForbiddenException(
-          'Only the borrower on this loan can accept as borrower.',
-        );
-      }
-      updateData.borrowerAccepted = true;
-      updateData.borrowerAcceptedAt = now;
-      updateData.borrowerSignatureAudit = {
-        signedName,
-        ipAddress:
-          this.readString(signatureAudit.ipAddress).trim() || undefined,
-        userAgent:
-          this.readString(signatureAudit.userAgent).trim() || undefined,
-      };
-    }
+    const acceptedAgreement = await this.firebaseService.db.runTransaction(
+      async (transaction) => {
+        const [agreementSnapshot, acceptanceSnapshot] = await Promise.all([
+          transaction.get(agreementRef),
+          transaction.get(acceptanceRef),
+        ]);
+        if (!agreementSnapshot.exists) {
+          throw new NotFoundException('Loan agreement not found.');
+        }
 
-    if (userRole === 'lender') {
-      if (document.lender.userId !== userId) {
-        throw new ForbiddenException(
-          'Only the lender on this loan can accept as lender.',
-        );
-      }
-      updateData.lenderAccepted = true;
-      updateData.lenderAcceptedAt = now;
-      updateData.lenderSignatureAudit = {
-        signedName,
-        ipAddress:
-          this.readString(signatureAudit.ipAddress).trim() || undefined,
-        userAgent:
-          this.readString(signatureAudit.userAgent).trim() || undefined,
-      };
-    }
+        const agreement = agreementSnapshot.data() as LoanAgreementDocument;
+        this.assertAgreementAccess(agreement, userId, userRole);
+        if (agreement.legacyReadOnly) {
+          throw new ConflictException('Migrated legacy agreements are read-only.');
+        }
+        if (['superseded', 'cancelled'].includes(agreement.status)) {
+          throw new ConflictException(
+            `An agreement in ${agreement.status} state cannot be signed.`,
+          );
+        }
+        if (userRole === 'borrower' && !agreement.lenderAcceptance.accepted) {
+          throw new ConflictException(
+            'The lender must sign this agreement before the borrower can sign.',
+          );
+        }
+        if (
+          input.agreementVersion !== agreement.version ||
+          input.termsHash !== agreement.termsHash
+        ) {
+          throw new ConflictException(
+            'The agreement terms changed. Reload the latest version before signing.',
+          );
+        }
 
-    const merged: LegalDocument = {
-      ...document,
-      ...updateData,
-    };
-    merged.status = this.resolveDocumentStatus(merged);
-    merged.htmlContent = this.buildAgreementHtml(merged);
-
-    if (merged.status === 'fully_accepted') {
-      const { documentId: pdfDocumentId, hash } = await this.persistSignedPdfToCloudinary(
-        merged,
-        userId,
-        documentId, // outer param = Firestore legal-document ID
-      );
-      merged.signedPdfDocumentId = pdfDocumentId;
-      merged.signedPdfGeneratedAt = now;
-      merged.pdfSha256Hash = hash;
-
-      // Update the loan document to ACTIVE
-      await this.firebaseService.db
-        .collection('loans')
-        .doc(document.loanId)
-        .update({
-          status: 'ACTIVE',
-          activatedAt: now,
-          signedPdfHash: hash,
-          signedPdfAt: now,
-        });
-    }
-
-    await docRef.update({
-      ...updateData,
-      status: merged.status,
-      htmlContent: merged.htmlContent,
-      ...(merged.signedPdfDocumentId
-        ? {
-            signedPdfDocumentId: merged.signedPdfDocumentId,
-            signedPdfGeneratedAt: merged.signedPdfGeneratedAt,
-            pdfSha256Hash: merged.pdfSha256Hash,
+        if (acceptanceSnapshot.exists) {
+          const prior =
+            acceptanceSnapshot.data() as LoanAgreementAcceptanceDocument;
+          if (
+            prior.userId !== userId ||
+            prior.termsHash !== input.termsHash ||
+            prior.agreementVersion !== input.agreementVersion
+          ) {
+            throw new ConflictException(
+              'A different acceptance already exists for this agreement role.',
+            );
           }
-        : {}),
-    });
+          return agreement;
+        }
 
+        const now = Timestamp.now();
+        const acceptance: LoanAgreementAcceptanceDocument = {
+          acceptanceId: acceptanceRef.id,
+          agreementId,
+          loanId: agreement.loanId,
+          userId,
+          role: userRole,
+          agreementVersion: agreement.version,
+          termsHash: agreement.termsHash,
+          signedName: input.signedName.trim(),
+          consentAccepted: true,
+          consentTextVersion: agreement.consentTextVersion,
+          ipAddressHash: input.ipAddress
+            ? createHmac('sha256', auditSalt)
+                .update(input.ipAddress)
+                .digest('hex')
+            : null,
+          userAgent: input.userAgent?.slice(0, 500) || null,
+          acceptedAt: now,
+        };
+        const merged: LoanAgreementDocument = {
+          ...agreement,
+          borrowerAcceptance:
+            userRole === 'borrower'
+              ? {
+                  accepted: true,
+                  signedName: acceptance.signedName,
+                  acceptedAt: now,
+                }
+              : agreement.borrowerAcceptance,
+          lenderAcceptance:
+            userRole === 'lender'
+              ? {
+                  accepted: true,
+                  signedName: acceptance.signedName,
+                  acceptedAt: now,
+                }
+              : agreement.lenderAcceptance,
+          updatedAt: now,
+          finalizationError: null,
+        };
+        const bothAccepted =
+          merged.borrowerAcceptance.accepted &&
+          merged.lenderAcceptance.accepted;
+        merged.status = bothAccepted ? 'finalizing' : 'partially_accepted';
+        merged.finalizationStartedAt = bothAccepted ? now : null;
+        merged.bodyHtml = buildAgreementHtml(merged);
+
+        transaction.create(acceptanceRef, acceptance);
+        transaction.update(agreementRef, {
+          borrowerAcceptance: merged.borrowerAcceptance,
+          lenderAcceptance: merged.lenderAcceptance,
+          status: merged.status,
+          bodyHtml: merged.bodyHtml,
+          updatedAt: now,
+          finalizationStartedAt: merged.finalizationStartedAt,
+          finalizationError: null,
+        });
+        return merged;
+      },
+    );
+
+    const bothAccepted =
+      acceptedAgreement.borrowerAcceptance.accepted &&
+      acceptedAgreement.lenderAcceptance.accepted;
+    if (!bothAccepted || acceptedAgreement.status === 'fully_accepted') {
+      return {
+        message:
+          userRole === 'lender'
+            ? 'Lender signature recorded. The agreement is waiting for the borrower.'
+            : 'Loan agreement acceptance recorded.',
+        document: this.toDto(acceptedAgreement),
+      };
+    }
+
+    try {
+      const finalized = await this.finalizeAgreementRecord(agreementId);
+      return {
+        message:
+          'The lender and borrower signed in sequence. The loan is now active.',
+        document: this.toDto(finalized),
+      };
+    } catch {
+      const failed = await this.markFinalizationFailed(agreementId);
+      return {
+        message:
+          'Both signatures were saved, but PDF finalization failed. Retry is available.',
+        document: this.toDto(failed),
+      };
+    }
+  }
+
+  async retryFinalization(
+    agreementId: string,
+    userId: string,
+    userRole: UserRole,
+  ): Promise<AcceptLegalDocumentResponseDto> {
+    const agreement = await this.getAgreementRecord(agreementId);
+    this.assertAgreementAccess(agreement, userId, userRole);
+    if (userRole === 'admin') {
+      throw new ForbiddenException('Admins cannot finalize party agreements.');
+    }
+    if (
+      !agreement.borrowerAcceptance.accepted ||
+      !agreement.lenderAcceptance.accepted
+    ) {
+      throw new ConflictException('Both signatures are required first.');
+    }
+    const finalized = await this.finalizeAgreementRecord(agreementId);
     return {
-      message: 'Legal document acceptance recorded successfully.',
-      document: this.toDto(merged),
+      message: 'Agreement finalization completed.',
+      document: this.toDto(finalized),
     };
   }
 
-  // Reads the loan record and normalizes field names because seeded data may use slightly different keys.
-  private async getLoanById(loanId: string): Promise<LoanRecord> {
-    const doc = await this.firebaseService.db
+  async downloadDocumentPdf(
+    agreementId: string,
+    userId: string,
+    userRole: UserRole,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const agreement = await this.getAgreementRecord(agreementId);
+    this.assertAgreementAccess(agreement, userId, userRole);
+
+    if (agreement.signedPdfDocumentId) {
+      const documentRecord = await this.documentsService.getById(
+        agreement.signedPdfDocumentId,
+      );
+      if (documentRecord && documentRecord.status !== 'deleted') {
+        const url = this.mediaService.generateSignedDeliveryUrl({
+          publicId: documentRecord.cloudinaryPublicId,
+          resourceType: documentRecord.cloudinaryResourceType,
+          deliveryType: documentRecord.cloudinaryDeliveryType,
+          version: documentRecord.cloudinaryVersion,
+          format: documentRecord.format,
+        });
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new ServiceUnavailableException(
+            'The signed agreement PDF is temporarily unavailable.',
+          );
+        }
+        return {
+          buffer: Buffer.from(await response.arrayBuffer()),
+          fileName: this.buildPdfFileName(agreement),
+        };
+      }
+    }
+
+    return {
+      buffer: await this.buildAgreementPdf(agreement),
+      fileName: this.buildPdfFileName(agreement),
+    };
+  }
+
+  private async finalizeAgreementRecord(
+    agreementId: string,
+  ): Promise<LoanAgreementDocument> {
+    const agreementRef = this.agreements.doc(agreementId);
+    let agreement = await this.getAgreementRecord(agreementId);
+    if (agreement.status === 'fully_accepted') {
+      return agreement;
+    }
+    if (
+      !agreement.borrowerAcceptance.accepted ||
+      !agreement.lenderAcceptance.accepted
+    ) {
+      throw new ConflictException('Both signatures are required first.');
+    }
+
+    const startedAt = Timestamp.now();
+    agreement = {
+      ...agreement,
+      status: 'finalizing',
+      finalizationStartedAt: startedAt,
+      finalizationError: null,
+      updatedAt: startedAt,
+    };
+    agreement.bodyHtml = buildAgreementHtml(agreement);
+    await agreementRef.update({
+      status: agreement.status,
+      finalizationStartedAt: startedAt,
+      finalizationError: null,
+      bodyHtml: agreement.bodyHtml,
+      updatedAt: startedAt,
+    });
+
+    const buffer = await this.buildAgreementPdf(agreement);
+    const pdfHash = createHash('sha256').update(buffer).digest('hex');
+    const pdfDocumentId = `agreement_pdf_${agreementId}`;
+    const uploaded = await this.mediaService.uploadBufferAsDocument(buffer, {
+      folder: `documents/loan-agreements/${agreement.loanId}/v${String(
+        agreement.version,
+      ).padStart(3, '0')}`,
+      publicId: 'signed-agreement',
+      resourceType: 'raw',
+      deliveryType: 'authenticated',
+      overwrite: true,
+    });
+    await this.documentsService.createSystemGeneratedRecord({
+      id: pdfDocumentId,
+      userId: agreement.lenderId,
+      category: 'agreement',
+      documentType: 'loan_agreement_pdf',
+      originalFilename: this.buildPdfFileName(agreement),
+      mimeType: 'application/pdf',
+      fileHash: pdfHash,
+      relatedEntityType: 'loan_agreement',
+      relatedEntityId: agreementId,
+      displayName: `Signed Loan Agreement - ${agreement.loanId}`,
+      uploadedMedia: uploaded,
+    });
+
+    const db = this.firebaseService.db;
+    const loanRef = db.collection('loans').doc(agreement.loanId);
+    const ledgerRef = db
+      .collection('transactions')
+      .doc(disbursementTransactionIdFor(agreement.loanId));
+    await db.runTransaction(async (transaction) => {
+      const [currentAgreementSnapshot, loanSnapshot, ledgerSnapshot] =
+        await Promise.all([
+          transaction.get(agreementRef),
+          transaction.get(loanRef),
+          transaction.get(ledgerRef),
+        ]);
+      if (!currentAgreementSnapshot.exists || !loanSnapshot.exists) {
+        throw new NotFoundException('Agreement or loan no longer exists.');
+      }
+      const currentAgreement =
+        currentAgreementSnapshot.data() as LoanAgreementDocument;
+      const loan = loanSnapshot.data() ?? {};
+      if (currentAgreement.status === 'fully_accepted' && ledgerSnapshot.exists) {
+        return;
+      }
+      if (!['pending_disbursement', 'active'].includes(String(loan.status))) {
+        throw new ConflictException(
+          `Loan in ${String(loan.status)} state cannot be activated.`,
+        );
+      }
+
+      const activatedAt = Timestamp.now();
+      const firstDueDate = this.addMonths(activatedAt.toDate(), 1);
+      if (!ledgerSnapshot.exists) {
+        for (
+          let sequence = 1;
+          sequence <= currentAgreement.terms.tenureMonths;
+          sequence += 1
+        ) {
+          const installmentId = installmentIdFor(sequence);
+          const amountDueMinor =
+            sequence === currentAgreement.terms.tenureMonths
+              ? currentAgreement.terms.totalRepayableMinor -
+                currentAgreement.terms.monthlyInstallmentMinor *
+                  (currentAgreement.terms.tenureMonths - 1)
+              : currentAgreement.terms.monthlyInstallmentMinor;
+          transaction.create(
+            loanRef.collection('installments').doc(installmentId),
+            {
+              installmentId,
+              loanId: agreement.loanId,
+              lenderId: agreement.lenderId,
+              borrowerId: agreement.borrowerId,
+              sequence,
+              currency: 'LKR',
+              amountDueMinor,
+              status: 'scheduled',
+              dueAt: Timestamp.fromDate(
+                this.addMonths(firstDueDate, sequence - 1),
+              ),
+              paidTransactionId: null,
+              paidAt: null,
+              note: null,
+              createdAt: activatedAt,
+              updatedAt: activatedAt,
+            },
+          );
+        }
+        transaction.create(ledgerRef, {
+          transactionId: ledgerRef.id,
+          type: 'disbursement',
+          status: 'completed',
+          currency: 'LKR',
+          amountMinor: currentAgreement.terms.principalMinor,
+          lenderId: agreement.lenderId,
+          borrowerId: agreement.borrowerId,
+          loanId: agreement.loanId,
+          installmentId: null,
+          listingId: agreement.listingId,
+          paymentMethod: 'system',
+          externalReference: null,
+          idempotencyKey: ledgerRef.id,
+          receiptDocumentId: pdfDocumentId,
+          note:
+            'Disbursement bookkeeping recorded after lender-first and borrower-second signatures. Smart Credit does not execute or independently verify the external transfer.',
+          initiatedByUserId: agreement.lenderId,
+          completedAt: activatedAt,
+          createdAt: activatedAt,
+        });
+      }
+
+      transaction.update(loanRef, {
+        status: 'active',
+        agreementStatus: 'fully_accepted',
+        currentAgreementId: agreementId,
+        disbursedAt: activatedAt,
+        firstPaymentDueAt: Timestamp.fromDate(firstDueDate),
+        maturityDate: Timestamp.fromDate(
+          this.addMonths(
+            firstDueDate,
+            currentAgreement.terms.tenureMonths - 1,
+          ),
+        ),
+        signedPdfHash: pdfHash,
+        signedPdfAt: activatedAt,
+        updatedAt: activatedAt,
+      });
+      transaction.update(agreementRef, {
+        status: 'fully_accepted',
+        signedPdfDocumentId: pdfDocumentId,
+        signedPdfGeneratedAt: activatedAt,
+        pdfSha256Hash: pdfHash,
+        finalizedAt: activatedAt,
+        finalizationError: null,
+        updatedAt: activatedAt,
+      });
+    });
+
+    return this.getAgreementRecord(agreementId);
+  }
+
+  private async markFinalizationFailed(
+    agreementId: string,
+  ): Promise<LoanAgreementDocument> {
+    const now = Timestamp.now();
+    await this.agreements.doc(agreementId).update({
+      status: 'finalization_failed',
+      finalizationError: 'PDF finalization failed. Retry is available.',
+      updatedAt: now,
+    });
+    return this.getAgreementRecord(agreementId);
+  }
+
+  private async getAgreementRecord(
+    agreementId: string,
+  ): Promise<LoanAgreementDocument> {
+    const snapshot = await this.agreements.doc(agreementId).get();
+    if (!snapshot.exists) {
+      throw new NotFoundException('Loan agreement not found.');
+    }
+    return snapshot.data() as LoanAgreementDocument;
+  }
+
+  private async getLatestLoanAgreementRecord(
+    loanId: string,
+  ): Promise<LoanAgreementDocument | null> {
+    const snapshot = await this.agreements
+      .where('loanId', '==', loanId)
+      .orderBy('version', 'desc')
+      .limit(1)
+      .get();
+    return snapshot.empty
+      ? null
+      : (snapshot.docs[0].data() as LoanAgreementDocument);
+  }
+
+  private async getCanonicalLoan(loanId: string): Promise<CanonicalLoanRecord> {
+    const snapshot = await this.firebaseService.db
       .collection('loans')
       .doc(loanId)
       .get();
-
-    if (!doc.exists) {
-      throw new NotFoundException(
-        'Loan not found. Create or seed a loan first.',
+    if (!snapshot.exists) {
+      throw new NotFoundException('Loan not found.');
+    }
+    const data = snapshot.data() ?? {};
+    const principalMinor = this.readInteger(
+      data.principalMinor,
+      Math.round(this.readNumber(data.amount ?? data.principalAmount) * 100),
+    );
+    const annualInterestRate = this.readNumber(
+      data.annualInterestRate ?? data.interestRate,
+    );
+    const tenureMonths = this.readInteger(
+      data.tenureMonths ?? data.durationMonths,
+    );
+    const interestAmountMinor = this.readInteger(
+      data.interestAmountMinor,
+      Math.round(
+        principalMinor * (annualInterestRate / 100) * (tenureMonths / 12),
+      ),
+    );
+    const totalRepayableMinor = this.readInteger(
+      data.totalRepayableMinor,
+      principalMinor + interestAmountMinor,
+    );
+    const monthlyInstallmentMinor = this.readInteger(
+      data.monthlyInstallmentMinor,
+      tenureMonths > 0 ? Math.floor(totalRepayableMinor / tenureMonths) : 0,
+    );
+    if (!principalMinor || !tenureMonths) {
+      throw new BadRequestException(
+        'Loan financial terms are incomplete and cannot generate an agreement.',
       );
     }
-
-    const data = doc.data() as Record<string, unknown>;
     return {
-      id: doc.id,
+      loanId,
+      applicationId: this.readString(data.applicationId),
+      listingId: this.readString(data.listingId ?? data.adId),
       borrowerId: this.readString(data.borrowerId),
       lenderId: this.readString(data.lenderId),
-      amount: this.readNumber(data.amount ?? data.principalAmount),
-      interestRate: this.readNumber(data.interestRate),
-      durationMonths: this.readNumber(data.durationMonths ?? data.tenureMonths),
-      repaymentSchedule: this.readString(data.repaymentSchedule),
-      status: this.readString(data.status),
-      nextDueDate: this.readTimestamp(data.nextDueDate),
+      termsVersion: this.readInteger(data.termsVersion, 1),
+      terms: {
+        currency: 'LKR',
+        principalMinor,
+        annualInterestRate,
+        interestAmountMinor,
+        totalRepayableMinor,
+        monthlyInstallmentMinor,
+        tenureMonths,
+        repaymentFrequency: 'monthly',
+        repaymentStartRule: 'one_month_after_activation',
+      },
     };
   }
 
-  // Finds the most recently updated agreement for a loan so the system has a single latest version to work with.
-  private async getLatestLoanDocumentRecord(
-    loanId: string,
-  ): Promise<LegalDocument | null> {
-    const snapshot = await this.legalCollection
-      .where('loanId', '==', loanId)
-      .get();
-
-    if (snapshot.empty) {
-      return null;
-    }
-
-    const documents = snapshot.docs.map((doc) => doc.data() as LegalDocument);
-    documents.sort(
-      (left, right) => right.updatedAt.toMillis() - left.updatedAt.toMillis(),
-    );
-
-    return documents[0];
-  }
-
-  // Allows only the borrower, lender, or admin to work with the loan's legal documents.
-  private async assertLoanAccess(
-    loan: LoanRecord,
+  private assertLoanAccess(
+    loan: Pick<CanonicalLoanRecord, 'borrowerId' | 'lenderId'>,
     userId: string,
-    userRole: UserRole,
-  ): Promise<void> {
-    if (userRole === 'admin') {
-      return;
-    }
-
-    if (userRole === 'borrower' && loan.borrowerId === userId) {
-      return;
-    }
-
-    if (userRole === 'lender' && loan.lenderId === userId) {
-      return;
-    }
-
-    throw new ForbiddenException(
-      'You do not have access to generate or view legal documents for this loan.',
-    );
-  }
-
-  // Applies the same access rules after a document has already been created.
-  private assertDocumentAccess(
-    document: LegalDocument,
-    userId: string,
-    userRole: UserRole,
+    role: UserRole,
   ): void {
-    if (userRole === 'admin') {
-      return;
-    }
-
-    if (userRole === 'borrower' && document.borrower.userId === userId) {
-      return;
-    }
-
-    if (userRole === 'lender' && document.lender.userId === userId) {
-      return;
-    }
-
-    throw new ForbiddenException(
-      'You do not have access to this legal document.',
-    );
+    if (role === 'admin') return;
+    if (role === 'borrower' && loan.borrowerId === userId) return;
+    if (role === 'lender' && loan.lenderId === userId) return;
+    throw new ForbiddenException('You do not have access to this loan.');
   }
 
-  private toPartyDto(
+  private assertAgreementAccess(
+    agreement: LoanAgreementDocument,
+    userId: string,
+    role: UserRole,
+  ): void {
+    this.assertLoanAccess(agreement, userId, role);
+  }
+
+  private validateAcceptanceInput(input: AcceptLoanAgreementInput): void {
+    if (!input.signedName?.trim()) {
+      throw new BadRequestException('Signed legal name is required.');
+    }
+    if (input.signedName.trim().length > 160) {
+      throw new BadRequestException('Signed legal name is too long.');
+    }
+    if (input.consentAccepted !== true) {
+      throw new BadRequestException('Explicit agreement consent is required.');
+    }
+    if (!Number.isInteger(input.agreementVersion) || input.agreementVersion < 1) {
+      throw new BadRequestException('A valid agreement version is required.');
+    }
+    if (!/^[a-f0-9]{64}$/.test(input.termsHash ?? '')) {
+      throw new BadRequestException('A valid agreement terms hash is required.');
+    }
+  }
+
+  private getAuditSalt(): string {
+    const salt = this.configService.get<string>('LEGAL_AUDIT_HASH_SALT')?.trim();
+    if (!salt || salt.length < 32) {
+      throw new ServiceUnavailableException(
+        'Agreement audit hashing is not configured.',
+      );
+    }
+    return salt;
+  }
+
+  private toParty(
     user: UserDocument,
     role: 'borrower' | 'lender',
-  ): LegalDocumentParty {
+  ): LoanAgreementParty {
     return {
       userId: user.userId,
       fullName: user.fullName,
@@ -382,473 +749,133 @@ export class LegalService {
     };
   }
 
-  private buildSummary(
-    borrower: UserDocument,
-    lender: UserDocument,
-    loan: LoanRecord,
-  ): string {
-    return `${borrower.fullName} and ${lender.fullName} entered a loan agreement for LKR ${this.readNumber(loan.amount).toLocaleString('en-LK')} over ${this.readNumber(loan.durationMonths)} months at ${this.readNumber(loan.interestRate)}% interest.`;
-  }
-
-  async downloadDocumentPdf(
-    documentId: string,
-    userId: string,
-    userRole: UserRole,
-  ): Promise<{ buffer: Buffer; fileName: string }> {
-    const doc = await this.legalCollection.doc(documentId).get();
-
-    if (!doc.exists) {
-      throw new NotFoundException('Legal document not found.');
-    }
-
-    const document = doc.data() as LegalDocument;
-    this.assertDocumentAccess(document, userId, userRole);
-
-    // ── Priority 1: Cloudinary-backed signed PDF (new path) ───────────────
-    if (document.signedPdfDocumentId) {
-      const docRecord = await this.documentsService.getById(
-        document.signedPdfDocumentId,
-      );
-
-      if (docRecord && docRecord.status !== 'deleted') {
-        const signedUrl = this.mediaService.generateSignedDeliveryUrl({
-          publicId: docRecord.cloudinaryPublicId,
-          resourceType: docRecord.cloudinaryResourceType,
-          deliveryType: docRecord.cloudinaryDeliveryType,
-          version: docRecord.cloudinaryVersion,
-          format: docRecord.format,
-        });
-
-        const response = await fetch(signedUrl);
-        if (response.ok) {
-          const arrayBuffer = await response.arrayBuffer();
-          return {
-            buffer: Buffer.from(arrayBuffer),
-            fileName: this.buildPdfFileName(document),
-          };
-        }
-      }
-    }
-
-    // ── Priority 2: Legacy Firebase Storage (backward compat) ─────────────
-    if (document.signedPdfStoragePath) {
-      const file = this.firebaseService.bucket.file(
-        document.signedPdfStoragePath,
-      );
-      const [exists] = await file.exists();
-
-      if (exists) {
-        const [buffer] = await file.download();
-        return {
-          buffer,
-          fileName: this.buildPdfFileName(document),
-        };
-      }
-    }
-
-    // ── Priority 3: On-the-fly generation (unsigned / pre-accepted docs) ──
+  private toDto(agreement: LoanAgreementDocument): LegalDocumentDto {
     return {
-      buffer: await this.buildAgreementPdf(document),
-      fileName: this.buildPdfFileName(document),
+      id: agreement.agreementId,
+      loanId: agreement.loanId,
+      applicationId: agreement.applicationId,
+      listingId: agreement.listingId,
+      version: agreement.version,
+      title: agreement.title,
+      summary: agreement.summary,
+      documentType: 'loan_agreement',
+      status: agreement.status,
+      generatedByUserId: agreement.generatedByUserId,
+      generatedByRole: agreement.generatedByRole,
+      generatedAt: agreement.generatedAt.toDate().toISOString(),
+      updatedAt: agreement.updatedAt.toDate().toISOString(),
+      borrower: agreement.borrower,
+      lender: agreement.lender,
+      terms: agreement.terms,
+      htmlContent: agreement.bodyHtml,
+      termsHash: agreement.termsHash,
+      consentTextVersion: agreement.consentTextVersion,
+      borrowerAcceptance: this.toAcceptanceDto(agreement.borrowerAcceptance),
+      lenderAcceptance: this.toAcceptanceDto(agreement.lenderAcceptance),
+      pdfDownloadPath: `/api/legal/documents/${agreement.agreementId}/download`,
+      pdfAvailable: Boolean(agreement.signedPdfDocumentId),
+      signedPdfGeneratedAt:
+        agreement.signedPdfGeneratedAt?.toDate().toISOString() ?? null,
+      pdfSha256Hash: agreement.pdfSha256Hash,
+      legacyReadOnly: Boolean(agreement.legacyReadOnly),
     };
   }
 
-  /**
-   * Returns a short-lived (5-minute) signed Cloudinary URL for the stored signed PDF.
-   * Preferred over the `/download` streaming endpoint for all new clients.
-   */
-  async getSignedPdfAccessUrl(
-    documentId: string,
-    userId: string,
-    userRole: UserRole,
-  ): Promise<{ accessUrl: string; expiresAt: string; documentId: string }> {
-    const doc = await this.legalCollection.doc(documentId).get();
-
-    if (!doc.exists) {
-      throw new NotFoundException('Legal document not found.');
-    }
-
-    const document = doc.data() as LegalDocument;
-    this.assertDocumentAccess(document, userId, userRole);
-
-    if (!document.signedPdfDocumentId) {
-      throw new NotFoundException(
-        'Signed PDF is not yet available for this document. Both parties must accept first.',
-      );
-    }
-
-    const docRecord = await this.documentsService.getById(
-      document.signedPdfDocumentId,
-    );
-
-    if (!docRecord || docRecord.status === 'deleted') {
-      throw new NotFoundException('Signed PDF document record not found.');
-    }
-
-    const TTL_SECONDS = 300; // 5 minutes
-    const expiresAt = new Date(Date.now() + TTL_SECONDS * 1000).toISOString();
-
-    const accessUrl = this.mediaService.generateSignedDeliveryUrl({
-      publicId: docRecord.cloudinaryPublicId,
-      resourceType: docRecord.cloudinaryResourceType,
-      deliveryType: docRecord.cloudinaryDeliveryType,
-      version: docRecord.cloudinaryVersion,
-      format: docRecord.format,
-    });
-
+  private toAcceptanceDto(
+    acceptance: LoanAgreementDocument['borrowerAcceptance'],
+  ) {
     return {
-      accessUrl,
-      expiresAt,
-      documentId: document.signedPdfDocumentId,
+      accepted: acceptance.accepted,
+      signedName: acceptance.signedName,
+      acceptedAt: acceptance.acceptedAt?.toDate().toISOString() ?? null,
     };
   }
 
-  private buildAgreementHtml(document: LegalDocument): string {
-    const amount = this.formatCurrency(document.loanSnapshot.amount);
-    const interestRate = document.loanSnapshot.interestRate;
-    const durationMonths = document.loanSnapshot.durationMonths;
-    const repaymentSchedule =
-      this.readString(document.loanSnapshot.repaymentSchedule) ||
-      'Monthly repayment';
-    const nextDueDate = document.loanSnapshot.nextDueDate
-      ? this.formatDate(document.loanSnapshot.nextDueDate)
-      : 'To be scheduled';
-    const generatedDate = this.formatDate(document.generatedAt);
-    const borrowerSigned = document.borrowerAcceptedAt
-      ? this.formatDate(document.borrowerAcceptedAt)
-      : 'Pending signature';
-    const lenderSigned = document.lenderAcceptedAt
-      ? this.formatDate(document.lenderAcceptedAt)
-      : 'Pending signature';
-    const borrowerSignedName =
-      document.borrowerSignatureAudit?.signedName || 'Pending signer name';
-    const lenderSignedName =
-      document.lenderSignatureAudit?.signedName || 'Pending signer name';
-
-    return `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Smart Credit+ Loan Agreement</title>
-    <style>
-      body { font-family: Georgia, serif; color: #1f2937; margin: 40px; line-height: 1.6; }
-      h1, h2 { color: #0f172a; margin-bottom: 8px; }
-      .meta, .parties, .terms { margin-bottom: 24px; }
-      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-      .card { border: 1px solid #dbe4f0; border-radius: 12px; padding: 16px; background: #f8fafc; }
-      .signature { margin-top: 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-      .line { border-top: 1px solid #94a3b8; margin-top: 48px; padding-top: 8px; }
-      ul { margin: 8px 0 0 20px; }
-    </style>
-  </head>
-  <body>
-    <h1>Smart Credit+ Loan Agreement</h1>
-    <p>This agreement was generated automatically by Smart Credit+ on ${this.escapeHtml(generatedDate)}.</p>
-
-    <section class="meta">
-      <div class="card">
-        <strong>Agreement Reference:</strong> ${this.escapeHtml(document.loanId)}<br />
-        <strong>Loan Status:</strong> ${this.escapeHtml(this.readString(document.loanSnapshot.status) || 'pending')}<br />
-        <strong>Agreement Status:</strong> ${this.escapeHtml(document.status.replace(/_/g, ' '))}<br />
-        <strong>Next Due Date:</strong> ${this.escapeHtml(nextDueDate)}
-      </div>
-    </section>
-
-    <section class="parties">
-      <h2>Parties</h2>
-      <div class="grid">
-        <div class="card">
-          <strong>Borrower</strong><br />
-          ${this.escapeHtml(document.borrower.fullName)}<br />
-          ${this.escapeHtml(document.borrower.email)}<br />
-          ${this.escapeHtml(document.borrower.phone)}
-        </div>
-        <div class="card">
-          <strong>Lender</strong><br />
-          ${this.escapeHtml(document.lender.fullName)}<br />
-          ${this.escapeHtml(document.lender.email)}<br />
-          ${this.escapeHtml(document.lender.phone)}
-        </div>
-      </div>
-    </section>
-
-    <section class="terms">
-      <h2>Loan Terms</h2>
-      <div class="card">
-        <strong>Principal Amount:</strong> ${this.escapeHtml(amount)}<br />
-        <strong>Interest Rate:</strong> ${this.escapeHtml(String(interestRate))}% per annum<br />
-        <strong>Tenure:</strong> ${this.escapeHtml(String(durationMonths))} months<br />
-        <strong>Repayment Schedule:</strong> ${this.escapeHtml(repaymentSchedule)}
-      </div>
-    </section>
-
-    <section>
-      <h2>Core Conditions</h2>
-      <ul>
-        <li>The lender agrees to provide the borrower the principal amount described above.</li>
-        <li>The borrower agrees to repay the loan according to the stated schedule and interest rate.</li>
-        <li>Both parties acknowledge that Smart Credit+ stores the current agreement state and acceptance history.</li>
-        <li>This PDF may be downloaded by either party after agreement review and acceptance.</li>
-        <li>Changes to principal, tenure, repayment timing, or interest should trigger a regenerated agreement.</li>
-      </ul>
-    </section>
-
-    <section class="signature">
-      <div class="line">
-        Borrower Signature<br />
-        ${this.escapeHtml(borrowerSignedName)}<br />
-        <small>${this.escapeHtml(borrowerSigned)}</small>
-      </div>
-      <div class="line">
-        Lender Signature<br />
-        ${this.escapeHtml(lenderSignedName)}<br />
-        <small>${this.escapeHtml(lenderSigned)}</small>
-      </div>
-    </section>
-  </body>
-</html>`;
-  }
-
-  private async buildAgreementPdf(document: LegalDocument): Promise<Buffer> {
+  private async buildAgreementPdf(
+    agreement: LoanAgreementDocument,
+  ): Promise<Buffer> {
     if (process.env.JEST_WORKER_ID) {
-      return this.buildFallbackPdf(document);
+      return this.buildFallbackPdf(agreement);
     }
-
     try {
       const browser = await puppeteer.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });
-
       try {
         const page = await browser.newPage();
-        await page.setContent(document.htmlContent, {
+        await page.setContent(agreement.bodyHtml, {
           waitUntil: 'domcontentloaded',
         });
-
-        const pdf = await page.pdf({
-          format: 'A4',
-          printBackground: true,
-          margin: {
-            top: '24px',
-            right: '24px',
-            bottom: '24px',
-            left: '24px',
-          },
-        });
-
-        return Buffer.from(pdf);
+        return Buffer.from(
+          await page.pdf({
+            format: 'A4',
+            printBackground: true,
+            margin: { top: '24px', right: '24px', bottom: '24px', left: '24px' },
+          }),
+        );
       } finally {
         await browser.close();
       }
     } catch {
-      return this.buildFallbackPdf(document);
+      return this.buildFallbackPdf(agreement);
     }
   }
 
-  private buildFallbackPdf(document: LegalDocument): Buffer {
-    const lines = [
-      'Smart Credit+ Loan Agreement',
-      '',
-      `Agreement Reference: ${document.loanId}`,
-      `Agreement Status: ${document.status.replace(/_/g, ' ')}`,
-      `Generated On: ${this.formatDate(document.generatedAt)}`,
-      '',
-      'Parties',
-      `Borrower: ${document.borrower.fullName}`,
-      `Borrower Email: ${document.borrower.email}`,
-      `Borrower Phone: ${document.borrower.phone}`,
-      `Lender: ${document.lender.fullName}`,
-      `Lender Email: ${document.lender.email}`,
-      `Lender Phone: ${document.lender.phone}`,
-      '',
-      'Loan Terms',
-      `Principal Amount: ${this.formatCurrency(document.loanSnapshot.amount)}`,
-      `Interest Rate: ${document.loanSnapshot.interestRate}% per annum`,
-      `Tenure: ${document.loanSnapshot.durationMonths} months`,
-      `Repayment Schedule: ${document.loanSnapshot.repaymentSchedule}`,
-      `Loan Status: ${document.loanSnapshot.status}`,
-      '',
-      'Acceptance',
-      `Borrower Accepted: ${document.borrowerAccepted ? 'Yes' : 'No'}`,
-      `Borrower Signed Name: ${document.borrowerSignatureAudit?.signedName ?? 'Pending signer name'}`,
-      `Borrower Signed At: ${document.borrowerAcceptedAt ? this.formatDate(document.borrowerAcceptedAt) : 'Pending signature'}`,
-      `Borrower Audit IP: ${document.borrowerSignatureAudit?.ipAddress ?? 'Not recorded'}`,
-      `Lender Accepted: ${document.lenderAccepted ? 'Yes' : 'No'}`,
-      `Lender Signed Name: ${document.lenderSignatureAudit?.signedName ?? 'Pending signer name'}`,
-      `Lender Signed At: ${document.lenderAcceptedAt ? this.formatDate(document.lenderAcceptedAt) : 'Pending signature'}`,
-      `Lender Audit IP: ${document.lenderSignatureAudit?.ipAddress ?? 'Not recorded'}`,
-      '',
-      'This agreement was produced by Smart Credit+ for borrower and lender reference.',
-    ];
-
-    return this.createSimplePdfBuffer(lines);
+  private buildFallbackPdf(agreement: LoanAgreementDocument): Buffer {
+    return this.createSimplePdfBuffer([
+      'Smart Credit Loan Agreement',
+      `Agreement: ${agreement.agreementId}`,
+      `Version: ${agreement.version}`,
+      `Borrower: ${agreement.borrower.fullName}`,
+      `Lender: ${agreement.lender.fullName}`,
+      `Principal minor units: ${agreement.terms.principalMinor}`,
+      `Annual interest: ${agreement.terms.annualInterestRate}%`,
+      `Total repayable minor units: ${agreement.terms.totalRepayableMinor}`,
+      `Tenure: ${agreement.terms.tenureMonths} months`,
+      `Borrower signature: ${agreement.borrowerAcceptance.signedName ?? 'Pending'}`,
+      `Lender signature: ${agreement.lenderAcceptance.signedName ?? 'Pending'}`,
+      `Terms hash: ${agreement.termsHash}`,
+    ]);
   }
 
-  private toDto(document: LegalDocument): LegalDocumentDto {
-    return {
-      id: document.id,
-      loanId: document.loanId,
-      title: document.title,
-      summary: document.summary,
-      documentType: document.documentType,
-      status: document.status,
-      generatedByUserId: document.generatedByUserId,
-      generatedByRole: document.generatedByRole,
-      generatedAt: document.generatedAt.toDate().toISOString(),
-      updatedAt: document.updatedAt.toDate().toISOString(),
-      borrower: document.borrower,
-      lender: document.lender,
-      loanSnapshot: {
-        loanId: document.loanSnapshot.loanId,
-        amount: document.loanSnapshot.amount,
-        interestRate: document.loanSnapshot.interestRate,
-        durationMonths: document.loanSnapshot.durationMonths,
-        repaymentSchedule: document.loanSnapshot.repaymentSchedule,
-        status: document.loanSnapshot.status,
-        nextDueDate: document.loanSnapshot.nextDueDate?.toDate().toISOString(),
-      },
-      htmlContent: document.htmlContent,
-      borrowerAccepted: document.borrowerAccepted,
-      lenderAccepted: document.lenderAccepted,
-      borrowerAcceptedAt: document.borrowerAcceptedAt?.toDate().toISOString(),
-      lenderAcceptedAt: document.lenderAcceptedAt?.toDate().toISOString(),
-      borrowerSignatureAudit: document.borrowerSignatureAudit,
-      lenderSignatureAudit: document.lenderSignatureAudit,
-      pdfDownloadPath:
-        document.pdfDownloadPath ??
-        `/api/legal/documents/${document.id}/download`,
-      signedPdfStoragePath: document.signedPdfStoragePath,
-      signedPdfDocumentId: document.signedPdfDocumentId,
-      signedPdfGeneratedAt: document.signedPdfGeneratedAt
-        ?.toDate()
-        .toISOString(),
-      pdfSha256Hash: document.pdfSha256Hash,
-    };
+  private buildPdfFileName(agreement: LoanAgreementDocument): string {
+    return `smart-credit-loan-agreement-${agreement.loanId}-v${agreement.version}.pdf`;
   }
 
-  private resolveExistingStatus(
-    document: LegalDocument,
-  ): LegalDocument['status'] {
-    return this.resolveDocumentStatus(document);
-  }
-
-  private resolveDocumentStatus(
-    document: Pick<LegalDocument, 'borrowerAccepted' | 'lenderAccepted'>,
-  ): LegalDocument['status'] {
-    if (document.borrowerAccepted && document.lenderAccepted) {
-      return 'fully_accepted';
-    }
-
-    if (document.borrowerAccepted || document.lenderAccepted) {
-      return 'partially_accepted';
-    }
-
-    return 'generated';
+  private addMonths(date: Date, months: number): Date {
+    const result = new Date(date);
+    result.setUTCMonth(result.getUTCMonth() + months);
+    return result;
   }
 
   private readString(value: unknown): string {
     return typeof value === 'string' ? value : '';
   }
 
-  private readNumber(value: unknown): number {
-    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  private readNumber(value: unknown, fallback = 0): number {
+    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
   }
 
-  private readTimestamp(value: unknown): Timestamp | undefined {
-    return value instanceof Timestamp ? value : undefined;
-  }
-
-  private formatCurrency(value: number): string {
-    return new Intl.NumberFormat('en-LK', {
-      style: 'currency',
-      currency: 'LKR',
-      maximumFractionDigits: 0,
-    }).format(value);
-  }
-
-  private formatDate(value: Timestamp): string {
-    return value.toDate().toLocaleDateString('en-LK', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  }
-
-  private buildPdfFileName(document: LegalDocument): string {
-    return `smart-credit-loan-agreement-${document.loanId}.pdf`;
-  }
-
-  /**
-   * Generates the signed-agreement PDF, uploads it to Cloudinary as an authenticated `raw`
-   * asset, then upserts the corresponding `documents` record.
-   * Returns the Firestore document ID and the PDF hash.
-   */
-  private async persistSignedPdfToCloudinary(
-    document: LegalDocument,
-    signingUserId: string,
-    legalDocumentId: string,
-  ): Promise<{ documentId: string; hash: string }> {
-    const fileName = this.buildPdfFileName(document);
-    const buffer = await this.buildAgreementPdf(document);
-    const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-
-    // Cloudinary folder/publicId convention: documents/<userId>/agreement/<legalDocId>
-    const folder = `documents/${signingUserId}/agreement`;
-    const publicId = `legal-${legalDocumentId}`;
-
-    const uploadedMedia = await this.mediaService.uploadBufferAsDocument(buffer, {
-      folder,
-      publicId,
-      resourceType: 'raw',
-      deliveryType: 'authenticated',
-      overwrite: true,
-    });
-
-    // Upsert the documents record – if one already exists for this legal document, update it;
-    // otherwise create a new one.
-    const existing = await this.documentsService.getByRelatedEntity(
-      'legal_document',
-      legalDocumentId,
-      'agreement',
-    );
-
-    let docRecord: import('../documents/interfaces/document-record.interface').DocumentRecord | undefined;
-
-    if (existing) {
-      await this.documentsService.updateCloudinaryAsset(existing.id, uploadedMedia, hash);
-      docRecord = existing;
-    } else {
-      docRecord = await this.documentsService.createSystemGeneratedRecord({
-        userId: signingUserId,
-        category: 'agreement',
-        documentType: 'loan_agreement_pdf',
-        originalFilename: fileName,
-        mimeType: 'application/pdf',
-        fileHash: hash,
-        relatedEntityType: 'legal_document',
-        relatedEntityId: legalDocumentId,
-        displayName: `Signed Loan Agreement – ${document.loanId}`,
-        uploadedMedia,
-      });
-    }
-
-    return { documentId: docRecord!.id, hash };
+  private readInteger(value: unknown, fallback = 0): number {
+    return typeof value === 'number' && Number.isSafeInteger(value)
+      ? value
+      : fallback;
   }
 
   private createSimplePdfBuffer(lines: string[]): Buffer {
-    const sanitizedLines = lines.map((line) => this.escapePdfText(line));
     const contentCommands = [
       'BT',
-      '/F1 12 Tf',
-      '50 780 Td',
+      '/F1 11 Tf',
+      '42 790 Td',
       '14 TL',
-      ...sanitizedLines.map((line, index) =>
-        index === 0 ? `(${line}) Tj` : `T* (${line}) Tj`,
+      ...lines.map((line, index) =>
+        index === 0
+          ? `(${this.escapePdfText(line)}) Tj`
+          : `T* (${this.escapePdfText(line)}) Tj`,
       ),
       'ET',
     ].join('\n');
-
     const objects = [
       '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
       '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
@@ -856,26 +883,18 @@ export class LegalService {
       `4 0 obj << /Length ${Buffer.byteLength(contentCommands, 'utf8')} >> stream\n${contentCommands}\nendstream endobj`,
       '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
     ];
-
     let pdf = '%PDF-1.4\n';
-    const offsets: number[] = [0];
-
+    const offsets = [0];
     for (const object of objects) {
       offsets.push(Buffer.byteLength(pdf, 'utf8'));
       pdf += `${object}\n`;
     }
-
     const xrefOffset = Buffer.byteLength(pdf, 'utf8');
-    pdf += `xref\n0 ${objects.length + 1}\n`;
-    pdf += '0000000000 65535 f \n';
-
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
     for (let index = 1; index < offsets.length; index += 1) {
       pdf += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`;
     }
-
-    pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\n`;
-    pdf += `startxref\n${xrefOffset}\n%%EOF`;
-
+    pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
     return Buffer.from(pdf, 'utf8');
   }
 
@@ -884,14 +903,5 @@ export class LegalService {
       .replace(/\\/g, '\\\\')
       .replace(/\(/g, '\\(')
       .replace(/\)/g, '\\)');
-  }
-
-  private escapeHtml(value: string): string {
-    return value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
   }
 }

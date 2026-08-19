@@ -10,7 +10,11 @@ export type DocumentStatus =
 export type DocumentSource = 'user_upload' | 'system_generated';
 
 /** The type of entity this document is linked to. */
-export type DocumentRelatedEntityType = 'user' | 'loan' | 'legal_document';
+export type DocumentRelatedEntityType =
+  | 'user'
+  | 'loan'
+  | 'legal_document'
+  | 'loan_agreement';
 
 export type ReviewInfo = {
   reviewedAt?: unknown;

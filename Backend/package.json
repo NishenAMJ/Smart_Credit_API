@@ -26,6 +26,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "backfill:auth-users": "node scripts/backfill-auth-users.js",
+    "migrate:loan-agreements": "node scripts/migrate-loan-agreements.js",
+    "migrate:loan-agreements:apply": "node scripts/migrate-loan-agreements.js --apply",
     "create:admin": "node scripts/create-admin-user.js"
   },
   "dependencies": {

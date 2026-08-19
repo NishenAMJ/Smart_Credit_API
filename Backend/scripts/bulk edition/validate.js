@@ -1,5 +1,7 @@
 'use strict';
 
+const collections = require('./collections');
+
 function assert(condition, message) {
   if (!condition) throw new Error(`Schema v2 validation failed: ${message}`);
 }
@@ -12,6 +14,7 @@ function validateFixtures(fixtures) {
   const loanIds = ids(fixtures.loans, 'loanId');
   const transactionIds = ids(fixtures.transactions, 'transactionId');
   const documentIds = ids(fixtures.documents, 'documentId');
+  const agreementIds = ids(fixtures.loanAgreements, 'agreementId');
 
   const assertUnique = (records, key, label) => {
     const values = records.map((record) => record[key]);
@@ -27,6 +30,12 @@ function validateFixtures(fixtures) {
   assertUnique(fixtures.loanApplications, 'applicationId', 'loan applications');
   assertUnique(fixtures.loans, 'loanId', 'loans');
   assertUnique(fixtures.transactions, 'transactionId', 'transactions');
+  assertUnique(fixtures.loanAgreements, 'agreementId', 'loan agreements');
+  assertUnique(
+    fixtures.loanAgreementAcceptances,
+    'acceptanceId',
+    'loan agreement acceptances',
+  );
 
   fixtures.authCredentials.forEach((record) => {
     assert(
@@ -71,10 +80,20 @@ function validateFixtures(fixtures) {
     const schedule = fixtures.installments.filter(
       (item) => item.loanId === loan.loanId,
     );
+    const expectedScheduleLength =
+      loan.status === 'pending_disbursement' ? 0 : loan.tenureMonths;
     assert(
-      schedule.length === loan.tenureMonths,
-      `loan ${loan.loanId} installment count differs from tenure`,
+      schedule.length === expectedScheduleLength,
+      `loan ${loan.loanId} installment count differs from lifecycle`,
     );
+    if (loan.status === 'pending_disbursement') {
+      assert(
+        loan.amountPaidMinor === 0 &&
+          loan.remainingBalanceMinor === loan.totalRepayableMinor,
+        `pending loan ${loan.loanId} balance is invalid`,
+      );
+      return;
+    }
     const scheduledTotal = schedule.reduce(
       (sum, item) => sum + item.amountDueMinor,
       0,
@@ -147,6 +166,24 @@ function validateFixtures(fixtures) {
     }
   });
 
+  fixtures.loanAgreements.forEach((agreement) => {
+    assert(loanIds.has(agreement.loanId), `agreement loan ${agreement.loanId} is missing`);
+    assert(userIds.has(agreement.borrowerId), `agreement borrower ${agreement.borrowerId} is missing`);
+    assert(userIds.has(agreement.lenderId), `agreement lender ${agreement.lenderId} is missing`);
+    assert(/^[a-f0-9]{64}$/.test(agreement.termsHash), `agreement ${agreement.agreementId} hash is invalid`);
+    if (agreement.status === 'partially_accepted') {
+      assert(
+        agreement.lenderAcceptance.accepted &&
+          !agreement.borrowerAcceptance.accepted,
+        `agreement ${agreement.agreementId} must be lender-signed first`,
+      );
+    }
+  });
+  fixtures.loanAgreementAcceptances.forEach((acceptance) => {
+    assert(agreementIds.has(acceptance.agreementId), `acceptance agreement ${acceptance.agreementId} is missing`);
+    assert(userIds.has(acceptance.userId), `acceptance user ${acceptance.userId} is missing`);
+  });
+
   fixtures.conversations.forEach((record) => {
     record.participantIds.forEach((userId) =>
       assert(
@@ -169,26 +206,12 @@ function validateFixtures(fixtures) {
     );
   });
 
-  const counts = {
-    users: fixtures.users.length,
-    authCredentials: fixtures.authCredentials.length,
-    documents: fixtures.documents.length,
-    kycSubmissions: fixtures.kycSubmissions.length,
-    loanListings: fixtures.loanListings.length,
-    loanApplications: fixtures.loanApplications.length,
-    loans: fixtures.loans.length,
-    installments: fixtures.installments.length,
-    transactions: fixtures.transactions.length,
-    disputes: fixtures.disputes.length,
-    notifications: fixtures.notifications.length,
-    conversations: fixtures.conversations.length,
-    messages: fixtures.messages.length,
-    disputeEvents: fixtures.disputeEvents.length,
-    legalDocuments: fixtures.legalDocuments.length,
-    legalAcceptances: fixtures.legalAcceptances.length,
-    userLocations: fixtures.userLocations.length,
-    auditLogs: fixtures.auditLogs.length,
-  };
+  const counts = Object.fromEntries(
+    collections.map((collection) => [
+      collection.fixtureKey,
+      collection.records(fixtures).length,
+    ]),
+  );
 
   return {
     ...counts,

@@ -128,9 +128,13 @@ export type MyKycSubmissionResponse = {
 };
 
 export type LegalDocumentStatus =
-  | "generated"
+  | "awaiting_signatures"
   | "partially_accepted"
-  | "fully_accepted";
+  | "finalizing"
+  | "finalization_failed"
+  | "fully_accepted"
+  | "superseded"
+  | "cancelled";
 
 export type LegalDocumentParty = {
   userId: string;
@@ -140,46 +144,56 @@ export type LegalDocumentParty = {
   role: "borrower" | "lender";
 };
 
-export type LegalLoanSnapshot = {
-  loanId: string;
-  amount: number;
-  interestRate: number;
-  durationMonths: number;
-  repaymentSchedule: string;
-  status: string;
-  nextDueDate?: string;
+export type LegalAgreementTerms = {
+  currency: "LKR";
+  principalMinor: number;
+  annualInterestRate: number;
+  interestAmountMinor: number;
+  totalRepayableMinor: number;
+  monthlyInstallmentMinor: number;
+  tenureMonths: number;
+  repaymentFrequency: "monthly";
+  repaymentStartRule: "one_month_after_activation";
+};
+
+export type LegalAcceptanceSummary = {
+  accepted: boolean;
+  signedName: string | null;
+  acceptedAt: string | null;
 };
 
 export type LegalDocument = {
   id: string;
   loanId: string;
+  applicationId: string;
+  listingId: string;
+  version: number;
   title: string;
   summary: string;
   documentType: "loan_agreement";
   status: LegalDocumentStatus;
   generatedByUserId: string;
-  generatedByRole: UserRole;
+  generatedByRole: UserRole | "system";
   generatedAt: string;
   updatedAt: string;
   borrower: LegalDocumentParty;
   lender: LegalDocumentParty;
-  loanSnapshot: LegalLoanSnapshot;
+  terms: LegalAgreementTerms;
   htmlContent: string;
-  borrowerAccepted: boolean;
-  lenderAccepted: boolean;
-  borrowerAcceptedAt?: string;
-  lenderAcceptedAt?: string;
-  borrowerSignatureAudit?: {
-    signedName?: string;
-    ipAddress?: string;
-    userAgent?: string;
-  };
-  lenderSignatureAudit?: {
-    signedName?: string;
-    ipAddress?: string;
-    userAgent?: string;
-  };
-  pdfDownloadPath?: string;
+  termsHash: string;
+  consentTextVersion: "loan_agreement_consent_v1";
+  borrowerAcceptance: LegalAcceptanceSummary;
+  lenderAcceptance: LegalAcceptanceSummary;
+  pdfDownloadPath: string;
+  pdfAvailable: boolean;
+  signedPdfGeneratedAt: string | null;
+  pdfSha256Hash: string | null;
+  legacyReadOnly: boolean;
+};
+
+export type LegalDocumentsResponse = {
+  documents: LegalDocument[];
+  pageInfo: { nextCursor: string | null; hasMore: boolean };
 };
 
 export type LegalDocumentResponse = {

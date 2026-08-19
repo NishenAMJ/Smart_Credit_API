@@ -47,13 +47,24 @@ export class LoanRequestsController {
     @Req() request: AuthenticatedRequest,
     @Param('requestId') requestId: string,
     @Body()
-    body: { decision?: 'approve' | 'reject'; note?: string },
+    body: {
+      decision?: 'approve' | 'reject';
+      note?: string;
+      approvedPrincipalMinor?: number;
+      annualInterestRate?: number;
+      approvedTenureMonths?: number;
+    },
   ): Promise<LoanRequestDecisionResponse> {
     return this.loanRequestsService.decideRequest(
       request.user.sub,
       requestId,
       body?.decision,
       body?.note,
+      {
+        approvedPrincipalMinor: body?.approvedPrincipalMinor,
+        annualInterestRate: body?.annualInterestRate,
+        approvedTenureMonths: body?.approvedTenureMonths,
+      },
     );
   }
 

@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const { geohashForLocation } = require('geofire-common');
 
 const pad = (value, size = 6) => String(value).padStart(size, '0');
@@ -363,7 +364,8 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
         completedAt: approvedAt,
         createdAt: approvedAt,
       });
-    amounts.forEach((amountDueMinor, installmentIndex) => {
+    if (status !== 'pending_disbursement')
+      amounts.forEach((amountDueMinor, installmentIndex) => {
       const sequence = installmentIndex + 1;
       const installmentId = `month_${String(sequence).padStart(3, '0')}`;
       const paid = sequence <= paidCount;
@@ -411,7 +413,7 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
           completedAt: dueAt,
           createdAt: dueAt,
         });
-    });
+      });
   }
 
   fixtures.loanApplications.slice(2).forEach((application, index) => {
@@ -429,6 +431,114 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
       createdAt: application.createdAt,
     });
   });
+
+  fixtures.loans
+    .filter((loan) => loan.status === 'pending_disbursement')
+    .forEach((loan, index) => {
+      const agreementId = `agreement_${loan.loanId}_v001`;
+      const borrower = fixtures.users.find(
+        (user) => user.userId === loan.borrowerId,
+      );
+      const lender = fixtures.users.find((user) => user.userId === loan.lenderId);
+      const partiallyAccepted = index % 2 === 1;
+      const terms = {
+        currency: 'LKR',
+        principalMinor: loan.principalMinor,
+        annualInterestRate: loan.annualInterestRate,
+        interestAmountMinor: loan.interestAmountMinor,
+        totalRepayableMinor: loan.totalRepayableMinor,
+        monthlyInstallmentMinor: loan.monthlyInstallmentMinor,
+        tenureMonths: loan.tenureMonths,
+        repaymentFrequency: 'monthly',
+        repaymentStartRule: 'one_month_after_activation',
+      };
+      const termsHash = crypto
+        .createHash('sha256')
+        .update(
+          JSON.stringify({
+            applicationId: loan.applicationId,
+            borrowerId: loan.borrowerId,
+            lenderId: loan.lenderId,
+            listingId: loan.listingId,
+            loanId: loan.loanId,
+            terms,
+            version: 1,
+          }),
+        )
+        .digest('hex');
+      const lenderAcceptance = partiallyAccepted
+        ? {
+            accepted: true,
+            signedName: lender?.fullName ?? 'Seed lender',
+            acceptedAt: referenceDate,
+          }
+        : { accepted: false, signedName: null, acceptedAt: null };
+      fixtures.loanAgreements.push({
+        agreementId,
+        loanId: loan.loanId,
+        applicationId: loan.applicationId,
+        listingId: loan.listingId,
+        version: 1,
+        status: partiallyAccepted
+          ? 'partially_accepted'
+          : 'awaiting_signatures',
+        title: `Smart Credit Loan Agreement - ${loan.loanId}`,
+        summary: 'Seeded unsigned loan agreement for development.',
+        borrowerId: loan.borrowerId,
+        lenderId: loan.lenderId,
+        borrower: {
+          userId: loan.borrowerId,
+          fullName: borrower?.fullName ?? 'Seed borrower',
+          email: borrower?.email ?? '',
+          phone: borrower?.phone ?? '',
+          role: 'borrower',
+        },
+        lender: {
+          userId: loan.lenderId,
+          fullName: lender?.fullName ?? 'Seed lender',
+          email: lender?.email ?? '',
+          phone: lender?.phone ?? '',
+          role: 'lender',
+        },
+        terms,
+        bodyHtml: `<h1>Smart Credit Loan Agreement</h1><p>Seed agreement ${agreementId}</p>`,
+        termsHash,
+        consentTextVersion: 'loan_agreement_consent_v1',
+        borrowerAcceptance: { accepted: false, signedName: null, acceptedAt: null },
+        lenderAcceptance,
+        generatedByUserId: loan.lenderId,
+        generatedByRole: 'lender',
+        generatedAt: loan.approvedAt,
+        updatedAt: referenceDate,
+        finalizedAt: null,
+        finalizationStartedAt: null,
+        finalizationError: null,
+        signedPdfDocumentId: null,
+        signedPdfGeneratedAt: null,
+        pdfSha256Hash: null,
+      });
+      loan.currentAgreementId = agreementId;
+      loan.agreementStatus = partiallyAccepted
+        ? 'partially_accepted'
+        : 'awaiting_signatures';
+      if (partiallyAccepted) {
+        fixtures.loanAgreementAcceptances.push({
+          acceptanceId: `${agreementId}_lender`,
+          agreementId,
+          loanId: loan.loanId,
+          userId: loan.lenderId,
+          role: 'lender',
+          agreementVersion: 1,
+          termsHash,
+          signedName: lender?.fullName ?? 'Seed lender',
+          consentAccepted: true,
+          consentTextVersion: 'loan_agreement_consent_v1',
+          ipAddressHash: null,
+          userAgent: 'bulk-seed',
+          acceptedAt: referenceDate,
+        });
+      }
+    });
 
   fixtures.loans
     .slice(1, Math.min(fixtures.loans.length, 301))

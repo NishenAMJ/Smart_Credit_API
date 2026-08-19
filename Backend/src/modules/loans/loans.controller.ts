@@ -10,10 +10,14 @@ import {
   HttpStatus,
   Query,
   Patch,
+  UseGuards,
 } from '@nestjs/common';
 import { LoansService } from './loans.service';
 import { CreateLoanDto } from './dto/create-loan.dto';
 import { UpdateLoanDto } from './dto/update-loan.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Controller('loans')
 export class LoansController {
@@ -21,6 +25,8 @@ export class LoansController {
 
   // POST /api/loans
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   @HttpCode(HttpStatus.CREATED)
   async createLoan(@Body() createLoanDto: CreateLoanDto) {
     return this.loansService.createLoan(createLoanDto);

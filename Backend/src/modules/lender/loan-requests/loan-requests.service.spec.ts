@@ -177,47 +177,38 @@ describe('LoanRequestsService', () => {
   });
 
   it('allows the owning lender to approve an actionable ad request', async () => {
-    const applicationRef = { collection: 'loanApplications', id: 'req_1' };
-    const listingRef = { collection: 'loanListings', id: 'ad_1' };
-    const update = jest.fn();
-    const transaction = {
-      get: jest.fn((ref: typeof applicationRef) => {
-        if (ref.collection === 'loanApplications') {
-          return Promise.resolve({
-            exists: true,
-            data: () => ({
-              applicationId: 'req_1',
-              listingId: 'ad_1',
-              lenderId: 'lender_1',
-              status: 'submitted',
-              requestedPrincipalMinor: 5000000,
-              requestedTenureMonths: 12,
-            }),
-          });
-        }
-
-        return Promise.resolve({
-          exists: true,
-          data: () => ({
-            lenderId: 'lender_1',
-            minInterestRateAnnual: 11.5,
-          }),
-        });
-      }),
-      update,
+    const application = {
+      applicationId: 'req_1',
+      listingId: 'ad_1',
+      lenderId: 'lender_1',
+      status: 'submitted',
+      requestedPrincipalMinor: 5000000,
+      requestedTenureMonths: 12,
+    };
+    const listing = {
+      lenderId: 'lender_1',
+      minInterestRateAnnual: 11.5,
     };
     const db = {
       collection: jest.fn((name: string) => ({
-        doc: jest.fn(() =>
-          name === 'loanApplications' ? applicationRef : listingRef,
-        ),
+        doc: jest.fn(() => ({
+          get: jest.fn(async () => ({
+            exists: true,
+            data: () => (name === 'loanApplications' ? application : listing),
+          })),
+        })),
       })),
-      runTransaction: jest.fn(
-        (work: (value: typeof transaction) => Promise<unknown>) =>
-          work(transaction),
-      ),
     };
-    const service = new LoanRequestsService({ getDb: () => db } as any);
+    const coreLedgerService = {
+      approveApplication: jest.fn(async () => ({
+        loanId: 'loan_1',
+        agreementId: 'agreement_loan_1_v001',
+      })),
+    };
+    const service = new LoanRequestsService(
+      { getDb: () => db } as any,
+      coreLedgerService as any,
+    );
 
     const result = await service.decideRequest(
       'lender_1',
@@ -226,17 +217,20 @@ describe('LoanRequestsService', () => {
       'Looks good',
     );
 
-    expect(result).toMatchObject({ requestId: 'req_1', status: 'approved' });
-    expect(update).toHaveBeenCalledWith(
-      applicationRef,
+    expect(result).toMatchObject({
+      requestId: 'req_1',
+      status: 'converted',
+      loanId: 'loan_1',
+      agreementId: 'agreement_loan_1_v001',
+    });
+    expect(coreLedgerService.approveApplication).toHaveBeenCalledWith(
+      'req_1',
+      'lender_1',
       expect.objectContaining({
-        status: 'approved',
-        lenderDecision: expect.objectContaining({
-          approvedPrincipalMinor: 5000000,
-          approvedTenureMonths: 12,
-          annualInterestRate: 11.5,
-          decisionNote: 'Looks good',
-        }),
+        approvedPrincipalMinor: 5000000,
+        approvedTenureMonths: 12,
+        annualInterestRate: 11.5,
+        decisionNote: 'Looks good',
       }),
     );
   });

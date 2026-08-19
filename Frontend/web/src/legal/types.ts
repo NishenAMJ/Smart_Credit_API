@@ -1,44 +1,71 @@
 export type AgreementStatus =
-  | "generated"
+  | "awaiting_signatures"
   | "partially_accepted"
-  | "fully_accepted";
+  | "finalizing"
+  | "finalization_failed"
+  | "fully_accepted"
+  | "superseded"
+  | "cancelled";
 
-export interface PartySignatureAudit {
+export interface AgreementParty {
   userId: string;
   fullName: string;
   email: string;
-  signedAt: string;
-  ipAddress: string;
-  userAgent: string;
-  signedName: string;
+  phone: string;
+  role: "borrower" | "lender";
+}
+
+export interface AgreementAcceptanceSummary {
+  accepted: boolean;
+  signedName: string | null;
+  acceptedAt: string | null;
+}
+
+export interface AgreementTerms {
+  currency: "LKR";
+  principalMinor: number;
+  annualInterestRate: number;
+  interestAmountMinor: number;
+  totalRepayableMinor: number;
+  monthlyInstallmentMinor: number;
+  tenureMonths: number;
+  repaymentFrequency: "monthly";
+  repaymentStartRule: "one_month_after_activation";
 }
 
 export interface SharedLegalDocument {
   id: string;
   loanId: string;
+  applicationId: string;
+  listingId: string;
+  version: number;
+  title: string;
+  summary: string;
+  documentType: "loan_agreement";
   status: AgreementStatus;
-  borrower: {
-    userId: string;
-    fullName: string;
-    email: string;
-  };
-  lender: {
-    userId: string;
-    fullName: string;
-    email: string;
-  };
-  borrowerSignatureAudit?: PartySignatureAudit;
-  lenderSignatureAudit?: PartySignatureAudit;
-  pdfDownloadPath?: string;
-  pdfSha256Hash?: string;
-  createdAt: string;
+  borrower: AgreementParty;
+  lender: AgreementParty;
+  terms: AgreementTerms;
+  htmlContent: string;
+  termsHash: string;
+  consentTextVersion: "loan_agreement_consent_v1";
+  borrowerAcceptance: AgreementAcceptanceSummary;
+  lenderAcceptance: AgreementAcceptanceSummary;
+  pdfDownloadPath: string;
+  pdfAvailable: boolean;
+  signedPdfGeneratedAt: string | null;
+  pdfSha256Hash: string | null;
+  legacyReadOnly: boolean;
+  generatedAt: string;
   updatedAt: string;
 }
 
 export interface AgreementsResponse {
-  success: boolean;
   documents: SharedLegalDocument[];
-  count: number;
+  pageInfo: {
+    nextCursor: string | null;
+    hasMore: boolean;
+  };
 }
 
 export interface AgreementsPageProps {

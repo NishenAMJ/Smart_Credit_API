@@ -14,6 +14,10 @@ import {
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { LoanRequestDecisionResponse } from './loan-requests.dto';
 import {
+  CoreLedgerService,
+  type ApproveApplicationInput,
+} from '../../core-ledger/core-ledger.service';
+import {
   applyDateCursor,
   buildPageInfo,
   orderByDateAndId,
@@ -79,13 +83,17 @@ const ACTIONABLE_STATUSES = new Set([
 
 @Injectable()
 export class LoanRequestsService {
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly coreLedgerService: CoreLedgerService,
+  ) {}
 
   async decideRequest(
     lenderId: string,
     requestId: string,
     decision: 'approve' | 'reject' | undefined,
     note?: string,
+    approvalOverrides: Partial<ApproveApplicationInput> = {},
   ): Promise<LoanRequestDecisionResponse> {
     const normalizedRequestId = requestId?.trim();
     if (!normalizedRequestId) {
@@ -101,6 +109,28 @@ export class LoanRequestsService {
     const applicationRef = db
       .collection('loanApplications')
       .doc(normalizedRequestId);
+
+    if (decision === 'approve') {
+      const approval = await this.resolveApprovalInput(
+        db,
+        normalizedRequestId,
+        lenderId,
+        note,
+        approvalOverrides,
+      );
+      const converted = await this.coreLedgerService.approveApplication(
+        normalizedRequestId,
+        lenderId,
+        approval,
+      );
+      return {
+        requestId: normalizedRequestId,
+        status: 'converted',
+        updatedAt: new Date().toISOString(),
+        loanId: converted.loanId,
+        agreementId: converted.agreementId,
+      };
+    }
 
     return db.runTransaction(async (transaction) => {
       const applicationSnapshot = await transaction.get(applicationRef);
@@ -139,7 +169,7 @@ export class LoanRequestsService {
       }
 
       const now = Timestamp.now();
-      const status = decision === 'approve' ? 'approved' : 'rejected';
+      const status = 'rejected';
       const decisionNote = note?.trim() || null;
       const existingDecision = (
         application.lenderDecision &&
@@ -151,24 +181,9 @@ export class LoanRequestsService {
       transaction.update(applicationRef, {
         status,
         lenderDecision: {
-          approvedPrincipalMinor:
-            decision === 'approve'
-              ? readNumber(application.requestedPrincipalMinor)
-              : null,
-          annualInterestRate:
-            decision === 'approve'
-              ? readNumber(
-                  application.suggestedInterestRate,
-                  readNumber(
-                    existingDecision.annualInterestRate,
-                    readNumber(listing?.minInterestRateAnnual),
-                  ),
-                )
-              : null,
-          approvedTenureMonths:
-            decision === 'approve'
-              ? readNumber(application.requestedTenureMonths)
-              : null,
+          approvedPrincipalMinor: null,
+          annualInterestRate: null,
+          approvedTenureMonths: null,
           decisionNote,
           decidedAt: now,
         },
@@ -181,6 +196,56 @@ export class LoanRequestsService {
         updatedAt: now.toDate().toISOString(),
       };
     });
+  }
+
+  private async resolveApprovalInput(
+    db: Firestore,
+    applicationId: string,
+    lenderId: string,
+    note: string | undefined,
+    overrides: Partial<ApproveApplicationInput>,
+  ): Promise<ApproveApplicationInput> {
+    const applicationSnapshot = await db
+      .collection('loanApplications')
+      .doc(applicationId)
+      .get();
+    if (!applicationSnapshot.exists) {
+      throw new NotFoundException('Loan request was not found.');
+    }
+    const application = applicationSnapshot.data() ?? {};
+    const listingId = readString(application.listingId);
+    const listingSnapshot = listingId
+      ? await db.collection('loanListings').doc(listingId).get()
+      : null;
+    const listing = listingSnapshot?.data() ?? {};
+    const matchedLenders = readStringArray(application.matchedLenderIds);
+    if (
+      readString(application.lenderId) !== lenderId &&
+      readString(listing.lenderId) !== lenderId &&
+      !matchedLenders.includes(lenderId)
+    ) {
+      throw new NotFoundException('Loan request was not found.');
+    }
+
+    return {
+      approvedPrincipalMinor:
+        overrides.approvedPrincipalMinor ??
+        readNumber(application.requestedPrincipalMinor),
+      annualInterestRate:
+        overrides.annualInterestRate ??
+        readNumber(
+          application.suggestedInterestRate,
+          readNumber(
+            (application.lenderDecision as Record<string, unknown> | undefined)
+              ?.annualInterestRate,
+            readNumber(listing.minInterestRateAnnual),
+          ),
+        ),
+      approvedTenureMonths:
+        overrides.approvedTenureMonths ??
+        readNumber(application.requestedTenureMonths),
+      decisionNote: note?.trim() || null,
+    };
   }
 
   async getPendingRequests(

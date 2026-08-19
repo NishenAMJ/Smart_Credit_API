@@ -458,38 +458,32 @@ createdAt: Timestamp
 updatedAt: Timestamp
 ```
 
-Runtime loan-agreement alternative:
+Loan contracts are stored separately from platform legal documents:
+
+### `loanAgreements/{agreementId}`
 
 ```text
-id: string
-loanId: string
-title: string
-summary: string
-documentType: 'loan_agreement'
-status: 'generated' | 'partially_accepted' | 'fully_accepted'
-generatedByUserId: string
-generatedByRole: 'borrower' | 'lender' | 'admin'
-generatedAt: Timestamp
-updatedAt: Timestamp
-borrower: { userId, fullName, email, phone, role }
-lender: { userId, fullName, email, phone, role }
-loanSnapshot: {
-  loanId, amount, interestRate, durationMonths, repaymentSchedule, status,
-  nextDueDate?
+agreementId, loanId, applicationId, listingId: string
+version: number
+status: awaiting_signatures | partially_accepted | finalizing |
+  finalization_failed | fully_accepted | superseded | cancelled
+borrowerId, lenderId: string
+borrower, lender: { userId, fullName, email, phone, role }
+terms: {
+  currency, principalMinor, annualInterestRate, interestAmountMinor,
+  totalRepayableMinor, monthlyInstallmentMinor, tenureMonths,
+  repaymentFrequency, repaymentStartRule
 }
-htmlContent: string
-borrowerAccepted: boolean
-lenderAccepted: boolean
-borrowerAcceptedAt?: Timestamp
-lenderAcceptedAt?: Timestamp
-borrowerSignatureAudit?: { signedName?, ipAddress?, userAgent? }
-lenderSignatureAudit?: { signedName?, ipAddress?, userAgent? }
-pdfDownloadPath?: string
-signedPdfStoragePath?: string
-signedPdfDocumentId?: string
-signedPdfGeneratedAt?: Timestamp
-pdfSha256Hash?: string
+bodyHtml, termsHash, consentTextVersion: string
+borrowerAcceptance, lenderAcceptance: { accepted, signedName, acceptedAt }
+signedPdfDocumentId, pdfSha256Hash: string | null
+generatedAt, updatedAt, finalizedAt: Timestamp | null
 ```
+
+### `loanAgreementAcceptances/{acceptanceId}`
+
+Append-only party consent record containing the agreement/version/hash, typed
+legal name, role, hashed IP address, user agent, and acceptance timestamp.
 
 ### `legalAcceptances/{acceptanceId}`
 

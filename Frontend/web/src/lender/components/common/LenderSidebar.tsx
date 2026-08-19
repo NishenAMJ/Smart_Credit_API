@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   CreditCard,
+  FileSignature,
   Landmark,
   LayoutDashboard,
   LogOut,
@@ -25,6 +26,7 @@ type LenderView =
   | 'settings'
   | 'notifications'
   | 'sms'
+  | 'agreements'
 
 type NavItem = {
   id: LenderView
@@ -36,6 +38,7 @@ const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'loans', label: 'Loans', icon: Landmark },
   { id: 'borrowers', label: 'Borrowers', icon: UsersRound },
+  { id: 'agreements', label: 'Agreements', icon: FileSignature },
   { id: 'recent-transactions', label: 'Payments', icon: CreditCard },
   { id: 'active-ads-requests', label: 'Advertisements', icon: Megaphone },
   { id: 'sms', label: 'SMS', icon: MessageSquareText },

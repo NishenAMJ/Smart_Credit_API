@@ -38,7 +38,13 @@ function formatDate(value: string | null): string {
       }).format(date);
 }
 
-export default function LoansPage({ session }: { session: LenderSession }) {
+export default function LoansPage({
+  session,
+  onOpenAgreement,
+}: {
+  session: LenderSession;
+  onOpenAgreement?: (loanId: string) => void;
+}) {
   const [response, setResponse] = useState<LenderLoansResponse | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -340,6 +346,7 @@ export default function LoansPage({ session }: { session: LenderSession }) {
           borrowerName={selectedLoan.borrowerName}
           initialShowPayments={selectedLoan.showPayments}
           onPaymentRecorded={() => setReloadVersion((version) => version + 1)}
+          onOpenAgreement={onOpenAgreement}
           onClose={() => setSelectedLoan(null)}
         />
       ) : null}
