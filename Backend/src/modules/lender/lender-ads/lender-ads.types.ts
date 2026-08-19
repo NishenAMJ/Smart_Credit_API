@@ -8,6 +8,8 @@ export interface CreateLenderAdInput {
   lenderId: string;
   lenderName: string | null;
   headline: string;
+  title?: string;
+  description?: string;
   minAmount: number;
   maxAmount: number;
   interestRate: number;
@@ -17,6 +19,8 @@ export interface CreateLenderAdInput {
   repaymentStyle: string;
   requirements: string;
   supportNote: string;
+  location?: string;
+  preferredPurposes?: string[];
 }
 
 export interface LenderAdResponse {
@@ -28,6 +32,7 @@ export interface LenderAdResponse {
   minAmount: number;
   maxAmount: number;
   preferredInterestRate: number;
+  minTenureMonths?: number;
   maxTenureMonths: number;
   location: string;
   preferredPurposes: string[];
@@ -44,6 +49,9 @@ export interface LenderAdResponse {
   searchKeywords: string[];
   seedBatchId: string;
   source: string;
+  lenderPhotoURL?: string | null;
+  lenderRating?: number;
+  imageUrl?: string;
 }
 
 export interface LenderAdsListResponse {

@@ -26,6 +26,7 @@ describe('AdminAuditService', () => {
   const collectionMock = jest.fn();
 
   beforeEach(async () => {
+    jest.resetAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminAuditService,
@@ -41,7 +42,6 @@ describe('AdminAuditService', () => {
     }).compile();
 
     service = module.get<AdminAuditService>(AdminAuditService);
-    jest.clearAllMocks();
   });
 
   it('returns ad approval logs only when the ad has an approval timestamp', async () => {
@@ -66,6 +66,16 @@ describe('AdminAuditService', () => {
     };
 
     collectionMock.mockImplementation((name: string) => ({
+      orderBy: jest.fn(() => ({
+        limit: jest.fn(() => ({
+          get: jest.fn().mockResolvedValue(snapshots[name]),
+        })),
+        startAfter: jest.fn(() => ({
+          limit: jest.fn(() => ({
+            get: jest.fn().mockResolvedValue(snapshots[name]),
+          })),
+        })),
+      })),
       get: jest.fn().mockResolvedValue(snapshots[name]),
     }));
 
@@ -118,6 +128,16 @@ describe('AdminAuditService', () => {
     };
 
     collectionMock.mockImplementation((name: string) => ({
+      orderBy: jest.fn(() => ({
+        limit: jest.fn(() => ({
+          get: jest.fn().mockResolvedValue(snapshots[name]),
+        })),
+        startAfter: jest.fn(() => ({
+          limit: jest.fn(() => ({
+            get: jest.fn().mockResolvedValue(snapshots[name]),
+          })),
+        })),
+      })),
       get: jest.fn().mockResolvedValue(snapshots[name]),
     }));
 
