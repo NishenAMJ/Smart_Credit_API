@@ -366,15 +366,6 @@ export default function QRScannerScreen({ navigation }: any) {
           The QR code will be detected automatically — no need to tap
         </Text>
 
-        {/* Steps */}
-        <View style={styles.stepsRow}>
-          <StepChip number="1" label="Borrower opens app"    />
-          <StepDivider />
-          <StepChip number="2" label="Shows payment QR"      />
-          <StepDivider />
-          <StepChip number="3" label="Scan & confirm"        />
-        </View>
-
         {/* Info strip */}
         <View style={styles.infoStrip}>
           <Feather name="shield" size={14} color={COLORS.success} />
@@ -413,19 +404,6 @@ const TipRow = ({ icon, text }: { icon: string; text: string }) => (
     </View>
     <Text style={tipStyles.text}>{text}</Text>
   </View>
-);
-
-const StepChip = ({ number, label }: { number: string; label: string }) => (
-  <View style={stepStyles.chip}>
-    <View style={stepStyles.numWrap}>
-      <Text style={stepStyles.num}>{number}</Text>
-    </View>
-    <Text style={stepStyles.label}>{label}</Text>
-  </View>
-);
-
-const StepDivider = () => (
-  <View style={stepStyles.divider} />
 );
 
 // ── Styles ────────────────────────────────────────────────
@@ -825,35 +803,3 @@ const tipStyles = StyleSheet.create({
   },
 });
 
-const stepStyles = StyleSheet.create({
-  chip: {
-    alignItems: "center",
-    gap: 4,
-  },
-  numWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  num: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  label: {
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    maxWidth: 70,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginHorizontal: 6,
-    marginBottom: 14,
-  },
-});
