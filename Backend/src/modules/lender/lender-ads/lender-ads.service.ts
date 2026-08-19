@@ -93,7 +93,9 @@ export class LenderAdsService {
       repaymentFrequency: 'monthly',
       borrowerFocus: input.borrowerFocus.trim(),
       processingTime: input.processingTime.trim(),
+      repaymentStyle: input.repaymentStyle.trim(),
       requirements: input.requirements.trim(),
+      responseTimeHours,
       status: 'pending_review',
       availableCapitalMinor: Math.round(input.maxAmount * 100),
       adminReview: {
@@ -134,6 +136,10 @@ export class LenderAdsService {
       lenderId: document.lenderId,
       title: document.title,
       description: document.description,
+      borrowerFocus: document.borrowerFocus,
+      processingTime: document.processingTime,
+      repaymentStyle: input.repaymentStyle.trim(),
+      requirements: document.requirements,
       minAmount: document.minAmountMinor / 100,
       maxAmount: document.maxAmountMinor / 100,
       preferredInterestRate: document.minInterestRateAnnual,
@@ -160,16 +166,19 @@ export class LenderAdsService {
     lenderId: string,
     pageSize = 6,
     cursor?: string | null,
+    status?: string | null,
   ): Promise<LenderAdsListResponse> {
     const safePageSize = Math.min(Math.max(pageSize, 1), 12);
     const collection = this.firebaseService.getDb().collection('loanListings');
+    const normalizedStatus = this.normalizeStatusFilter(status);
+    const lenderQuery = collection.where('lenderId', '==', lenderId);
+    const scopedQuery = normalizedStatus
+      ? lenderQuery.where('status', '==', normalizedStatus)
+      : lenderQuery;
 
     try {
       const snapshot = await applyDateCursor(
-        orderByDateAndId(
-          collection.where('lenderId', '==', lenderId),
-          'createdAt',
-        ),
+        orderByDateAndId(scopedQuery, 'createdAt'),
         cursor,
       )
         .limit(safePageSize + 1)
@@ -193,12 +202,17 @@ export class LenderAdsService {
         this.hasWarnedAboutMissingIndex = true;
       }
       const snapshot = await collection.where('lenderId', '==', lenderId).get();
-      const orderedDocs = snapshot.docs.slice().sort((left, right) => {
-        const leftTime = readDate(left.get('createdAt'))?.getTime() ?? 0;
-        const rightTime = readDate(right.get('createdAt'))?.getTime() ?? 0;
+      const orderedDocs = snapshot.docs
+        .filter(
+          (doc) =>
+            !normalizedStatus || getAdStatus(doc.data()) === normalizedStatus,
+        )
+        .sort((left, right) => {
+          const leftTime = readDate(left.get('createdAt'))?.getTime() ?? 0;
+          const rightTime = readDate(right.get('createdAt'))?.getTime() ?? 0;
 
-        return rightTime - leftTime || right.id.localeCompare(left.id);
-      });
+          return rightTime - leftTime || right.id.localeCompare(left.id);
+        });
       const decodedCursor = decodeCursor(cursor);
       const startIndex = decodedCursor
         ? orderedDocs.findIndex((doc) => {
@@ -262,6 +276,25 @@ export class LenderAdsService {
       typeof candidate.details === 'string' &&
       candidate.details.toLowerCase().includes('requires an index')
     );
+  }
+
+  private normalizeStatusFilter(status?: string | null): string | null {
+    if (!status) return null;
+
+    const supportedStatuses = new Set([
+      'draft',
+      'pending_review',
+      'active',
+      'paused',
+      'rejected',
+      'expired',
+      'closed',
+    ]);
+    if (!supportedStatuses.has(status)) {
+      throw new BadRequestException('Unsupported advertisement status.');
+    }
+
+    return status;
   }
 
   async updateAdFromMobile(
@@ -446,6 +479,16 @@ export class LenderAdsService {
           ? data.title
           : 'Untitled ad',
       description: typeof data.description === 'string' ? data.description : '',
+      borrowerFocus:
+        readString(data.borrowerFocus) ??
+        readStringArray(data.purposeCategories)[0] ??
+        'Eligible borrowers',
+      processingTime:
+        readString(data.processingTime) ?? 'Within 2 business days',
+      repaymentStyle: readString(data.repaymentStyle) ?? 'Monthly installments',
+      requirements:
+        readString(data.requirements) ??
+        'Approved KYC and supporting financial documents',
       minAmount: this.toNumber(data.minAmountMinor) / 100,
       maxAmount: this.toNumber(data.maxAmountMinor) / 100,
       preferredInterestRate: this.toNumber(data.minInterestRateAnnual),
@@ -457,7 +500,7 @@ export class LenderAdsService {
       availableCapital: this.toNumber(data.availableCapitalMinor) / 100,
       applicationCount: 0,
       fundedLoansCount: 0,
-      responseTimeHours: 24,
+      responseTimeHours: this.toNumber(data.responseTimeHours) || 24,
       lenderName: typeof data.lenderName === 'string' ? data.lenderName : null,
       expiresAt: this.toIsoString(data.expiresAt),
       createdAt: this.toIsoString(data.createdAt),

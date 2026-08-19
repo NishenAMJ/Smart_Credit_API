@@ -1,13 +1,22 @@
 import { useEffect, useState } from "react";
-import { BadgeCheck, Ban, Plus, X } from "lucide-react";
+import {
+  BadgeCheck,
+  Ban,
+  CalendarDays,
+  Eye,
+  Percent,
+  Plus,
+  Timer,
+  X,
+} from "lucide-react";
 import BorrowerSidePanel from "../components/borrowers/BorrowerSidePanel";
 import type { LenderView } from "../components/common/LenderSidebar";
 import CreateAdPage from "./create-ad";
 import {
-  fetchAnalyticsDrilldown,
-  type AnalyticsDrilldownItem,
-  type AnalyticsDrilldownResponse,
-} from "../lib/analytics-api";
+  fetchLenderAdsPage,
+  type LenderAd,
+  type LenderAdsListResponse,
+} from "../lib/lender-ads-api";
 import {
   decideLoanRequest,
   fetchPendingRequests,
@@ -22,7 +31,9 @@ type ActiveAdsRequestsPageProps = {
   onNavigate: (view: LenderView) => void;
 };
 
-const ACTIVE_AD_LIMIT = 12;
+type AdStatusGroup = "active" | "pending_review";
+
+const AD_PAGE_SIZE = 12;
 const REQUEST_LIMIT = 30;
 const ACTIONABLE_REQUEST_STATUSES = new Set([
   "open",
@@ -49,15 +60,9 @@ function formatLabel(value: string): string {
 }
 
 function formatDate(value: string | null): string {
-  if (!value) {
-    return "Unknown";
-  }
-
+  if (!value) return "Date unavailable";
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "Unknown";
-  }
-
+  if (Number.isNaN(parsed.getTime())) return "Date unavailable";
   return new Intl.DateTimeFormat("en-LK", {
     year: "numeric",
     month: "short",
@@ -65,17 +70,286 @@ function formatDate(value: string | null): string {
   }).format(parsed);
 }
 
+function mergeAdPage(
+  current: LenderAdsListResponse | null,
+  next: LenderAdsListResponse,
+): LenderAdsListResponse {
+  if (!current) return next;
+  return {
+    ...next,
+    ads: [
+      ...current.ads,
+      ...next.ads.filter(
+        (nextAd) => !current.ads.some((ad) => ad.id === nextAd.id),
+      ),
+    ],
+  };
+}
+
+function AdvertisementCard({
+  ad,
+  canReviewRequests,
+  onPreview,
+  onReviewRequests,
+}: {
+  ad: LenderAd;
+  canReviewRequests: boolean;
+  onPreview: () => void;
+  onReviewRequests: () => void;
+}) {
+  return (
+    <article className="lender-ad-card">
+      <header className="lender-ad-card__header">
+        <span
+          className={`lender-ad-status lender-ad-status--${ad.status.replaceAll("_", "-")}`}
+        >
+          {formatLabel(ad.status)}
+        </span>
+        <span className="lender-ad-card__date">
+          <CalendarDays size={14} /> {formatDate(ad.createdAt)}
+        </span>
+      </header>
+
+      <div className="lender-ad-card__content">
+        <p className="lender-ad-card__audience">{ad.borrowerFocus}</p>
+        <h3>{ad.title}</h3>
+        <p className="lender-ad-card__description">
+          {ad.description || "No description was provided."}
+        </p>
+      </div>
+
+      <dl className="lender-ad-card__terms">
+        <div>
+          <dt>Amount range</dt>
+          <dd>
+            {formatCurrency(ad.minAmount)} – {formatCurrency(ad.maxAmount)}
+          </dd>
+        </div>
+        <div>
+          <dt>
+            <Percent size={14} /> Annual rate
+          </dt>
+          <dd>{ad.preferredInterestRate}%</dd>
+        </div>
+        <div>
+          <dt>
+            <Timer size={14} /> Maximum term
+          </dt>
+          <dd>{ad.maxTenureMonths} months</dd>
+        </div>
+      </dl>
+
+      <footer className="lender-ad-card__actions">
+        <button
+          type="button"
+          className="button button-secondary"
+          onClick={onPreview}
+        >
+          <Eye size={16} /> Preview
+        </button>
+        {canReviewRequests ? (
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={onReviewRequests}
+          >
+            View borrower requests
+          </button>
+        ) : (
+          <p>Waiting for admin approval</p>
+        )}
+      </footer>
+    </article>
+  );
+}
+
+function AdvertisementSection({
+  title,
+  description,
+  response,
+  isLoading,
+  isLoadingMore,
+  emptyMessage,
+  canReviewRequests,
+  onPreview,
+  onReviewRequests,
+  onLoadMore,
+}: {
+  title: string;
+  description: string;
+  response: LenderAdsListResponse | null;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  emptyMessage: string;
+  canReviewRequests: boolean;
+  onPreview: (ad: LenderAd) => void;
+  onReviewRequests: (ad: LenderAd) => void;
+  onLoadMore: () => void;
+}) {
+  return (
+    <section className="card lender-ad-section">
+      <div className="lender-ad-section__header">
+        <div>
+          <h2 className="section-title">{title}</h2>
+          <p className="section-subtitle">{description}</p>
+        </div>
+        {!isLoading ? (
+          <span className="lender-ad-section__count">
+            {response?.ads.length ?? 0}
+          </span>
+        ) : null}
+      </div>
+
+      {isLoading ? (
+        <div className="borrower-modal__state">Loading advertisements...</div>
+      ) : response?.ads.length ? (
+        <div className="lender-ad-grid">
+          {response.ads.map((ad) => (
+            <AdvertisementCard
+              key={ad.id}
+              ad={ad}
+              canReviewRequests={canReviewRequests}
+              onPreview={() => onPreview(ad)}
+              onReviewRequests={() => onReviewRequests(ad)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="lender-ad-empty">{emptyMessage}</div>
+      )}
+
+      {response?.pageInfo.hasMore ? (
+        <div className="active-ads-load-more">
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
+          >
+            {isLoadingMore ? "Loading..." : "Load more"}
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function AdvertisementPreview({
+  ad,
+  session,
+  onClose,
+}: {
+  ad: LenderAd;
+  session: LenderSession;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="create-ad-preview-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="card create-ad-preview-card create-ad-preview-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="saved-ad-preview-title"
+      >
+        <div className="create-ad-preview-card__top">
+          <div>
+            <p className="create-ad-section-kicker">Borrower view</p>
+            <h2 className="section-title" id="saved-ad-preview-title">
+              Advertisement preview
+            </h2>
+          </div>
+          <div className="create-ad-preview-card__actions">
+            <span className="create-ad-draft-badge">
+              {formatLabel(ad.status)}
+            </span>
+            <button
+              type="button"
+              className="create-ad-preview-close"
+              onClick={onClose}
+              aria-label="Close advertisement preview"
+            >
+              <X size={17} />
+            </button>
+          </div>
+        </div>
+
+        <div className="create-ad-preview">
+          <div className="create-ad-preview__brand">
+            <div className="create-ad-preview__logo" aria-hidden="true">
+              {session.displayName.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="create-ad-preview__identity">
+              <p className="create-ad-preview__name">
+                {ad.lenderName || session.displayName}
+              </p>
+              <p className="create-ad-preview__meta">
+                <BadgeCheck size={14} /> Verified lender
+              </p>
+            </div>
+          </div>
+          <div>
+            <p className="create-ad-preview__audience">{ad.borrowerFocus}</p>
+            <h3 className="create-ad-preview__title">{ad.title}</h3>
+          </div>
+          <article className="create-ad-preview__amount">
+            <span>Available amount</span>
+            <strong>
+              {formatCurrency(ad.minAmount)} – {formatCurrency(ad.maxAmount)}
+            </strong>
+          </article>
+          <div className="create-ad-preview__metrics">
+            <article className="create-ad-preview__metric">
+              <span>Annual rate</span>
+              <strong>{ad.preferredInterestRate}%</strong>
+            </article>
+            <article className="create-ad-preview__metric">
+              <span>Maximum term</span>
+              <strong>{ad.maxTenureMonths} months</strong>
+            </article>
+            <article className="create-ad-preview__metric">
+              <span>Review time</span>
+              <strong>{ad.processingTime.replace("Within ", "")}</strong>
+            </article>
+          </div>
+          <p className="create-ad-preview__description">{ad.description}</p>
+          <div className="create-ad-preview__requirements">
+            <BadgeCheck size={16} aria-hidden="true" />
+            <div>
+              <strong>What borrowers need</strong>
+              <p>{ad.requirements}</p>
+            </div>
+          </div>
+          <div className="create-ad-preview__footer">
+            <span>{ad.repaymentStyle}</span>
+            <button type="button" disabled>
+              View offer
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function ActiveAdsRequestsPage({
   session,
 }: ActiveAdsRequestsPageProps) {
-  const [adsResponse, setAdsResponse] =
-    useState<AnalyticsDrilldownResponse | null>(null);
+  const [activeResponse, setActiveResponse] =
+    useState<LenderAdsListResponse | null>(null);
+  const [pendingResponse, setPendingResponse] =
+    useState<LenderAdsListResponse | null>(null);
   const [isAdsLoading, setIsAdsLoading] = useState(true);
-  const [isLoadingMoreAds, setIsLoadingMoreAds] = useState(false);
+  const [loadingMoreGroup, setLoadingMoreGroup] =
+    useState<AdStatusGroup | null>(null);
   const [adsError, setAdsError] = useState<string | null>(null);
-  const [selectedAd, setSelectedAd] = useState<AnalyticsDrilldownItem | null>(
-    null,
-  );
+  const [previewAd, setPreviewAd] = useState<LenderAd | null>(null);
+  const [selectedAd, setSelectedAd] = useState<LenderAd | null>(null);
   const [requestsResponse, setRequestsResponse] =
     useState<PendingRequestsResponse | null>(null);
   const [isRequestsLoading, setIsRequestsLoading] = useState(false);
@@ -90,88 +364,57 @@ export default function ActiveAdsRequestsPage({
     null,
   );
 
-  const ads = adsResponse?.items ?? [];
   const requests = requestsResponse?.requests ?? [];
 
   useEffect(() => {
-    setAdsResponse(null);
-    setSelectedAd(null);
-    setRequestsResponse(null);
-    setAdsError(null);
-    setRequestsError(null);
-  }, [session.lenderId]);
-
-  useEffect(() => {
     let isMounted = true;
-
     const loadAds = async () => {
       try {
         setIsAdsLoading(true);
         setAdsError(null);
-        setAdsResponse(null);
-        setSelectedAd(null);
-        setRequestsResponse(null);
-        const data = await fetchAnalyticsDrilldown(
-          session.lenderId,
-          "active-ads",
-          "90d",
-          {
-            pageSize: ACTIVE_AD_LIMIT,
-            cursor: null,
-          },
-        );
-
-        if (!isMounted) {
-          return;
-        }
-
-        setAdsResponse(data);
+        const [active, pending] = await Promise.all([
+          fetchLenderAdsPage({ pageSize: AD_PAGE_SIZE, status: "active" }),
+          fetchLenderAdsPage({
+            pageSize: AD_PAGE_SIZE,
+            status: "pending_review",
+          }),
+        ]);
+        if (!isMounted) return;
+        setActiveResponse(active);
+        setPendingResponse(pending);
       } catch (loadError) {
         if (isMounted) {
           setAdsError(
             loadError instanceof Error
               ? loadError.message
-              : "Failed to load active ads.",
+              : "Failed to load advertisements.",
           );
         }
       } finally {
-        if (isMounted) {
-          setIsAdsLoading(false);
-        }
+        if (isMounted) setIsAdsLoading(false);
       }
     };
-
     void loadAds();
-
     return () => {
       isMounted = false;
     };
   }, [session.lenderId, adsRefreshKey]);
 
   useEffect(() => {
-    if (!isCreateAdOpen && !selectedAd) return;
-
+    if (!isCreateAdOpen && !selectedAd && !previewAd) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-
-      if (isCreateAdOpen) {
-        setIsCreateAdOpen(false);
-      } else {
-        setSelectedAd(null);
-      }
+      if (previewAd) setPreviewAd(null);
+      else if (isCreateAdOpen) setIsCreateAdOpen(false);
+      else setSelectedAd(null);
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isCreateAdOpen, selectedAd]);
+  }, [isCreateAdOpen, previewAd, selectedAd]);
 
   useEffect(() => {
-    if (!selectedAd) {
-      return;
-    }
-
+    if (!selectedAd) return;
     let isMounted = true;
-
     const loadRequests = async () => {
       try {
         setIsRequestsLoading(true);
@@ -183,31 +426,52 @@ export default function ActiveAdsRequestsPage({
           includeSummary: false,
           includeAllStatuses: true,
         });
-
-        if (isMounted) {
-          setRequestsResponse(data);
-        }
+        if (isMounted) setRequestsResponse(data);
       } catch (loadError) {
         if (isMounted) {
           setRequestsError(
             loadError instanceof Error
               ? loadError.message
-              : "Failed to load borrower requests for this ad.",
+              : "Failed to load borrower requests for this advertisement.",
           );
         }
       } finally {
-        if (isMounted) {
-          setIsRequestsLoading(false);
-        }
+        if (isMounted) setIsRequestsLoading(false);
       }
     };
-
     void loadRequests();
-
     return () => {
       isMounted = false;
     };
-  }, [selectedAd, session.lenderId]);
+  }, [selectedAd]);
+
+  const handleLoadMore = async (group: AdStatusGroup) => {
+    const current = group === "active" ? activeResponse : pendingResponse;
+    const cursor = current?.pageInfo.nextCursor;
+    if (!cursor || loadingMoreGroup) return;
+    try {
+      setLoadingMoreGroup(group);
+      setAdsError(null);
+      const next = await fetchLenderAdsPage({
+        pageSize: AD_PAGE_SIZE,
+        status: group,
+        cursor,
+      });
+      if (group === "active") {
+        setActiveResponse((value) => mergeAdPage(value, next));
+      } else {
+        setPendingResponse((value) => mergeAdPage(value, next));
+      }
+    } catch (loadError) {
+      setAdsError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Failed to load more advertisements.",
+      );
+    } finally {
+      setLoadingMoreGroup(null);
+    }
+  };
 
   const handleDecision = async (
     request: PendingRequest,
@@ -223,7 +487,6 @@ export default function ActiveAdsRequestsPage({
           ? "Approved from the advertisement request review."
           : "Rejected from the advertisement request review.",
       );
-
       setRequestsResponse((current) =>
         current
           ? {
@@ -251,129 +514,62 @@ export default function ActiveAdsRequestsPage({
     }
   };
 
-  const handleLoadMoreAds = async () => {
-    const cursor = adsResponse?.pageInfo.nextCursor;
-    if (!cursor || isLoadingMoreAds) return;
-
-    try {
-      setIsLoadingMoreAds(true);
-      setAdsError(null);
-      const nextPage = await fetchAnalyticsDrilldown(
-        session.lenderId,
-        "active-ads",
-        "90d",
-        { pageSize: ACTIVE_AD_LIMIT, cursor },
-      );
-
-      setAdsResponse((current) =>
-        current
-          ? {
-              ...nextPage,
-              items: [
-                ...current.items,
-                ...nextPage.items.filter(
-                  (nextAd) => !current.items.some((ad) => ad.id === nextAd.id),
-                ),
-              ],
-            }
-          : nextPage,
-      );
-    } catch (loadError) {
-      setAdsError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Failed to load more active advertisements.",
-      );
-    } finally {
-      setIsLoadingMoreAds(false);
-    }
-  };
-
   return (
-    <section className="dashboard-panel">
+    <section className="dashboard-panel lender-advertisements-page">
       <header className="page-header">
         <div>
           <h1 className="page-title">Advertisements</h1>
           <p className="page-subtitle">
-            View your active lending offers and open an advertisement to review
-            its borrower requests.
+            Review published offers and advertisements waiting for approval.
           </p>
         </div>
-
-        <div className="analytics-header-tools">
-          <button
-            type="button"
-            className="create-ad-button create-ad-button--primary"
-            onClick={() => setIsCreateAdOpen(true)}
-          >
-            <Plus size={16} /> Create advertisement
-          </button>
-        </div>
+        <button
+          type="button"
+          className="create-ad-button create-ad-button--primary"
+          onClick={() => setIsCreateAdOpen(true)}
+        >
+          <Plus size={16} /> Create advertisement
+        </button>
       </header>
 
-      <section className="card analytics-card">
-        <div className="analytics-card__header">
-          <div>
-            <h2 className="section-title">Active Ads</h2>
-            <p className="section-subtitle">
-              Only approved, published offers that have not expired appear here.
-              Select one to review its borrower requests.
-            </p>
-          </div>
+      {adsError ? (
+        <div className="sms-alert sms-alert--error" role="alert">
+          {adsError}
         </div>
+      ) : null}
 
-        {adsError ? (
-          <div className="borrower-modal__state borrower-modal__state--error">
-            {adsError}
-          </div>
-        ) : isAdsLoading ? (
-          <div className="borrower-modal__state">Loading active ads...</div>
-        ) : ads.length > 0 ? (
-          <div className="active-ads-list">
-            {ads.map((ad) => {
-              const isSelected = selectedAd?.id === ad.id;
+      <AdvertisementSection
+        title="Active advertisements"
+        description="Approved offers currently visible to borrowers."
+        response={activeResponse}
+        isLoading={isAdsLoading}
+        isLoadingMore={loadingMoreGroup === "active"}
+        emptyMessage="No active advertisements are available."
+        canReviewRequests
+        onPreview={setPreviewAd}
+        onReviewRequests={setSelectedAd}
+        onLoadMore={() => void handleLoadMore("active")}
+      />
+      <AdvertisementSection
+        title="Pending approval"
+        description="Submitted advertisements waiting for an administrator decision."
+        response={pendingResponse}
+        isLoading={isAdsLoading}
+        isLoadingMore={loadingMoreGroup === "pending_review"}
+        emptyMessage="No advertisements are waiting for approval."
+        canReviewRequests={false}
+        onPreview={setPreviewAd}
+        onReviewRequests={() => undefined}
+        onLoadMore={() => void handleLoadMore("pending_review")}
+      />
 
-              return (
-                <button
-                  key={ad.id}
-                  type="button"
-                  className={`active-ads-list__item${
-                    isSelected ? " active-ads-list__item--selected" : ""
-                  }`}
-                  onClick={() => setSelectedAd(ad)}
-                >
-                  <div>
-                    <p className="active-ads-list__title">{ad.title}</p>
-                  </div>
-                  <div className="active-ads-list__meta">
-                    <span className="badge badge-gray">
-                      {formatLabel(ad.status)}
-                    </span>
-                    <p>{ad.metric}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="borrower-modal__state">
-            No active ads are available for this lender right now.
-          </div>
-        )}
-
-        {adsResponse?.pageInfo.hasMore ? (
-          <div className="active-ads-load-more">
-            <button
-              type="button"
-              className="create-ad-button"
-              onClick={() => void handleLoadMoreAds()}
-              disabled={isLoadingMoreAds}
-            >
-              {isLoadingMoreAds ? "Loading…" : "Load more advertisements"}
-            </button>
-          </div>
-        ) : null}
-      </section>
+      {previewAd ? (
+        <AdvertisementPreview
+          ad={previewAd}
+          session={session}
+          onClose={() => setPreviewAd(null)}
+        />
+      ) : null}
 
       {selectedAd ? (
         <div
@@ -399,8 +595,7 @@ export default function ActiveAdsRequestsPage({
                   {selectedAd.title}
                 </h2>
                 <p className="section-subtitle">
-                  Review and decide requests submitted through this
-                  advertisement.
+                  Review requests submitted through this advertisement.
                 </p>
               </div>
               <button
@@ -422,7 +617,6 @@ export default function ActiveAdsRequestsPage({
                   {decisionError}
                 </div>
               ) : null}
-
               {requestsError ? (
                 <div className="borrower-modal__state borrower-modal__state--error">
                   {requestsError}
@@ -431,14 +625,13 @@ export default function ActiveAdsRequestsPage({
                 <div className="borrower-modal__state">
                   Loading borrower requests...
                 </div>
-              ) : requests.length > 0 ? (
+              ) : requests.length ? (
                 <div className="active-ads-request-list">
                   {requests.map((request) => {
                     const isActionable = ACTIONABLE_REQUEST_STATUSES.has(
                       request.status,
                     );
                     const isUpdating = decisionRequestId === request.requestId;
-
                     return (
                       <article
                         className="active-ads-request-card"
@@ -472,7 +665,6 @@ export default function ActiveAdsRequestsPage({
                             </p>
                           </div>
                         </div>
-
                         <div className="active-ads-request-card__details">
                           <span>{request.tenureMonths} month tenure</span>
                           <span>{formatLabel(request.urgency)} urgency</span>
@@ -484,7 +676,6 @@ export default function ActiveAdsRequestsPage({
                             KYC {formatLabel(request.borrowerKycStatus)}
                           </span>
                         </div>
-
                         <div className="request-decision-actions">
                           {isActionable ? (
                             <>
@@ -522,7 +713,7 @@ export default function ActiveAdsRequestsPage({
                 </div>
               ) : (
                 <div className="borrower-modal__state">
-                  No borrower requests have reached this ad yet.
+                  No borrower requests have reached this advertisement yet.
                 </div>
               )}
             </div>
@@ -556,7 +747,7 @@ export default function ActiveAdsRequestsPage({
               <button
                 type="button"
                 className="borrower-modal__close"
-                aria-label="Close create ad form"
+                aria-label="Close create advertisement form"
                 onClick={() => setIsCreateAdOpen(false)}
               >
                 <X size={20} />

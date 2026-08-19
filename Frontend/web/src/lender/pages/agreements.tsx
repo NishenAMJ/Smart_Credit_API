@@ -16,6 +16,7 @@ import {
   retryLenderAgreementFinalization,
 } from "../lib/legal-agreements-api";
 import type { LenderSession } from "../lib/lender-session";
+import AgreementPortfolioCard from "../components/agreements/AgreementPortfolioCard";
 import "./agreements.css";
 
 type Props = {
@@ -238,34 +239,25 @@ export default function LenderAgreementsPage({
       ) : null}
 
       <section
-        className="card lender-agreements__list"
+        className="agreement-portfolio-grid"
         aria-label="Loan agreements"
       >
         {loading ? (
-          <p className="lender-agreements__state">Loading agreements...</p>
+          <p className="card lender-agreements__state">Loading agreements...</p>
         ) : records.length ? (
           records.map((record) => (
-            <button
-              type="button"
+            <AgreementPortfolioCard
               key={record.id}
-              className={`lender-agreements__record${selected?.id === record.id ? " lender-agreements__record--active" : ""}`}
-              onClick={() => {
+              agreement={record}
+              onOpen={() => {
                 setSelected(record);
                 setConsentAccepted(false);
                 setNotice("");
               }}
-            >
-              <span>
-                <strong>{record.borrower.fullName}</strong>
-                <small>
-                  Version {record.version} · {label(record.status)}
-                </small>
-              </span>
-              <span>{money(record.terms.principalMinor)}</span>
-            </button>
+            />
           ))
         ) : (
-          <p className="lender-agreements__state">
+          <p className="card lender-agreements__state">
             No agreements are available.
           </p>
         )}

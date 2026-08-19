@@ -55,11 +55,13 @@ export class LenderAdsController {
     @Query('pageSize') pageSize?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('status') status?: string,
   ): Promise<LenderAdsListResponse> {
     return this.lenderAdsService.getAdsForLender(
       request.user.sub,
       this.toOptionalNumber(pageSize) ?? this.toOptionalNumber(limit) ?? 6,
       cursor?.trim() || null,
+      status?.trim() || null,
     );
   }
 

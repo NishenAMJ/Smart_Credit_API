@@ -2,44 +2,65 @@
   padding: 18px;
 }
 
-.lender-agreements__list {
+.agreement-portfolio-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 18px;
+  gap: 14px;
 }
 
-.lender-agreements__record {
-  width: 100%;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #fff;
-  padding: 14px;
+.agreement-portfolio-card {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  text-align: left;
-  color: #0f172a;
-  cursor: pointer;
+  flex-direction: column;
 }
 
-.lender-agreements__record span:first-child {
+.agreement-portfolio-card .portfolio-loan-card__details {
+  width: 100%;
+}
+
+.agreement-portfolio-card__status {
   display: grid;
-  gap: 4px;
-  min-width: 0;
+  justify-items: end;
+  gap: 5px;
 }
 
-.lender-agreements__record small {
+.agreement-portfolio-card__status small {
   color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
 }
 
-.lender-agreements__record--active {
-  border-color: #2563eb;
-  background: #eff6ff;
+.agreement-portfolio-card__signatures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.agreement-portfolio-card__signature {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agreement-portfolio-card__signature--complete {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.agreement-portfolio-card__footer {
+  width: 100%;
+  margin-top: auto;
 }
 
 .lender-agreements__state {
   grid-column: 1 / -1;
+  margin: 0;
   color: #64748b;
   text-align: center;
   padding: 42px 20px;
@@ -170,7 +191,7 @@
 }
 
 @media (max-width: 900px) {
-  .lender-agreements__list {
+  .agreement-portfolio-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -196,5 +217,10 @@
 
   .lender-agreements__detail {
     max-height: calc(100vh - 24px);
+  }
+
+  .agreement-portfolio-card__footer {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
