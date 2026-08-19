@@ -18,7 +18,7 @@ jest.mock('bcrypt', () => ({
 
 type QuerySnapshotMock = {
   empty: boolean;
-  docs: Array<{ data: () => UserDocument }>;
+  docs: Array<{ id: string; data: () => UserDocument }>;
 };
 
 type UserDocRefMock = {
@@ -88,7 +88,7 @@ describe('AuthService', () => {
       user
         ? {
             empty: false,
-            docs: [{ data: () => user }],
+            docs: [{ id: user.userId, data: () => user }],
           }
         : {
             empty: true,
@@ -101,6 +101,7 @@ describe('AuthService', () => {
     const docRef = usersCollection.doc(user.userId) as UserDocRefMock;
     docRef.get.mockResolvedValue({
       exists: true,
+      id: user.userId,
       data: () => user,
     });
   }

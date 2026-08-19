@@ -111,7 +111,7 @@ export interface Loan {
   totalInterest: number;
   status: LoanStatus;
   startDate: FirebaseFirestore.Timestamp;
-  nextDueDate: FirebaseFirestore.Timestamp;
+  nextDueDate: FirebaseFirestore.Timestamp | null;
   endDate: FirebaseFirestore.Timestamp;
   repaymentsMade: number;
   createdAt: FirebaseFirestore.Timestamp;
@@ -146,6 +146,7 @@ export interface Repayment {
   status: RepaymentStatus;
   dueDate: FirebaseFirestore.Timestamp;
   paidAt?: FirebaseFirestore.Timestamp;
+  installmentId?: string | null;
   installmentNumber: number;
   createdAt: FirebaseFirestore.Timestamp;
 }

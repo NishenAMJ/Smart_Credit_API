@@ -48,6 +48,11 @@ type QrTokenPayload = {
   issuedAt: number;
 };
 
+type InstallmentRefAndData = {
+  ref: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>;
+  data: FirebaseFirestore.DocumentData;
+};
+
 export type BorrowerInstallmentSummary = {
   installmentId: string;
   installmentNumber: number;
@@ -160,6 +165,43 @@ export class BorrowerService {
   private clearRoundingDust(value: number): number {
     const rounded = this.roundMoney(value);
     return rounded <= BORROWER_MONEY.ROUNDING_DUST_THRESHOLD ? 0 : rounded;
+  }
+
+  private async findInstallmentForRepayment(
+    loanId: string,
+    installmentNumber: number,
+  ): Promise<InstallmentRefAndData | null> {
+    const installmentsRef = this.db
+      .collection(this.LOANS_COL)
+      .doc(loanId)
+      .collection('installments');
+    const expectedId = `month_${String(installmentNumber).padStart(3, '0')}`;
+    const directSnapshot = await installmentsRef.doc(expectedId).get();
+
+    if (directSnapshot.exists) {
+      return {
+        ref: directSnapshot.ref,
+        data: directSnapshot.data() ?? {},
+      };
+    }
+
+    for (const field of ['installmentNumber', 'sequence']) {
+      const snapshot = await installmentsRef
+        .where(field, '==', installmentNumber)
+        .limit(1)
+        .get();
+
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+
+        return {
+          ref: doc.ref,
+          data: doc.data(),
+        };
+      }
+    }
+
+    return null;
   }
 
   /** Normalizes a raw date-like value into a Firestore Timestamp, or undefined if unresolvable. */
@@ -668,11 +710,19 @@ export class BorrowerService {
     return snapshot.docs
       .map((doc) => {
         const data = doc.data();
-        const amount = this.toNumber(data.amount ?? data.amountDue);
+        const amount = this.toNumber(
+          data.amount ?? data.amountDue,
+          typeof data.amountDueMinor === 'number'
+            ? data.amountDueMinor / 100
+            : 0,
+        );
         const paidAmount = this.toNumber(
           data.paidAmount ?? data.amountPaid,
+          String(data.status ?? '').toLowerCase() === 'paid' ? amount : 0,
         );
-        const dueDate = this.toDate(data.dueDate ?? data.dueDateAt);
+        const dueDate = this.toDate(
+          data.dueDate ?? data.dueDateAt ?? data.dueAt,
+        );
         const status = this.normalizeInstallmentStatus(
           data.status,
           dueDate,
@@ -682,7 +732,9 @@ export class BorrowerService {
 
         return {
           installmentId: String(data.installmentId ?? doc.id),
-          installmentNumber: this.toNumber(data.installmentNumber),
+          installmentNumber: this.toNumber(
+            data.installmentNumber ?? data.sequence,
+          ),
           amount,
           paidAmount,
           remainingAmount: this.clearRoundingDust(
@@ -752,9 +804,21 @@ export class BorrowerService {
     let remainingBalance = principal;
 
     for (let i = 1; i <= term; i++) {
-      const interestAmount = remainingBalance * monthlyRate;
-      const principalAmount = loan.monthlyInstallment - interestAmount;
-      remainingBalance = Math.max(0, remainingBalance - principalAmount);
+      const interestAmount = this.roundMoney(remainingBalance * monthlyRate);
+      const principalAmount =
+        i === term
+          ? this.roundMoney(remainingBalance)
+          : this.roundMoney(loan.monthlyInstallment - interestAmount);
+      const totalAmount =
+        i === term
+          ? this.roundMoney(principalAmount + interestAmount)
+          : loan.monthlyInstallment;
+      remainingBalance =
+        i === term
+          ? 0
+          : this.clearRoundingDust(
+              Math.max(0, remainingBalance - principalAmount),
+            );
 
       const dueDate = new Date(disbursedAt);
       dueDate.setMonth(dueDate.getMonth() + i);
@@ -770,10 +834,10 @@ export class BorrowerService {
       schedule.push({
         installmentNumber: i,
         dueDate,
-        principalAmount: Math.round(principalAmount * 100) / 100,
-        interestAmount: Math.round(interestAmount * 100) / 100,
-        totalAmount: loan.monthlyInstallment,
-        remainingBalance: Math.round(remainingBalance * 100) / 100,
+        principalAmount,
+        interestAmount,
+        totalAmount,
+        remainingBalance,
         status,
       });
     }
@@ -814,11 +878,17 @@ export class BorrowerService {
     );
     const principalPaid = this.roundMoney(dto.amount - interestPaid);
 
-    const newOutstanding = this.clearRoundingDust(
-      Math.max(0, loan.outstandingBalance - dto.amount),
-    );
-
     const installmentNumber = loan.repaymentsMade + 1;
+    const installmentRecord = await this.findInstallmentForRepayment(
+      dto.loanId,
+      installmentNumber,
+    );
+    const installmentId = installmentRecord?.ref.id;
+    const rawOutstanding = Math.max(0, loan.outstandingBalance - dto.amount);
+    const newOutstanding =
+      rawOutstanding <= BORROWER_MONEY.ROUNDING_DUST_THRESHOLD
+        ? 0
+        : this.roundMoney(rawOutstanding);
 
     const status =
       dto.paymentMethod === RepaymentMethod.CARD
@@ -849,6 +919,7 @@ export class BorrowerService {
       status: status,
       dueDate: loan.nextDueDate,
       paidAt: status === RepaymentStatus.COMPLETED ? now : null,
+      installmentId: installmentId ?? null,
       installmentNumber,
       requiresVerification,
       verificationStatus,
@@ -860,6 +931,7 @@ export class BorrowerService {
       paymentId: repaymentRef.id,
       repaymentId: repaymentRef.id,
       loanId: dto.loanId,
+      installmentId: installmentId ?? null,
       borrowerId: dto.borrowerId,
       lenderId: loan.lenderId,
       amount: dto.amount,
@@ -896,6 +968,34 @@ export class BorrowerService {
         nextDueDate: isFullyRepaid ? null : nextDueDate,
         updatedAt: now,
       });
+
+      if (installmentRecord) {
+        const installment = installmentRecord.data;
+        const paidAmount = this.roundMoney(
+          this.toNumber(installment.paidAmount ?? installment.amountPaid) +
+            dto.amount,
+        );
+        const amountDue = this.toNumber(
+          installment.amount ?? installment.amountDue,
+          typeof installment.amountDueMinor === 'number'
+            ? installment.amountDueMinor / 100
+            : dto.amount,
+        );
+        const remainingAmount = this.clearRoundingDust(
+          Math.max(0, amountDue - paidAmount),
+        );
+
+        batch.update(installmentRecord.ref, {
+          status: remainingAmount === 0 ? 'paid' : 'partially_paid',
+          paidAmount,
+          amountPaid: paidAmount,
+          remainingAmount,
+          paidTransactionId:
+            remainingAmount === 0 ? transactionRef.id : null,
+          paidAt: remainingAmount === 0 ? now : null,
+          updatedAt: now,
+        });
+      }
 
       // Update borrower's totalRepaid
       batch.update(this.db.collection(this.BORROWERS_COL).doc(dto.borrowerId), {

@@ -397,7 +397,10 @@ export class AuthService {
         .get();
 
       if (!snapshot.empty) {
-        return snapshot.docs[0].data() as UserDocument;
+        return {
+          ...(snapshot.docs[0].data() as UserDocument),
+          userId: snapshot.docs[0].id,
+        };
       }
 
       return null;
@@ -410,7 +413,10 @@ export class AuthService {
       .get();
 
     if (!snapshot.empty) {
-      return snapshot.docs[0].data() as UserDocument;
+      return {
+        ...(snapshot.docs[0].data() as UserDocument),
+        userId: snapshot.docs[0].id,
+      };
     }
 
     return null;
@@ -547,18 +553,29 @@ export class AuthService {
   }
 
   private async getRequiredUser(userId: string): Promise<UserDocument> {
+    if (!userId?.trim()) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+
     const snapshot = await this.usersCollection.doc(userId).get();
 
     if (!snapshot.exists) {
       throw new NotFoundException('User not found.');
     }
 
-    return snapshot.data() as UserDocument;
+    return {
+      ...(snapshot.data() as UserDocument),
+      userId: snapshot.id,
+    };
   }
 
   private async getRequiredCredentials(
     userId: string,
   ): Promise<AuthCredentialDocument> {
+    if (!userId?.trim()) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+
     const snapshot = await this.credentialsCollection.doc(userId).get();
     if (!snapshot.exists) {
       throw new UnauthorizedException('Invalid credentials.');

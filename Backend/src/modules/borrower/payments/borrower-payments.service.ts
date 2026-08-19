@@ -125,8 +125,8 @@ export class BorrowerPaymentsService {
           ? nextInstallment.dueDate.toISOString()
           : this.toIsoDate(rawDate);
         const amount = nextInstallment
-          ? Math.min(nextInstallment.remainingAmount, outstandingBalance)
-          : Math.min(loan.monthlyInstallment, outstandingBalance);
+          ? this.roundMoney(nextInstallment.remainingAmount)
+          : this.roundMoney(loan.monthlyInstallment);
 
         return {
           paymentId: `upcoming-${loan.loanId}`,
@@ -382,6 +382,10 @@ export class BorrowerPaymentsService {
       Number(installment.remainingAmount ?? 0) >
         BORROWER_MONEY.ROUNDING_DUST_THRESHOLD
     );
+  }
+
+  private roundMoney(value: number): number {
+    return Math.round(value * 100) / 100;
   }
 
   private toMillis(value: unknown): number {
