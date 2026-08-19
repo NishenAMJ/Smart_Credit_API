@@ -15,11 +15,23 @@ describe('DashboardService', () => {
 
   it('builds the summary response from the summary data sources', async () => {
     const db = {
-      collection: jest.fn(() => ({
-        where: jest.fn(() => ({
-          get: jest.fn().mockResolvedValue({ docs: [] }),
-        })),
-      })),
+      collection: jest.fn((collectionName: string) => {
+        if (collectionName === 'users') {
+          return {
+            doc: jest.fn(() => ({
+              get: jest.fn().mockResolvedValue({
+                data: () => ({ fullName: 'Lender One' }),
+              }),
+            })),
+          };
+        }
+
+        return {
+          where: jest.fn(() => ({
+            get: jest.fn().mockResolvedValue({ docs: [] }),
+          })),
+        };
+      }),
     };
     const summary = {
       getSummary: jest.fn().mockResolvedValue({
@@ -40,6 +52,7 @@ describe('DashboardService', () => {
     const result = await service.getSummary('lender_1');
 
     expect(result.summary).toEqual({
+      lenderName: 'Lender One',
       totalBorrowers: 5,
       todaysCollection: 27500,
       overduePayments: 2,
