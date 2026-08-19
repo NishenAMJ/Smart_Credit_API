@@ -30,6 +30,11 @@ export class DashboardSummaryService {
       .collection('loans')
       .where('lenderId', '==', lenderId)
       .get();
+    const lenderSnapshot = await db.collection('users').doc(lenderId).get();
+    const lenderData = lenderSnapshot.data();
+    const lenderName =
+      readString(lenderData?.businessName, lenderData?.fullName, lenderData?.name) ??
+      'Unnamed Lender';
     const loans = snapshot.docs.map((doc) => ({
       id: doc.id,
       borrowerId: readString(doc.data().borrowerId),
@@ -44,6 +49,7 @@ export class DashboardSummaryService {
 
     return {
       summary: {
+        lenderName,
         totalBorrowers,
         todaysCollection,
         overduePayments,

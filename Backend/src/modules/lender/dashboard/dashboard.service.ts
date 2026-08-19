@@ -139,6 +139,19 @@ export class DashboardService {
     };
   }
 
+  async getBorrowersForExport(lenderId: string): Promise<DashboardBorrower[]> {
+    const borrowers: DashboardBorrower[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const page = await this.getBorrowers(lenderId, 50, cursor);
+      borrowers.push(...page.borrowers);
+      cursor = page.pageInfo.nextCursor;
+    } while (cursor);
+
+    return borrowers;
+  }
+
   async getBorrowerDetails(
     lenderId: string,
     borrowerId: string,
@@ -230,19 +243,30 @@ export class DashboardService {
     lenderId: string,
   ): Promise<number> {
     const now = new Date();
-    const activeQuery = db
-      .collection('ads')
-      .where('lenderId', '==', lenderId)
-      .where('status', 'in', ['active', 'approved'])
-      .where('expiresAt', '>=', now);
 
-    return this.getCountWithFallback('active-ads', activeQuery, async () => {
+    try {
       const snapshot = await db
-        .collection('ads')
+        .collection('loanListings')
+        .where('lenderId', '==', lenderId)
+        .where('status', 'in', ['active', 'approved'])
+        .where('expiresAt', '>=', now)
+        .count()
+        .get();
+
+      return snapshot.data().count;
+    } catch (error) {
+      this.logFallback(
+        'active-ads',
+        'Falling back from aggregate query for active ads.',
+        error,
+      );
+
+      const snapshot = await db
+        .collection('loanListings')
         .where('lenderId', '==', lenderId)
         .get();
       return snapshot.docs.filter((doc) => isActiveAd(doc.data(), now)).length;
-    });
+    }
   }
 
   private async getTotalBorrowersFromRelations(
@@ -428,7 +452,7 @@ export class DashboardService {
         .where('lenderId', '==', lenderId)
         .get();
 
-      if (snapshot.empty) {
+      if (snapshot.empty || snapshot.docs.length === 0) {
         if (searchTerm) {
           return {
             borrowers: [],
@@ -542,6 +566,7 @@ export class DashboardService {
           userData?.displayName,
         ) ?? 'Unnamed borrower',
       email: readString(userData?.email) ?? 'No email',
+      phone: readString(userData?.phone, relation.borrowerPhone) ?? null,
       creditScore:
         typeof userData?.creditScore === 'number' &&
         Number.isFinite(userData.creditScore)
@@ -562,6 +587,10 @@ export class DashboardService {
       ),
       latestLoanStatus: readString(relation.latestLoanStatus) ?? 'unknown',
       latestLoanCreatedAt: createdAt,
+      firstLoanCreatedAt:
+        this.toIsoString(relation.firstLoanCreatedAt) ??
+        this.toIsoString(relation.firstLoanAt) ??
+        this.toIsoString(relation.createdAt),
       isActive: userData?.isActive !== false,
       createdAt: this.toIsoString(userData?.createdAt),
     };
@@ -658,7 +687,11 @@ export class DashboardService {
     data: DocumentData | undefined,
     loans: DashboardLoanRecord[],
   ): DashboardBorrower | null {
-    if (!data || !hasRole(data.role, 'borrower') || loans.length === 0) {
+    if (
+      !data ||
+      (!hasRole(data.role, 'borrower') && !hasRole(data.roles, 'borrower')) ||
+      loans.length === 0
+    ) {
       return null;
     }
 
@@ -683,11 +716,15 @@ export class DashboardService {
           ? data.fullName
           : 'Unnamed borrower',
       email: typeof data.email === 'string' ? data.email : 'No email',
+      phone: typeof data.phone === 'string' ? data.phone : null,
       creditScore:
         typeof data.creditScore === 'number' &&
         Number.isFinite(data.creditScore)
           ? data.creditScore
-          : null,
+          : this.toNullableNumber(
+              (data.borrowerProfile as Record<string, unknown> | undefined)
+                ?.creditScore,
+            ),
       kycStatus:
         typeof data.kycStatus === 'string' ? data.kycStatus : 'not_submitted',
       loanCount: loans.length,
@@ -698,9 +735,21 @@ export class DashboardService {
       latestLoanCreatedAt: latestLoan?.createdAt
         ? latestLoan.createdAt.toISOString()
         : null,
+      firstLoanCreatedAt: this.getFirstLoanCreatedAt(loans),
       isActive: data.isActive !== false,
       createdAt: this.toIsoString(data.createdAt),
     };
+  }
+
+  private getFirstLoanCreatedAt(loans: DashboardLoanRecord[]): string | null {
+    const firstLoan = loans
+      .filter((loan) => loan.createdAt)
+      .sort(
+        (left, right) =>
+          left.createdAt!.getTime() - right.createdAt!.getTime(),
+      )[0];
+
+    return firstLoan?.createdAt ? firstLoan.createdAt.toISOString() : null;
   }
 
   private async mapLoan(

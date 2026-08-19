@@ -1,4 +1,5 @@
 export interface DashboardSummary {
+  lenderName: string;
   totalBorrowers: number;
   todaysCollection: number;
   overduePayments: number;

@@ -1,16 +1,17 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   applyDateCursor,
   buildPageInfo,
+  decodeCursor,
   orderByDateAndId,
   readDate,
   readNumber,
   readStringArray,
 } from '../../../firebase/firestore-query.utils';
 import { getAdStatus } from '../../../firebase/firestore-seed.utils';
-import { LenderNotificationsService } from '../lender-notifications/lender-notifications.service';
+import { LenderNotificationWriterService } from '../lender-notifications/lender-notification-writer.service';
 import {
   CreateLenderAdInput,
   LenderAdResponse,
@@ -21,7 +22,7 @@ import {
 export class LenderAdsService {
   constructor(
     private readonly firebaseService: FirebaseService,
-    private readonly lenderNotificationsService: LenderNotificationsService,
+    private readonly notificationWriter: LenderNotificationWriterService,
   ) {}
 
   async createAd(input: CreateLenderAdInput): Promise<LenderAdResponse> {
@@ -35,7 +36,7 @@ export class LenderAdsService {
     const lenderData = lenderSnapshot.data();
     const now = Timestamp.now();
     const expiresAt = Timestamp.fromDate(this.getExpiryDate(now.toDate(), 30));
-    const docRef = db.collection('ads').doc();
+    const docRef = db.collection('loanListings').doc();
     const title = input.headline.trim();
     const preferredPurposes = this.buildPreferredPurposes(input);
     const lenderName =
@@ -103,7 +104,7 @@ export class LenderAdsService {
     };
 
     await docRef.set(document);
-    await this.lenderNotificationsService.createNotification({
+    await this.notificationWriter.create({
       id: `ad-published-${docRef.id}`,
       lenderId: input.lenderId,
       category: 'ad',
@@ -157,20 +158,36 @@ export class LenderAdsService {
     cursor?: string | null,
   ): Promise<LenderAdsListResponse> {
     const safePageSize = Math.min(Math.max(pageSize, 1), 12);
-    const collection = this.firebaseService.getDb().collection('ads');
-    const snapshot = await applyDateCursor(
-      orderByDateAndId(
-        collection.where('lenderId', '==', lenderId),
-        'createdAt',
-      ),
-      cursor,
-    )
-      .limit(safePageSize + 1)
-      .get();
+    const collection = this.firebaseService.getDb().collection('loanListings');
+    let items: LenderAdResponse[];
+    let hasMore: boolean;
 
-    const items = snapshot.docs
-      .slice(0, safePageSize)
-      .map((doc) => this.mapLenderAd(doc.id, lenderId, doc.data()));
+    try {
+      const snapshot = await applyDateCursor(
+        orderByDateAndId(
+          collection.where('lenderId', '==', lenderId),
+          'createdAt',
+        ),
+        cursor,
+      )
+        .limit(safePageSize + 1)
+        .get();
+
+      items = snapshot.docs
+        .slice(0, safePageSize)
+        .map((doc) => this.mapLenderAd(doc.id, lenderId, doc.data()));
+      hasMore = snapshot.docs.length > safePageSize;
+    } catch {
+      const snapshot = await collection.where('lenderId', '==', lenderId).get();
+      const decodedCursor = decodeCursor(cursor);
+      const allItems = snapshot.docs
+        .map((doc) => this.mapLenderAd(doc.id, lenderId, doc.data()))
+        .sort((left, right) => this.compareAdsByCreatedAt(left, right))
+        .filter((item) => this.isAfterCursor(item, decodedCursor));
+
+      items = allItems.slice(0, safePageSize);
+      hasMore = allItems.length > safePageSize;
+    }
 
     return {
       lenderId,
@@ -182,9 +199,58 @@ export class LenderAdsService {
           cursorId: item.id,
         })),
         safePageSize,
-        snapshot.docs.length > safePageSize,
+        hasMore,
       ),
     };
+  }
+
+  async updateAdFromMobile(
+    lenderId: string,
+    adId: string,
+    input: Record<string, unknown>,
+  ): Promise<LenderAdResponse> {
+    const db = this.firebaseService.getDb();
+    const ref = db.collection('loanListings').doc(adId);
+    const snapshot = await ref.get();
+    const data = snapshot.data();
+
+    if (!snapshot.exists || data?.lenderId !== lenderId) {
+      throw new NotFoundException(`Ad ${adId} was not found.`);
+    }
+
+    const updateData: Record<string, unknown> = {
+      updatedAt: Timestamp.now(),
+    };
+
+    this.assignNumberUpdate(updateData, input, 'minAmount', 'minAmount');
+    this.assignNumberUpdate(updateData, input, 'maxAmount', 'maxAmount');
+    this.assignNumberUpdate(
+      updateData,
+      input,
+      'interestRate',
+      'preferredInterestRate',
+    );
+    this.assignNumberUpdate(
+      updateData,
+      input,
+      'tenureMonths',
+      'maxTenureMonths',
+    );
+
+    if (typeof input.active === 'boolean') {
+      updateData.status = input.active ? 'active' : 'inactive';
+    }
+
+    if (typeof updateData.maxAmount === 'number') {
+      updateData.availableCapital = updateData.maxAmount;
+    }
+
+    await ref.update(updateData);
+
+    return this.mapLenderAd(adId, lenderId, {
+      ...data,
+      ...updateData,
+    });
   }
 
   private validateCreateInput(input: CreateLenderAdInput): void {
@@ -261,6 +327,23 @@ export class LenderAdsService {
     return readNumber(value);
   }
 
+  private assignNumberUpdate(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>,
+    sourceKey: string,
+    targetKey: string,
+  ): void {
+    if (!(sourceKey in source)) {
+      return;
+    }
+
+    const value = readNumber(source[sourceKey]);
+
+    if (value > 0) {
+      target[targetKey] = value;
+    }
+  }
+
   private buildPreferredPurposes(input: CreateLenderAdInput): string[] {
     const tokens = [input.borrowerFocus, input.repaymentStyle]
       .flatMap((value) => value.split(/[,/]/))
@@ -278,6 +361,38 @@ export class LenderAdsService {
           .filter((token) => token.length > 1),
       ),
     );
+  }
+
+  private compareAdsByCreatedAt(
+    left: LenderAdResponse,
+    right: LenderAdResponse,
+  ): number {
+    const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+    const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+
+    if (leftTime !== rightTime) {
+      return rightTime - leftTime;
+    }
+
+    return right.id.localeCompare(left.id);
+  }
+
+  private isAfterCursor(
+    item: LenderAdResponse,
+    cursor: { date: Date; id: string } | null,
+  ): boolean {
+    if (!cursor) {
+      return true;
+    }
+
+    const itemTime = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+    const cursorTime = cursor.date.getTime();
+
+    if (itemTime !== cursorTime) {
+      return itemTime < cursorTime;
+    }
+
+    return item.id.localeCompare(cursor.id) < 0;
   }
 
   private mapLenderAd(
