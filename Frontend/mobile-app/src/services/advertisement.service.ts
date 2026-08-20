@@ -13,12 +13,39 @@ export interface CreateAdvertisementInput {
   supportNote: string;
 }
 
+export interface AdvertisementAnalytics {
+  adId: string;
+  title: string;
+  status: string;
+  createdAt: string | null;
+  expiresAt: string | null;
+  applications: {
+    total: number;
+    submitted: number;
+    underReview: number;
+    approved: number;
+    rejected: number;
+    converted: number;
+  };
+  loans: {
+    funded: number;
+    active: number;
+    overdue: number;
+    completed: number;
+    defaulted: number;
+  };
+  fundingRate: number;
+}
+
 export const AdService = {
   getMyAds: async (status?: string) => {
     const params = new URLSearchParams({ pageSize: "12" });
     if (status) params.append("status", status);
     return api.get(`/lender-ads?${params.toString()}`);
   },
+
+  getAdAnalytics: async (adId: string) =>
+    api.get<AdvertisementAnalytics>(`/lender-ads/${adId}/analytics`),
 
   createAd: async (data: CreateAdvertisementInput) =>
     api.post("/lender-ads", data),
