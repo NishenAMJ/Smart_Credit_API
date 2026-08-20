@@ -285,7 +285,14 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
 
   for (let index = 1; index <= config.loanCount; index += 1) {
     const suffix = pad(index);
-    const application = fixtures.loanApplications[2 + index - 1];
+    const application = fixtures.loanApplications.find(
+      (item) => item.applicationId === `${prefix}_application_${suffix}`,
+    );
+    if (!application) {
+      throw new Error(
+        `Missing generated application ${prefix}_application_${suffix}.`,
+      );
+    }
     const loanId = `${prefix}_loan_${suffix}`;
     const tenureMonths = application.lenderDecision.approvedTenureMonths;
     const principalMinor = application.lenderDecision.approvedPrincipalMinor;
@@ -366,71 +373,77 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
       });
     if (status !== 'pending_disbursement')
       amounts.forEach((amountDueMinor, installmentIndex) => {
-      const sequence = installmentIndex + 1;
-      const installmentId = `month_${String(sequence).padStart(3, '0')}`;
-      const paid = sequence <= paidCount;
-      const dueAt = addMonths(approvedAt, sequence);
-      const repaymentId = `repayment_${loanId}_${installmentId}`;
-      const installmentStatus = paid
-        ? 'paid'
-        : status === 'overdue' && sequence === paidCount + 1
-          ? 'overdue'
-          : 'scheduled';
-      fixtures.installments.push({
-        installmentId,
-        loanId,
-        lenderId: application.lenderId,
-        borrowerId: application.borrowerId,
-        sequence,
-        currency: 'LKR',
-        amountDueMinor,
-        status: installmentStatus,
-        dueAt,
-        paidTransactionId: paid ? repaymentId : null,
-        paidAt: paid ? dueAt : null,
-        note: paid ? 'Seeded full monthly settlement.' : null,
-        createdAt: approvedAt,
-        updatedAt: referenceDate,
-      });
-      if (paid)
-        fixtures.transactions.push({
-          transactionId: repaymentId,
-          type: 'repayment',
-          status: 'completed',
-          currency: 'LKR',
-          amountMinor: amountDueMinor,
+        const sequence = installmentIndex + 1;
+        const installmentId = `month_${String(sequence).padStart(3, '0')}`;
+        const paid = sequence <= paidCount;
+        const dueAt = addMonths(approvedAt, sequence);
+        const repaymentId = `repayment_${loanId}_${installmentId}`;
+        const installmentStatus = paid
+          ? 'paid'
+          : status === 'overdue' && sequence === paidCount + 1
+            ? 'overdue'
+            : 'scheduled';
+        fixtures.installments.push({
+          installmentId,
+          loanId,
           lenderId: application.lenderId,
           borrowerId: application.borrowerId,
-          loanId,
-          installmentId,
-          listingId: application.listingId,
-          paymentMethod: ['bank_transfer', 'qr', 'cash', 'card'][sequence % 4],
-          externalReference: `SEED-R-${suffix}-${sequence}`,
-          idempotencyKey: repaymentId,
-          receiptDocumentId: null,
-          note: 'Seeded full installment repayment.',
-          initiatedByUserId: application.borrowerId,
-          completedAt: dueAt,
-          createdAt: dueAt,
+          sequence,
+          currency: 'LKR',
+          amountDueMinor,
+          status: installmentStatus,
+          dueAt,
+          paidTransactionId: paid ? repaymentId : null,
+          paidAt: paid ? dueAt : null,
+          note: paid ? 'Seeded full monthly settlement.' : null,
+          createdAt: approvedAt,
+          updatedAt: referenceDate,
         });
+        if (paid)
+          fixtures.transactions.push({
+            transactionId: repaymentId,
+            type: 'repayment',
+            status: 'completed',
+            currency: 'LKR',
+            amountMinor: amountDueMinor,
+            lenderId: application.lenderId,
+            borrowerId: application.borrowerId,
+            loanId,
+            installmentId,
+            listingId: application.listingId,
+            paymentMethod: ['bank_transfer', 'qr', 'cash', 'card'][
+              sequence % 4
+            ],
+            externalReference: `SEED-R-${suffix}-${sequence}`,
+            idempotencyKey: repaymentId,
+            receiptDocumentId: null,
+            note: 'Seeded full installment repayment.',
+            initiatedByUserId: application.borrowerId,
+            completedAt: dueAt,
+            createdAt: dueAt,
+          });
       });
   }
 
-  fixtures.loanApplications.slice(2).forEach((application, index) => {
-    const suffix = pad(index + 1);
-    fixtures.notifications.push({
-      notificationId: `${prefix}_notification_${suffix}`,
-      userId: application.lenderId,
-      category: 'application',
-      title: 'Seeded loan application',
-      body: `Application ${application.applicationId} is ${application.status}.`,
-      entityType: 'application',
-      entityId: application.applicationId,
-      isRead: index % 3 === 0,
-      readAt: index % 3 === 0 ? referenceDate : null,
-      createdAt: application.createdAt,
+  fixtures.loanApplications
+    .filter((application) =>
+      application.applicationId.startsWith(`${prefix}_application_`),
+    )
+    .forEach((application, index) => {
+      const suffix = pad(index + 1);
+      fixtures.notifications.push({
+        notificationId: `${prefix}_notification_${suffix}`,
+        userId: application.lenderId,
+        category: 'application',
+        title: 'Seeded loan application',
+        body: `Application ${application.applicationId} is ${application.status}.`,
+        entityType: 'application',
+        entityId: application.applicationId,
+        isRead: index % 3 === 0,
+        readAt: index % 3 === 0 ? referenceDate : null,
+        createdAt: application.createdAt,
+      });
     });
-  });
 
   fixtures.loans
     .filter((loan) => loan.status === 'pending_disbursement')
@@ -439,7 +452,9 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
       const borrower = fixtures.users.find(
         (user) => user.userId === loan.borrowerId,
       );
-      const lender = fixtures.users.find((user) => user.userId === loan.lenderId);
+      const lender = fixtures.users.find(
+        (user) => user.userId === loan.lenderId,
+      );
       const partiallyAccepted = index % 2 === 1;
       const terms = {
         currency: 'LKR',
@@ -504,7 +519,11 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
         bodyHtml: `<h1>Smart Credit Loan Agreement</h1><p>Seed agreement ${agreementId}</p>`,
         termsHash,
         consentTextVersion: 'loan_agreement_consent_v1',
-        borrowerAcceptance: { accepted: false, signedName: null, acceptedAt: null },
+        borrowerAcceptance: {
+          accepted: false,
+          signedName: null,
+          acceptedAt: null,
+        },
         lenderAcceptance,
         generatedByUserId: loan.lenderId,
         generatedByRole: 'lender',
@@ -541,7 +560,8 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
     });
 
   fixtures.loans
-    .slice(1, Math.min(fixtures.loans.length, 301))
+    .filter((loan) => loan.loanId.startsWith(`${prefix}_loan_`))
+    .slice(0, 300)
     .forEach((loan, index) => {
       const suffix = pad(index + 1);
       const conversationId = `${prefix}_conversation_${suffix}`;
@@ -575,44 +595,46 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
       });
     });
 
-  fixtures.loans.slice(1).forEach((loan, index) => {
-    if (index % 25 !== 0) return;
-    const suffix = pad(index + 1);
-    const installment = fixtures.installments.find(
-      (item) => item.loanId === loan.loanId && item.status === 'paid',
-    );
-    fixtures.disputes.push({
-      disputeId: `${prefix}_dispute_${suffix}`,
-      openedByUserId: loan.borrowerId,
-      complainantId: loan.borrowerId,
-      respondentId: loan.lenderId,
-      assignedAdminId: adminId,
-      loanId: loan.loanId,
-      installmentId: installment?.installmentId ?? null,
-      transactionId: installment?.paidTransactionId ?? null,
-      category: installment ? 'repayment' : 'loan_terms',
-      subject: 'Seeded account review request',
-      description:
-        'Development fixture for the administrative dispute workflow.',
-      evidenceDocumentIds: [],
-      status: 'under_review',
-      resolution: null,
-      resolvedAt: null,
-      createdAt: referenceDate,
-      updatedAt: referenceDate,
+  fixtures.loans
+    .filter((loan) => loan.loanId.startsWith(`${prefix}_loan_`))
+    .forEach((loan, index) => {
+      if (index % 25 !== 0) return;
+      const suffix = pad(index + 1);
+      const installment = fixtures.installments.find(
+        (item) => item.loanId === loan.loanId && item.status === 'paid',
+      );
+      fixtures.disputes.push({
+        disputeId: `${prefix}_dispute_${suffix}`,
+        openedByUserId: loan.borrowerId,
+        complainantId: loan.borrowerId,
+        respondentId: loan.lenderId,
+        assignedAdminId: adminId,
+        loanId: loan.loanId,
+        installmentId: installment?.installmentId ?? null,
+        transactionId: installment?.paidTransactionId ?? null,
+        category: installment ? 'repayment' : 'loan_terms',
+        subject: 'Seeded account review request',
+        description:
+          'Development fixture for the administrative dispute workflow.',
+        evidenceDocumentIds: [],
+        status: 'under_review',
+        resolution: null,
+        resolvedAt: null,
+        createdAt: referenceDate,
+        updatedAt: referenceDate,
+      });
+      fixtures.disputeEvents.push({
+        disputeId: `${prefix}_dispute_${suffix}`,
+        eventId: 'event_001',
+        actorUserId: loan.borrowerId,
+        type: 'created',
+        message: 'Seeded dispute opened.',
+        previousStatus: null,
+        nextStatus: 'under_review',
+        documentIds: [],
+        createdAt: referenceDate,
+      });
     });
-    fixtures.disputeEvents.push({
-      disputeId: `${prefix}_dispute_${suffix}`,
-      eventId: 'event_001',
-      actorUserId: loan.borrowerId,
-      type: 'created',
-      message: 'Seeded dispute opened.',
-      previousStatus: null,
-      nextStatus: 'under_review',
-      documentIds: [],
-      createdAt: referenceDate,
-    });
-  });
 
   [...lenderIds, ...borrowerIds].forEach((userId, index) => {
     fixtures.legalAcceptances.push({
@@ -626,21 +648,23 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
     });
   });
 
-  fixtures.loanListings.slice(2).forEach((listing, index) => {
-    if (index % 10 !== 0) return;
-    fixtures.auditLogs.push({
-      auditLogId: `${prefix}_audit_${pad(index + 1)}`,
-      actorUserId: adminId,
-      actorRole: 'admin',
-      action: 'listing.approved',
-      entityType: 'loanListing',
-      entityId: listing.listingId,
-      before: { status: 'pending_review' },
-      after: { status: 'active' },
-      metadata: { source: 'bulk-seed', batchId: config.batchId },
-      createdAt: listing.createdAt,
+  fixtures.loanListings
+    .filter((listing) => listing.listingId.startsWith(`${prefix}_listing_`))
+    .forEach((listing, index) => {
+      if (index % 10 !== 0) return;
+      fixtures.auditLogs.push({
+        auditLogId: `${prefix}_audit_${pad(index + 1)}`,
+        actorUserId: adminId,
+        actorRole: 'admin',
+        action: 'listing.approved',
+        entityType: 'loanListing',
+        entityId: listing.listingId,
+        before: { status: 'pending_review' },
+        after: { status: 'active' },
+        metadata: { source: 'bulk-seed', batchId: config.batchId },
+        createdAt: listing.createdAt,
+      });
     });
-  });
 
   lenderIds.forEach((userId, index) => {
     const [city, district, latitude, longitude] =
