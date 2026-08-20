@@ -14,6 +14,17 @@ export interface MakeRepaymentPayload {
   paymentProofUrl?: string;
 }
 
+export interface InitiatePayHerePayload {
+  loanId: string;
+  amount: number;
+}
+
+export interface PayHereCheckoutSession {
+  orderId: string;
+  paymentPageUrl: string;
+  checkoutUrl: string;
+}
+
 type RepaymentListResponse = {
   success?: boolean;
   data?: BorrowerRepayment[];
@@ -63,6 +74,27 @@ export const paymentService = {
       ...response.data,
       data: normalizeRepayment(response.data?.data ?? {}),
     };
+  },
+
+  initiatePayHerePayment: async (data: InitiatePayHerePayload) => {
+    const borrowerId = await getUserId();
+    if (!borrowerId)
+      throw new Error("User session expired. Please log in again.");
+
+    const response = await apiClient.post<{
+      success?: boolean;
+      data?: PayHereCheckoutSession;
+    }>(
+      ENDPOINTS.repayments.initiatePayHere,
+      { ...data, borrowerId },
+      { params: { borrowerId } },
+    );
+
+    if (!response.data?.data?.paymentPageUrl) {
+      throw new Error("PayHere checkout could not be started.");
+    }
+
+    return response.data.data;
   },
 
   generateQr: async (loanId: string) => {
