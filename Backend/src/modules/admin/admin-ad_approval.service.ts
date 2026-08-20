@@ -2,10 +2,15 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
+import { AdminQueryCacheService } from '../../common/cache/admin-query-cache.service';
+import { writeAuditLog } from '../../common/audit/write-audit-log';
+import { normalizeSearchToken } from '../../common/firestore/search-tokens';
+import { ChatGateway } from '../chat/gateway/chat.gateway';
 
 type AdminAdStatus = 'pending' | 'approved' | 'active' | 'rejected' | 'closed';
 
@@ -15,7 +20,12 @@ export class AdminAdApprovalService {
   private static readonly MAX_PAGE_SIZE = 100;
   private readonly collection = 'loanListings';
 
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    @Optional()
+    private readonly cache: AdminQueryCacheService = new AdminQueryCacheService(),
+    @Optional() private readonly gateway?: ChatGateway,
+  ) {}
 
   private get db() {
     return this.firebaseService.db;
@@ -95,12 +105,32 @@ export class AdminAdApprovalService {
     };
   }
 
-  async getAds(limit?: string, cursor?: string) {
+  private rawStatuses(status?: AdminAdStatus): string[] | undefined {
+    if (status === 'pending') return ['pending_review', 'pending', 'draft'];
+    if (status === 'closed') return ['paused', 'expired', 'closed'];
+    return status ? [status] : undefined;
+  }
+
+  private async count(query: FirebaseFirestore.Query): Promise<number> {
+    return (await query.count().get()).data().count;
+  }
+
+  async getAds(
+    limit?: string,
+    cursor?: string,
+    status?: AdminAdStatus,
+    searchValue?: string,
+  ) {
     try {
       const pageSize = this.parseLimit(limit);
-      let query: FirebaseFirestore.Query = this.db
-        .collection(this.collection)
-        .orderBy('createdAt', 'desc');
+      let query: FirebaseFirestore.Query = this.db.collection(this.collection);
+      const statuses = this.rawStatuses(status);
+      if (statuses?.length === 1)
+        query = query.where('status', '==', statuses[0]);
+      else if (statuses?.length) query = query.where('status', 'in', statuses);
+      const search = normalizeSearchToken(searchValue);
+      if (search) query = query.where('searchTokens', 'array-contains', search);
+      query = query.orderBy('createdAt', 'desc');
 
       if (cursor) {
         const cursorDoc = await this.db
@@ -128,20 +158,25 @@ export class AdminAdApprovalService {
 
   async getAdStats() {
     try {
-      const snapshot = await this.db.collection(this.collection).get();
-      const stats = {
-        all: snapshot.size,
-        active: 0,
-        approved: 0,
-        pending: 0,
-        rejected: 0,
-        closed: 0,
-      };
-
-      snapshot.docs.forEach((doc) => {
-        stats[this.normalizeStatus(doc.data().status)] += 1;
+      const cached = await this.cache.remember('admin:ads:stats', async () => {
+        const ads = this.db.collection(this.collection);
+        const [all, active, approved, pending, rejected, closed] =
+          await Promise.all([
+            this.count(ads),
+            this.count(ads.where('status', '==', 'active')),
+            this.count(ads.where('status', '==', 'approved')),
+            this.count(ads.where('status', 'in', this.rawStatuses('pending')!)),
+            this.count(ads.where('status', '==', 'rejected')),
+            this.count(ads.where('status', 'in', this.rawStatuses('closed')!)),
+          ]);
+        return { all, active, approved, pending, rejected, closed };
       });
-      return { success: true, stats };
+      return {
+        success: true,
+        stats: cached.value,
+        generatedAt: cached.generatedAt,
+        cacheAgeSeconds: cached.cacheAgeSeconds,
+      };
     } catch (error) {
       rethrowFirebaseError(error, 'Failed to fetch lender ad statistics');
     }
@@ -168,6 +203,7 @@ export class AdminAdApprovalService {
     const now = Timestamp.now();
     await docRef.update({
       status: 'active',
+      adminStatus: 'active',
       adminReview: {
         reviewedBy: adminId,
         reviewedAt: now,
@@ -183,6 +219,16 @@ export class AdminAdApprovalService {
       'Ad Approved',
       `Your ad "${data.title}" has been approved and is now live.`,
     );
+    this.cache.invalidate('admin:ads:');
+    await writeAuditLog(this.db, {
+      actorUserId: adminId,
+      action: 'ad.approved',
+      entityType: 'ad',
+      entityId: adId,
+      before: { status: data.status },
+      after: { status: 'active' },
+    });
+    this.emitChange(adId, 'approved');
     return { success: true, status: 'active' };
   }
 
@@ -204,6 +250,7 @@ export class AdminAdApprovalService {
     const now = Timestamp.now();
     await docRef.update({
       status: 'rejected',
+      adminStatus: 'rejected',
       adminReview: {
         reviewedBy: adminId,
         reviewedAt: now,
@@ -220,6 +267,17 @@ export class AdminAdApprovalService {
       'Ad Rejected',
       `Your ad "${data.title}" was rejected. Reason: ${reason.trim()}`,
     );
+    this.cache.invalidate('admin:ads:');
+    await writeAuditLog(this.db, {
+      actorUserId: adminId,
+      action: 'ad.rejected',
+      entityType: 'ad',
+      entityId: adId,
+      before: { status: data.status },
+      after: { status: 'rejected' },
+      metadata: { reason: reason.trim() },
+    });
+    this.emitChange(adId, 'rejected');
     return { success: true, status: 'rejected' };
   }
 
@@ -238,6 +296,15 @@ export class AdminAdApprovalService {
       adId,
       read: false,
       createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  private emitChange(entityId: string, changeType: string): void {
+    this.gateway?.emitToRole('admin', 'admin:changed', {
+      resource: 'ads',
+      entityId,
+      changeType,
+      updatedAt: new Date().toISOString(),
     });
   }
 }

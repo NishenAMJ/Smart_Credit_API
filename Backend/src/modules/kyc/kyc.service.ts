@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 
@@ -18,6 +19,9 @@ import type { DocumentRecord } from '../documents/interfaces/document-record.int
 import { MediaService } from '../media/media.service';
 import type { KycDocument } from './interfaces/kyc-document.interface';
 import { SubmitKycDto } from './dto/submit-kyc.dto';
+import { ChatGateway } from '../chat/gateway/chat.gateway';
+import { buildSearchTokens } from '../../common/firestore/search-tokens';
+import { writeAuditLog } from '../../common/audit/write-audit-log';
 
 type KycUploadField = {
   documentType: 'nic_front' | 'nic_back' | 'address_proof' | 'bank_document';
@@ -51,6 +55,7 @@ export class KycService {
     private readonly authService: AuthService,
     private readonly documentsService: DocumentsService,
     private readonly mediaService: MediaService,
+    @Optional() private readonly gateway?: ChatGateway,
   ) {}
 
   private get db() {
@@ -242,7 +247,9 @@ export class KycService {
       return;
     }
 
-    throw new ForbiddenException('You do not have access to this KYC document.');
+    throw new ForbiddenException(
+      'You do not have access to this KYC document.',
+    );
   }
 
   // Ensures the requested document exists, belongs to the KYC category, and has not been deleted.
@@ -302,8 +309,7 @@ export class KycService {
         folder: `documents/${userId}/kyc/${field.documentType}`,
         publicId: `${field.documentType}-${Date.now()}-${fileHash.slice(0, 8)}`,
         overwrite: false,
-        resourceType:
-          prepared.resourceType === 'image' ? 'image' : 'raw',
+        resourceType: prepared.resourceType === 'image' ? 'image' : 'raw',
         deliveryType: 'authenticated',
       },
     );
@@ -368,7 +374,11 @@ export class KycService {
       const documentIds: string[] = [];
 
       for (const field of this.buildUploadFields(dto)) {
-        const record = await this.uploadKycDocument(userId, field, existingUser);
+        const record = await this.uploadKycDocument(
+          userId,
+          field,
+          existingUser,
+        );
         documentRefs[field.documentType] = record.id;
         documentIds.push(record.id);
         createdDocuments.push(record);
@@ -383,10 +393,11 @@ export class KycService {
       let profilePictureData: any = null;
 
       if (profilePhotoSource?.startsWith('data:')) {
-        const profileUpload = await this.mediaService.uploadProfilePictureFromDataUrl(
-          userId,
-          profilePhotoSource,
-        );
+        const profileUpload =
+          await this.mediaService.uploadProfilePictureFromDataUrl(
+            userId,
+            profilePhotoSource,
+          );
         profilePhotoUrl = profileUpload.secureUrl;
         profilePictureData = {
           cloudinaryPublicId: profileUpload.publicId,
@@ -402,9 +413,14 @@ export class KycService {
         removeUndefinedDeep({
           uid: userId,
           role: [dto.role],
+          roles: [dto.role],
+          primaryRole: dto.role,
           ...(fullName ? { fullName } : {}),
           ...(email
-            ? { email: email.toLowerCase(), emailLower: this.normalizeEmail(email) }
+            ? {
+                email: email.toLowerCase(),
+                emailLower: this.normalizeEmail(email),
+              }
             : {}),
           ...(phoneNumber
             ? {
@@ -424,6 +440,13 @@ export class KycService {
           totalAmountBorrowed: 0,
           kycStatus: 'pending',
           accountStatus: 'active',
+          searchTokens: buildSearchTokens([
+            userId,
+            fullName,
+            email,
+            phoneNumber,
+            dto.role,
+          ]),
           authProvider: 'local',
           notes: '',
           rejectionReason: '',
@@ -441,6 +464,7 @@ export class KycService {
         }),
         { merge: true },
       );
+      this.emitAdminChange(userId, 'submitted');
 
       return {
         success: true,
@@ -485,12 +509,17 @@ export class KycService {
   async getPendingKyc(limit?: string, cursor?: string) {
     try {
       const pageSize = this.parseLimit(limit);
-      const result = await this.documentsService.getPendingReview(pageSize, cursor);
+      const result = await this.documentsService.getPendingReview(
+        pageSize,
+        cursor,
+      );
 
       return {
         success: true,
         count: result.documents.length,
-        documents: result.documents.map((doc) => this.mapDocumentToKycDocument(doc)),
+        documents: result.documents.map((doc) =>
+          this.mapDocumentToKycDocument(doc),
+        ),
         hasMore: result.hasMore,
         nextCursor: result.nextCursor,
       };
@@ -517,7 +546,11 @@ export class KycService {
   }
 
   // Approves a document and mirrors that result back onto the user's profile.
-  async approveDocument(documentId: string, reviewedBy?: string, notes?: string) {
+  async approveDocument(
+    documentId: string,
+    reviewedBy?: string,
+    notes?: string,
+  ) {
     try {
       const documentRef = this.db.collection('documents').doc(documentId);
       const reviewTimestamp = admin.firestore.FieldValue.serverTimestamp();
@@ -537,7 +570,9 @@ export class KycService {
         }
 
         if (document.status !== 'pending_review') {
-          throw new ConflictException('This KYC document has already been reviewed.');
+          throw new ConflictException(
+            'This KYC document has already been reviewed.',
+          );
         }
 
         const reviewNotes = notes?.trim() ?? '';
@@ -569,9 +604,17 @@ export class KycService {
           notes: reviewNotes,
           updatedAt: reviewTimestamp,
         });
-
         return { userId: document.userId };
       });
+      await writeAuditLog(this.db, {
+        actorUserId: reviewedBy ?? 'system',
+        action: 'kyc.approved',
+        entityType: 'user',
+        entityId: result.userId,
+        after: { status: 'approved' },
+        metadata: { documentId, description: notes?.trim() ?? '' },
+      });
+      this.emitAdminChange(documentId, 'approved');
 
       return {
         success: true,
@@ -595,7 +638,11 @@ export class KycService {
   }
 
   // Rejects a document and stores the rejection reason on both the document and user profile.
-  async rejectDocument(documentId: string, reason: string, reviewedBy?: string) {
+  async rejectDocument(
+    documentId: string,
+    reason: string,
+    reviewedBy?: string,
+  ) {
     try {
       const documentRef = this.db.collection('documents').doc(documentId);
       const reviewTimestamp = admin.firestore.FieldValue.serverTimestamp();
@@ -616,7 +663,9 @@ export class KycService {
         }
 
         if (document.status !== 'pending_review') {
-          throw new ConflictException('This KYC document has already been reviewed.');
+          throw new ConflictException(
+            'This KYC document has already been reviewed.',
+          );
         }
 
         const userRef = this.db.collection('users').doc(document.userId);
@@ -647,9 +696,17 @@ export class KycService {
           notes: rejectionReason,
           updatedAt: reviewTimestamp,
         });
-
         return { userId: document.userId };
       });
+      await writeAuditLog(this.db, {
+        actorUserId: reviewedBy ?? 'system',
+        action: 'kyc.rejected',
+        entityType: 'user',
+        entityId: result.userId,
+        after: { status: 'rejected' },
+        metadata: { documentId, reason: rejectionReason },
+      });
+      this.emitAdminChange(documentId, 'rejected');
 
       return {
         success: true,
@@ -672,6 +729,15 @@ export class KycService {
     }
   }
 
+  private emitAdminChange(entityId: string, changeType: string): void {
+    this.gateway?.emitToRole('admin', 'admin:changed', {
+      resource: 'kyc',
+      entityId,
+      changeType,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   // Generates a signed delivery URL so documents stay private while still being viewable when authorized.
   async getSignedDocumentAccessUrl(
     documentId: string,
@@ -679,7 +745,10 @@ export class KycService {
     requesterRole: UserRole,
   ) {
     try {
-      const document = await this.getRequiredKycDocument(documentId, requesterRole);
+      const document = await this.getRequiredKycDocument(
+        documentId,
+        requesterRole,
+      );
       this.assertDocumentAccess(document, requesterId, requesterRole);
 
       return {

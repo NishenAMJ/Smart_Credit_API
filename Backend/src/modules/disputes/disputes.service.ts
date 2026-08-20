@@ -11,6 +11,9 @@ import {
 import { DocumentData, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { ChatGateway } from '../chat/gateway/chat.gateway';
+import { AdminQueryCacheService } from '../../common/cache/admin-query-cache.service';
+import { buildSearchTokens } from '../../common/firestore/search-tokens';
+import { writeAuditLog } from '../../common/audit/write-audit-log';
 import type { UserRole } from '../auth/auth.types';
 import type {
   AddDisputeCommentDto,
@@ -55,6 +58,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly gateway: ChatGateway,
+    private readonly cache: AdminQueryCacheService = new AdminQueryCacheService(),
   ) {}
 
   onModuleInit() {
@@ -206,6 +210,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       // Legacy URL evidence remains on the source document for audit/migration;
       // only verified document-record IDs are exposed through secured access.
       evidenceDocumentIds: data.evidenceDocumentIds ?? [],
+      searchTokens: Array.isArray(data.searchTokens) ? data.searchTokens : [],
       status: this.status(data.status),
       priority: PRIORITIES.includes(data.priority)
         ? data.priority
@@ -296,6 +301,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
   }
 
   private emit(dispute: Dispute, changeType: string) {
+    this.cache.invalidate('admin:disputes:');
     const payload = {
       disputeId: dispute.id,
       changeType,
@@ -311,6 +317,27 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         payload,
       );
     this.gateway.emitToRole('admin', 'dispute:changed', payload);
+  }
+
+  private async auditAdminAction(
+    disputeId: string,
+    adminId: string,
+    action: string,
+    description: string,
+  ) {
+    await writeAuditLog(this.db, {
+      actorUserId: adminId,
+      action: `dispute.${action}`,
+      entityType: 'dispute',
+      entityId: disputeId,
+      metadata: { description },
+    });
+    this.gateway.emitToRole('admin', 'admin:changed', {
+      resource: 'audit',
+      changeType: action,
+      entityId: disputeId,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   private async notify(
@@ -530,6 +557,14 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       disputedAmountMinor,
       currency: 'LKR',
       evidenceDocumentIds,
+      searchTokens: buildSearchTokens([
+        ref.id,
+        `DSP-${ref.id.slice(0, 8).toUpperCase()}`,
+        loanId,
+        subject,
+        loan.borrowerName,
+        loan.lenderName,
+      ]),
       status: 'open',
       priority: this.priorityFor(category),
       assignedAdminId: null,
@@ -544,18 +579,16 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
 
     await this.db.runTransaction(async (transaction) => {
       const duplicates = await transaction.get(
-        this.db.collection('disputes').where('complainantId', '==', userId),
+        this.db
+          .collection('disputes')
+          .where('complainantId', '==', userId)
+          .where('loanId', '==', loanId)
+          .where('category', '==', category)
+          .where('transactionId', '==', input.transactionId ?? null)
+          .where('status', 'in', ACTIVE_STATUSES)
+          .limit(1),
       );
-      const duplicate = duplicates.docs.some((doc) => {
-        const item = this.mapDispute(doc.id, doc.data());
-        return (
-          ACTIVE_STATUSES.includes(item.status) &&
-          item.loanId === loanId &&
-          item.category === category &&
-          item.transactionId === (input.transactionId ?? null)
-        );
-      });
-      if (duplicate)
+      if (!duplicates.empty)
         throw new ConflictException(
           'An active dispute already exists for this loan and category.',
         );
@@ -593,29 +626,24 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     status?: DisputeStatus,
     limit?: string,
     cursor?: string,
+    role: UserRole = 'borrower',
   ) {
-    const [created, received] = await Promise.all([
-      this.db.collection('disputes').where('complainantId', '==', userId).get(),
-      this.db.collection('disputes').where('respondentId', '==', userId).get(),
-    ]);
-    const byId = new Map<string, Dispute>();
-    [...created.docs, ...received.docs].forEach((doc) =>
-      byId.set(doc.id, this.mapDispute(doc.id, doc.data())),
-    );
-    let items = [...byId.values()]
-      .filter((item) => !status || item.status === status)
-      .sort(
-        (a, b) =>
-          b.updatedAt.toMillis() - a.updatedAt.toMillis() ||
-          b.id.localeCompare(a.id),
-      );
+    const participantField = role === 'lender' ? 'lenderId' : 'borrowerId';
+    let query: FirebaseFirestore.Query = this.db
+      .collection('disputes')
+      .where(participantField, '==', userId);
+    if (status) query = query.where('status', '==', status);
+    query = query.orderBy('updatedAt', 'desc');
     if (cursor) {
-      const index = items.findIndex((item) => item.id === cursor);
-      items = index >= 0 ? items.slice(index + 1) : items;
+      const cursorDoc = await this.db.collection('disputes').doc(cursor).get();
+      if (cursorDoc.exists) query = query.startAfter(cursorDoc);
     }
     const pageSize = this.parseLimit(limit);
-    const hasMore = items.length > pageSize;
-    const disputes = items.slice(0, pageSize);
+    const snapshot = await query.limit(pageSize + 1).get();
+    const hasMore = snapshot.size > pageSize;
+    const disputes = snapshot.docs
+      .slice(0, pageSize)
+      .map((doc) => this.mapDispute(doc.id, doc.data()));
     return {
       success: true,
       count: disputes.length,
@@ -630,46 +658,25 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     cursor?: string,
     filters: AdminDisputeQuery = {},
   ) {
-    const snapshot = await this.db.collection('disputes').get();
+    let query: FirebaseFirestore.Query = this.db.collection('disputes');
+    if (filters.status) query = query.where('status', '==', filters.status);
+    if (filters.priority)
+      query = query.where('priority', '==', filters.priority);
+    if (filters.assignedAdminId)
+      query = query.where('assignedAdminId', '==', filters.assignedAdminId);
     const search = filters.search?.trim().toLowerCase();
-    let items = snapshot.docs
-      .map((doc) => this.mapDispute(doc.id, doc.data()))
-      .filter((item) => {
-        if (filters.status && item.status !== filters.status) return false;
-        if (filters.priority && item.priority !== filters.priority)
-          return false;
-        if (
-          filters.assignedAdminId &&
-          item.assignedAdminId !== filters.assignedAdminId
-        )
-          return false;
-        if (!search) return true;
-        return [
-          item.id,
-          item.disputeCode,
-          item.loanId,
-          item.subject,
-          item.description,
-          item.borrowerName,
-          item.lenderName,
-        ].some((value) =>
-          String(value ?? '')
-            .toLowerCase()
-            .includes(search),
-        );
-      })
-      .sort(
-        (a, b) =>
-          b.updatedAt.toMillis() - a.updatedAt.toMillis() ||
-          b.id.localeCompare(a.id),
-      );
+    if (search) query = query.where('searchTokens', 'array-contains', search);
+    query = query.orderBy('updatedAt', 'desc');
     if (cursor) {
-      const index = items.findIndex((item) => item.id === cursor);
-      items = index >= 0 ? items.slice(index + 1) : items;
+      const cursorDoc = await this.db.collection('disputes').doc(cursor).get();
+      if (cursorDoc.exists) query = query.startAfter(cursorDoc);
     }
     const pageSize = this.parseLimit(limit);
-    const hasMore = items.length > pageSize;
-    const disputes = items.slice(0, pageSize);
+    const snapshot = await query.limit(pageSize + 1).get();
+    const hasMore = snapshot.size > pageSize;
+    const disputes = snapshot.docs
+      .slice(0, pageSize)
+      .map((doc) => this.mapDispute(doc.id, doc.data()));
     return {
       success: true,
       count: disputes.length,
@@ -680,20 +687,48 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getStats() {
-    const snapshot = await this.db.collection('disputes').get();
-    const stats: Record<string, number> = {
-      all: snapshot.size,
-      open: 0,
-      under_review: 0,
-      awaiting_response: 0,
-      escalated: 0,
-      resolved: 0,
-      closed: 0,
+    const cached = await this.cache.remember(
+      'admin:disputes:stats',
+      async () => {
+        const disputes = this.db.collection('disputes');
+        const count = async (query: FirebaseFirestore.Query) =>
+          (await query.count().get()).data().count;
+        const [
+          all,
+          open,
+          underReview,
+          awaitingResponse,
+          escalated,
+          resolved,
+          closed,
+        ] = await Promise.all([
+          count(disputes),
+          count(disputes.where('status', '==', 'open')),
+          count(
+            disputes.where('status', 'in', ['under_review', 'in-progress']),
+          ),
+          count(disputes.where('status', '==', 'awaiting_response')),
+          count(disputes.where('status', '==', 'escalated')),
+          count(disputes.where('status', '==', 'resolved')),
+          count(disputes.where('status', '==', 'closed')),
+        ]);
+        return {
+          all,
+          open,
+          under_review: underReview,
+          awaiting_response: awaitingResponse,
+          escalated,
+          resolved,
+          closed,
+        };
+      },
+    );
+    return {
+      success: true,
+      stats: cached.value,
+      generatedAt: cached.generatedAt,
+      cacheAgeSeconds: cached.cacheAgeSeconds,
     };
-    snapshot.docs.forEach((doc) => {
-      stats[this.status(doc.data().status)] += 1;
-    });
-    return { success: true, stats };
   }
 
   async getDisputeById(
@@ -768,6 +803,15 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     });
     const updated = { ...dispute, updatedAt: now };
     this.emit(updated, 'commented');
+    if (role === 'admin')
+      await this.auditAdminAction(
+        disputeId,
+        actorId,
+        visibility === 'admin' ? 'noted' : 'commented',
+        visibility === 'admin'
+          ? 'Private note added to dispute.'
+          : 'Shared response added to dispute.',
+      );
     if (visibility === 'shared')
       await this.notify(
         updated,
@@ -818,6 +862,8 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       updatedAt: now,
     } as Dispute;
     this.emit(updated, type);
+    if (role === 'admin')
+      await this.auditAdminAction(disputeId, actorId, type, message);
     return updated;
   }
 
@@ -879,6 +925,12 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     });
     const updated = { ...dispute, priority, updatedAt: now };
     this.emit(updated, 'priority_changed');
+    await this.auditAdminAction(
+      disputeId,
+      adminId,
+      'priority_changed',
+      `Priority changed to ${priority}: ${note}`,
+    );
     return { success: true, dispute: updated };
   }
 

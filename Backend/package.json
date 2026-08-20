@@ -32,6 +32,8 @@
     "migrate:loan-agreements:apply": "node scripts/operations/migrations/migrate-loan-agreements.js --apply",
     "migrate:disputes": "node scripts/operations/migrations/migrate-disputes.js",
     "migrate:disputes:apply": "node scripts/operations/migrations/migrate-disputes.js --apply",
+    "migrate:admin-query-fields": "node scripts/operations/migrations/backfill-admin-query-fields.js",
+    "migrate:admin-query-fields:apply": "node scripts/operations/migrations/backfill-admin-query-fields.js --apply",
     "create:admin": "node scripts/create-admin-user.js",
     "firestore:indexes:check": "node scripts/operations/firestore/deploy-firestore-indexes.js --check",
     "firestore:indexes:deploy": "node scripts/operations/firestore/deploy-firestore-indexes.js"

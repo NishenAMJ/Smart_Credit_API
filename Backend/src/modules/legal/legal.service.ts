@@ -244,7 +244,9 @@ export class LegalService {
         const agreement = agreementSnapshot.data() as LoanAgreementDocument;
         this.assertAgreementAccess(agreement, userId, userRole);
         if (agreement.legacyReadOnly) {
-          throw new ConflictException('Migrated legacy agreements are read-only.');
+          throw new ConflictException(
+            'Migrated legacy agreements are read-only.',
+          );
         }
         if (['superseded', 'cancelled'].includes(agreement.status)) {
           throw new ConflictException(
@@ -437,7 +439,9 @@ export class LegalService {
         'Only the lender on the agreement can confirm the transfer.',
       );
     if (input.confirmationAccepted !== true)
-      throw new BadRequestException('Explicit transfer confirmation is required.');
+      throw new BadRequestException(
+        'Explicit transfer confirmation is required.',
+      );
     const externalReference = input.externalReference?.trim() || null;
     if (externalReference && externalReference.length > 160)
       throw new BadRequestException('The transfer reference is too long.');
@@ -447,15 +451,22 @@ export class LegalService {
     let confirmationWasCreated = false;
     await this.firebaseService.db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(agreementRef);
-      if (!snapshot.exists) throw new NotFoundException('Loan agreement not found.');
+      if (!snapshot.exists)
+        throw new NotFoundException('Loan agreement not found.');
       const agreement = snapshot.data() as LoanAgreementDocument;
       this.assertAgreementAccess(agreement, userId, userRole);
       if (agreement.legacyReadOnly)
-        throw new ConflictException('Migrated legacy agreements are read-only.');
+        throw new ConflictException(
+          'Migrated legacy agreements are read-only.',
+        );
       if (!agreement.lenderAcceptance.accepted)
-        throw new ConflictException('The lender must sign before confirming transfer.');
+        throw new ConflictException(
+          'The lender must sign before confirming transfer.',
+        );
       if (agreement.borrowerAcceptance.accepted)
-        throw new ConflictException('This agreement is already signed by the borrower.');
+        throw new ConflictException(
+          'This agreement is already signed by the borrower.',
+        );
       const prior = this.disbursementOf(agreement);
       if (prior.confirmed) {
         if (
@@ -661,7 +672,10 @@ export class LegalService {
       const currentAgreement =
         currentAgreementSnapshot.data() as LoanAgreementDocument;
       const loan = loanSnapshot.data() ?? {};
-      if (currentAgreement.status === 'fully_accepted' && ledgerSnapshot.exists) {
+      if (
+        currentAgreement.status === 'fully_accepted' &&
+        ledgerSnapshot.exists
+      ) {
         return;
       }
       if (!['pending_disbursement', 'active'].includes(String(loan.status))) {
@@ -713,6 +727,9 @@ export class LegalService {
           status: 'completed',
           currency: 'LKR',
           amountMinor: currentAgreement.terms.principalMinor,
+          platformFeeMinor: Math.round(
+            currentAgreement.terms.principalMinor * 0.02,
+          ),
           lenderId: agreement.lenderId,
           borrowerId: agreement.borrowerId,
           loanId: agreement.loanId,
@@ -722,8 +739,7 @@ export class LegalService {
           externalReference: null,
           idempotencyKey: ledgerRef.id,
           receiptDocumentId: pdfDocumentId,
-          note:
-            'Disbursement bookkeeping recorded after lender-first and borrower-second signatures. Smart Credit does not execute or independently verify the external transfer.',
+          note: 'Disbursement bookkeeping recorded after lender-first and borrower-second signatures. Smart Credit does not execute or independently verify the external transfer.',
           initiatedByUserId: agreement.lenderId,
           completedAt: activatedAt,
           createdAt: activatedAt,
@@ -737,10 +753,7 @@ export class LegalService {
         disbursedAt: activatedAt,
         firstPaymentDueAt: Timestamp.fromDate(firstDueDate),
         maturityDate: Timestamp.fromDate(
-          this.addMonths(
-            firstDueDate,
-            currentAgreement.terms.tenureMonths - 1,
-          ),
+          this.addMonths(firstDueDate, currentAgreement.terms.tenureMonths - 1),
         ),
         signedPdfHash: pdfHash,
         signedPdfAt: activatedAt,
@@ -883,16 +896,23 @@ export class LegalService {
     if (input.consentAccepted !== true) {
       throw new BadRequestException('Explicit agreement consent is required.');
     }
-    if (!Number.isInteger(input.agreementVersion) || input.agreementVersion < 1) {
+    if (
+      !Number.isInteger(input.agreementVersion) ||
+      input.agreementVersion < 1
+    ) {
       throw new BadRequestException('A valid agreement version is required.');
     }
     if (!/^[a-f0-9]{64}$/.test(input.termsHash ?? '')) {
-      throw new BadRequestException('A valid agreement terms hash is required.');
+      throw new BadRequestException(
+        'A valid agreement terms hash is required.',
+      );
     }
   }
 
   private getAuditSalt(): string {
-    const salt = this.configService.get<string>('LEGAL_AUDIT_HASH_SALT')?.trim();
+    const salt = this.configService
+      .get<string>('LEGAL_AUDIT_HASH_SALT')
+      ?.trim();
     if (!salt || salt.length < 32) {
       throw new ServiceUnavailableException(
         'Agreement audit hashing is not configured.',
@@ -1032,8 +1052,7 @@ export class LegalService {
       this.firebaseService.db.collection('borrowerNotifications').add({
         borrowerId: agreement.borrowerId,
         category: 'agreement',
-        severity:
-          changeType === 'finalization_failed' ? 'warning' : 'info',
+        severity: changeType === 'finalization_failed' ? 'warning' : 'info',
         title,
         message,
         isRead: false,
@@ -1056,8 +1075,7 @@ export class LegalService {
         eventType: changeType,
         title,
         body: message,
-        severity:
-          changeType === 'finalization_failed' ? 'warning' : 'info',
+        severity: changeType === 'finalization_failed' ? 'warning' : 'info',
         isRead: false,
         createdAt: now,
         readAt: null,
@@ -1095,7 +1113,12 @@ export class LegalService {
           await page.pdf({
             format: 'A4',
             printBackground: true,
-            margin: { top: '24px', right: '24px', bottom: '24px', left: '24px' },
+            margin: {
+              top: '24px',
+              right: '24px',
+              bottom: '24px',
+              left: '24px',
+            },
           }),
         );
       } finally {
@@ -1138,7 +1161,9 @@ export class LegalService {
   }
 
   private readNumber(value: unknown, fallback = 0): number {
-    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback;
   }
 
   private readInteger(value: unknown, fallback = 0): number {

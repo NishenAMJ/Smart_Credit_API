@@ -35,4 +35,31 @@ describe('TransactionsService', () => {
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
+
+  it('shares one Firestore listener across connected admin subscribers', () => {
+    const unsubscribe = jest.fn();
+    const onSnapshot = jest.fn(() => unsubscribe);
+    const query = {
+      orderBy: jest.fn(),
+      limit: jest.fn(),
+      onSnapshot,
+    };
+    query.orderBy.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
+    const sharedService = new TransactionsService({
+      db: {
+        collection: jest.fn(() => query),
+        getAll: jest.fn(),
+      },
+    } as unknown as FirebaseService);
+
+    const first = sharedService.streamTransactions(10).subscribe();
+    const second = sharedService.streamTransactions(20).subscribe();
+
+    expect(onSnapshot).toHaveBeenCalledTimes(1);
+    first.unsubscribe();
+    expect(unsubscribe).not.toHaveBeenCalled();
+    second.unsubscribe();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
 });

@@ -20,6 +20,8 @@ import {
   type AdminUserRole,
   type AdminUserStatus,
 } from "../../lib/api";
+import { subscribeToAdminChanges } from "../../lib/admin-realtime";
+import { useDebouncedValue } from "../../lib/use-debounced-value";
 import { DEFAULT_USER_SUSPENSION_REASON } from "../../constants/admin-actions";
 import { formatFirestoreDate } from "../../lib/admin-format";
 
@@ -143,10 +145,34 @@ function buildSummaryCards(stats: {
   suspendedUsers: number;
 }): SummaryCard[] {
   return [
-    { label: "Total Users", count: stats.totalUsers, color: "#007AFF", bg: "#EFF6FF", icon: Users },
-    { label: "Active", count: stats.activeUsers, color: "#10B981", bg: "#ECFDF5", icon: UserCheck },
-    { label: "Borrowers", count: stats.borrowers, color: "#8B5CF6", bg: "#F5F3FF", icon: Users },
-    { label: "Suspended", count: stats.suspendedUsers, color: "#6B7280", bg: "#F3F4F6", icon: Shield },
+    {
+      label: "Total Users",
+      count: stats.totalUsers,
+      color: "#007AFF",
+      bg: "#EFF6FF",
+      icon: Users,
+    },
+    {
+      label: "Active",
+      count: stats.activeUsers,
+      color: "#10B981",
+      bg: "#ECFDF5",
+      icon: UserCheck,
+    },
+    {
+      label: "Borrowers",
+      count: stats.borrowers,
+      color: "#8B5CF6",
+      bg: "#F5F3FF",
+      icon: Users,
+    },
+    {
+      label: "Suspended",
+      count: stats.suspendedUsers,
+      color: "#6B7280",
+      bg: "#F3F4F6",
+      icon: Shield,
+    },
   ];
 }
 
@@ -155,6 +181,7 @@ function buildSummaryCards(stats: {
 export default function ManageUsers() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [filterStatus, setFilterStatus] = useState<AdminUserStatus | "all">(
     "all",
   );
@@ -187,7 +214,7 @@ export default function ManageUsers() {
           getUsers({
             limit: pageSize,
             cursor,
-            search,
+            search: debouncedSearch,
             status: filterStatus,
             role: filterRole,
           }),
@@ -215,7 +242,7 @@ export default function ManageUsers() {
         setLoading(false);
       }
     },
-    [filterRole, filterStatus, pageSize, search],
+    [debouncedSearch, filterRole, filterStatus, pageSize],
   );
 
   useEffect(() => {
@@ -225,13 +252,12 @@ export default function ManageUsers() {
   }, [loadUsers]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      const activeCursor =
-        currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
-      void loadUsers(activeCursor);
-    }, 10000);
-
-    return () => window.clearInterval(interval);
+    const activeCursor =
+      currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+    return subscribeToAdminChanges(
+      ["users"],
+      () => void loadUsers(activeCursor),
+    );
   }, [currentPage, cursorStack, loadUsers]);
 
   const filteredUsers = useMemo(() => {

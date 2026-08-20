@@ -45,6 +45,7 @@ export interface Dispute {
   disputedAmountMinor: number | null;
   currency: 'LKR';
   evidenceDocumentIds: string[];
+  searchTokens?: string[];
   status: DisputeStatus;
   priority: DisputePriority;
   assignedAdminId: string | null;

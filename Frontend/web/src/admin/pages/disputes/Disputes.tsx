@@ -28,6 +28,7 @@ import {
 } from "../../lib/api";
 import { subscribeToAdminDisputes } from "../../lib/dispute-realtime";
 import { formatFirestoreDate } from "../../lib/admin-format";
+import { useDebouncedValue } from "../../lib/use-debounced-value";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
@@ -145,6 +146,7 @@ export default function Disputes() {
     null,
   );
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [filterStatus, setFilterStatus] = useState<DisputeStatus | "all">(
     "all",
   );
@@ -171,7 +173,12 @@ export default function Disputes() {
     async (cursor?: string) => {
       setLoading(true);
       try {
-        const response = await getDisputes({ limit: pageSize, cursor });
+        const response = await getDisputes({
+          limit: pageSize,
+          cursor,
+          status: filterStatus === "all" ? undefined : filterStatus,
+          search: debouncedSearch.trim() || undefined,
+        });
         setDisputes(response.disputes.map(mapDispute));
         setHasMore(response.hasMore ?? false);
         setNextCursor(response.nextCursor);
@@ -184,7 +191,7 @@ export default function Disputes() {
         setLoading(false);
       }
     },
-    [pageSize],
+    [debouncedSearch, filterStatus, pageSize],
   );
 
   useEffect(() => {
@@ -234,23 +241,7 @@ export default function Disputes() {
     };
   }, [selectedDispute?.id]);
 
-  const filteredDisputes = useMemo(() => {
-    return disputes.filter((dispute) => {
-      const searchValue = search.toLowerCase();
-      const matchesSearch =
-        dispute.id.toLowerCase().includes(searchValue) ||
-        dispute.disputeCode.toLowerCase().includes(searchValue) ||
-        dispute.title.toLowerCase().includes(searchValue) ||
-        dispute.loanId.toLowerCase().includes(searchValue) ||
-        dispute.transactionId.toLowerCase().includes(searchValue) ||
-        dispute.raisedBy.toLowerCase().includes(searchValue) ||
-        dispute.againstUser.toLowerCase().includes(searchValue) ||
-        dispute.description.toLowerCase().includes(searchValue);
-      const matchesStatus =
-        filterStatus === "all" || dispute.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [disputes, filterStatus, search]);
+  const filteredDisputes = useMemo(() => disputes, [disputes]);
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;

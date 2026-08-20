@@ -198,6 +198,11 @@ export interface DashboardAnalyticsResponse {
       totalRevenue: number;
       activeDisputes: number;
     };
+    userRoles: {
+      admin: number;
+      borrower: number;
+      lender: number;
+    };
     recentActivity: {
       newUsersToday: number;
       loansCreatedToday: number;
@@ -216,6 +221,8 @@ export interface DashboardAnalyticsResponse {
       count: number;
     }>;
   };
+  generatedAt?: string;
+  cacheAgeSeconds?: number;
 }
 
 export interface UsersReportResponse {
@@ -708,11 +715,16 @@ export function changeAdminPassword(
 }
 
 // Gives the ads page a typed moderation data source.
-export function getAds(params?: CursorQueryParams) {
+export function getAds(
+  params?: CursorQueryParams & { status?: AdStatus | "all"; search?: string },
+) {
   const searchParams = new URLSearchParams();
   if (typeof params?.limit === "number")
     searchParams.set("limit", String(params.limit));
   if (params?.cursor) searchParams.set("cursor", params.cursor);
+  if (params?.status && params.status !== "all")
+    searchParams.set("status", params.status);
+  if (params?.search) searchParams.set("search", params.search);
   const query = searchParams.toString();
   return apiRequest<AdsResponse & PaginationMeta>(
     `/admin/ads${query ? `?${query}` : ""}`,

@@ -11,6 +11,10 @@ export interface User {
   id: string;
   email: string;
   role: UserRole | UserRole[];
+  roles?: UserRole[];
+  primaryRole?: UserRole;
+  accountStatus?: UserStatus;
+  searchTokens?: string[];
   status?: UserStatus;
   uid?: string;
   fullName?: string;

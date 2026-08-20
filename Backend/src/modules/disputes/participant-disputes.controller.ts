@@ -52,6 +52,7 @@ export class ParticipantDisputesController {
       status,
       limit,
       cursor,
+      req.user.role,
     );
   }
 

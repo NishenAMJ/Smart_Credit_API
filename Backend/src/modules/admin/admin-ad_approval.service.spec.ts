@@ -2,21 +2,28 @@ import { AdminAdApprovalService } from './admin-ad_approval.service';
 import { FirebaseService } from '../../firebase/firebase.service';
 
 describe('AdminAdApprovalService', () => {
-  const limitGet = jest.fn();
-  const limit = jest.fn(() => ({ get: limitGet }));
-  const orderBy = jest.fn(() => ({ limit }));
-  const collectionGet = jest.fn();
-  const collection = jest.fn(() => ({ orderBy, get: collectionGet }));
+  const get = jest.fn();
+  const limit = jest.fn();
+  const orderBy = jest.fn();
+  const where = jest.fn();
+  const countGet = jest.fn();
+  const count = jest.fn(() => ({ get: countGet }));
+  const query = { get, limit, orderBy, where, count };
+  const collection = jest.fn(() => query);
   const firebaseService = { db: { collection } } as unknown as FirebaseService;
   let service: AdminAdApprovalService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    limit.mockReturnValue(query);
+    orderBy.mockReturnValue(query);
+    where.mockReturnValue(query);
     service = new AdminAdApprovalService(firebaseService);
   });
 
-  it('returns the paginated admin contract and maps canonical listing fields', async () => {
-    limitGet.mockResolvedValue({
+  it('returns a bounded page and maps canonical listing fields', async () => {
+    get.mockResolvedValue({
+      size: 1,
       docs: [
         {
           id: 'listing-1',
@@ -35,6 +42,7 @@ describe('AdminAdApprovalService', () => {
     const response = await service.getAds('10');
 
     expect(collection).toHaveBeenCalledWith('loanListings');
+    expect(limit).toHaveBeenCalledWith(11);
     expect(response).toMatchObject({ success: true, count: 1, hasMore: false });
     expect(response.ads[0]).toMatchObject({
       id: 'listing-1',
@@ -45,28 +53,22 @@ describe('AdminAdApprovalService', () => {
     });
   });
 
-  it('normalizes canonical statuses for the admin summary', async () => {
-    collectionGet.mockResolvedValue({
-      size: 5,
-      docs: [
-        { data: () => ({ status: 'pending_review' }) },
-        { data: () => ({ status: 'active' }) },
-        { data: () => ({ status: 'rejected' }) },
-        { data: () => ({ status: 'expired' }) },
-        { data: () => ({ status: 'approved' }) },
-      ],
-    });
+  it('uses count aggregations and never fetches listing documents for statistics', async () => {
+    for (const value of [5, 1, 1, 1, 1, 1]) {
+      countGet.mockResolvedValueOnce({ data: () => ({ count: value }) });
+    }
 
-    await expect(service.getAdStats()).resolves.toEqual({
-      success: true,
-      stats: {
-        all: 5,
-        active: 1,
-        approved: 1,
-        pending: 1,
-        rejected: 1,
-        closed: 1,
-      },
+    const response = await service.getAdStats();
+
+    expect(response.stats).toEqual({
+      all: 5,
+      active: 1,
+      approved: 1,
+      pending: 1,
+      rejected: 1,
+      closed: 1,
     });
+    expect(count).toHaveBeenCalledTimes(6);
+    expect(get).not.toHaveBeenCalled();
   });
 });

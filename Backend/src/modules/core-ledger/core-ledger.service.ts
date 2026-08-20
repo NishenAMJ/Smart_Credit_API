@@ -82,12 +82,16 @@ export class CoreLedgerService {
       }
       const [listingSnapshot, lenderSnapshot, borrowerSnapshot] =
         await Promise.all([
-          transaction.get(db.collection(COLLECTIONS.loanListings).doc(listingId)),
+          transaction.get(
+            db.collection(COLLECTIONS.loanListings).doc(listingId),
+          ),
           transaction.get(db.collection(COLLECTIONS.users).doc(lenderId)),
           transaction.get(db.collection(COLLECTIONS.users).doc(borrowerId)),
         ]);
       if (!listingSnapshot.exists) {
-        throw new NotFoundException('The application listing no longer exists.');
+        throw new NotFoundException(
+          'The application listing no longer exists.',
+        );
       }
       if (!lenderSnapshot.exists || !borrowerSnapshot.exists) {
         throw new NotFoundException('A loan participant no longer exists.');
@@ -314,6 +318,7 @@ export class CoreLedgerService {
         status: 'completed',
         currency: 'LKR',
         amountMinor: amount,
+        platformFeeMinor: Math.round(amount * 0.02),
         lenderId: loan.lenderId,
         borrowerId,
         loanId,

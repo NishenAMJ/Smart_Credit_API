@@ -17,6 +17,7 @@ import {
   type AuditLogEntry,
   type AuditSeverity,
 } from "../../lib/api";
+import { subscribeToAdminChanges } from "../../lib/admin-realtime";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
@@ -142,13 +143,12 @@ export default function AuditLogs() {
   }, [loadLogs]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      const activeCursor =
-        currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
-      void loadLogs(activeCursor);
-    }, 10000);
-
-    return () => window.clearInterval(interval);
+    const activeCursor =
+      currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+    return subscribeToAdminChanges(
+      ["users", "kyc", "ads", "audit"],
+      () => void loadLogs(activeCursor),
+    );
   }, [currentPage, cursorStack, loadLogs]);
 
   const filteredLogs = useMemo(() => {

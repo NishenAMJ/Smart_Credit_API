@@ -1,13 +1,6 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Search,
-  Eye,
-  Check,
-  X,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Search, Eye, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   approveAd,
   getAdStats,
@@ -16,7 +9,9 @@ import {
   type AdminAd,
   type AdStatus,
 } from "../../lib/api";
+import { subscribeToAdminChanges } from "../../lib/admin-realtime";
 import { formatFirestoreDate } from "../../lib/admin-format";
+import { useDebouncedValue } from "../../lib/use-debounced-value";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
@@ -117,6 +112,7 @@ export default function LenderAds() {
     closed: 0,
   });
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [filterStatus, setFilterStatus] = useState<AdStatus | "all">("all");
   const [selectedAd, setSelectedAd] = useState<LenderAdRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,7 +135,12 @@ export default function LenderAds() {
     async (cursor?: string) => {
       setLoading(true);
       try {
-        const response = await getAds({ limit: pageSize, cursor });
+        const response = await getAds({
+          limit: pageSize,
+          cursor,
+          status: filterStatus,
+          search: debouncedSearch.trim() || undefined,
+        });
         setAds(response.ads.map(mapAd));
         setHasMore(response.hasMore ?? false);
         setNextCursor(response.nextCursor);
@@ -151,7 +152,7 @@ export default function LenderAds() {
         setLoading(false);
       }
     },
-    [pageSize],
+    [debouncedSearch, filterStatus, pageSize],
   );
 
   useEffect(() => {
@@ -165,29 +166,15 @@ export default function LenderAds() {
   }, [loadAdStats]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      const activeCursor =
-        currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+    const activeCursor =
+      currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+    return subscribeToAdminChanges(["ads"], () => {
       void loadAds(activeCursor);
       void loadAdStats();
-    }, 10000);
-
-    return () => window.clearInterval(interval);
+    });
   }, [currentPage, cursorStack, loadAds, loadAdStats]);
 
-  const filteredAds = useMemo(() => {
-    return ads.filter((ad) => {
-      const searchValue = search.toLowerCase();
-      const matchesSearch =
-        ad.lender.toLowerCase().includes(searchValue) ||
-        ad.location.toLowerCase().includes(searchValue) ||
-        ad.id.toLowerCase().includes(searchValue) ||
-        ad.preferredPurposes.toLowerCase().includes(searchValue);
-      const matchesStatus =
-        filterStatus === "all" || ad.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [ads, filterStatus, search]);
+  const filteredAds = useMemo(() => ads, [ads]);
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;

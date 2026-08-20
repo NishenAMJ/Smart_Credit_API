@@ -644,7 +644,69 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
     auditLogs,
   };
 
-  return addBulkFixtures(fixtures, config, referenceDate, passwordHash);
+  const complete = addBulkFixtures(
+    fixtures,
+    config,
+    referenceDate,
+    passwordHash,
+  );
+  const searchTokens = (values) =>
+    [
+      ...new Set(
+        values.filter(Boolean).flatMap((value) => {
+          const normalized = String(value).trim().toLowerCase();
+          return [
+            normalized,
+            ...normalized.split(/[^a-z0-9@+._-]+/).filter(Boolean),
+          ];
+        }),
+      ),
+    ].slice(0, 100);
+  complete.users.forEach((user) => {
+    user.primaryRole =
+      user.roles?.[0] ?? user.role?.[0] ?? user.role ?? 'borrower';
+    user.roles =
+      user.roles ??
+      (Array.isArray(user.role) ? user.role : [user.role ?? user.primaryRole]);
+    user.searchTokens = searchTokens([
+      user.userId,
+      user.fullName,
+      user.email,
+      user.phone,
+      ...user.roles,
+    ]);
+  });
+  complete.loanListings.forEach((listing) => {
+    listing.adminStatus = ['pending_review', 'pending', 'draft'].includes(
+      listing.status,
+    )
+      ? 'pending'
+      : ['active', 'approved', 'rejected'].includes(listing.status)
+        ? listing.status
+        : 'closed';
+    listing.searchTokens = searchTokens([
+      listing.listingId,
+      listing.title,
+      listing.lenderId,
+      listing.lenderName,
+    ]);
+  });
+  complete.disputes.forEach((dispute) => {
+    dispute.searchTokens = searchTokens([
+      dispute.disputeId,
+      dispute.disputeCode,
+      dispute.loanId,
+      dispute.subject,
+      dispute.borrowerName,
+      dispute.lenderName,
+    ]);
+  });
+  complete.transactions.forEach((transaction) => {
+    transaction.platformFeeMinor =
+      transaction.platformFeeMinor ??
+      Math.round(Number(transaction.amountMinor ?? 0) * 0.02);
+  });
+  return complete;
 }
 
 module.exports = { buildSchemaV2Fixtures, installmentIdFor };

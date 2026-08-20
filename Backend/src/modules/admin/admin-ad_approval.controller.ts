@@ -46,8 +46,11 @@ export class AdminAdApprovalController {
   async getAds(
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('status')
+    status?: 'pending' | 'approved' | 'active' | 'rejected' | 'closed',
+    @Query('search') search?: string,
   ) {
-    return this.approvalService.getAds(limit, cursor);
+    return this.approvalService.getAds(limit, cursor, status, search);
   }
 
   // GET /admin/ads/:adId

@@ -134,4 +134,91 @@ describe('DisputesService', () => {
 
     expect(response.events.map((event) => event.id)).toEqual(['shared']);
   });
+
+  it('applies admin filters and a page limit before reading documents', async () => {
+    const get = jest.fn().mockResolvedValue({ size: 0, docs: [] });
+    const query = {
+      where: jest.fn(),
+      orderBy: jest.fn(),
+      limit: jest.fn(),
+      get,
+    };
+    query.where.mockReturnValue(query);
+    query.orderBy.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
+    const firebase = {
+      db: { collection: jest.fn(() => query) },
+    } as unknown as FirebaseService;
+    const service = new DisputesService(firebase, gateway);
+
+    const response = await service.getAllDisputes('10', undefined, {
+      status: 'open',
+      priority: 'high',
+      search: 'DSP-123',
+    });
+
+    expect(query.where).toHaveBeenCalledWith('status', '==', 'open');
+    expect(query.where).toHaveBeenCalledWith('priority', '==', 'high');
+    expect(query.where).toHaveBeenCalledWith(
+      'searchTokens',
+      'array-contains',
+      'dsp-123',
+    );
+    expect(query.orderBy).toHaveBeenCalledWith('updatedAt', 'desc');
+    expect(query.limit).toHaveBeenCalledWith(11);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(response).toMatchObject({ count: 0, hasMore: false });
+  });
+
+  it('uses count aggregations instead of dispute snapshots for statistics', async () => {
+    const get = jest.fn();
+    for (const value of [9, 2, 2, 1, 1, 2, 1]) {
+      get.mockResolvedValueOnce({ data: () => ({ count: value }) });
+    }
+    const count = jest.fn(() => ({ get }));
+    const query = { where: jest.fn(), count };
+    query.where.mockReturnValue(query);
+    const firebase = {
+      db: { collection: jest.fn(() => query) },
+    } as unknown as FirebaseService;
+    const service = new DisputesService(firebase, gateway);
+
+    const response = await service.getStats();
+
+    expect(count).toHaveBeenCalledTimes(7);
+    expect(response.stats).toEqual({
+      all: 9,
+      open: 2,
+      under_review: 2,
+      awaiting_response: 1,
+      escalated: 1,
+      resolved: 2,
+      closed: 1,
+    });
+  });
+
+  it('bounds participant dispute lists before reading documents', async () => {
+    const get = jest.fn().mockResolvedValue({ size: 0, docs: [] });
+    const query = {
+      where: jest.fn(),
+      orderBy: jest.fn(),
+      limit: jest.fn(),
+      get,
+    };
+    query.where.mockReturnValue(query);
+    query.orderBy.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
+    const firebase = {
+      db: { collection: jest.fn(() => query) },
+    } as unknown as FirebaseService;
+    const service = new DisputesService(firebase, gateway);
+
+    await service.getMyDisputes('lender-1', 'open', '10', undefined, 'lender');
+
+    expect(query.where).toHaveBeenCalledWith('lenderId', '==', 'lender-1');
+    expect(query.where).toHaveBeenCalledWith('status', '==', 'open');
+    expect(query.orderBy).toHaveBeenCalledWith('updatedAt', 'desc');
+    expect(query.limit).toHaveBeenCalledWith(11);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
 });

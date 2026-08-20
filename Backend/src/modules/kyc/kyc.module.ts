@@ -6,9 +6,16 @@ import { FirebaseModule } from '../../firebase/firebase.module';
 import { AuthModule } from '../auth/auth.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { MediaModule } from '../media/media.module';
+import { GatewayModule } from '../chat/gateway/gateway.module';
 
 @Module({
-  imports: [FirebaseModule, AuthModule, DocumentsModule, MediaModule],
+  imports: [
+    FirebaseModule,
+    AuthModule,
+    DocumentsModule,
+    MediaModule,
+    GatewayModule,
+  ],
   controllers: [KycController, KycMobileController],
   providers: [KycService],
 })

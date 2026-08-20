@@ -2,19 +2,29 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
+  Optional,
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
 import { User, UserRole, UserStatus } from './interfaces/user.interface';
 import { QueryUsersDto } from './dto/query-users.dto';
+import { AdminQueryCacheService } from '../../common/cache/admin-query-cache.service';
+import { normalizeSearchToken } from '../../common/firestore/search-tokens';
+import { writeAuditLog } from '../../common/audit/write-audit-log';
+import { ChatGateway } from '../chat/gateway/chat.gateway';
 
 @Injectable()
 export class AdminService {
   private static readonly DEFAULT_PAGE_SIZE = 20;
   private static readonly MAX_PAGE_SIZE = 100;
 
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    @Optional()
+    private readonly cache: AdminQueryCacheService = new AdminQueryCacheService(),
+    @Optional() private readonly gateway?: ChatGateway,
+  ) {}
 
   private get db() {
     return this.firebaseService.db;
@@ -29,6 +39,9 @@ export class AdminService {
   }
 
   private getDerivedStatus(data: FirebaseFirestore.DocumentData): UserStatus {
+    if (data.accountStatus === 'suspended') return 'suspended';
+    if (data.accountStatus === 'pending') return 'pending';
+    if (data.accountStatus === 'active') return 'active';
     if (data.status === 'inactive') {
       return 'suspended';
     }
@@ -81,7 +94,9 @@ export class AdminService {
     return {
       id,
       uid: storedUid,
-      role: this.getPrimaryRole(sanitizedData.role),
+      role: this.getPrimaryRole(
+        sanitizedData.primaryRole ?? sanitizedData.roles ?? sanitizedData.role,
+      ),
       status: this.getDerivedStatus(sanitizedData),
       fullName: storedFullName,
       firstName: storedFirstName ?? firstName,
@@ -157,10 +172,12 @@ export class AdminService {
     ] = await Promise.all([
       this.getCount(usersCollection),
       this.getCount(usersCollection.where('accountStatus', '==', 'pending')),
-      this.getCount(usersCollection.where('status', '==', 'suspended')),
-      this.getCount(usersCollection.where('role', 'array-contains', 'admin')),
-      this.getCount(usersCollection.where('role', 'array-contains', 'borrower')),
-      this.getCount(usersCollection.where('role', 'array-contains', 'lender')),
+      this.getCount(usersCollection.where('accountStatus', '==', 'suspended')),
+      this.getCount(usersCollection.where('roles', 'array-contains', 'admin')),
+      this.getCount(
+        usersCollection.where('roles', 'array-contains', 'borrower'),
+      ),
+      this.getCount(usersCollection.where('roles', 'array-contains', 'lender')),
     ]);
 
     return {
@@ -181,9 +198,15 @@ export class AdminService {
   ) {
     try {
       const pageSize = this.parseLimit(limit);
-      let usersQuery: FirebaseFirestore.Query = this.db
-        .collection('users')
-        .orderBy('createdAt', 'desc');
+      let usersQuery: FirebaseFirestore.Query = this.db.collection('users');
+      if (query.role)
+        usersQuery = usersQuery.where('primaryRole', '==', query.role);
+      if (query.status)
+        usersQuery = usersQuery.where('accountStatus', '==', query.status);
+      const search = normalizeSearchToken(query.search);
+      if (search)
+        usersQuery = usersQuery.where('searchTokens', 'array-contains', search);
+      usersQuery = usersQuery.orderBy('createdAt', 'desc');
 
       if (cursor) {
         const cursorDoc = await this.getUserDocument(cursor).get();
@@ -192,51 +215,22 @@ export class AdminService {
         }
       }
 
-      const users: User[] = [];
-      let nextCursor: string | undefined;
-      let exhausted = false;
-      let queryCursorDoc: FirebaseFirestore.QueryDocumentSnapshot | undefined;
-
-      while (users.length < pageSize && !exhausted) {
-        let pageQuery = usersQuery.limit(Math.max(pageSize * 2, pageSize + 1));
-        if (queryCursorDoc) {
-          pageQuery = usersQuery
-            .startAfter(queryCursorDoc)
-            .limit(Math.max(pageSize * 2, pageSize + 1));
-        }
-
-        const usersSnapshot = await pageQuery.get();
-
-        if (usersSnapshot.empty) {
-          exhausted = true;
-          break;
-        }
-
-        queryCursorDoc = usersSnapshot.docs[usersSnapshot.docs.length - 1];
-
-        usersSnapshot.docs.forEach((doc) => {
-          if (users.length >= pageSize) {
-            return;
-          }
-
-          const user = this.sanitizeUser(doc.id, doc.data());
-          if (this.matchesUserFilters(user, query)) {
-            users.push(user);
-            nextCursor = doc.id;
-          }
-        });
-
-        if (usersSnapshot.size < Math.max(pageSize * 2, pageSize + 1)) {
-          exhausted = true;
-        }
-      }
+      const usersSnapshot = await usersQuery.limit(pageSize + 1).get();
+      const hasMore = usersSnapshot.size > pageSize;
+      const pageDocs = usersSnapshot.docs.slice(0, pageSize);
+      const users = pageDocs.map((doc) =>
+        this.sanitizeUser(doc.id, doc.data()),
+      );
+      const nextCursor = hasMore
+        ? pageDocs[pageDocs.length - 1]?.id
+        : undefined;
 
       return {
         success: true,
         count: users.length,
         users,
-        hasMore: !exhausted && Boolean(nextCursor),
-        nextCursor: !exhausted ? nextCursor : undefined,
+        hasMore,
+        nextCursor,
       };
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -267,6 +261,9 @@ export class AdminService {
   // Aggregates user counts by status and role for admin reporting.
   async getUserStats() {
     try {
+      const cached = await this.cache.remember('admin:users:stats', () =>
+        this.getUserCounts(),
+      );
       const {
         totalUsers,
         pendingUsers,
@@ -274,7 +271,7 @@ export class AdminService {
         admins,
         borrowers,
         lenders,
-      } = await this.getUserCounts();
+      } = cached.value;
 
       const activeUsers = Math.max(
         totalUsers - pendingUsers - suspendedUsers,
@@ -294,6 +291,8 @@ export class AdminService {
       return {
         success: true,
         stats,
+        generatedAt: cached.generatedAt,
+        cacheAgeSeconds: cached.cacheAgeSeconds,
       };
     } catch (error) {
       console.error('Error fetching user stats:', error);
@@ -302,7 +301,7 @@ export class AdminService {
   }
 
   // Suspends the selected user and persists the audit-related metadata.
-  async suspendUser(userId: string, reason?: string) {
+  async suspendUser(userId: string, reason?: string, actorAdminId = 'system') {
     try {
       const userRef = this.getUserDocument(userId);
       const userDoc = await userRef.get();
@@ -313,9 +312,26 @@ export class AdminService {
 
       await userRef.update({
         status: 'suspended',
+        accountStatus: 'suspended',
         suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
         suspensionReason: reason || 'No reason provided',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      this.cache.invalidate('admin:users:');
+      await writeAuditLog(this.db, {
+        actorUserId: actorAdminId,
+        action: 'user.suspended',
+        entityType: 'user',
+        entityId: userId,
+        before: { accountStatus: userDoc.data()?.accountStatus },
+        after: { accountStatus: 'suspended' },
+        metadata: { reason: reason || 'No reason provided' },
+      });
+      this.gateway?.emitToRole('admin', 'admin:changed', {
+        resource: 'users',
+        entityId: userId,
+        changeType: 'suspended',
+        updatedAt: new Date().toISOString(),
       });
 
       return {
@@ -331,7 +347,7 @@ export class AdminService {
   }
 
   // Restores a suspended user to the active state and clears suspension metadata.
-  async activateUser(userId: string) {
+  async activateUser(userId: string, actorAdminId = 'system') {
     try {
       const userRef = this.getUserDocument(userId);
       const userDoc = await userRef.get();
@@ -342,10 +358,26 @@ export class AdminService {
 
       await userRef.update({
         status: 'active',
+        accountStatus: 'active',
         activatedAt: admin.firestore.FieldValue.serverTimestamp(),
         suspendedAt: admin.firestore.FieldValue.delete(),
         suspensionReason: admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      this.cache.invalidate('admin:users:');
+      await writeAuditLog(this.db, {
+        actorUserId: actorAdminId,
+        action: 'user.activated',
+        entityType: 'user',
+        entityId: userId,
+        before: { accountStatus: userDoc.data()?.accountStatus },
+        after: { accountStatus: 'active' },
+      });
+      this.gateway?.emitToRole('admin', 'admin:changed', {
+        resource: 'users',
+        entityId: userId,
+        changeType: 'activated',
+        updatedAt: new Date().toISOString(),
       });
 
       return {
@@ -361,7 +393,7 @@ export class AdminService {
   }
 
   // Deletes a user document after confirming that it exists.
-  async deleteUser(userId: string) {
+  async deleteUser(userId: string, actorAdminId = 'system') {
     try {
       const userRef = this.getUserDocument(userId);
       const userDoc = await userRef.get();
@@ -371,6 +403,20 @@ export class AdminService {
       }
 
       await userRef.delete();
+      this.cache.invalidate('admin:users:');
+      await writeAuditLog(this.db, {
+        actorUserId: actorAdminId,
+        action: 'user.deleted',
+        entityType: 'user',
+        entityId: userId,
+        before: { accountStatus: userDoc.data()?.accountStatus },
+      });
+      this.gateway?.emitToRole('admin', 'admin:changed', {
+        resource: 'users',
+        entityId: userId,
+        changeType: 'deleted',
+        updatedAt: new Date().toISOString(),
+      });
 
       return {
         success: true,

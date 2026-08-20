@@ -10,6 +10,8 @@ export type AccountStatus = 'pending' | 'active' | 'suspended' | 'closed';
 export type UserDocument = {
   userId: string;
   roles: UserRole[];
+  primaryRole?: UserRole;
+  searchTokens?: string[];
   fullName: string;
   photoUrl: string | null;
   phone: string;

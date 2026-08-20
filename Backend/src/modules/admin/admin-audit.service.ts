@@ -6,46 +6,12 @@ import { rethrowFirebaseError } from '../../common/firebase-error';
 
 type AuditTimestamp = FirestoreTimestampLike | Date;
 
-type AuditUserRecord = {
-  status?: string;
-  role?: string | string[];
-  email?: string;
-  fullName?: string;
-  kycStatus?: string;
-  suspensionReason?: string;
-  rejectionReason?: string;
-  suspendedAt?: AuditTimestamp;
-  activatedAt?: AuditTimestamp;
-  reviewedAt?: AuditTimestamp;
-  updatedAt?: AuditTimestamp;
-};
-
-type AuditAdRecord = {
-  status?: string;
-  lenderName?: string;
-  notes?: string;
-  rejectionReason?: string;
-  approvedAt?: AuditTimestamp;
-  rejectedAt?: AuditTimestamp;
-  reviewedAt?: AuditTimestamp;
-  updatedAt?: AuditTimestamp;
-};
-
 @Injectable()
 export class AdminAuditService {
   private static readonly DEFAULT_PAGE_SIZE = 20;
   private static readonly MAX_PAGE_SIZE = 50;
 
   constructor(private readonly firebaseService: FirebaseService) {}
-
-  // Pick the first role when the stored role is an array.
-  private getPrimaryRole(role?: string | string[]) {
-    if (Array.isArray(role)) {
-      return role[0];
-    }
-
-    return role;
-  }
 
   // Normalizes Firestore timestamps and Date objects for the audit table.
   private formatDate(value?: AuditTimestamp) {
@@ -76,14 +42,6 @@ export class AdminAuditService {
     return `${partValue('year')}-${partValue('month')}-${partValue('day')} ${partValue('hour')}:${partValue('minute')}:${partValue('second')}`;
   }
 
-  private getSortTime(dateTime: string) {
-    if (dateTime === 'N/A') {
-      return 0;
-    }
-
-    return new Date(dateTime.replace(' ', 'T')).getTime() || 0;
-  }
-
   private parseLimit(limit?: string) {
     const parsed = Number(limit ?? AdminAuditService.DEFAULT_PAGE_SIZE);
     if (!Number.isFinite(parsed)) {
@@ -96,172 +54,81 @@ export class AdminAuditService {
     );
   }
 
-  // Converts a user document into one or more audit log rows.
-  private buildUserAuditLogs(
-    doc: FirebaseFirestore.QueryDocumentSnapshot,
-  ): AuditLogEntry[] {
-    const user = doc.data() as AuditUserRecord;
-    const logs: AuditLogEntry[] = [];
-
-    if (user.status === 'suspended') {
-      logs.push({
-        id: `USR-S-${doc.id}`,
-        actionType: 'user_suspended',
-        description:
-          user.suspensionReason || 'User account was suspended by admin',
-        performedBy: 'Admin',
-        targetName: user.email || doc.id,
-        targetType: 'user',
-        dateTime: this.formatDate(user.suspendedAt || user.updatedAt),
-        severity: 'critical',
-      });
-    }
-
-    if (user.status === 'active' && user.activatedAt) {
-      logs.push({
-        id: `USR-A-${doc.id}`,
-        actionType: 'user_activated',
-        description: `${this.getPrimaryRole(user.role) || 'User'} account is active`,
-        performedBy: 'Admin',
-        targetName: user.email || doc.id,
-        targetType: 'user',
-        dateTime: this.formatDate(user.activatedAt),
-        severity: 'success',
-      });
-    }
-
-    if (user.kycStatus === 'approved' && user.reviewedAt) {
-      logs.push({
-        id: `KYC-A-${doc.id}`,
-        actionType: 'kyc_approved',
-        description: 'User KYC approved',
-        performedBy: 'Admin',
-        targetName: user.fullName || user.email || doc.id,
-        targetType: 'user',
-        dateTime: this.formatDate(user.reviewedAt || user.updatedAt),
-        severity: 'success',
-      });
-    }
-
-    if (user.kycStatus === 'rejected' && user.reviewedAt) {
-      logs.push({
-        id: `KYC-R-${doc.id}`,
-        actionType: 'kyc_rejected',
-        description: user.rejectionReason || 'User KYC rejected',
-        performedBy: 'Admin',
-        targetName: user.fullName || user.email || doc.id,
-        targetType: 'user',
-        dateTime: this.formatDate(user.reviewedAt || user.updatedAt),
-        severity: 'warning',
-      });
-    }
-
-    return logs;
-  }
-
-  // Converts an ad document into one or more audit log rows.
-  private buildAdAuditLogs(
-    doc: FirebaseFirestore.QueryDocumentSnapshot,
-  ): AuditLogEntry[] {
-    const ad = doc.data() as AuditAdRecord;
-    const logs: AuditLogEntry[] = [];
-    const approvalTime = ad.approvedAt || ad.reviewedAt || ad.updatedAt;
-
-    if ((ad.status === 'approved' || ad.status === 'active') && approvalTime) {
-      logs.push({
-        id: `AD-A-${doc.id}`,
-        actionType: 'ad_approved',
-        description: ad.notes || 'Lender advertisement approved',
-        performedBy: 'Admin',
-        targetName: ad.lenderName || doc.id,
-        targetType: 'ad',
-        dateTime: this.formatDate(approvalTime),
-        severity: 'success',
-      });
-    }
-
-    if (ad.status === 'rejected') {
-      logs.push({
-        id: `AD-R-${doc.id}`,
-        actionType: 'ad_rejected',
-        description: ad.rejectionReason || 'Lender advertisement rejected',
-        performedBy: 'Admin',
-        targetName: ad.lenderName || doc.id,
-        targetType: 'ad',
-        dateTime: this.formatDate(
-          ad.rejectedAt || ad.reviewedAt || ad.updatedAt,
-        ),
-        severity: 'warning',
-      });
-    }
-
-    return logs;
-  }
-
-  // Builds a flat activity feed from admin-relevant Firestore collections.
+  // Reads the immutable audit collection with bounded cursor pagination.
   async getAuditLogs(limit?: string, cursor?: string) {
     try {
       const db = this.firebaseService.db;
       const pageSize = this.parseLimit(limit);
-      const cursorDate = cursor ? new Date(cursor) : null;
-      const sourceLimit = Math.max(pageSize * 3, pageSize + 5);
-
-      let usersQuery: FirebaseFirestore.Query = db
-        .collection('users')
-        .orderBy('updatedAt', 'desc')
-        .limit(sourceLimit);
-      let adsQuery: FirebaseFirestore.Query = db
-        .collection('loanListings')
-        .orderBy('updatedAt', 'desc')
-        .limit(sourceLimit);
-
-      if (cursorDate && !Number.isNaN(cursorDate.getTime())) {
-        usersQuery = db
-          .collection('users')
-          .orderBy('updatedAt', 'desc')
-          .startAfter(cursorDate)
-          .limit(sourceLimit);
-        adsQuery = db
-          .collection('loanListings')
-          .orderBy('updatedAt', 'desc')
-          .startAfter(cursorDate)
-          .limit(sourceLimit);
-      }
-
-      const [usersSnapshot, adsSnapshot] = await Promise.all([
-        usersQuery.get(),
-        adsQuery.get(),
-      ]);
-
-      const logs: AuditLogEntry[] = [];
-
-      usersSnapshot.forEach((doc) => {
-        logs.push(...this.buildUserAuditLogs(doc));
-      });
-
-      adsSnapshot.forEach((doc) => {
-        logs.push(...this.buildAdAuditLogs(doc));
-      });
-
-      logs.sort(
-        (a, b) => this.getSortTime(b.dateTime) - this.getSortTime(a.dateTime),
+      const collection = db.collection('auditLogs');
+      let query: FirebaseFirestore.Query = collection.orderBy(
+        'createdAt',
+        'desc',
       );
-
-      const pageLogs = logs.slice(0, pageSize);
-      const hasMore = logs.length > pageSize;
+      if (cursor) {
+        const cursorDoc = await collection.doc(cursor).get();
+        if (cursorDoc.exists) query = query.startAfter(cursorDoc);
+      }
+      const snapshot = await query.limit(pageSize + 1).get();
+      const hasMore = snapshot.size > pageSize;
+      const pageDocs = snapshot.docs.slice(0, pageSize);
+      const pageLogs = pageDocs.map((doc) => this.mapStoredAudit(doc));
 
       return {
         success: true,
         count: pageLogs.length,
         logs: pageLogs,
         hasMore,
-        nextCursor: hasMore
-          ? pageLogs[pageLogs.length - 1]?.dateTime.replace(' ', 'T')
-          : undefined,
+        nextCursor: hasMore ? pageDocs[pageDocs.length - 1]?.id : undefined,
       };
     } catch (error) {
       console.error('Error fetching audit logs:', error);
       rethrowFirebaseError(error, 'Failed to fetch audit logs');
     }
+  }
+
+  private mapStoredAudit(
+    doc: FirebaseFirestore.QueryDocumentSnapshot,
+  ): AuditLogEntry {
+    const data = doc.data();
+    const action = String(data.action ?? 'system.event');
+    const actionType = this.mapStoredAction(action);
+    const metadata =
+      data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
+    return {
+      id: doc.id,
+      actionType,
+      description:
+        String(metadata.description ?? metadata.reason ?? '').trim() ||
+        action.replaceAll('.', ' '),
+      performedBy: String(data.actorUserId ?? data.actorRole ?? 'System'),
+      targetName: String(data.entityId ?? 'System'),
+      targetType: this.mapTargetType(data.entityType),
+      dateTime: this.formatDate(data.createdAt),
+      severity:
+        action.includes('reject') || action.includes('suspend')
+          ? 'warning'
+          : action.includes('approve') || action.includes('activate')
+            ? 'success'
+            : 'info',
+    };
+  }
+
+  private mapStoredAction(action: string): AuditLogEntry['actionType'] {
+    if (action === 'kyc.approved') return 'kyc_approved';
+    if (action === 'kyc.rejected') return 'kyc_rejected';
+    if (action === 'user.suspended') return 'user_suspended';
+    if (action === 'user.activated') return 'user_activated';
+    if (action === 'ad.approved') return 'ad_approved';
+    if (action === 'ad.rejected') return 'ad_rejected';
+    if (action.startsWith('dispute.')) return 'dispute_updated';
+    return 'system_event';
+  }
+
+  private mapTargetType(value: unknown): AuditLogEntry['targetType'] {
+    return ['user', 'ad', 'dispute', 'transaction', 'report'].includes(
+      String(value),
+    )
+      ? (String(value) as AuditLogEntry['targetType'])
+      : 'system';
   }
 }

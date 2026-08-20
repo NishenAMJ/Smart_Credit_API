@@ -208,6 +208,7 @@ export interface TransactionDocument {
   status: 'pending' | 'completed' | 'failed' | 'reversed';
   currency: Currency;
   amountMinor: number;
+  platformFeeMinor: number;
   lenderId: string | null;
   borrowerId: string | null;
   loanId: string | null;

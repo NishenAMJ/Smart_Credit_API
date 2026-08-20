@@ -29,6 +29,7 @@ import {
   LenderAdsListResponse,
 } from './lender-ads.types';
 import { LenderAdAnalyticsService } from './lender-ad-analytics.service';
+import { buildSearchTokens } from '../../../common/firestore/search-tokens';
 
 @Injectable()
 export class LenderAdsService {
@@ -99,6 +100,8 @@ export class LenderAdsService {
       requirements: input.requirements.trim(),
       responseTimeHours,
       status: 'pending_review',
+      adminStatus: 'pending',
+      searchTokens: buildSearchTokens([docRef.id, title, lenderId, lenderName]),
       availableCapitalMinor: Math.round(input.maxAmount * 100),
       adminReview: {
         reviewedBy: null,
@@ -362,6 +365,7 @@ export class LenderAdsService {
     }
     if (input.active !== undefined) {
       update.status = input.active ? 'active' : 'paused';
+      update.adminStatus = input.active ? 'active' : 'closed';
     }
 
     await ref.update(update);
@@ -387,7 +391,8 @@ export class LenderAdsService {
     const current = snapshot.data() ?? {};
     const update: Record<string, unknown> = { updatedAt: Timestamp.now() };
     const contentChanged = Object.keys(input).some(
-      (key) => key !== 'status' && input[key as keyof typeof input] !== undefined,
+      (key) =>
+        key !== 'status' && input[key as keyof typeof input] !== undefined,
     );
 
     if (input.headline !== undefined) update.title = input.headline.trim();
@@ -417,14 +422,11 @@ export class LenderAdsService {
     if (contentChanged) {
       const merged: CreateLenderAdInput = {
         headline: input.headline ?? readString(current.title) ?? '',
-        minAmount:
-          input.minAmount ?? readNumber(current.minAmountMinor) / 100,
-        maxAmount:
-          input.maxAmount ?? readNumber(current.maxAmountMinor) / 100,
+        minAmount: input.minAmount ?? readNumber(current.minAmountMinor) / 100,
+        maxAmount: input.maxAmount ?? readNumber(current.maxAmountMinor) / 100,
         interestRate:
           input.interestRate ?? readNumber(current.minInterestRateAnnual),
-        tenureMonths:
-          input.tenureMonths ?? readNumber(current.maxTenureMonths),
+        tenureMonths: input.tenureMonths ?? readNumber(current.maxTenureMonths),
         borrowerFocus:
           input.borrowerFocus ??
           readString(current.borrowerFocus) ??
@@ -442,12 +444,18 @@ export class LenderAdsService {
           input.requirements ??
           readString(current.requirements) ??
           'Approved KYC and supporting financial documents',
-        supportNote:
-          input.supportNote ?? readString(current.description) ?? '',
+        supportNote: input.supportNote ?? readString(current.description) ?? '',
       };
       this.validateCreateInput(merged);
       update.purposeCategories = this.buildPreferredPurposes(merged);
       update.status = 'pending_review';
+      update.adminStatus = 'pending';
+      update.searchTokens = buildSearchTokens([
+        adId,
+        merged.headline,
+        lenderId,
+        current.lenderName,
+      ]);
       update.adminReview = {
         reviewedBy: null,
         reviewedAt: null,
@@ -458,8 +466,10 @@ export class LenderAdsService {
       const currentStatus = getAdStatus(current);
       if (input.status === 'paused' && currentStatus === 'active') {
         update.status = 'paused';
+        update.adminStatus = 'closed';
       } else if (input.status === 'active' && currentStatus === 'paused') {
         update.status = 'active';
+        update.adminStatus = 'active';
       } else {
         throw new BadRequestException(
           'Only active advertisements can be paused and only paused advertisements can be resumed.',
