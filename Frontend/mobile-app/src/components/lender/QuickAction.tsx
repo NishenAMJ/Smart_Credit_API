@@ -34,14 +34,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     paddingVertical: 14,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     alignItems: "center",
+    justifyContent: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
     marginHorizontal: 4,
+    minHeight: 88,
   },
 
   icon: {

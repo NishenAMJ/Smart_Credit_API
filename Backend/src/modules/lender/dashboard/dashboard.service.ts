@@ -3,16 +3,13 @@ import {
   DocumentData,
   Firestore,
   QueryDocumentSnapshot,
+  Query,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
-import { DashboardSummaryService } from './dashboard-summary.service';
 import {
-  applyDateCursor,
   buildPageInfo,
   decodeCursor,
   hasRole,
-  encodeCursor,
-  orderByDateAndId,
   readDate,
   readNumber,
   readString,
@@ -21,6 +18,10 @@ import {
   computeLoanRemainingAmount,
   getLoanAmount,
   getLoanCreatedAt,
+  getNormalizedInstallment,
+  getPaymentAmount,
+  getPaymentCreatedAt,
+  isActiveAd,
 } from '../../../firebase/firestore-seed.utils';
 import {
   BorrowerLoanSummary,
@@ -56,55 +57,99 @@ function isDashboardBorrower(
 @Injectable()
 export class DashboardService {
   private readonly logger = new Logger(DashboardService.name);
+  private readonly warnedFallbacks = new Set<string>();
 
-  constructor(
-    private readonly firebaseService: FirebaseService,
-    private readonly dashboardSummary: DashboardSummaryService,
-  ) {}
+  constructor(private readonly firebaseService: FirebaseService) {}
 
-  getSummary(lenderId: string): Promise<DashboardSummaryResponse> {
-    return this.dashboardSummary.getSummary(lenderId);
+  async getSummary(lenderId: string): Promise<DashboardSummaryResponse> {
+    const db = this.firebaseService.getDb();
+    const [userSnapshot, totalBorrowers, todaysCollection, overduePayments, activeAds] =
+      await Promise.all([
+        db.collection('users').doc(lenderId).get(),
+        this.getTotalBorrowersFromRelations(db, lenderId),
+        this.getTodaysPaymentsCollection(db, lenderId),
+        this.getOverduePaymentsCount(db, lenderId),
+        this.getActiveAdsCount(db, lenderId),
+      ]);
+
+    const userData = userSnapshot.data();
+    const lenderName =
+      userData?.fullName || userData?.name || 'Unnamed Lender';
+
+    console.log(`[DashboardService] Stats for ${lenderId} (${lenderName}):`, {
+      totalBorrowers,
+      todaysCollection,
+      overduePayments,
+      activeAds,
+    });
+
+    return {
+      summary: {
+        lenderName,
+        totalBorrowers,
+        todaysCollection,
+        overduePayments,
+        activeAds,
+      },
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   async getBorrowers(
     lenderId: string,
     pageSize = 8,
     cursor?: string | null,
+    search?: string | null,
   ): Promise<DashboardBorrowersResponse> {
     const db = this.firebaseService.getDb();
     const safePageSize = this.clamp(pageSize, 8, 50);
 
-    const loansSnapshot = await db
+    const relationBorrowers = await this.getBorrowersFromRelations(
+      db,
+      lenderId,
+      safePageSize,
+      cursor,
+      search,
+    );
+
+    if (relationBorrowers) {
+      return {
+        ...relationBorrowers,
+        generatedAt: new Date().toISOString(),
+      };
+    }
+
+    const lenderLoansSnapshot = await db
       .collection('loans')
       .where('lenderId', '==', lenderId)
       .get();
     const lenderLoans = await Promise.all(
-      loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
+      lenderLoansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
     );
 
     return {
-      ...(await this.getRecentBorrowers(db, lenderLoans, safePageSize, cursor)),
+      ...(await this.getRecentBorrowers(
+        db,
+        lenderLoans,
+        safePageSize,
+        cursor,
+        search,
+      )),
       generatedAt: new Date().toISOString(),
     };
   }
 
   async getBorrowersForExport(lenderId: string): Promise<DashboardBorrower[]> {
-    const db = this.firebaseService.getDb();
-    const loansSnapshot = await db
-      .collection('loans')
-      .where('lenderId', '==', lenderId)
-      .get();
-    const lenderLoans = await Promise.all(
-      loansSnapshot.docs.map((doc) => this.mapLoan(db, doc)),
-    );
-    const result = await this.getRecentBorrowers(
-      db,
-      lenderLoans,
-      Number.MAX_SAFE_INTEGER,
-      null,
-    );
+    const borrowers: DashboardBorrower[] = [];
+    let cursor: string | null = null;
 
-    return result.borrowers;
+    do {
+      const page = await this.getBorrowers(lenderId, 50, cursor);
+      borrowers.push(...page.borrowers);
+      cursor = page.pageInfo.nextCursor;
+    } while (cursor);
+
+    return borrowers;
   }
 
   async getBorrowerDetails(
@@ -127,7 +172,7 @@ export class DashboardService {
 
     const data = snapshot.data();
 
-    if (!data || !hasRole(data.roles ?? data.role, 'borrower')) {
+    if (!data || !hasRole(data.role, 'borrower')) {
       return null;
     }
 
@@ -151,9 +196,7 @@ export class DashboardService {
 
     return {
       id: snapshot.id,
-      role: hasRole(data.roles ?? data.role, 'borrower')
-        ? 'borrower'
-        : 'unknown',
+      role: hasRole(data.role, 'borrower') ? 'borrower' : 'unknown',
       fullName:
         typeof data.fullName === 'string' && data.fullName.trim().length > 0
           ? data.fullName
@@ -164,7 +207,11 @@ export class DashboardService {
       nic: typeof data.nic === 'string' ? data.nic : null,
       kycStatus:
         typeof data.kycStatus === 'string' ? data.kycStatus : 'not_submitted',
-      creditScore: this.readBorrowerCreditScore(data),
+      creditScore:
+        typeof data.creditScore === 'number' &&
+        Number.isFinite(data.creditScore)
+          ? data.creditScore
+          : null,
       rating:
         typeof data.rating === 'number' && Number.isFinite(data.rating)
           ? data.rating
@@ -173,9 +220,7 @@ export class DashboardService {
       activeLoansCount,
       totalBorrowedAmount,
       outstandingAmount,
-      isActive: data.accountStatus
-        ? data.accountStatus === 'active'
-        : data.isActive !== false,
+      isActive: data.isActive !== false,
       createdAt: this.toIsoString(data.createdAt),
       loans: lenderLoans
         .slice()
@@ -193,15 +238,154 @@ export class DashboardService {
     return Math.min(Math.max(value, min), max);
   }
 
+  private async getActiveAdsCount(
+    db: Firestore,
+    lenderId: string,
+  ): Promise<number> {
+    const now = new Date();
+
+    try {
+      const snapshot = await db
+        .collection('loanListings')
+        .where('lenderId', '==', lenderId)
+        .where('status', 'in', ['active', 'approved'])
+        .where('expiresAt', '>=', now)
+        .count()
+        .get();
+
+      return snapshot.data().count;
+    } catch (error) {
+      this.logFallback(
+        'active-ads',
+        'Falling back from aggregate query for active ads.',
+        error,
+      );
+
+      const snapshot = await db
+        .collection('loanListings')
+        .where('lenderId', '==', lenderId)
+        .get();
+      return snapshot.docs.filter((doc) => isActiveAd(doc.data(), now)).length;
+    }
+  }
+
+  private async getTotalBorrowersFromRelations(
+    db: Firestore,
+    lenderId: string,
+  ): Promise<number> {
+    const query = db
+      .collection('lenderBorrowers')
+      .where('lenderId', '==', lenderId);
+
+    return this.getCountWithFallback('lender-borrowers', query, async () => {
+      const snapshot = await query.get();
+      return snapshot.size;
+    });
+  }
+
+  private async getOverduePaymentsCount(
+    db: Firestore,
+    lenderId: string,
+  ): Promise<number> {
+    try {
+      const snapshot = await db
+        .collectionGroup('installments')
+        .where('lenderId', '==', lenderId)
+        .where('status', '==', 'overdue')
+        .count()
+        .get();
+
+      return snapshot.data().count;
+    } catch (error) {
+      this.logFallback(
+        'overdue-installments:lender-scope',
+        'Falling back getOverduePaymentsCount from lender-scoped overdue installments query.',
+        error,
+      );
+
+      const loansSnapshot = await db
+        .collection('loans')
+        .where('lenderId', '==', lenderId)
+        .get();
+      const counts = await Promise.all(
+        loansSnapshot.docs.map(async (loan) => {
+          const snapshot = await db
+            .collection('loans')
+            .doc(loan.id)
+            .collection('installments')
+            .get();
+
+          return snapshot.docs.filter((doc) => {
+            const installment = getNormalizedInstallment(doc.data());
+            return installment.status === 'overdue';
+          }).length;
+        }),
+      );
+
+      return counts.reduce((total, count) => total + count, 0);
+    }
+  }
+
+  private async getTodaysPaymentsCollection(
+    db: Firestore,
+    lenderId: string,
+  ): Promise<number> {
+    const { start, end } = this.getCurrentDayRange();
+
+    try {
+      const snapshot = await db
+        .collectionGroup('payments')
+        .where('lenderId', '==', lenderId)
+        .where('paidAt', '>=', start)
+        .where('paidAt', '<', end)
+        .orderBy('paidAt', 'desc')
+        .get();
+
+      return snapshot.docs.reduce(
+        (total, doc) => total + getPaymentAmount(doc.data()),
+        0,
+      );
+    } catch (error) {
+      this.logFallback(
+        'todays-payments:lender-scope',
+        'Falling back from lender-scoped todays payments query.',
+        error,
+      );
+
+      const loansSnapshot = await db
+        .collection('loans')
+        .where('lenderId', '==', lenderId)
+        .get();
+
+      return this.sumNestedPaymentsForDateRange(
+        db,
+        loansSnapshot.docs.map((doc) => doc.id),
+        { start, end },
+      );
+    }
+  }
+
+  private getCurrentDayRange(): { start: Date; end: Date } {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    return { start, end };
+  }
+
   private async getRecentBorrowers(
     db: Firestore,
     loans: DashboardLoanRecord[],
     pageSize: number,
     cursor?: string | null,
+    search?: string | null,
   ): Promise<{
     borrowers: DashboardBorrower[];
     pageInfo: CursorPageInfo;
   }> {
+    const searchTerm = this.normalizeBorrowerSearch(search);
     const borrowerLoanMap = this.groupLoansByBorrower(loans);
     const borrowerIds = Array.from(borrowerLoanMap.keys());
 
@@ -226,6 +410,10 @@ export class DashboardService {
         ),
       )
       .filter(isDashboardBorrower)
+      .filter(
+        (borrower) =>
+          !searchTerm || this.borrowerMatchesSearch(borrower, searchTerm),
+      )
       .sort((left, right) => {
         const leftTime = left.latestLoanCreatedAt
           ? new Date(left.latestLoanCreatedAt).getTime()
@@ -252,69 +440,70 @@ export class DashboardService {
     lenderId: string,
     pageSize: number,
     cursor?: string | null,
+    search?: string | null,
   ): Promise<{
     borrowers: DashboardBorrower[];
     pageInfo: CursorPageInfo;
   } | null> {
     try {
-      const query = db.collection('loans').where('lenderId', '==', lenderId);
-      const batchSize = Math.max(pageSize * 2, pageSize);
-      let currentCursor = cursor ?? null;
-      let exhausted = false;
-      const items: DashboardBorrowerPageItem[] = [];
+      const searchTerm = this.normalizeBorrowerSearch(search);
+      const snapshot = await db
+        .collection('lenderBorrowers')
+        .where('lenderId', '==', lenderId)
+        .get();
 
-      while (items.length < pageSize + 1 && !exhausted) {
-        const snapshot = await applyDateCursor(
-          orderByDateAndId(query, 'latestLoanCreatedAt'),
-          currentCursor,
-        )
-          .limit(batchSize)
-          .get();
-
-        if (snapshot.empty) {
-          return cursor ? this.createBorrowerPage([], pageSize, false) : null;
+      if (snapshot.empty || snapshot.docs.length === 0) {
+        if (searchTerm) {
+          return {
+            borrowers: [],
+            pageInfo: this.createEmptyPageInfo(pageSize),
+          };
         }
 
-        const borrowerIds = Array.from(
-          new Set(
-            snapshot.docs
-              .map((doc) => readString(doc.data().borrowerId))
-              .filter((id): id is string => Boolean(id)),
-          ),
-        );
-        const userDataById = await this.getUsersByIds(db, borrowerIds);
+        return null;
+      }
 
-        for (const doc of snapshot.docs) {
+      const borrowerIds: string[] = Array.from(
+        new Set<string>(
+          snapshot.docs
+            .map((doc) => readString(doc.data().borrowerId))
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+      const userDataById = await this.getUsersByIds(db, borrowerIds);
+      const borrowers = snapshot.docs
+        .map((doc) => {
           const mapped = this.mapBorrowerFromRelation(doc.data(), userDataById);
 
           if (!mapped) {
-            continue;
+            return null;
           }
 
-          items.push({
+          return {
             ...mapped,
             cursorDate: readDate(doc.get('latestLoanCreatedAt')),
             cursorId: doc.id,
-          });
+          };
+        })
+        .filter((borrower): borrower is DashboardBorrowerPageItem =>
+          Boolean(borrower),
+        )
+        .filter(
+          (borrower) =>
+            !searchTerm || this.borrowerMatchesSearch(borrower, searchTerm),
+        )
+        .sort((left, right) => {
+          const leftTime = left.cursorDate ? left.cursorDate.getTime() : 0;
+          const rightTime = right.cursorDate ? right.cursorDate.getTime() : 0;
 
-          if (items.length >= pageSize + 1) {
-            break;
+          if (leftTime !== rightTime) {
+            return rightTime - leftTime;
           }
-        }
 
-        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-        currentCursor = encodeCursor(
-          readDate(lastDoc.get('latestLoanCreatedAt')),
-          lastDoc.id,
-        );
-        exhausted = snapshot.docs.length < batchSize || !currentCursor;
-      }
+          return right.cursorId.localeCompare(left.cursorId);
+        });
 
-      return this.createBorrowerPage(
-        items.slice(0, pageSize),
-        pageSize,
-        items.length > pageSize,
-      );
+      return this.paginateBorrowerItems(borrowers, pageSize, cursor);
     } catch (error) {
       this.logFallback(
         'borrowers:lender-relations',
@@ -340,12 +529,6 @@ export class DashboardService {
 
     return new Map(
       userSnapshots.map((snapshot) => [snapshot.id, snapshot.data()]),
-    );
-  }
-
-  private logFallback(key: string, message: string, error: unknown): void {
-    this.logger.warn(
-      `${key}: ${message} ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 
@@ -383,10 +566,12 @@ export class DashboardService {
           userData?.displayName,
         ) ?? 'Unnamed borrower',
       email: readString(userData?.email) ?? 'No email',
-      phone: readString(userData?.phone),
+      phone: readString(userData?.phone, relation.borrowerPhone) ?? null,
       creditScore:
-        this.readBorrowerCreditScore(userData) ??
-        this.toNullableNumber(relation.borrowerCreditScore),
+        typeof userData?.creditScore === 'number' &&
+        Number.isFinite(userData.creditScore)
+          ? userData.creditScore
+          : this.toNullableNumber(relation.borrowerCreditScore),
       kycStatus:
         readString(userData?.kycStatus, relation.borrowerKycStatus) ??
         'not_submitted',
@@ -404,13 +589,97 @@ export class DashboardService {
       latestLoanCreatedAt: createdAt,
       firstLoanCreatedAt:
         this.toIsoString(relation.firstLoanCreatedAt) ??
-        this.toIsoString(relation.createdAt) ??
-        createdAt,
-      isActive: userData?.accountStatus
-        ? userData.accountStatus === 'active'
-        : userData?.isActive !== false,
+        this.toIsoString(relation.firstLoanAt) ??
+        this.toIsoString(relation.createdAt),
+      isActive: userData?.isActive !== false,
       createdAt: this.toIsoString(userData?.createdAt),
     };
+  }
+
+  private normalizeBorrowerSearch(search?: string | null): string | null {
+    if (typeof search !== 'string') {
+      return null;
+    }
+
+    const normalized = search
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9@._-]+/g, ' ');
+
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private borrowerMatchesSearch(
+    borrower: DashboardBorrower,
+    searchTerm: string,
+  ): boolean {
+    const searchTerms = searchTerm.split(/\s+/).filter(Boolean);
+    const searchTokens = this.buildBorrowerSearchTokens(borrower);
+
+    return searchTerms.every((term) =>
+      searchTokens.some((token) => token.startsWith(term)),
+    );
+  }
+
+  private buildBorrowerSearchTokens(borrower: DashboardBorrower): string[] {
+    return Array.from(
+      new Set(
+        [borrower.fullName, borrower.email]
+          .flatMap((value) => this.normalizeSearchTokens(value))
+          .filter((token) => token.length > 0),
+      ),
+    );
+  }
+
+  private normalizeSearchTokens(value: string): string[] {
+    return value
+      .trim()
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean);
+  }
+
+  private async getCountWithFallback(
+    label: string,
+    query: Query<DocumentData>,
+    fallback: () => Promise<number>,
+  ): Promise<number> {
+    try {
+      const snapshot = await query.count().get();
+      return snapshot.data().count;
+    } catch (error) {
+      this.logFallback(
+        `aggregate:${label}`,
+        `Falling back from aggregate query for ${label}.`,
+        error,
+      );
+      return fallback();
+    }
+  }
+
+  private logFallback(key: string, message: string, error: unknown): void {
+    if (this.warnedFallbacks.has(key)) {
+      return;
+    }
+
+    this.warnedFallbacks.add(key);
+
+    const errorCode = this.getFirestoreErrorCode(error);
+    const suffix = errorCode ? ` Firestore code: ${errorCode}.` : '';
+    this.logger.warn(`${message}${suffix}`);
+  }
+
+  private getFirestoreErrorCode(error: unknown): string | null {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (typeof error.code === 'number' || typeof error.code === 'string')
+    ) {
+      return String(error.code);
+    }
+
+    return null;
   }
 
   private mapBorrower(
@@ -420,7 +689,7 @@ export class DashboardService {
   ): DashboardBorrower | null {
     if (
       !data ||
-      !hasRole(data.roles ?? data.role, 'borrower') ||
+      (!hasRole(data.role, 'borrower') && !hasRole(data.roles, 'borrower')) ||
       loans.length === 0
     ) {
       return null;
@@ -439,12 +708,6 @@ export class DashboardService {
 
       return rightTime - leftTime;
     })[0];
-    const firstLoan = loans.slice().sort((left, right) => {
-      const leftTime = left.createdAt ? left.createdAt.getTime() : Infinity;
-      const rightTime = right.createdAt ? right.createdAt.getTime() : Infinity;
-
-      return leftTime - rightTime;
-    })[0];
 
     return {
       id: borrowerId,
@@ -454,7 +717,14 @@ export class DashboardService {
           : 'Unnamed borrower',
       email: typeof data.email === 'string' ? data.email : 'No email',
       phone: typeof data.phone === 'string' ? data.phone : null,
-      creditScore: this.readBorrowerCreditScore(data),
+      creditScore:
+        typeof data.creditScore === 'number' &&
+        Number.isFinite(data.creditScore)
+          ? data.creditScore
+          : this.toNullableNumber(
+              (data.borrowerProfile as Record<string, unknown> | undefined)
+                ?.creditScore,
+            ),
       kycStatus:
         typeof data.kycStatus === 'string' ? data.kycStatus : 'not_submitted',
       loanCount: loans.length,
@@ -465,14 +735,21 @@ export class DashboardService {
       latestLoanCreatedAt: latestLoan?.createdAt
         ? latestLoan.createdAt.toISOString()
         : null,
-      firstLoanCreatedAt: firstLoan?.createdAt
-        ? firstLoan.createdAt.toISOString()
-        : null,
-      isActive: data.accountStatus
-        ? data.accountStatus === 'active'
-        : data.isActive !== false,
+      firstLoanCreatedAt: this.getFirstLoanCreatedAt(loans),
+      isActive: data.isActive !== false,
       createdAt: this.toIsoString(data.createdAt),
     };
+  }
+
+  private getFirstLoanCreatedAt(loans: DashboardLoanRecord[]): string | null {
+    const firstLoan = loans
+      .filter((loan) => loan.createdAt)
+      .sort(
+        (left, right) =>
+          left.createdAt!.getTime() - right.createdAt!.getTime(),
+      )[0];
+
+    return firstLoan?.createdAt ? firstLoan.createdAt.toISOString() : null;
   }
 
   private async mapLoan(
@@ -486,7 +763,7 @@ export class DashboardService {
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
       amount: getLoanAmount(data),
       remainingAmount: await computeLoanRemainingAmount(db, doc.id, data),
-      interestRate: this.toNumber(data.annualInterestRate ?? data.interestRate),
+      interestRate: this.toNumber(data.interestRate),
       tenureMonths: this.toNumber(data.tenureMonths),
       status: typeof data.status === 'string' ? data.status : 'unknown',
       createdAt: getLoanCreatedAt(data),
@@ -544,20 +821,6 @@ export class DashboardService {
     return numeric > 0 ? numeric : null;
   }
 
-  private readBorrowerCreditScore(
-    data: DocumentData | undefined,
-  ): number | null {
-    const record = data as Record<string, unknown> | undefined;
-    const nestedProfile = record?.borrowerProfile;
-    const nestedScore =
-      nestedProfile && typeof nestedProfile === 'object'
-        ? (nestedProfile as Record<string, unknown>).creditScore
-        : undefined;
-    const score = readNumber(nestedScore, record?.creditScore);
-
-    return score > 0 ? score : null;
-  }
-
   private sum(values: number[]): number {
     return values.reduce((total, value) => total + value, 0);
   }
@@ -598,11 +861,10 @@ export class DashboardService {
     pageInfo: CursorPageInfo;
   } {
     return {
-      borrowers: borrowers.map(({ cursorDate, cursorId, ...borrower }) => {
-        void cursorDate;
-        void cursorId;
-        return borrower;
-      }),
+      borrowers: borrowers.map(
+        ({ cursorDate: _cursorDate, cursorId: _cursorId, ...borrower }) =>
+          borrower,
+      ),
       pageInfo: buildPageInfo(borrowers, pageSize, hasMore),
     };
   }
@@ -629,5 +891,48 @@ export class DashboardService {
     }
 
     return borrower.cursorId.localeCompare(cursor.id) < 0;
+  }
+
+  private async sumNestedPaymentsForDateRange(
+    db: Firestore,
+    loanIds: string[],
+    range: { start: Date; end: Date },
+  ): Promise<number> {
+    const totals = await Promise.all(
+      loanIds.map(async (loanId) => {
+        const installmentsSnapshot = await db
+          .collection('loans')
+          .doc(loanId)
+          .collection('installments')
+          .get();
+
+        const installmentTotals = await Promise.all(
+          installmentsSnapshot.docs.map(async (installmentDoc) => {
+            const paymentsSnapshot = await installmentDoc.ref
+              .collection('payments')
+              .get();
+
+            return paymentsSnapshot.docs.reduce((total, paymentDoc) => {
+              const data = paymentDoc.data();
+              const createdAt = getPaymentCreatedAt(data);
+
+              if (
+                !createdAt ||
+                createdAt < range.start ||
+                createdAt >= range.end
+              ) {
+                return total;
+              }
+
+              return total + getPaymentAmount(data);
+            }, 0);
+          }),
+        );
+
+        return this.sum(installmentTotals);
+      }),
+    );
+
+    return this.sum(totals);
   }
 }

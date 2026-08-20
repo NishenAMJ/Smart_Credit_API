@@ -15,31 +15,41 @@ describe('DashboardService', () => {
 
   it('builds the summary response from the summary data sources', async () => {
     const db = {
-      collection: jest.fn(() => ({
-        where: jest.fn(() => ({
-          get: jest.fn().mockResolvedValue({ docs: [] }),
-        })),
-      })),
-    };
-    const summary = {
-      getSummary: jest.fn().mockResolvedValue({
-        summary: {
-          totalBorrowers: 5,
-          todaysCollection: 27500,
-          overduePayments: 2,
-          activeAds: 3,
-        },
-        generatedAt: new Date().toISOString(),
+      collection: jest.fn((collectionName: string) => {
+        if (collectionName === 'users') {
+          return {
+            doc: jest.fn(() => ({
+              get: jest.fn().mockResolvedValue({
+                data: () => ({ fullName: 'Lender One' }),
+              }),
+            })),
+          };
+        }
+
+        return {
+          where: jest.fn(() => ({
+            get: jest.fn().mockResolvedValue({ docs: [] }),
+          })),
+        };
       }),
     };
-    const service = new DashboardService(
-      { getDb: () => db } as any,
-      summary as any,
-    );
+    const service = new DashboardService({ getDb: () => db } as any);
+
+    jest
+      .spyOn(service as any, 'getTotalBorrowersFromRelations')
+      .mockResolvedValue(5);
+    jest
+      .spyOn(service as any, 'getTodaysPaymentsCollection')
+      .mockResolvedValue(27500);
+    jest
+      .spyOn(service as any, 'getOverduePaymentsCount')
+      .mockResolvedValue(2);
+    jest.spyOn(service as any, 'getActiveAdsCount').mockResolvedValue(3);
 
     const result = await service.getSummary('lender_1');
 
     expect(result.summary).toEqual({
+      lenderName: 'Lender One',
       totalBorrowers: 5,
       todaysCollection: 27500,
       overduePayments: 2,
@@ -56,7 +66,7 @@ describe('DashboardService', () => {
         })),
       })),
     };
-    const service = new DashboardService({ getDb: () => db } as any, {} as any);
+    const service = new DashboardService({ getDb: () => db } as any);
 
     jest.spyOn(service as any, 'getRecentBorrowers').mockResolvedValue({
       borrowers: [
@@ -97,7 +107,7 @@ describe('DashboardService', () => {
   });
 
   it('maps schema-v2 roles and nested borrower credit score', () => {
-    const service = new DashboardService({} as any, {} as any);
+    const service = new DashboardService({} as any);
     const result = (service as any).mapBorrower(
       'borrower_1',
       {
