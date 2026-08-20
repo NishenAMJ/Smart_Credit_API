@@ -44,13 +44,6 @@ const AD_MENU = [
     color: COLORS.primary,
     bg: "#EBF4FF",
   },
-  {
-    icon: "bar-chart-2",
-    label: "Ad Analytics",
-    screen: "AdSummaryAnalytics",
-    color: COLORS.success,
-    bg: "#ECFDF5",
-  },
 ];
 
 // ── Main Component ────────────────────────────────────────

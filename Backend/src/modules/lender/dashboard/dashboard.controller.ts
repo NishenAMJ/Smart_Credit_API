@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Controller,
   DefaultValuePipe,
   Get,
@@ -25,6 +24,8 @@ import {
 } from './dashboard.types';
 
 @Controller('dashboard')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
 export class DashboardController {
   constructor(
     private readonly dashboardService: DashboardService,
@@ -33,36 +34,26 @@ export class DashboardController {
 
   @Get('summary')
   getSummary(
-    @Query('lenderId') lenderId: string | undefined,
+    @Req() request: AuthenticatedRequest,
   ): Promise<DashboardSummaryResponse> {
-    if (!lenderId?.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
-    return this.dashboardService.getSummary(lenderId.trim());
+    return this.dashboardService.getSummary(request.user.sub);
   }
 
   @Get('borrowers')
   getBorrowers(
-    @Query('lenderId') lenderId: string | undefined,
+    @Req() request: AuthenticatedRequest,
     @Query('pageSize', new DefaultValuePipe(8), ParseIntPipe) pageSize: number,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ): Promise<DashboardBorrowersResponse> {
-    if (!lenderId?.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     return this.dashboardService.getBorrowers(
-      lenderId.trim(),
+      request.user.sub,
       Number.isFinite(Number(limit)) ? Number(limit) : pageSize,
       cursor?.trim() || null,
     );
   }
 
   @Get('borrowers/export')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('lender')
   async exportBorrowers(
     @Req() req: AuthenticatedRequest,
     @Res({ passthrough: true }) response: Response,
@@ -86,15 +77,11 @@ export class DashboardController {
 
   @Get('borrowers/:id')
   async getBorrowerDetails(
+    @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
-    @Query('lenderId') lenderId: string | undefined,
   ): Promise<BorrowerDetailsResponse> {
-    if (!lenderId?.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     const borrower = await this.dashboardService.getBorrowerDetails(
-      lenderId.trim(),
+      request.user.sub,
       id,
     );
 

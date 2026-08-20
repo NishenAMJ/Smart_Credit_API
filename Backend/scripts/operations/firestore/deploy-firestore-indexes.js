@@ -5,7 +5,13 @@ const path = require('path');
 
 const { initializeFirebase } = require('../../shared/firebase');
 
-const manifestPath = path.resolve(__dirname, 'firestore.indexes.json');
+// Keep one tracked source of truth so fresh clones deploy the same indexes as
+// Firebase CLI. The old colocated manifest was gitignored and could silently
+// be missing for other developers.
+const manifestPath = path.resolve(
+  __dirname,
+  '../../../../firestore.indexes.json',
+);
 const checkOnly = process.argv.includes('--check');
 
 function normalizeFields(fields) {

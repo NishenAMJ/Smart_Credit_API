@@ -13,22 +13,22 @@ export class ScanPaymentSlipDto {
    * Loan ID extracted or confirmed from QR data
    */
   @IsString()
-  @IsNotEmpty()
-  loanId: string;
+  @IsOptional()
+  loanId?: string;
 
   /**
    * Borrower ID making the payment
    */
   @IsString()
-  @IsNotEmpty()
-  borrowerId: string;
+  @IsOptional()
+  borrowerId?: string;
 
   /**
    * Payment amount from the slip
    */
   @IsNumber()
-  @IsNotEmpty()
-  amount: number;
+  @IsOptional()
+  amount?: number;
 
   /**
    * Optional reference number from payment slip

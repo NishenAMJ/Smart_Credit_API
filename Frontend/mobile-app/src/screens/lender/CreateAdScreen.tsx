@@ -8,7 +8,6 @@ import { commonStyles, COLORS } from '../../styles/lender.styles';
 import { AdService } from '../../services/advertisement.service';
 
 const PURPOSES  = ['education', 'business', 'medical', 'personal', 'vehicle', 'home'];
-const LOCATIONS = ['Colombo', 'Kandy', 'Galle', 'Negombo', 'Kurunegala', 'Jaffna'];
 
 export default function CreateAdScreen({ navigation }: any) {
   const [loading,     setLoading]     = useState(false);
@@ -19,9 +18,7 @@ export default function CreateAdScreen({ navigation }: any) {
   const [rate,        setRate]        = useState('');
   const [minTenure,   setMinTenure]   = useState('');
   const [maxTenure,   setMaxTenure]   = useState('');
-  const [capital,     setCapital]     = useState('');
   const [responseHrs, setResponseHrs] = useState('');
-  const [location,    setLocation]    = useState('Colombo');
   const [purposes,    setPurposes]    = useState<string[]>([]);
 
   const togglePurpose = (p: string) => {
@@ -51,25 +48,19 @@ export default function CreateAdScreen({ navigation }: any) {
       return;
     }
 
-    // Expiry date — 6 months from now
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 6);
-
     try {
       setLoading(true);
       await AdService.createAd({
-        title,
-        description,
-        minAmount:             Number(minAmount),
-        maxAmount:             Number(maxAmount),
-        preferredInterestRate: Number(rate),
-        minTenureMonths:       Number(minTenure) || 6,
-        maxTenureMonths:       Number(maxTenure) || 12,
-        availableCapital:      Number(capital) || 0,
-        responseTimeHours:     Number(responseHrs) || 24,
-        location,
-        preferredPurposes:     purposes,
-        expiresAt:             expiresAt.toISOString(),
+        headline: title,
+        supportNote: description,
+        minAmount: Number(minAmount),
+        maxAmount: Number(maxAmount),
+        interestRate: Number(rate),
+        tenureMonths: Number(maxTenure) || Number(minTenure) || 12,
+        borrowerFocus: purposes.join(", "),
+        processingTime: `Reviewed within ${Number(responseHrs) || 24} hours`,
+        repaymentStyle: "Monthly installments",
+        requirements: "Approved KYC and verified supporting documents",
       });
 
       Alert.alert('Success', 'Ad created successfully!', [
@@ -190,18 +181,8 @@ export default function CreateAdScreen({ navigation }: any) {
           </View>
         </View>
 
-        <Text style={commonStyles.sectionTitle}>Availability</Text>
+        <Text style={commonStyles.sectionTitle}>Review timing</Text>
         <View style={commonStyles.card}>
-          <Text style={commonStyles.textPrimary}>Available Capital (LKR)</Text>
-          <TextInput
-            value={capital}
-            onChangeText={setCapital}
-            keyboardType="numeric"
-            placeholder="1000000"
-            style={[commonStyles.input, { marginBottom: 12 }]}
-            placeholderTextColor={COLORS.textSecondary}
-          />
-
           <Text style={commonStyles.textPrimary}>Response Time (hours)</Text>
           <TextInput
             value={responseHrs}
@@ -211,28 +192,6 @@ export default function CreateAdScreen({ navigation }: any) {
             style={commonStyles.input}
             placeholderTextColor={COLORS.textSecondary}
           />
-        </View>
-
-        <Text style={commonStyles.sectionTitle}>Location</Text>
-        <View style={commonStyles.card}>
-          {LOCATIONS.map((loc) => (
-            <TouchableOpacity
-              key={loc}
-              style={[commonStyles.row, { paddingVertical: 8 }]}
-              onPress={() => setLocation(loc)}
-            >
-              <View style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                borderWidth: 2,
-                borderColor: COLORS.primary,
-                backgroundColor: location === loc ? COLORS.primary : 'transparent',
-                marginRight: 8,
-              }} />
-              <Text style={commonStyles.textPrimary}>{loc}</Text>
-            </TouchableOpacity>
-          ))}
         </View>
 
         <Text style={commonStyles.sectionTitle}>Loan Purposes</Text>

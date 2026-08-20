@@ -18,13 +18,13 @@ export interface LenderProfileResponse {
 }
 
 export interface UpdateLenderProfileInput {
-  fullName: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  district: string;
-  businessName: string;
-  responseTimeHours: number;
-  preferredRegions: string[];
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  businessName?: string;
+  responseTimeHours?: number;
+  preferredRegions?: string[];
 }

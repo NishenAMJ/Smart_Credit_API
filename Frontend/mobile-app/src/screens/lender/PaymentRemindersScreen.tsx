@@ -7,17 +7,16 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader, AlertBanner } from "../../components/lender";
 import { PaymentRemindersService } from "../../services/lender.service";
 
-type TabType = "pending" | "sent" | "paid";
+type TabType = "overdue" | "due" | "scheduled";
 
 export default function PaymentRemindersScreen({ navigation }: any) {
-  const [activeTab, setActiveTab] = useState<TabType>("pending");
+  const [activeTab, setActiveTab] = useState<TabType>("overdue");
   const [reminders, setReminders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,17 +38,17 @@ export default function PaymentRemindersScreen({ navigation }: any) {
   }, []);
 
   const filtered = reminders.filter(
-    (r) => (r.status ?? "pending") === activeTab,
+    (r) => (r.status ?? "scheduled") === activeTab,
   );
 
   const getStatusIcon = (s: string) => {
     switch (s) {
-      case "pending":
+      case "scheduled":
         return "clock";
-      case "sent":
-        return "send";
-      case "paid":
-        return "check-circle";
+      case "due":
+        return "calendar";
+      case "overdue":
+        return "alert-circle";
       default:
         return "info";
     }
@@ -90,7 +89,7 @@ export default function PaymentRemindersScreen({ navigation }: any) {
         {error && <AlertBanner type="error" title="Error" message={error} />}
 
         <View style={styles.tabBar}>
-          {(["pending", "sent", "paid"] as const).map((tab) => (
+          {(["overdue", "due", "scheduled"] as const).map((tab) => (
             <TouchableOpacity
               key={tab}
               style={[styles.tab, activeTab === tab && styles.tabActive]}
@@ -127,7 +126,7 @@ export default function PaymentRemindersScreen({ navigation }: any) {
                   </Text>
                 </View>
                 <Feather
-                  name={getStatusIcon(reminder.status ?? "pending")}
+                  name={getStatusIcon(reminder.status ?? "scheduled")}
                   size={20}
                   color={COLORS.primary}
                 />
@@ -150,20 +149,6 @@ export default function PaymentRemindersScreen({ navigation }: any) {
                 </View>
               </View>
 
-              {(reminder.status ?? "pending") === "pending" && (
-                <TouchableOpacity
-                  style={[commonStyles.primaryButton, { marginTop: 12 }]}
-                  onPress={() =>
-                    Alert.alert(
-                      "Reminder",
-                      `Reminder sent to ${reminder.borrowerName ?? "borrower"}`,
-                    )
-                  }
-                >
-                  <Feather name="send" size={16} color="#fff" />
-                  <Text style={commonStyles.buttonText}>Send Reminder</Text>
-                </TouchableOpacity>
-              )}
             </View>
           ))
         )}

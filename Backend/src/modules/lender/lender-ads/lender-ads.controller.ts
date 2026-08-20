@@ -3,6 +3,8 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -30,6 +32,10 @@ type CreateLenderAdBody = {
   repaymentStyle?: string;
   requirements?: string;
   supportNote?: string;
+};
+
+type UpdateLenderAdBody = Partial<CreateLenderAdBody> & {
+  status?: string;
 };
 
 @Controller('lender-ads')
@@ -63,6 +69,53 @@ export class LenderAdsController {
       cursor?.trim() || null,
       status?.trim() || null,
     );
+  }
+
+  @Patch(':adId')
+  updateAd(
+    @Req() request: AuthenticatedRequest,
+    @Param('adId') adId: string,
+    @Body() body: UpdateLenderAdBody,
+  ): Promise<LenderAdResponse> {
+    return this.lenderAdsService.updateAd(
+      request.user.sub,
+      adId,
+      this.toUpdateInput(body),
+    );
+  }
+
+  private toUpdateInput(body: UpdateLenderAdBody) {
+    return {
+      headline:
+        typeof body.headline === 'string' ? body.headline : undefined,
+      minAmount: this.toOptionalBodyNumber(body.minAmount, 'minAmount'),
+      maxAmount: this.toOptionalBodyNumber(body.maxAmount, 'maxAmount'),
+      interestRate: this.toOptionalBodyNumber(
+        body.interestRate,
+        'interestRate',
+      ),
+      tenureMonths: this.toOptionalBodyNumber(
+        body.tenureMonths,
+        'tenureMonths',
+      ),
+      borrowerFocus:
+        typeof body.borrowerFocus === 'string'
+          ? body.borrowerFocus
+          : undefined,
+      processingTime:
+        typeof body.processingTime === 'string'
+          ? body.processingTime
+          : undefined,
+      repaymentStyle:
+        typeof body.repaymentStyle === 'string'
+          ? body.repaymentStyle
+          : undefined,
+      requirements:
+        typeof body.requirements === 'string' ? body.requirements : undefined,
+      supportNote:
+        typeof body.supportNote === 'string' ? body.supportNote : undefined,
+      status: typeof body.status === 'string' ? body.status : undefined,
+    };
   }
 
   private toCreateInput(body: CreateLenderAdBody): CreateLenderAdInput {
@@ -107,5 +160,13 @@ export class LenderAdsController {
 
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+
+  private toOptionalBodyNumber(
+    value: number | string | undefined,
+    fieldName: string,
+  ): number | undefined {
+    return value === undefined ? undefined : this.toNumber(value, fieldName);
   }
 }

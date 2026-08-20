@@ -16,7 +16,7 @@ import { AdService } from "../../services/advertisement.service";
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
   active:   { bg: "#D1F9E6", color: "#065F46", label: "Active"   },
   paused:   { bg: "#FEF3C7", color: "#92400E", label: "Paused"   },
-  pending:  { bg: "#EFF6FF", color: "#1D4ED8", label: "Pending ⏳" },
+  pending_review: { bg: "#EFF6FF", color: "#1D4ED8", label: "Pending review" },
   rejected: { bg: "#FEF2F2", color: "#991B1B", label: "Rejected ❌" },
   expired:  { bg: "#F3F4F6", color: "#6B7280", label: "Expired"  },
 };
@@ -35,7 +35,7 @@ export default function MyAdsScreen({ navigation }: any) {
     try {
       setLoading(true);
       const data = await AdService.getMyAds();
-      setAds(data);
+      setAds(data?.ads ?? []);
     } catch (e: any) {
       Alert.alert("Error", e?.response?.data?.message || "Failed to load ads");
     } finally {
@@ -61,25 +61,7 @@ export default function MyAdsScreen({ navigation }: any) {
     }
   };
 
-  const handleDelete = (adId: string) => {
-    Alert.alert("Delete Ad", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await AdService.deleteAd(adId);
-            loadAds();
-          } catch (e: any) {
-            Alert.alert("Error", e?.response?.data?.message || "Failed to delete ad");
-          }
-        },
-      },
-    ]);
-  };
-
-  const FILTERS = ["all", "active", "pending", "paused", "rejected"];
+  const FILTERS = ["all", "active", "pending_review", "paused", "rejected"];
 
   const filtered = ads.filter((ad: any) => {
     if (filter === "all") return true;
@@ -105,7 +87,7 @@ export default function MyAdsScreen({ navigation }: any) {
               fontSize: 12,
               color: filter === f ? "#fff" : COLORS.textPrimary,
             }}>
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f.replace("_", " ").replace(/^./, (c) => c.toUpperCase())}
             </Text>
           </TouchableOpacity>
         ))}
@@ -115,7 +97,7 @@ export default function MyAdsScreen({ navigation }: any) {
 
   const renderAd = ({ item }: any) => {
     const statusCfg = STATUS_STYLE[item.status] ?? STATUS_STYLE.active;
-    const isPending  = item.status === "pending";
+    const isPending  = item.status === "pending_review";
     const isRejected = item.status === "rejected";
     const isActive   = item.status === "active";
 
@@ -133,11 +115,6 @@ export default function MyAdsScreen({ navigation }: any) {
             </Text>
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            {item.isBoosted && (
-              <Text style={{ fontSize: 11, fontWeight: "600", color: COLORS.warning, marginBottom: 4 }}>
-                ⚡ Boosted
-              </Text>
-            )}
             <Text style={{
               fontSize: 11,
               fontWeight: "700",
@@ -205,15 +182,11 @@ export default function MyAdsScreen({ navigation }: any) {
 
         <View style={commonStyles.spacer12} />
 
-        {/* ── Stats ── */}
+        {/* ── Activity ── */}
         <View style={commonStyles.rowSpaceBetween}>
           <View>
-            <Text style={commonStyles.textSmall}>Views</Text>
-            <Text style={commonStyles.textPrimary}>{item.views}</Text>
-          </View>
-          <View>
-            <Text style={commonStyles.textSmall}>Clicks</Text>
-            <Text style={commonStyles.textPrimary}>{item.clicks}</Text>
+            <Text style={commonStyles.textSmall}>Funded loans</Text>
+            <Text style={commonStyles.textPrimary}>{item.fundedLoansCount ?? 0}</Text>
           </View>
           <View>
             <Text style={commonStyles.textSmall}>Applications</Text>
@@ -234,25 +207,6 @@ export default function MyAdsScreen({ navigation }: any) {
             <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>Edit</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => navigation.navigate("AdAnalytics", { adId: item.adId })}
-            style={{ flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.border }}
-          >
-            <Feather name="bar-chart-2" size={16} color={COLORS.textPrimary} />
-            <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>Stats</Text>
-          </TouchableOpacity>
-
-          {/* Boost only available for active ads */}
-          {isActive && (
-            <TouchableOpacity
-              onPress={() => navigation.navigate("BoostAd", { ad: item })}
-              style={{ flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.border }}
-            >
-              <Feather name="trending-up" size={16} color={COLORS.textPrimary} />
-              <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>Boost</Text>
-            </TouchableOpacity>
-          )}
-
           {/* Pause/Resume only for active or paused ads */}
           {(isActive || item.status === "paused") && (
             <TouchableOpacity
@@ -271,25 +225,6 @@ export default function MyAdsScreen({ navigation }: any) {
           )}
 
         </View>
-
-        {/* ── Delete ── */}
-        <TouchableOpacity
-          onPress={() => handleDelete(item.adId)}
-          style={{
-            marginTop: 8,
-            paddingVertical: 9,
-            borderRadius: 8,
-            backgroundColor: "#FEF2F2",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Feather name="trash-2" size={14} color={COLORS.danger} />
-          <Text style={{ marginLeft: 6, color: COLORS.danger, fontWeight: "600", fontSize: 13 }}>
-            Delete
-          </Text>
-        </TouchableOpacity>
 
       </View>
     );

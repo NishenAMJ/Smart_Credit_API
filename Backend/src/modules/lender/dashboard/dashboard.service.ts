@@ -3,12 +3,9 @@ import {
   DocumentData,
   Firestore,
   QueryDocumentSnapshot,
-  Query,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import {
-  buildPageInfo,
-  decodeCursor,
   hasRole,
   readDate,
   readNumber,
@@ -19,8 +16,6 @@ import {
   getLoanAmount,
   getLoanCreatedAt,
   getNormalizedInstallment,
-  getPaymentAmount,
-  getPaymentCreatedAt,
   isActiveAd,
 } from '../../../firebase/firestore-seed.utils';
 import {
@@ -31,6 +26,12 @@ import {
   CursorPageInfo,
   DashboardSummaryResponse,
 } from './dashboard.types';
+import {
+  borrowerMatchesSearch,
+  createEmptyPageInfo,
+  normalizeBorrowerSearch,
+  paginateBorrowerItems,
+} from './dashboard-borrower-query.utils';
 
 type DashboardLoanRecord = {
   id: string;
@@ -41,11 +42,6 @@ type DashboardLoanRecord = {
   tenureMonths: number;
   status: string;
   createdAt: Date | null;
-};
-
-type DashboardBorrowerPageItem = DashboardBorrower & {
-  cursorDate: Date | null;
-  cursorId: string;
 };
 
 function isDashboardBorrower(
@@ -66,7 +62,7 @@ export class DashboardService {
     const [userSnapshot, totalBorrowers, todaysCollection, overduePayments, activeAds] =
       await Promise.all([
         db.collection('users').doc(lenderId).get(),
-        this.getTotalBorrowersFromRelations(db, lenderId),
+        this.getTotalBorrowersFromLoans(db, lenderId),
         this.getTodaysPaymentsCollection(db, lenderId),
         this.getOverduePaymentsCount(db, lenderId),
         this.getActiveAdsCount(db, lenderId),
@@ -103,21 +99,6 @@ export class DashboardService {
   ): Promise<DashboardBorrowersResponse> {
     const db = this.firebaseService.getDb();
     const safePageSize = this.clamp(pageSize, 8, 50);
-
-    const relationBorrowers = await this.getBorrowersFromRelations(
-      db,
-      lenderId,
-      safePageSize,
-      cursor,
-      search,
-    );
-
-    if (relationBorrowers) {
-      return {
-        ...relationBorrowers,
-        generatedAt: new Date().toISOString(),
-      };
-    }
 
     const lenderLoansSnapshot = await db
       .collection('loans')
@@ -269,18 +250,19 @@ export class DashboardService {
     }
   }
 
-  private async getTotalBorrowersFromRelations(
+  private async getTotalBorrowersFromLoans(
     db: Firestore,
     lenderId: string,
   ): Promise<number> {
-    const query = db
-      .collection('lenderBorrowers')
-      .where('lenderId', '==', lenderId);
-
-    return this.getCountWithFallback('lender-borrowers', query, async () => {
-      const snapshot = await query.get();
-      return snapshot.size;
-    });
+    const snapshot = await db
+      .collection('loans')
+      .where('lenderId', '==', lenderId)
+      .get();
+    return new Set(
+      snapshot.docs
+        .map((doc) => readString(doc.get('borrowerId')))
+        .filter((id): id is string => Boolean(id)),
+    ).size;
   }
 
   private async getOverduePaymentsCount(
@@ -334,15 +316,16 @@ export class DashboardService {
 
     try {
       const snapshot = await db
-        .collectionGroup('payments')
+        .collection('transactions')
         .where('lenderId', '==', lenderId)
-        .where('paidAt', '>=', start)
-        .where('paidAt', '<', end)
-        .orderBy('paidAt', 'desc')
+        .where('type', '==', 'repayment')
+        .where('status', '==', 'completed')
+        .where('createdAt', '>=', start)
+        .where('createdAt', '<', end)
         .get();
 
       return snapshot.docs.reduce(
-        (total, doc) => total + getPaymentAmount(doc.data()),
+        (total, doc) => total + readNumber(doc.get('amountMinor')) / 100,
         0,
       );
     } catch (error) {
@@ -352,16 +335,22 @@ export class DashboardService {
         error,
       );
 
-      const loansSnapshot = await db
-        .collection('loans')
+      const snapshot = await db
+        .collection('transactions')
         .where('lenderId', '==', lenderId)
         .get();
-
-      return this.sumNestedPaymentsForDateRange(
-        db,
-        loansSnapshot.docs.map((doc) => doc.id),
-        { start, end },
-      );
+      return snapshot.docs.reduce((total, doc) => {
+        const createdAt = readDate(doc.get('createdAt'));
+        const isRepayment = readString(doc.get('type')) === 'repayment';
+        const isCompleted = readString(doc.get('status')) === 'completed';
+        return createdAt &&
+          createdAt >= start &&
+          createdAt < end &&
+          isRepayment &&
+          isCompleted
+          ? total + readNumber(doc.get('amountMinor')) / 100
+          : total;
+      }, 0);
     }
   }
 
@@ -385,14 +374,14 @@ export class DashboardService {
     borrowers: DashboardBorrower[];
     pageInfo: CursorPageInfo;
   }> {
-    const searchTerm = this.normalizeBorrowerSearch(search);
+    const searchTerm = normalizeBorrowerSearch(search);
     const borrowerLoanMap = this.groupLoansByBorrower(loans);
     const borrowerIds = Array.from(borrowerLoanMap.keys());
 
     if (borrowerIds.length === 0) {
       return {
         borrowers: [],
-        pageInfo: this.createEmptyPageInfo(pageSize),
+        pageInfo: createEmptyPageInfo(pageSize),
       };
     }
 
@@ -412,7 +401,7 @@ export class DashboardService {
       .filter(isDashboardBorrower)
       .filter(
         (borrower) =>
-          !searchTerm || this.borrowerMatchesSearch(borrower, searchTerm),
+          !searchTerm || borrowerMatchesSearch(borrower, searchTerm),
       )
       .sort((left, right) => {
         const leftTime = left.latestLoanCreatedAt
@@ -432,229 +421,7 @@ export class DashboardService {
         cursorId: borrower.id,
       }));
 
-    return this.paginateBorrowerItems(borrowers, pageSize, cursor);
-  }
-
-  private async getBorrowersFromRelations(
-    db: Firestore,
-    lenderId: string,
-    pageSize: number,
-    cursor?: string | null,
-    search?: string | null,
-  ): Promise<{
-    borrowers: DashboardBorrower[];
-    pageInfo: CursorPageInfo;
-  } | null> {
-    try {
-      const searchTerm = this.normalizeBorrowerSearch(search);
-      const snapshot = await db
-        .collection('lenderBorrowers')
-        .where('lenderId', '==', lenderId)
-        .get();
-
-      if (snapshot.empty || snapshot.docs.length === 0) {
-        if (searchTerm) {
-          return {
-            borrowers: [],
-            pageInfo: this.createEmptyPageInfo(pageSize),
-          };
-        }
-
-        return null;
-      }
-
-      const borrowerIds: string[] = Array.from(
-        new Set<string>(
-          snapshot.docs
-            .map((doc) => readString(doc.data().borrowerId))
-            .filter((id): id is string => Boolean(id)),
-        ),
-      );
-      const userDataById = await this.getUsersByIds(db, borrowerIds);
-      const borrowers = snapshot.docs
-        .map((doc) => {
-          const mapped = this.mapBorrowerFromRelation(doc.data(), userDataById);
-
-          if (!mapped) {
-            return null;
-          }
-
-          return {
-            ...mapped,
-            cursorDate: readDate(doc.get('latestLoanCreatedAt')),
-            cursorId: doc.id,
-          };
-        })
-        .filter((borrower): borrower is DashboardBorrowerPageItem =>
-          Boolean(borrower),
-        )
-        .filter(
-          (borrower) =>
-            !searchTerm || this.borrowerMatchesSearch(borrower, searchTerm),
-        )
-        .sort((left, right) => {
-          const leftTime = left.cursorDate ? left.cursorDate.getTime() : 0;
-          const rightTime = right.cursorDate ? right.cursorDate.getTime() : 0;
-
-          if (leftTime !== rightTime) {
-            return rightTime - leftTime;
-          }
-
-          return right.cursorId.localeCompare(left.cursorId);
-        });
-
-      return this.paginateBorrowerItems(borrowers, pageSize, cursor);
-    } catch (error) {
-      this.logFallback(
-        'borrowers:lender-relations',
-        'Falling back from lenderBorrowers borrower list query.',
-        error,
-      );
-      return null;
-    }
-  }
-
-  private async getUsersByIds(
-    db: Firestore,
-    borrowerIds: string[],
-  ): Promise<Map<string, DocumentData | undefined>> {
-    if (borrowerIds.length === 0) {
-      return new Map();
-    }
-
-    const userRefs = borrowerIds.map((borrowerId) =>
-      db.collection('users').doc(borrowerId),
-    );
-    const userSnapshots = await db.getAll(...userRefs);
-
-    return new Map(
-      userSnapshots.map((snapshot) => [snapshot.id, snapshot.data()]),
-    );
-  }
-
-  private mapBorrowerFromRelation(
-    relation: DocumentData,
-    userDataById: Map<string, DocumentData | undefined>,
-  ): DashboardBorrower | null {
-    const borrowerId = readString(relation.borrowerId);
-
-    if (!borrowerId) {
-      return null;
-    }
-
-    const userData = userDataById.get(borrowerId);
-    const activeLoansCount = readNumber(
-      relation.activeLoanCount,
-      relation.activeLoansCount,
-    );
-    const totalLoans = readNumber(
-      relation.totalLoans,
-      relation.loanCount,
-      activeLoansCount,
-    );
-    const createdAt =
-      this.toIsoString(relation.latestLoanCreatedAt) ??
-      this.toIsoString(relation.updatedAt) ??
-      this.toIsoString(relation.createdAt);
-
-    return {
-      id: borrowerId,
-      fullName:
-        readString(
-          relation.borrowerName,
-          userData?.fullName,
-          userData?.displayName,
-        ) ?? 'Unnamed borrower',
-      email: readString(userData?.email) ?? 'No email',
-      phone: readString(userData?.phone, relation.borrowerPhone) ?? null,
-      creditScore:
-        typeof userData?.creditScore === 'number' &&
-        Number.isFinite(userData.creditScore)
-          ? userData.creditScore
-          : this.toNullableNumber(relation.borrowerCreditScore),
-      kycStatus:
-        readString(userData?.kycStatus, relation.borrowerKycStatus) ??
-        'not_submitted',
-      loanCount: totalLoans,
-      activeLoansCount,
-      totalBorrowedAmount: readNumber(
-        relation.totalPrincipalAmount,
-        relation.totalBorrowedAmount,
-      ),
-      outstandingAmount: readNumber(
-        relation.outstandingAmount,
-        relation.totalOutstandingAmount,
-      ),
-      latestLoanStatus: readString(relation.latestLoanStatus) ?? 'unknown',
-      latestLoanCreatedAt: createdAt,
-      firstLoanCreatedAt:
-        this.toIsoString(relation.firstLoanCreatedAt) ??
-        this.toIsoString(relation.firstLoanAt) ??
-        this.toIsoString(relation.createdAt),
-      isActive: userData?.isActive !== false,
-      createdAt: this.toIsoString(userData?.createdAt),
-    };
-  }
-
-  private normalizeBorrowerSearch(search?: string | null): string | null {
-    if (typeof search !== 'string') {
-      return null;
-    }
-
-    const normalized = search
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9@._-]+/g, ' ');
-
-    return normalized.length > 0 ? normalized : null;
-  }
-
-  private borrowerMatchesSearch(
-    borrower: DashboardBorrower,
-    searchTerm: string,
-  ): boolean {
-    const searchTerms = searchTerm.split(/\s+/).filter(Boolean);
-    const searchTokens = this.buildBorrowerSearchTokens(borrower);
-
-    return searchTerms.every((term) =>
-      searchTokens.some((token) => token.startsWith(term)),
-    );
-  }
-
-  private buildBorrowerSearchTokens(borrower: DashboardBorrower): string[] {
-    return Array.from(
-      new Set(
-        [borrower.fullName, borrower.email]
-          .flatMap((value) => this.normalizeSearchTokens(value))
-          .filter((token) => token.length > 0),
-      ),
-    );
-  }
-
-  private normalizeSearchTokens(value: string): string[] {
-    return value
-      .trim()
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter(Boolean);
-  }
-
-  private async getCountWithFallback(
-    label: string,
-    query: Query<DocumentData>,
-    fallback: () => Promise<number>,
-  ): Promise<number> {
-    try {
-      const snapshot = await query.count().get();
-      return snapshot.data().count;
-    } catch (error) {
-      this.logFallback(
-        `aggregate:${label}`,
-        `Falling back from aggregate query for ${label}.`,
-        error,
-      );
-      return fallback();
-    }
+    return paginateBorrowerItems(borrowers, pageSize, cursor);
   }
 
   private logFallback(key: string, message: string, error: unknown): void {
@@ -825,114 +592,4 @@ export class DashboardService {
     return values.reduce((total, value) => total + value, 0);
   }
 
-  private paginateBorrowerItems(
-    borrowers: DashboardBorrowerPageItem[],
-    pageSize: number,
-    cursor?: string | null,
-  ): {
-    borrowers: DashboardBorrower[];
-    pageInfo: CursorPageInfo;
-  } {
-    const decodedCursor = decodeCursor(cursor);
-    const startIndex = decodedCursor
-      ? borrowers.findIndex((borrower) =>
-          this.isBorrowerAfterCursor(borrower, decodedCursor),
-        )
-      : 0;
-    const safeStartIndex = startIndex < 0 ? borrowers.length : startIndex;
-    const pagedBorrowers = borrowers.slice(
-      safeStartIndex,
-      safeStartIndex + pageSize + 1,
-    );
-
-    return this.createBorrowerPage(
-      pagedBorrowers.slice(0, pageSize),
-      pageSize,
-      pagedBorrowers.length > pageSize,
-    );
-  }
-
-  private createBorrowerPage(
-    borrowers: DashboardBorrowerPageItem[],
-    pageSize: number,
-    hasMore: boolean,
-  ): {
-    borrowers: DashboardBorrower[];
-    pageInfo: CursorPageInfo;
-  } {
-    return {
-      borrowers: borrowers.map(
-        ({ cursorDate: _cursorDate, cursorId: _cursorId, ...borrower }) =>
-          borrower,
-      ),
-      pageInfo: buildPageInfo(borrowers, pageSize, hasMore),
-    };
-  }
-
-  private createEmptyPageInfo(pageSize: number): CursorPageInfo {
-    return {
-      pageSize,
-      hasMore: false,
-      nextCursor: null,
-    };
-  }
-
-  private isBorrowerAfterCursor(
-    borrower: DashboardBorrowerPageItem,
-    cursor: { date: Date; id: string },
-  ): boolean {
-    const borrowerTime = borrower.cursorDate
-      ? borrower.cursorDate.getTime()
-      : 0;
-    const cursorTime = cursor.date.getTime();
-
-    if (borrowerTime !== cursorTime) {
-      return borrowerTime < cursorTime;
-    }
-
-    return borrower.cursorId.localeCompare(cursor.id) < 0;
-  }
-
-  private async sumNestedPaymentsForDateRange(
-    db: Firestore,
-    loanIds: string[],
-    range: { start: Date; end: Date },
-  ): Promise<number> {
-    const totals = await Promise.all(
-      loanIds.map(async (loanId) => {
-        const installmentsSnapshot = await db
-          .collection('loans')
-          .doc(loanId)
-          .collection('installments')
-          .get();
-
-        const installmentTotals = await Promise.all(
-          installmentsSnapshot.docs.map(async (installmentDoc) => {
-            const paymentsSnapshot = await installmentDoc.ref
-              .collection('payments')
-              .get();
-
-            return paymentsSnapshot.docs.reduce((total, paymentDoc) => {
-              const data = paymentDoc.data();
-              const createdAt = getPaymentCreatedAt(data);
-
-              if (
-                !createdAt ||
-                createdAt < range.start ||
-                createdAt >= range.end
-              ) {
-                return total;
-              }
-
-              return total + getPaymentAmount(data);
-            }, 0);
-          }),
-        );
-
-        return this.sum(installmentTotals);
-      }),
-    );
-
-    return this.sum(totals);
-  }
 }

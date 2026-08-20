@@ -72,18 +72,14 @@ export default function QRScannerScreen({ navigation }: any) {
     try {
       setLoading(true);
 
-      // result.data is the raw string inside the QR code
-      // Your borrower app should encode JSON like:
-      // { borrowerId, name, loanId, offer, amountDue, dueDate }
-      const parsed = JSON.parse(result.data);
-
-      // Validate it's a Smart Credit QR — must have borrowerId
-      if (!parsed.borrowerId || !parsed.loanId) {
+      if (!result.data?.trim()) {
         setScanState("error");
         return;
       }
 
-      setScannedData(parsed);
+      // Borrower payment QR codes contain a signed, short-lived token. The
+      // lender client must not decode or trust financial fields locally.
+      setScannedData({ qrData: result.data });
       setScanState("scanned");
 
     } catch {
@@ -95,7 +91,7 @@ export default function QRScannerScreen({ navigation }: any) {
   };
 
   const handleVerify = () => {
-    navigation.navigate("VerifyPayment", { borrower: scannedData });
+    navigation.navigate("VerifyPayment", { qrData: scannedData.qrData });
   };
 
   const resetScan = () => {
@@ -172,22 +168,18 @@ export default function QRScannerScreen({ navigation }: any) {
           </View>
           <Text style={styles.resultTitle}>QR Code Detected!</Text>
           <Text style={styles.resultSub}>
-            Borrower information retrieved successfully
+            Secure payment token captured successfully
           </Text>
 
           {/* Borrower info card */}
           <View style={styles.resultCard}>
             <View style={styles.resultCardHeader}>
               <View style={styles.resultAvatar}>
-                <Text style={styles.resultAvatarText}>
-                  {scannedData.name?.[0] ?? "?"}
-                </Text>
+                <Feather name="shield" size={22} color={COLORS.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.resultName}>{scannedData.name}</Text>
-                <Text style={styles.resultId}>
-                  ID: {scannedData.borrowerId}
-                </Text>
+                <Text style={styles.resultName}>Smart Credit payment</Text>
+                <Text style={styles.resultId}>Server verification required</Text>
               </View>
               {/* Verified badge */}
               <View style={styles.verifiedBadge}>
@@ -198,14 +190,10 @@ export default function QRScannerScreen({ navigation }: any) {
 
             <View style={styles.resultDivider} />
 
-            <ResultRow label="Loan Reference" value={scannedData.loanId} />
-            <ResultRow label="Loan Offer"     value={scannedData.offer}  />
             <ResultRow
-              label="Amount Due"
-              value={`LKR ${Number(scannedData.amountDue).toLocaleString()}`}
-              highlight
+              label="Security"
+              value="Loan, borrower, amount, expiry and ownership will be checked by the server"
             />
-            <ResultRow label="Due Date" value={scannedData.dueDate} />
           </View>
 
           <View style={styles.resultBtns}>
@@ -802,4 +790,3 @@ const tipStyles = StyleSheet.create({
     flex: 1,
   },
 });
-

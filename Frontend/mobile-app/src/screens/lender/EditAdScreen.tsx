@@ -13,15 +13,6 @@ import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { AdService } from "../../services/advertisement.service";
 
-const LOCATIONS = [
-  "Colombo",
-  "Kandy",
-  "Galle",
-  "Negombo",
-  "Kurunegala",
-  "Jaffna",
-];
-
 export default function EditAdScreen({ route, navigation }: any) {
   const { ad } = route.params;
 
@@ -31,11 +22,7 @@ export default function EditAdScreen({ route, navigation }: any) {
   const [minAmount, setMinAmount] = useState(String(ad.minAmount));
   const [maxAmount, setMaxAmount] = useState(String(ad.maxAmount));
   const [rate, setRate] = useState(String(ad.preferredInterestRate));
-  const [minTenure, setMinTenure] = useState(String(ad.minTenureMonths));
   const [maxTenure, setMaxTenure] = useState(String(ad.maxTenureMonths));
-  const [capital, setCapital] = useState(String(ad.availableCapital));
-  const [responseHrs, setResponseHrs] = useState(String(ad.responseTimeHours));
-  const [location, setLocation] = useState(ad.location);
 
   const handleUpdate = async () => {
     if (Number(minAmount) >= Number(maxAmount)) {
@@ -46,27 +33,15 @@ export default function EditAdScreen({ route, navigation }: any) {
       return;
     }
 
-    if (Number(minTenure) > Number(maxTenure)) {
-      Alert.alert(
-        "Validation Error",
-        "Maximum tenure must be >= minimum tenure",
-      );
-      return;
-    }
-
     try {
       setLoading(true);
       await AdService.updateAd(ad.adId, {
-        title,
-        description,
+        headline: title,
+        supportNote: description,
         minAmount: Number(minAmount),
         maxAmount: Number(maxAmount),
-        preferredInterestRate: Number(rate),
-        minTenureMonths: Number(minTenure),
-        maxTenureMonths: Number(maxTenure),
-        availableCapital: Number(capital),
-        responseTimeHours: Number(responseHrs),
-        location,
+        interestRate: Number(rate),
+        tenureMonths: Number(maxTenure),
       });
 
       Alert.alert("Success", "Ad updated successfully!", [
@@ -149,75 +124,14 @@ export default function EditAdScreen({ route, navigation }: any) {
             placeholderTextColor={COLORS.textSecondary}
           />
 
-          <View style={commonStyles.rowSpaceBetween}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={commonStyles.textPrimary}>Min Tenure (months)</Text>
-              <TextInput
-                value={minTenure}
-                onChangeText={setMinTenure}
-                keyboardType="numeric"
-                style={commonStyles.input}
-                placeholderTextColor={COLORS.textSecondary}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={commonStyles.textPrimary}>Max Tenure (months)</Text>
-              <TextInput
-                value={maxTenure}
-                onChangeText={setMaxTenure}
-                keyboardType="numeric"
-                style={commonStyles.input}
-                placeholderTextColor={COLORS.textSecondary}
-              />
-            </View>
-          </View>
-        </View>
-
-        <Text style={commonStyles.sectionTitle}>Availability</Text>
-        <View style={commonStyles.card}>
-          <Text style={commonStyles.textPrimary}>Available Capital (LKR)</Text>
+          <Text style={commonStyles.textPrimary}>Maximum tenure (months)</Text>
           <TextInput
-            value={capital}
-            onChangeText={setCapital}
-            keyboardType="numeric"
-            style={[commonStyles.input, { marginBottom: 12 }]}
-            placeholderTextColor={COLORS.textSecondary}
-          />
-
-          <Text style={commonStyles.textPrimary}>Response Time (hours)</Text>
-          <TextInput
-            value={responseHrs}
-            onChangeText={setResponseHrs}
+            value={maxTenure}
+            onChangeText={setMaxTenure}
             keyboardType="numeric"
             style={commonStyles.input}
             placeholderTextColor={COLORS.textSecondary}
           />
-        </View>
-
-        {/* ── Location picker (was read-only before — now editable) ── */}
-        <Text style={commonStyles.sectionTitle}>Location</Text>
-        <View style={commonStyles.card}>
-          {LOCATIONS.map((loc) => (
-            <TouchableOpacity
-              key={loc}
-              style={[commonStyles.row, { paddingVertical: 8 }]}
-              onPress={() => setLocation(loc)}
-            >
-              <View
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  borderWidth: 2,
-                  borderColor: COLORS.primary,
-                  backgroundColor:
-                    location === loc ? COLORS.primary : "transparent",
-                  marginRight: 8,
-                }}
-              />
-              <Text style={commonStyles.textPrimary}>{loc}</Text>
-            </TouchableOpacity>
-          ))}
         </View>
 
         <TouchableOpacity

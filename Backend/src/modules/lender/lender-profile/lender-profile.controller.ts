@@ -1,4 +1,8 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import { LenderProfileService } from './lender-profile.service';
 import {
   LenderProfileResponse,
@@ -18,44 +22,39 @@ type UpdateLenderProfileBody = {
 };
 
 @Controller('lender-profile')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
 export class LenderProfileController {
   constructor(private readonly lenderProfileService: LenderProfileService) {}
 
   @Get(':lenderId')
-  getProfile(@Param('lenderId') lenderId: string): Promise<LenderProfileResponse> {
-    if (!lenderId.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
-    return this.lenderProfileService.getProfile(lenderId.trim());
+  getProfile(@Req() request: AuthenticatedRequest): Promise<LenderProfileResponse> {
+    return this.lenderProfileService.getProfile(request.user.sub);
   }
 
   @Patch(':lenderId')
   updateProfile(
-    @Param('lenderId') lenderId: string,
+    @Req() request: AuthenticatedRequest,
+    @Param('lenderId') _lenderId: string,
     @Body() body: UpdateLenderProfileBody,
   ): Promise<LenderProfileResponse> {
-    if (!lenderId.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     return this.lenderProfileService.updateProfile(
-      lenderId.trim(),
+      request.user.sub,
       this.toUpdateInput(body),
     );
   }
 
   private toUpdateInput(body: UpdateLenderProfileBody): UpdateLenderProfileInput {
     return {
-      fullName: typeof body.fullName === 'string' ? body.fullName : '',
-      email: typeof body.email === 'string' ? body.email : '',
-      phone: typeof body.phone === 'string' ? body.phone : '',
-      address: typeof body.address === 'string' ? body.address : '',
-      city: typeof body.city === 'string' ? body.city : '',
-      district: typeof body.district === 'string' ? body.district : '',
+      fullName: typeof body.fullName === 'string' ? body.fullName : undefined,
+      email: typeof body.email === 'string' ? body.email : undefined,
+      phone: typeof body.phone === 'string' ? body.phone : undefined,
+      address: typeof body.address === 'string' ? body.address : undefined,
+      city: typeof body.city === 'string' ? body.city : undefined,
+      district: typeof body.district === 'string' ? body.district : undefined,
       businessName:
-        typeof body.businessName === 'string' ? body.businessName : '',
-      responseTimeHours: this.toNumber(body.responseTimeHours),
+        typeof body.businessName === 'string' ? body.businessName : undefined,
+      responseTimeHours: this.toOptionalNumber(body.responseTimeHours),
       preferredRegions: Array.isArray(body.preferredRegions)
         ? body.preferredRegions.filter(
             (value): value is string => typeof value === 'string',
@@ -65,11 +64,11 @@ export class LenderProfileController {
               .split(',')
               .map((value) => value.trim())
               .filter((value) => value.length > 0)
-          : [],
+          : undefined,
     };
   }
 
-  private toNumber(value: unknown): number {
+  private toOptionalNumber(value: unknown): number | undefined {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return value;
     }
@@ -81,6 +80,6 @@ export class LenderProfileController {
       }
     }
 
-    return 0;
+    return undefined;
   }
 }

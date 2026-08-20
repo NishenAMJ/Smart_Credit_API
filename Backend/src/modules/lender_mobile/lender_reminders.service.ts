@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { FirebaseService } from '../../firebase/firebase.service';
+import {
+  readDate,
+  readNumber,
+  readString,
+} from '../../firebase/firestore-query.utils';
 
 export interface PaymentReminder {
   id: string;
@@ -8,7 +13,7 @@ export interface PaymentReminder {
   borrowerName: string;
   amountDue: number;
   dueDate: string;
-  status: 'pending' | 'sent' | 'paid';
+  status: 'scheduled' | 'due' | 'overdue';
 }
 
 @Injectable()
@@ -39,38 +44,55 @@ export class LenderRemindersService {
       .limit(50)
       .get();
 
+    const borrowerIds = Array.from(
+      new Set(
+        snapshot.docs
+          .map((doc) => readString(doc.get('borrowerId')))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    const borrowerSnapshots = borrowerIds.length
+      ? await db.getAll(
+          ...borrowerIds.map((id) => db.collection('users').doc(id)),
+        )
+      : [];
+    const borrowerNames = new Map(
+      borrowerSnapshots.map((doc) => [
+        doc.id,
+        readString(doc.get('fullName')) ?? 'Unknown borrower',
+      ]),
+    );
     const reminders: PaymentReminder[] = [];
 
     for (const doc of snapshot.docs) {
-      const loan = doc.data();
+      const borrowerId = readString(doc.get('borrowerId')) ?? '';
+      const installments = await doc.ref.collection('installments').get();
 
-      // Check nextInstallmentDue date
-      let dueDate: Date | null = null;
-      if (loan.nextInstallmentDue) {
-        if (loan.nextInstallmentDue?.toDate) {
-          dueDate = loan.nextInstallmentDue.toDate();
-        } else if (typeof loan.nextInstallmentDue === 'string') {
-          dueDate = new Date(loan.nextInstallmentDue);
+      for (const installment of installments.docs) {
+        const installmentStatus =
+          readString(installment.get('status'))?.toLowerCase() ?? 'scheduled';
+        const dueDate = readDate(installment.get('dueAt'));
+        if (
+          !dueDate ||
+          dueDate > thirtyDaysFromNow ||
+          ['paid', 'waived'].includes(installmentStatus)
+        ) {
+          continue;
         }
-      }
-
-      if (!dueDate) continue;
-
-      // Only include if due within 30 days or already overdue
-      if (dueDate <= thirtyDaysFromNow) {
-        const isPaid = loan.status === 'paid';
-        const isPastDue = dueDate < now;
 
         reminders.push({
-          id: doc.id,
+          id: `${doc.id}_${installment.id}`,
           loanId: doc.id,
-          borrowerId: loan.borrowerId ?? '',
-          borrowerName: loan.borrowerName ?? 'Unknown',
-          amountDue: Number(
-            loan.nextInstallmentAmount ?? loan.monthlyInstallment ?? 0,
-          ),
+          borrowerId,
+          borrowerName: borrowerNames.get(borrowerId) ?? 'Unknown borrower',
+          amountDue: readNumber(installment.get('amountDueMinor')) / 100,
           dueDate: dueDate.toISOString(),
-          status: isPaid ? 'paid' : isPastDue ? 'pending' : 'pending',
+          status:
+            installmentStatus === 'overdue' || dueDate < now
+              ? 'overdue'
+              : installmentStatus === 'due'
+                ? 'due'
+                : 'scheduled',
         });
       }
     }

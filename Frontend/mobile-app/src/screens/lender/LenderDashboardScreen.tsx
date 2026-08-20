@@ -292,12 +292,6 @@ export default function LenderDashboardScreen({ navigation }: any) {
             label="Agreements"
             onPress={() => navigation.navigate("AgreementsList")}
           />
-          <LenderActionItem
-            icon="bar-chart-2"
-            iconColor={COLORS.success}
-            label="Ad Analytics"
-            onPress={() => navigation.navigate("AdSummaryAnalytics")}
-          />
         </View>
 
         <View style={commonStyles.spacer32} />
