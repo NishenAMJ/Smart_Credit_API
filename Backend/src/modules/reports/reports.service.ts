@@ -334,8 +334,10 @@ export class ReportsService {
         totalUsers,
         totalLoans,
         activeDisputesOpen,
-        activeDisputesInProgress,
+        activeDisputesUnderReview,
+        activeDisputesAwaitingResponse,
         activeDisputesEscalated,
+        activeDisputesLegacyInProgress,
         newUsersToday,
         loansCreatedToday,
         disputesResolvedToday,
@@ -349,10 +351,17 @@ export class ReportsService {
         this.getCount(db.collection('loans')),
         this.getCount(db.collection('disputes').where('status', '==', 'open')),
         this.getCount(
-          db.collection('disputes').where('status', '==', 'in-progress'),
+          db.collection('disputes').where('status', '==', 'under_review'),
+        ),
+        this.getCount(
+          db.collection('disputes').where('status', '==', 'awaiting_response'),
         ),
         this.getCount(
           db.collection('disputes').where('status', '==', 'escalated'),
+        ),
+        // Keep legacy cases visible until the dispute migration is applied.
+        this.getCount(
+          db.collection('disputes').where('status', '==', 'in-progress'),
         ),
         this.getCount(db.collection('users').where('createdAt', '>=', today)),
         this.getCount(
@@ -378,7 +387,11 @@ export class ReportsService {
       ]);
 
       const activeDisputes =
-        activeDisputesOpen + activeDisputesInProgress + activeDisputesEscalated;
+        activeDisputesOpen +
+        activeDisputesUnderReview +
+        activeDisputesAwaitingResponse +
+        activeDisputesEscalated +
+        activeDisputesLegacyInProgress;
       let transactionsToday = 0;
       let totalRevenue = 0;
 

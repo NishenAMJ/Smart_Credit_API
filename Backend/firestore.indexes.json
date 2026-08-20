@@ -351,6 +351,55 @@
         { "fieldPath": "borrowerId", "order": "ASCENDING" },
         { "fieldPath": "calculatedAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "disputes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "complainantId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "disputes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "respondentId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "disputes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "disputes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assignedAdminId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "disputes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "resolution.reopenUntil", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "disputeId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -84,11 +84,19 @@ describe('DocumentsService', () => {
       docs: [
         {
           id: 'doc-1',
-          data: () => ({ userId: 'user-1', category: 'kyc', status: 'pending_review' }),
+          data: () => ({
+            userId: 'user-1',
+            category: 'kyc',
+            status: 'pending_review',
+          }),
         },
         {
           id: 'doc-2',
-          data: () => ({ userId: 'user-1', category: 'kyc', status: 'deleted' }),
+          data: () => ({
+            userId: 'user-1',
+            category: 'kyc',
+            status: 'deleted',
+          }),
         },
       ],
     });
@@ -109,11 +117,19 @@ describe('DocumentsService', () => {
       docs: [
         {
           id: 'doc-1',
-          data: () => ({ userId: 'user-1', category: 'kyc', status: 'pending_review' }),
+          data: () => ({
+            userId: 'user-1',
+            category: 'kyc',
+            status: 'pending_review',
+          }),
         },
         {
           id: 'doc-2',
-          data: () => ({ userId: 'user-2', category: 'kyc', status: 'pending_review' }),
+          data: () => ({
+            userId: 'user-2',
+            category: 'kyc',
+            status: 'pending_review',
+          }),
         },
       ],
     });

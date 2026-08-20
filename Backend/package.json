@@ -30,6 +30,8 @@
     "backfill:auth-users": "node scripts/backfill-auth-users.js",
     "migrate:loan-agreements": "node scripts/operations/migrations/migrate-loan-agreements.js",
     "migrate:loan-agreements:apply": "node scripts/operations/migrations/migrate-loan-agreements.js --apply",
+    "migrate:disputes": "node scripts/operations/migrations/migrate-disputes.js",
+    "migrate:disputes:apply": "node scripts/operations/migrations/migrate-disputes.js --apply",
     "create:admin": "node scripts/create-admin-user.js",
     "firestore:indexes:check": "node scripts/operations/firestore/deploy-firestore-indexes.js --check",
     "firestore:indexes:deploy": "node scripts/operations/firestore/deploy-firestore-indexes.js"

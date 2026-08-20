@@ -223,6 +223,67 @@ export interface TransactionDocument {
   createdAt: Timestamp;
 }
 
+export type DisputeStatus =
+  | 'open'
+  | 'under_review'
+  | 'awaiting_response'
+  | 'escalated'
+  | 'resolved'
+  | 'closed';
+
+export interface DisputeDocument {
+  disputeId: string;
+  disputeCode: string;
+  loanId: string;
+  transactionId: string | null;
+  installmentId: string | null;
+  complainantId: string;
+  complainantRole: 'borrower' | 'lender';
+  respondentId: string;
+  respondentRole: 'borrower' | 'lender';
+  borrowerId: string;
+  lenderId: string;
+  borrowerName: string;
+  lenderName: string;
+  category: 'payment' | 'loan_terms' | 'fraud' | 'conduct' | 'other';
+  subject: string;
+  description: string;
+  desiredOutcome: string;
+  disputedAmountMinor: number | null;
+  currency: Currency;
+  evidenceDocumentIds: string[];
+  status: DisputeStatus;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  assignedAdminId: string | null;
+  resolution: {
+    summary: string;
+    recommendedActions: string[];
+    issuedByAdminId: string;
+    issuedAt: Timestamp;
+    reopenUntil: Timestamp;
+  } | null;
+  acknowledgements: Record<string, Timestamp>;
+  reopenCount: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  resolvedAt: Timestamp | null;
+  closedAt: Timestamp | null;
+}
+
+export interface DisputeEventDocument {
+  eventId: string;
+  disputeId: string;
+  type: string;
+  actorUserId: string;
+  actorRole: UserRole | 'system';
+  message: string;
+  documentIds: string[];
+  visibility: 'shared' | 'admin';
+  previousStatus: DisputeStatus | null;
+  nextStatus: DisputeStatus | null;
+  createdAt: Timestamp;
+}
+
 export const installmentIdFor = (sequence: number): string =>
   `month_${String(sequence).padStart(3, '0')}`;
 

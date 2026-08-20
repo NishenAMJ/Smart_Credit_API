@@ -17,6 +17,7 @@ import DailyCollectionPage from "./pages/daily-collection";
 import SettingsPage from "./pages/settings";
 import SmsPage from "./pages/sms";
 import LenderAgreementsPage from "./pages/agreements";
+import LenderDisputesPage from "./pages/disputes";
 import LenderProfileModal from "./components/profile/LenderProfileModal";
 import {
   clearStoredSession,
@@ -124,6 +125,8 @@ function App() {
             initialLoanId={agreementLoanId}
             onInitialLoanHandled={clearAgreementLoanId}
           />
+        ) : activeView === "disputes" ? (
+          <LenderDisputesPage session={session} />
         ) : (
           <section className="dashboard-panel">
             <header className="page-header">

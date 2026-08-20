@@ -42,6 +42,21 @@ export class DocumentsService {
     return this.firebaseService.db.collection('documents');
   }
 
+  async canAccessDisputeEvidence(disputeId: string, userId: string) {
+    const snapshot = await this.firebaseService.db
+      .collection('disputes')
+      .doc(disputeId)
+      .get();
+    if (!snapshot.exists) return false;
+    const dispute = snapshot.data() ?? {};
+    return [
+      dispute.complainantId,
+      dispute.respondentId,
+      dispute.borrowerId,
+      dispute.lenderId,
+    ].includes(userId);
+  }
+
   // Fetches one stored document metadata record by id.
   async getById(documentId: string) {
     try {
@@ -278,7 +293,10 @@ export class DocumentsService {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } catch (error) {
-      rethrowFirebaseError(error, 'Failed to update Cloudinary asset on document record');
+      rethrowFirebaseError(
+        error,
+        'Failed to update Cloudinary asset on document record',
+      );
     }
   }
 
@@ -306,7 +324,10 @@ export class DocumentsService {
 
       return docs[0] ?? null;
     } catch (error) {
-      rethrowFirebaseError(error, 'Failed to fetch document record by related entity');
+      rethrowFirebaseError(
+        error,
+        'Failed to fetch document record by related entity',
+      );
     }
   }
 }

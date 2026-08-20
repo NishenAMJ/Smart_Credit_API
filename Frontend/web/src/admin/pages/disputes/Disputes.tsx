@@ -10,13 +10,23 @@ import {
   ChevronRight,
 } from "lucide-react";
 import {
+  addAdminDisputeComment,
+  assignDispute,
+  changeDisputePriority,
+  closeDispute,
   escalateDispute,
+  getDisputeEvents,
+  getDisputeEvidenceAccess,
+  getDisputeStats,
   getDisputes,
-  resolveDispute,
+  requestDisputeInformation,
+  resolveCanonicalDispute,
   type AdminDispute,
+  type DisputeEvent,
   type DisputePriority,
   type DisputeStatus,
 } from "../../lib/api";
+import { subscribeToAdminDisputes } from "../../lib/dispute-realtime";
 import { formatFirestoreDate } from "../../lib/admin-format";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
@@ -79,9 +89,9 @@ function mapDispute(dispute: AdminDispute): DisputeRow {
       typeof dispute.disputedAmount === "number"
         ? `LKR ${dispute.disputedAmount.toLocaleString()}`
         : "N/A",
-    evidenceUrls: dispute.evidenceUrls || [],
+    evidenceUrls: dispute.evidenceDocumentIds || dispute.evidenceUrls || [],
     createdAt: formatFirestoreDate(dispute.createdAt),
-    resolution: dispute.resolution || "N/A",
+    resolution: dispute.resolution?.summary || "N/A",
     escalationReason: dispute.escalationReason || "N/A",
     notes: dispute.notes || "N/A",
   };
@@ -90,7 +100,8 @@ function mapDispute(dispute: AdminDispute): DisputeRow {
 function StatusBadge({ status }: { status: DisputeStatus }) {
   const className = {
     open: "badge badge-warning",
-    "in-progress": "badge badge-warning",
+    under_review: "badge badge-warning",
+    awaiting_response: "badge badge-warning",
     resolved: "badge badge-success",
     escalated: "badge badge-danger",
     closed: "badge badge-gray",
@@ -139,6 +150,14 @@ export default function Disputes() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [globalCounts, setGlobalCounts] = useState<Record<string, number>>({});
+  const [events, setEvents] = useState<DisputeEvent[]>([]);
+  const [caseMessage, setCaseMessage] = useState("");
+  const [messageVisibility, setMessageVisibility] = useState<
+    "shared" | "admin"
+  >("shared");
+  const [resolutionSummary, setResolutionSummary] = useState("");
+  const [recommendedActions, setRecommendedActions] = useState("");
 
   // Pagination state
   const [pageSize, setPageSize] = useState<number>(10);
@@ -175,14 +194,45 @@ export default function Disputes() {
   }, [loadDisputes]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
+    const refresh = () => {
       const activeCursor =
         currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
       void loadDisputes(activeCursor);
-    }, 10000);
-
-    return () => window.clearInterval(interval);
+      void getDisputeStats().then((response) =>
+        setGlobalCounts(response.stats),
+      );
+    };
+    void getDisputeStats().then((response) => setGlobalCounts(response.stats));
+    return subscribeToAdminDisputes(refresh, refresh);
   }, [currentPage, cursorStack, loadDisputes]);
+
+  useEffect(() => {
+    if (!selectedDispute) {
+      setEvents([]);
+      return;
+    }
+    void getDisputeEvents(selectedDispute.id)
+      .then((response) => setEvents(response.events))
+      .catch((err) =>
+        setError(
+          err instanceof Error ? err.message : "Failed to load timeline.",
+        ),
+      );
+  }, [selectedDispute?.id]);
+
+  useEffect(() => {
+    if (!selectedDispute) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedDispute(null);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [selectedDispute?.id]);
 
   const filteredDisputes = useMemo(() => {
     return disputes.filter((dispute) => {
@@ -228,14 +278,19 @@ export default function Disputes() {
   }
 
   const counts = {
-    all: disputes.length,
-    open: disputes.filter((dispute) => dispute.status === "open").length,
-    inProgress: disputes.filter((dispute) => dispute.status === "in-progress")
-      .length,
-    escalated: disputes.filter((dispute) => dispute.status === "escalated")
-      .length,
-    resolved: disputes.filter((dispute) => dispute.status === "resolved")
-      .length,
+    all: globalCounts.all ?? disputes.length,
+    open:
+      globalCounts.open ??
+      disputes.filter((dispute) => dispute.status === "open").length,
+    inProgress:
+      globalCounts.under_review ??
+      disputes.filter((dispute) => dispute.status === "under_review").length,
+    escalated:
+      globalCounts.escalated ??
+      disputes.filter((dispute) => dispute.status === "escalated").length,
+    resolved:
+      globalCounts.resolved ??
+      disputes.filter((dispute) => dispute.status === "resolved").length,
   };
 
   function syncStatus(
@@ -254,14 +309,113 @@ export default function Disputes() {
   }
 
   async function handleResolve(dispute: DisputeRow) {
-    const resolution = `Resolved by admin for ${dispute.category} dispute`;
+    const resolution = resolutionSummary.trim();
+    if (!resolution) {
+      setError("Enter a resolution summary first.");
+      return;
+    }
 
     try {
-      await resolveDispute(dispute.id, resolution);
+      await resolveCanonicalDispute(
+        dispute.id,
+        resolution,
+        recommendedActions
+          .split("\n")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      );
       syncStatus(dispute.id, "resolved", { resolution });
+      setResolutionSummary("");
+      setRecommendedActions("");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to resolve dispute.",
+      );
+    }
+  }
+
+  async function handleClaim(dispute: DisputeRow) {
+    try {
+      await assignDispute(dispute.id);
+      syncStatus(dispute.id, "under_review");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to claim dispute.");
+    }
+  }
+
+  async function handleReassign(dispute: DisputeRow) {
+    const adminId = window.prompt(
+      "Enter the admin user ID to assign this case to:",
+    );
+    if (!adminId?.trim()) return;
+    try {
+      await assignDispute(dispute.id, adminId.trim());
+      await loadDisputes();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to reassign dispute.",
+      );
+    }
+  }
+
+  async function handlePriority(
+    dispute: DisputeRow,
+    priority: DisputePriority,
+  ) {
+    if (priority === dispute.priority) return;
+    const reason = window.prompt("Reason for changing this case priority:");
+    if (!reason?.trim()) return;
+    try {
+      await changeDisputePriority(dispute.id, priority, reason.trim());
+      syncStatus(dispute.id, dispute.status, { priority });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to change priority.",
+      );
+    }
+  }
+
+  async function handleManualClose(dispute: DisputeRow) {
+    const reason = window.prompt(
+      "Exceptional reason for manually closing this case:",
+    );
+    if (!reason?.trim()) return;
+    try {
+      await closeDispute(dispute.id, reason.trim());
+      syncStatus(dispute.id, "closed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to close dispute.");
+    }
+  }
+
+  async function handleAddMessage(dispute: DisputeRow) {
+    if (!caseMessage.trim()) return;
+    try {
+      await addAdminDisputeComment(
+        dispute.id,
+        caseMessage.trim(),
+        messageVisibility,
+      );
+      setCaseMessage("");
+      const response = await getDisputeEvents(dispute.id);
+      setEvents(response.events);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add message.");
+    }
+  }
+
+  async function handleRequestInfo(dispute: DisputeRow) {
+    if (!caseMessage.trim()) {
+      setError("Enter the information you need first.");
+      return;
+    }
+    try {
+      await requestDisputeInformation(dispute.id, "both", caseMessage.trim());
+      syncStatus(dispute.id, "awaiting_response");
+      setCaseMessage("");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to request information.",
       );
     }
   }
@@ -329,7 +483,7 @@ export default function Disputes() {
             [
               "all",
               "open",
-              "in-progress",
+              "under_review",
               "escalated",
               "resolved",
               "closed",
@@ -409,7 +563,7 @@ export default function Disputes() {
                         <>
                           <button
                             style={S.iconButton("#10B981", "#ECFDF5")}
-                            onClick={() => void handleResolve(dispute)}
+                            onClick={() => setSelectedDispute(dispute)}
                             title="Resolve"
                             aria-label="Resolve dispute"
                           >
@@ -540,11 +694,28 @@ export default function Disputes() {
                 label="Evidence"
                 value={
                   selectedDispute.evidenceUrls.length
-                    ? selectedDispute.evidenceUrls.join(", ")
+                    ? `${selectedDispute.evidenceUrls.length} secure file(s)`
                     : "N/A"
                 }
                 wide
               />
+              {selectedDispute.evidenceUrls.map((documentId) => (
+                <button
+                  key={documentId}
+                  className="btn-secondary btn-sm"
+                  onClick={() =>
+                    void getDisputeEvidenceAccess(documentId).then((response) =>
+                      window.open(
+                        response.accessUrl,
+                        "_blank",
+                        "noopener,noreferrer",
+                      ),
+                    )
+                  }
+                >
+                  Open evidence {documentId.slice(0, 8)}
+                </button>
+              ))}
               {selectedDispute.status === "resolved" &&
                 selectedDispute.resolution !== "N/A" && (
                   <Detail
@@ -563,6 +734,141 @@ export default function Disputes() {
                 )}
             </div>
 
+            <div style={{ marginTop: 20 }}>
+              <h4 style={{ marginBottom: 10 }}>Case timeline</h4>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  maxHeight: 220,
+                  overflowY: "auto",
+                }}
+              >
+                {events.length ? (
+                  events.map((event) => (
+                    <div key={event.id} style={S.detailCard}>
+                      <strong>{event.type.replace(/_/g, " ")}</strong>
+                      <div style={S.mutedLine}>
+                        {event.actorRole} ·{" "}
+                        {formatFirestoreDate(event.createdAt)}
+                      </div>
+                      <div>{event.message}</div>
+                      {event.documentIds.map((documentId) => (
+                        <button
+                          key={documentId}
+                          className="btn-secondary btn-sm"
+                          onClick={() =>
+                            void getDisputeEvidenceAccess(documentId).then(
+                              (response) =>
+                                window.open(
+                                  response.accessUrl,
+                                  "_blank",
+                                  "noopener,noreferrer",
+                                ),
+                            )
+                          }
+                        >
+                          Open attached evidence
+                        </button>
+                      ))}
+                      {event.visibility === "admin" ? (
+                        <small>Private admin note</small>
+                      ) : null}
+                    </div>
+                  ))
+                ) : (
+                  <p style={S.mutedLine}>No timeline entries yet.</p>
+                )}
+              </div>
+            </div>
+
+            {canAct(selectedDispute) && (
+              <div style={{ display: "grid", gap: 10, marginTop: 18 }}>
+                <textarea
+                  className="input"
+                  rows={3}
+                  placeholder="Write a shared response, information request, or internal note..."
+                  value={caseMessage}
+                  onChange={(event) => setCaseMessage(event.target.value)}
+                />
+                <select
+                  className="input"
+                  value={messageVisibility}
+                  onChange={(event) =>
+                    setMessageVisibility(
+                      event.target.value as "shared" | "admin",
+                    )
+                  }
+                >
+                  <option value="shared">Visible to both parties</option>
+                  <option value="admin">Private admin note</option>
+                </select>
+                <div style={S.modalActions}>
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => void handleClaim(selectedDispute)}
+                  >
+                    Claim case
+                  </button>
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => void handleReassign(selectedDispute)}
+                  >
+                    Reassign
+                  </button>
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => void handleAddMessage(selectedDispute)}
+                  >
+                    Add message
+                  </button>
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => void handleRequestInfo(selectedDispute)}
+                  >
+                    Request information
+                  </button>
+                </div>
+                <label>
+                  Priority
+                  <select
+                    className="input"
+                    value={selectedDispute.priority}
+                    onChange={(event) =>
+                      void handlePriority(
+                        selectedDispute,
+                        event.target.value as DisputePriority,
+                      )
+                    }
+                  >
+                    {(["low", "medium", "high", "critical"] as const).map(
+                      (priority) => (
+                        <option key={priority} value={priority}>
+                          {priority}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+                <textarea
+                  className="input"
+                  rows={3}
+                  placeholder="Required resolution summary..."
+                  value={resolutionSummary}
+                  onChange={(event) => setResolutionSummary(event.target.value)}
+                />
+                <textarea
+                  className="input"
+                  rows={3}
+                  placeholder="Recommended actions, one per line"
+                  value={recommendedActions}
+                  onChange={(event) =>
+                    setRecommendedActions(event.target.value)
+                  }
+                />
+              </div>
+            )}
+
             <div style={S.modalActions}>
               {canAct(selectedDispute) && (
                 <>
@@ -577,6 +883,12 @@ export default function Disputes() {
                     onClick={() => void handleEscalate(selectedDispute)}
                   >
                     Escalate
+                  </button>
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => void handleManualClose(selectedDispute)}
+                  >
+                    Manual close
                   </button>
                 </>
               )}
@@ -737,19 +1049,34 @@ const S = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    padding: 16,
+    boxSizing: "border-box",
+    overflow: "hidden",
     zIndex: 1000,
   },
   modal: {
-    width: "min(760px, 92vw)",
+    width: "min(900px, 100%)",
+    maxHeight: "calc(100vh - 32px)",
     background: "#FFFFFF",
     borderRadius: 12,
     padding: 24,
+    boxSizing: "border-box",
+    overflowX: "hidden",
+    overflowY: "auto",
+    overscrollBehavior: "contain",
+    boxShadow: "0 24px 64px rgba(15, 23, 42, 0.28)",
   },
   modalHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    position: "sticky",
+    top: -24,
+    zIndex: 4,
+    margin: "-24px -24px 16px",
+    padding: "20px 24px 16px",
+    background: "#FFFFFF",
+    borderBottom: "1px solid #E5E7EB",
   },
   bigIcon: {
     width: 44,

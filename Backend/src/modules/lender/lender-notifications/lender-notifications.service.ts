@@ -331,6 +331,7 @@ export class LenderNotificationsService {
       'analytics',
       'create-ad',
       'settings',
+      'disputes',
       null,
     ].includes(value as NotificationActionTarget)
       ? (value as NotificationActionTarget)

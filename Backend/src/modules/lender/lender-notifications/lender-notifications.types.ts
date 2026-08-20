@@ -23,6 +23,7 @@ export type NotificationActionTarget =
   | 'analytics'
   | 'create-ad'
   | 'settings'
+  | 'disputes'
   | null;
 
 export type NotificationStateFilter = 'all' | 'unread' | 'read';

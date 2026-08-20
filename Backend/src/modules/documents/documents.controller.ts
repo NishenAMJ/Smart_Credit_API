@@ -52,8 +52,10 @@ export class DocumentsController {
     const userId = req.user.sub;
     const category = body.category;
 
-    if (!['kyc', 'agreement'].includes(category)) {
-      throw new BadRequestException('category must be "kyc" or "agreement".');
+    if (!['kyc', 'agreement', 'dispute_evidence'].includes(category)) {
+      throw new BadRequestException(
+        'category must be "kyc", "agreement", or "dispute_evidence".',
+      );
     }
 
     // Derive a stable publicId from the fileName (strip extension, sanitise).
@@ -151,7 +153,9 @@ export class DocumentsController {
       mimeType: body.mimeType,
       fileHash: body.fileHash,
       source: 'user_upload',
-      relatedEntityType: body.relatedEntityType as DocumentRelatedEntityType | undefined,
+      relatedEntityType: body.relatedEntityType as
+        | DocumentRelatedEntityType
+        | undefined,
       relatedEntityId: body.relatedEntityId,
       displayName: body.displayName,
       uploadedMedia,
@@ -189,10 +193,25 @@ export class DocumentsController {
     }
 
     // Ownership check – admins bypass.
-    if (role !== 'admin' && document.userId !== requesterId) {
-      throw new ForbiddenException(
-        'You do not have access to this document.',
+    let hasDisputeAccess = false;
+    if (
+      role !== 'admin' &&
+      document.category === 'dispute_evidence' &&
+      document.relatedEntityType === 'dispute' &&
+      document.relatedEntityId
+    ) {
+      hasDisputeAccess = await this.documentsService.canAccessDisputeEvidence(
+        document.relatedEntityId,
+        requesterId,
       );
+    }
+
+    if (
+      role !== 'admin' &&
+      document.userId !== requesterId &&
+      !hasDisputeAccess
+    ) {
+      throw new ForbiddenException('You do not have access to this document.');
     }
 
     const expiresAt = new Date(

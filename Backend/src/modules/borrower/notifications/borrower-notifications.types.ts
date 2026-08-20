@@ -2,6 +2,7 @@ export type BorrowerNotificationCategory =
   | 'application'
   | 'payment'
   | 'profile'
+  | 'dispute'
   | 'system';
 
 export type BorrowerNotificationSeverity =
