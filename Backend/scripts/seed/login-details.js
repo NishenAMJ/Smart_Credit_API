@@ -13,6 +13,24 @@ function writeLoginDetails(fixtures, config) {
     __dirname,
     `login-details-${config.batchId}.md`,
   );
+  const mode = config.loginDetailsMode || 'overwrite';
+
+  if (mode === 'if-missing' && fs.existsSync(outputPath)) {
+    console.log(
+      `Login details file already exists; keeping existing file at ${outputPath}.`,
+    );
+    return outputPath;
+  }
+
+  if (mode === 'backup' && fs.existsSync(outputPath)) {
+    const backupPath = `${outputPath}.${new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')}.bak`;
+    fs.copyFileSync(outputPath, backupPath);
+    fs.chmodSync(backupPath, 0o600);
+    console.log(`Backed up previous login details to ${backupPath}.`);
+  }
+
   const header = [
     'Role(s)',
     'User ID',

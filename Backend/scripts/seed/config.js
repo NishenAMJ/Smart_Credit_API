@@ -16,6 +16,7 @@ const DEFAULTS = Object.freeze({
   randomSeed: 'smart-credit-dev',
   batchId: 'bulk_dev',
   ...getSeedProfile(DEFAULT_PROFILE),
+  loginDetailsMode: 'overwrite',
   writeBatchSize: 200,
   writeDelayMs: 100,
   defaultPassword: 'SmartCredit@123',
@@ -53,6 +54,8 @@ function getSeedConfig() {
     ),
     loanCount: integerFromEnv('SEED_LOAN_COUNT', profile.loanCount),
     maxWrites: integerFromEnv('SEED_MAX_WRITES', profile.maxWrites),
+    loginDetailsMode:
+      process.env.SEED_LOGIN_DETAILS_MODE || DEFAULTS.loginDetailsMode,
     writeBatchSize: integerFromEnv(
       'SEED_WRITE_BATCH_SIZE',
       DEFAULTS.writeBatchSize,
@@ -90,6 +93,15 @@ function getSeedConfig() {
   }
   if (config.maxWrites < 1) {
     throw new Error('SEED_MAX_WRITES must be at least 1.');
+  }
+  if (
+    !new Set(['overwrite', 'if-missing', 'backup']).has(
+      config.loginDetailsMode,
+    )
+  ) {
+    throw new Error(
+      'SEED_LOGIN_DETAILS_MODE must be one of: overwrite, if-missing, backup.',
+    );
   }
   if (config.writeBatchSize < 1 || config.writeBatchSize > 500) {
     throw new Error('SEED_WRITE_BATCH_SIZE must be between 1 and 500.');
