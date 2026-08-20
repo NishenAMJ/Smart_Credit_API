@@ -198,7 +198,9 @@
   color: #065f46;
 }
 
-.badge-partially_accepted {
+.badge-partially_accepted,
+.badge-awaiting_disbursement,
+.badge-awaiting_borrower_signature {
   background: #fef3c7;
   color: #92400e;
 }

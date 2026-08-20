@@ -285,7 +285,14 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
 
   for (let index = 1; index <= config.loanCount; index += 1) {
     const suffix = pad(index);
-    const application = fixtures.loanApplications[2 + index - 1];
+    const application = fixtures.loanApplications.find(
+      (item) => item.applicationId === `${prefix}_application_${suffix}`,
+    );
+    if (!application) {
+      throw new Error(
+        `Missing generated application ${prefix}_application_${suffix}.`,
+      );
+    }
     const loanId = `${prefix}_loan_${suffix}`;
     const tenureMonths = application.lenderDecision.approvedTenureMonths;
     const principalMinor = application.lenderDecision.approvedPrincipalMinor;
@@ -297,16 +304,18 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
     const amounts = distribute(totalRepayableMinor, tenureMonths);
     const lifecycle = index % 10;
     const paidCount =
-      lifecycle === 0
-        ? tenureMonths
-        : lifecycle < 3
-          ? 0
-          : Math.min(tenureMonths - 1, index % tenureMonths);
+      index <= 4
+        ? 0
+        : lifecycle === 0
+          ? tenureMonths
+          : lifecycle < 3
+            ? 0
+            : Math.min(tenureMonths - 1, index % tenureMonths);
     const status =
-      lifecycle === 0
-        ? 'completed'
-        : lifecycle === 1
-          ? 'pending_disbursement'
+      index <= 4
+        ? 'pending_disbursement'
+        : lifecycle === 0
+          ? 'completed'
           : lifecycle === 2
             ? 'overdue'
             : 'active';
@@ -366,182 +375,246 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
       });
     if (status !== 'pending_disbursement')
       amounts.forEach((amountDueMinor, installmentIndex) => {
-      const sequence = installmentIndex + 1;
-      const installmentId = `month_${String(sequence).padStart(3, '0')}`;
-      const paid = sequence <= paidCount;
-      const dueAt = addMonths(approvedAt, sequence);
-      const repaymentId = `repayment_${loanId}_${installmentId}`;
-      const installmentStatus = paid
-        ? 'paid'
-        : status === 'overdue' && sequence === paidCount + 1
-          ? 'overdue'
-          : 'scheduled';
-      fixtures.installments.push({
-        installmentId,
-        loanId,
-        lenderId: application.lenderId,
-        borrowerId: application.borrowerId,
-        sequence,
-        currency: 'LKR',
-        amountDueMinor,
-        status: installmentStatus,
-        dueAt,
-        paidTransactionId: paid ? repaymentId : null,
-        paidAt: paid ? dueAt : null,
-        note: paid ? 'Seeded full monthly settlement.' : null,
-        createdAt: approvedAt,
-        updatedAt: referenceDate,
-      });
-      if (paid)
-        fixtures.transactions.push({
-          transactionId: repaymentId,
-          type: 'repayment',
-          status: 'completed',
-          currency: 'LKR',
-          amountMinor: amountDueMinor,
+        const sequence = installmentIndex + 1;
+        const installmentId = `month_${String(sequence).padStart(3, '0')}`;
+        const paid = sequence <= paidCount;
+        const dueAt = addMonths(approvedAt, sequence);
+        const repaymentId = `repayment_${loanId}_${installmentId}`;
+        const installmentStatus = paid
+          ? 'paid'
+          : status === 'overdue' && sequence === paidCount + 1
+            ? 'overdue'
+            : 'scheduled';
+        fixtures.installments.push({
+          installmentId,
+          loanId,
           lenderId: application.lenderId,
           borrowerId: application.borrowerId,
-          loanId,
-          installmentId,
-          listingId: application.listingId,
-          paymentMethod: ['bank_transfer', 'qr', 'cash', 'card'][sequence % 4],
-          externalReference: `SEED-R-${suffix}-${sequence}`,
-          idempotencyKey: repaymentId,
-          receiptDocumentId: null,
-          note: 'Seeded full installment repayment.',
-          initiatedByUserId: application.borrowerId,
-          completedAt: dueAt,
-          createdAt: dueAt,
+          sequence,
+          currency: 'LKR',
+          amountDueMinor,
+          status: installmentStatus,
+          dueAt,
+          paidTransactionId: paid ? repaymentId : null,
+          paidAt: paid ? dueAt : null,
+          note: paid ? 'Seeded full monthly settlement.' : null,
+          createdAt: approvedAt,
+          updatedAt: referenceDate,
         });
+        if (paid)
+          fixtures.transactions.push({
+            transactionId: repaymentId,
+            type: 'repayment',
+            status: 'completed',
+            currency: 'LKR',
+            amountMinor: amountDueMinor,
+            lenderId: application.lenderId,
+            borrowerId: application.borrowerId,
+            loanId,
+            installmentId,
+            listingId: application.listingId,
+            paymentMethod: ['bank_transfer', 'qr', 'cash', 'card'][
+              sequence % 4
+            ],
+            externalReference: `SEED-R-${suffix}-${sequence}`,
+            idempotencyKey: repaymentId,
+            receiptDocumentId: null,
+            note: 'Seeded full installment repayment.',
+            initiatedByUserId: application.borrowerId,
+            completedAt: dueAt,
+            createdAt: dueAt,
+          });
       });
   }
 
-  fixtures.loanApplications.slice(2).forEach((application, index) => {
-    const suffix = pad(index + 1);
-    fixtures.notifications.push({
-      notificationId: `${prefix}_notification_${suffix}`,
-      userId: application.lenderId,
-      category: 'application',
-      title: 'Seeded loan application',
-      body: `Application ${application.applicationId} is ${application.status}.`,
-      entityType: 'application',
-      entityId: application.applicationId,
-      isRead: index % 3 === 0,
-      readAt: index % 3 === 0 ? referenceDate : null,
-      createdAt: application.createdAt,
+  fixtures.loanApplications
+    .filter((application) =>
+      application.applicationId.startsWith(`${prefix}_application_`),
+    )
+    .forEach((application, index) => {
+      const suffix = pad(index + 1);
+      fixtures.notifications.push({
+        notificationId: `${prefix}_notification_${suffix}`,
+        userId: application.lenderId,
+        category: 'application',
+        title: 'Seeded loan application',
+        body: `Application ${application.applicationId} is ${application.status}.`,
+        entityType: 'application',
+        entityId: application.applicationId,
+        isRead: index % 3 === 0,
+        readAt: index % 3 === 0 ? referenceDate : null,
+        createdAt: application.createdAt,
+      });
     });
+
+  let pendingAgreementIndex = 0;
+  fixtures.loans.forEach((loan) => {
+    const agreementId = `agreement_${loan.loanId}_v001`;
+    const borrower = fixtures.users.find(
+      (user) => user.userId === loan.borrowerId,
+    );
+    const lender = fixtures.users.find((user) => user.userId === loan.lenderId);
+    const agreementPhase =
+      loan.status === 'pending_disbursement'
+        ? Math.min(pendingAgreementIndex++, 3)
+        : 4;
+    const lenderAccepted = agreementPhase >= 1;
+    const transferConfirmed = agreementPhase >= 2;
+    const borrowerAccepted = agreementPhase >= 3;
+    const terms = {
+      currency: 'LKR',
+      principalMinor: loan.principalMinor,
+      annualInterestRate: loan.annualInterestRate,
+      interestAmountMinor: loan.interestAmountMinor,
+      totalRepayableMinor: loan.totalRepayableMinor,
+      monthlyInstallmentMinor: loan.monthlyInstallmentMinor,
+      tenureMonths: loan.tenureMonths,
+      repaymentFrequency: 'monthly',
+      repaymentStartRule: 'one_month_after_activation',
+    };
+    const termsHash = crypto
+      .createHash('sha256')
+      .update(
+        JSON.stringify({
+          applicationId: loan.applicationId,
+          borrowerId: loan.borrowerId,
+          lenderId: loan.lenderId,
+          listingId: loan.listingId,
+          loanId: loan.loanId,
+          terms,
+          version: 1,
+        }),
+      )
+      .digest('hex');
+    const lenderAcceptance = lenderAccepted
+      ? {
+          accepted: true,
+          signedName: lender?.fullName ?? 'Seed lender',
+          acceptedAt: referenceDate,
+        }
+      : { accepted: false, signedName: null, acceptedAt: null };
+    fixtures.loanAgreements.push({
+      agreementId,
+      loanId: loan.loanId,
+      applicationId: loan.applicationId,
+      listingId: loan.listingId,
+      version: 1,
+      status:
+        agreementPhase === 0
+          ? 'awaiting_signatures'
+          : agreementPhase === 1
+            ? 'awaiting_disbursement'
+            : agreementPhase === 2
+              ? 'awaiting_borrower_signature'
+              : agreementPhase === 3
+                ? 'finalization_failed'
+                : 'fully_accepted',
+      title: `Smart Credit Loan Agreement - ${loan.loanId}`,
+      summary: 'Seeded unsigned loan agreement for development.',
+      borrowerId: loan.borrowerId,
+      lenderId: loan.lenderId,
+      borrower: {
+        userId: loan.borrowerId,
+        fullName: borrower?.fullName ?? 'Seed borrower',
+        email: borrower?.email ?? '',
+        phone: borrower?.phone ?? '',
+        role: 'borrower',
+      },
+      lender: {
+        userId: loan.lenderId,
+        fullName: lender?.fullName ?? 'Seed lender',
+        email: lender?.email ?? '',
+        phone: lender?.phone ?? '',
+        role: 'lender',
+      },
+      terms,
+      bodyHtml: `<h1>Smart Credit Loan Agreement</h1><p>Seed agreement ${agreementId}</p>`,
+      termsHash,
+      consentTextVersion: 'loan_agreement_consent_v1',
+      borrowerAcceptance: borrowerAccepted
+        ? {
+            accepted: true,
+            signedName: borrower?.fullName ?? 'Seed borrower',
+            acceptedAt: referenceDate,
+          }
+        : { accepted: false, signedName: null, acceptedAt: null },
+      lenderAcceptance,
+      disbursementConfirmation: transferConfirmed
+        ? {
+            confirmed: true,
+            confirmedByLenderId: loan.lenderId,
+            confirmedAt: referenceDate,
+            principalMinor: loan.principalMinor,
+            externalReference: `SEED-D-${loan.loanId}`,
+            ipAddressHash: null,
+            userAgent: 'bulk-seed',
+          }
+        : {
+            confirmed: false,
+            confirmedByLenderId: null,
+            confirmedAt: null,
+            principalMinor: null,
+            externalReference: null,
+            ipAddressHash: null,
+            userAgent: null,
+          },
+      generatedByUserId: loan.lenderId,
+      generatedByRole: 'lender',
+      generatedAt: loan.approvedAt,
+      updatedAt: referenceDate,
+      finalizedAt: agreementPhase === 4 ? referenceDate : null,
+      finalizationStartedAt: null,
+      finalizationError:
+        agreementPhase === 3
+          ? 'Seeded finalization failure for retry testing.'
+          : null,
+      signedPdfDocumentId: null,
+      signedPdfGeneratedAt: null,
+      pdfSha256Hash: null,
+    });
+    loan.currentAgreementId = agreementId;
+    loan.agreementStatus = fixtures.loanAgreements.at(-1).status;
+    if (lenderAccepted) {
+      fixtures.loanAgreementAcceptances.push({
+        acceptanceId: `${agreementId}_lender`,
+        agreementId,
+        loanId: loan.loanId,
+        userId: loan.lenderId,
+        role: 'lender',
+        agreementVersion: 1,
+        termsHash,
+        signedName: lender?.fullName ?? 'Seed lender',
+        consentAccepted: true,
+        consentTextVersion: 'loan_agreement_consent_v1',
+        ipAddressHash: null,
+        userAgent: 'bulk-seed',
+        acceptedAt: referenceDate,
+        fundsReceivedConfirmed: false,
+      });
+    }
+    if (borrowerAccepted) {
+      fixtures.loanAgreementAcceptances.push({
+        acceptanceId: `${agreementId}_borrower`,
+        agreementId,
+        loanId: loan.loanId,
+        userId: loan.borrowerId,
+        role: 'borrower',
+        agreementVersion: 1,
+        termsHash,
+        signedName: borrower?.fullName ?? 'Seed borrower',
+        consentAccepted: true,
+        consentTextVersion: 'loan_agreement_consent_v1',
+        ipAddressHash: null,
+        userAgent: 'bulk-seed',
+        acceptedAt: referenceDate,
+        fundsReceivedConfirmed: true,
+      });
+    }
   });
 
   fixtures.loans
-    .filter((loan) => loan.status === 'pending_disbursement')
-    .forEach((loan, index) => {
-      const agreementId = `agreement_${loan.loanId}_v001`;
-      const borrower = fixtures.users.find(
-        (user) => user.userId === loan.borrowerId,
-      );
-      const lender = fixtures.users.find((user) => user.userId === loan.lenderId);
-      const partiallyAccepted = index % 2 === 1;
-      const terms = {
-        currency: 'LKR',
-        principalMinor: loan.principalMinor,
-        annualInterestRate: loan.annualInterestRate,
-        interestAmountMinor: loan.interestAmountMinor,
-        totalRepayableMinor: loan.totalRepayableMinor,
-        monthlyInstallmentMinor: loan.monthlyInstallmentMinor,
-        tenureMonths: loan.tenureMonths,
-        repaymentFrequency: 'monthly',
-        repaymentStartRule: 'one_month_after_activation',
-      };
-      const termsHash = crypto
-        .createHash('sha256')
-        .update(
-          JSON.stringify({
-            applicationId: loan.applicationId,
-            borrowerId: loan.borrowerId,
-            lenderId: loan.lenderId,
-            listingId: loan.listingId,
-            loanId: loan.loanId,
-            terms,
-            version: 1,
-          }),
-        )
-        .digest('hex');
-      const lenderAcceptance = partiallyAccepted
-        ? {
-            accepted: true,
-            signedName: lender?.fullName ?? 'Seed lender',
-            acceptedAt: referenceDate,
-          }
-        : { accepted: false, signedName: null, acceptedAt: null };
-      fixtures.loanAgreements.push({
-        agreementId,
-        loanId: loan.loanId,
-        applicationId: loan.applicationId,
-        listingId: loan.listingId,
-        version: 1,
-        status: partiallyAccepted
-          ? 'partially_accepted'
-          : 'awaiting_signatures',
-        title: `Smart Credit Loan Agreement - ${loan.loanId}`,
-        summary: 'Seeded unsigned loan agreement for development.',
-        borrowerId: loan.borrowerId,
-        lenderId: loan.lenderId,
-        borrower: {
-          userId: loan.borrowerId,
-          fullName: borrower?.fullName ?? 'Seed borrower',
-          email: borrower?.email ?? '',
-          phone: borrower?.phone ?? '',
-          role: 'borrower',
-        },
-        lender: {
-          userId: loan.lenderId,
-          fullName: lender?.fullName ?? 'Seed lender',
-          email: lender?.email ?? '',
-          phone: lender?.phone ?? '',
-          role: 'lender',
-        },
-        terms,
-        bodyHtml: `<h1>Smart Credit Loan Agreement</h1><p>Seed agreement ${agreementId}</p>`,
-        termsHash,
-        consentTextVersion: 'loan_agreement_consent_v1',
-        borrowerAcceptance: { accepted: false, signedName: null, acceptedAt: null },
-        lenderAcceptance,
-        generatedByUserId: loan.lenderId,
-        generatedByRole: 'lender',
-        generatedAt: loan.approvedAt,
-        updatedAt: referenceDate,
-        finalizedAt: null,
-        finalizationStartedAt: null,
-        finalizationError: null,
-        signedPdfDocumentId: null,
-        signedPdfGeneratedAt: null,
-        pdfSha256Hash: null,
-      });
-      loan.currentAgreementId = agreementId;
-      loan.agreementStatus = partiallyAccepted
-        ? 'partially_accepted'
-        : 'awaiting_signatures';
-      if (partiallyAccepted) {
-        fixtures.loanAgreementAcceptances.push({
-          acceptanceId: `${agreementId}_lender`,
-          agreementId,
-          loanId: loan.loanId,
-          userId: loan.lenderId,
-          role: 'lender',
-          agreementVersion: 1,
-          termsHash,
-          signedName: lender?.fullName ?? 'Seed lender',
-          consentAccepted: true,
-          consentTextVersion: 'loan_agreement_consent_v1',
-          ipAddressHash: null,
-          userAgent: 'bulk-seed',
-          acceptedAt: referenceDate,
-        });
-      }
-    });
-
-  fixtures.loans
-    .slice(1, Math.min(fixtures.loans.length, 301))
+    .filter((loan) => loan.loanId.startsWith(`${prefix}_loan_`))
+    .slice(0, 300)
     .forEach((loan, index) => {
       const suffix = pad(index + 1);
       const conversationId = `${prefix}_conversation_${suffix}`;
@@ -575,44 +648,63 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
       });
     });
 
-  fixtures.loans.slice(1).forEach((loan, index) => {
-    if (index % 25 !== 0) return;
-    const suffix = pad(index + 1);
-    const installment = fixtures.installments.find(
-      (item) => item.loanId === loan.loanId && item.status === 'paid',
-    );
-    fixtures.disputes.push({
-      disputeId: `${prefix}_dispute_${suffix}`,
-      openedByUserId: loan.borrowerId,
-      complainantId: loan.borrowerId,
-      respondentId: loan.lenderId,
-      assignedAdminId: adminId,
-      loanId: loan.loanId,
-      installmentId: installment?.installmentId ?? null,
-      transactionId: installment?.paidTransactionId ?? null,
-      category: installment ? 'repayment' : 'loan_terms',
-      subject: 'Seeded account review request',
-      description:
-        'Development fixture for the administrative dispute workflow.',
-      evidenceDocumentIds: [],
-      status: 'under_review',
-      resolution: null,
-      resolvedAt: null,
-      createdAt: referenceDate,
-      updatedAt: referenceDate,
+  fixtures.loans
+    .filter((loan) => loan.loanId.startsWith(`${prefix}_loan_`))
+    .forEach((loan, index) => {
+      if (index % 25 !== 0) return;
+      const suffix = pad(index + 1);
+      const installment = fixtures.installments.find(
+        (item) => item.loanId === loan.loanId && item.status === 'paid',
+      );
+      fixtures.disputes.push({
+        disputeId: `${prefix}_dispute_${suffix}`,
+        disputeCode: `DSP-${suffix}`,
+        openedByUserId: loan.borrowerId,
+        complainantId: loan.borrowerId,
+        complainantRole: 'borrower',
+        respondentId: loan.lenderId,
+        respondentRole: 'lender',
+        borrowerId: loan.borrowerId,
+        lenderId: loan.lenderId,
+        borrowerName: '',
+        lenderName: '',
+        assignedAdminId: adminId,
+        loanId: loan.loanId,
+        installmentId: installment?.installmentId ?? null,
+        transactionId: installment?.paidTransactionId ?? null,
+        category: installment ? 'payment' : 'loan_terms',
+        subject: 'Seeded account review request',
+        description:
+          'Development fixture for the administrative dispute workflow.',
+        desiredOutcome:
+          'Review the loan record and provide a written decision.',
+        disputedAmountMinor: null,
+        currency: 'LKR',
+        evidenceDocumentIds: [],
+        status: 'under_review',
+        priority: installment ? 'high' : 'medium',
+        resolution: null,
+        acknowledgements: {},
+        reopenCount: 0,
+        resolvedAt: null,
+        closedAt: null,
+        createdAt: referenceDate,
+        updatedAt: referenceDate,
+      });
+      fixtures.disputeEvents.push({
+        disputeId: `${prefix}_dispute_${suffix}`,
+        eventId: 'event_001',
+        actorUserId: loan.borrowerId,
+        actorRole: 'borrower',
+        type: 'created',
+        message: 'Seeded dispute opened.',
+        previousStatus: null,
+        nextStatus: 'under_review',
+        documentIds: [],
+        visibility: 'shared',
+        createdAt: referenceDate,
+      });
     });
-    fixtures.disputeEvents.push({
-      disputeId: `${prefix}_dispute_${suffix}`,
-      eventId: 'event_001',
-      actorUserId: loan.borrowerId,
-      type: 'created',
-      message: 'Seeded dispute opened.',
-      previousStatus: null,
-      nextStatus: 'under_review',
-      documentIds: [],
-      createdAt: referenceDate,
-    });
-  });
 
   [...lenderIds, ...borrowerIds].forEach((userId, index) => {
     fixtures.legalAcceptances.push({
@@ -626,21 +718,23 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
     });
   });
 
-  fixtures.loanListings.slice(2).forEach((listing, index) => {
-    if (index % 10 !== 0) return;
-    fixtures.auditLogs.push({
-      auditLogId: `${prefix}_audit_${pad(index + 1)}`,
-      actorUserId: adminId,
-      actorRole: 'admin',
-      action: 'listing.approved',
-      entityType: 'loanListing',
-      entityId: listing.listingId,
-      before: { status: 'pending_review' },
-      after: { status: 'active' },
-      metadata: { source: 'bulk-seed', batchId: config.batchId },
-      createdAt: listing.createdAt,
+  fixtures.loanListings
+    .filter((listing) => listing.listingId.startsWith(`${prefix}_listing_`))
+    .forEach((listing, index) => {
+      if (index % 10 !== 0) return;
+      fixtures.auditLogs.push({
+        auditLogId: `${prefix}_audit_${pad(index + 1)}`,
+        actorUserId: adminId,
+        actorRole: 'admin',
+        action: 'listing.approved',
+        entityType: 'loanListing',
+        entityId: listing.listingId,
+        before: { status: 'pending_review' },
+        after: { status: 'active' },
+        metadata: { source: 'bulk-seed', batchId: config.batchId },
+        createdAt: listing.createdAt,
+      });
     });
-  });
 
   lenderIds.forEach((userId, index) => {
     const [city, district, latitude, longitude] =

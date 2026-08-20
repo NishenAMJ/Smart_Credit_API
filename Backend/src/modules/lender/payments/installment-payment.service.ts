@@ -118,6 +118,7 @@ export class InstallmentPaymentService {
         installmentId,
         listingId: readString(loan.listingId),
         amountMinor: Math.round(input.amount * 100),
+        platformFeeMinor: Math.round(input.amount * 2),
         currency: 'LKR',
         createdAt: paymentTimestamp,
         completedAt: paymentTimestamp,

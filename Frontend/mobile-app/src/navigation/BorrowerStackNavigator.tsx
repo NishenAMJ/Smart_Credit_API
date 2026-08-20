@@ -19,6 +19,7 @@ import NearbyLendersMapScreen from "../screens/borrower/NearbyLendersMapScreen";
 import AgreementsListScreen from "../screens/shared/AgreementsListScreen";
 import LegalAgreementScreen from "../screens/shared/LegalAgreementScreen";
 import AiAssistantScreen from "../screens/shared/AiAssistantScreen";
+import DisputesScreen from "../screens/shared/DisputesScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -44,12 +45,16 @@ export default function BorrowerStackNavigator() {
       <Stack.Screen name="ContactSupport" component={ContactSupportScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="BorrowerChat" component={ChatNavigator} />
-      <Stack.Screen name="NearbyLendersMap" component={NearbyLendersMapScreen} />
+      <Stack.Screen
+        name="NearbyLendersMap"
+        component={NearbyLendersMapScreen}
+      />
       <Stack.Screen name="AgreementsList" component={AgreementsListScreen} />
       <Stack.Screen name="LoanAgreement">
         {(props) => <LegalAgreementScreen {...props} role="borrower" />}
       </Stack.Screen>
       <Stack.Screen name="AiAssistant" component={AiAssistantScreen} />
+      <Stack.Screen name="Disputes" component={DisputesScreen} />
     </Stack.Navigator>
   );
 }

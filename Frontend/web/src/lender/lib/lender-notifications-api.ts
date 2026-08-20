@@ -5,6 +5,7 @@ export type NotificationCategory =
   | 'transaction'
   | 'repayment_risk'
   | 'dispute'
+  | 'agreement'
   | 'ad'
   | 'system'
 
@@ -15,6 +16,7 @@ export type NotificationActionTarget =
   | 'dashboard'
   | 'analytics'
   | 'create-ad'
+  | 'agreements'
   | 'settings'
   | null
 
@@ -34,6 +36,7 @@ export type LenderNotification = {
     | 'transaction'
     | 'loan'
     | 'dispute'
+    | 'loanAgreement'
     | 'ad'
     | 'system'
     | null
@@ -43,6 +46,7 @@ export type LenderNotification = {
   metadata: {
     borrowerId?: string
     loanId?: string
+    agreementId?: string
     adId?: string
     amount?: number
     status?: string

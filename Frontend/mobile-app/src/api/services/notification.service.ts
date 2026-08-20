@@ -6,7 +6,13 @@ import { getUserId } from "../../utils/auth.storage";
 export type BorrowerNotification = {
   id: string;
   borrowerId: string;
-  category: "application" | "payment" | "profile" | "system";
+  category:
+    | "application"
+    | "payment"
+    | "profile"
+    | "dispute"
+    | "agreement"
+    | "system";
   severity: "info" | "success" | "warning" | "critical";
   title: string;
   message: string;

@@ -61,8 +61,10 @@ export type LoanRequestDecision = 'approve' | 'reject'
 
 export type LoanRequestDecisionResponse = {
   requestId: string
-  status: 'approved' | 'rejected'
+  status: 'converted' | 'rejected'
   updatedAt: string
+  loanId?: string
+  agreementId?: string
 }
 
 export async function fetchPendingRequests(

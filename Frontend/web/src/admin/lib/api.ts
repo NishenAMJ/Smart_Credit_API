@@ -198,6 +198,11 @@ export interface DashboardAnalyticsResponse {
       totalRevenue: number;
       activeDisputes: number;
     };
+    userRoles: {
+      admin: number;
+      borrower: number;
+      lender: number;
+    };
     recentActivity: {
       newUsersToday: number;
       loansCreatedToday: number;
@@ -216,6 +221,8 @@ export interface DashboardAnalyticsResponse {
       count: number;
     }>;
   };
+  generatedAt?: string;
+  cacheAgeSeconds?: number;
 }
 
 export interface UsersReportResponse {
@@ -379,12 +386,18 @@ export interface AuditLogsResponse {
 
 export type DisputeStatus =
   | "open"
-  | "in-progress"
+  | "under_review"
+  | "awaiting_response"
   | "resolved"
   | "escalated"
   | "closed";
 export type DisputePriority = "low" | "medium" | "high" | "critical";
-export type DisputeCategory = "payment" | "fraud" | "service" | "other";
+export type DisputeCategory =
+  | "payment"
+  | "loan_terms"
+  | "fraud"
+  | "conduct"
+  | "other";
 
 export interface AdminDispute {
   id: string;
@@ -420,11 +433,37 @@ export interface AdminDispute {
   createdAt?: FirestoreTimestamp;
   updatedAt?: FirestoreTimestamp;
   resolvedAt?: FirestoreTimestamp;
-  resolution?: string;
   escalatedAt?: FirestoreTimestamp;
   escalationReason?: string;
   notes?: string;
   assignedTo?: string;
+  complainantId?: string;
+  respondentId?: string;
+  subject?: string;
+  desiredOutcome?: string;
+  disputedAmountMinor?: number | null;
+  evidenceDocumentIds?: string[];
+  assignedAdminId?: string | null;
+  acknowledgements?: Record<string, FirestoreTimestamp>;
+  reopenCount?: number;
+  resolution?: {
+    summary: string;
+    recommendedActions: string[];
+    issuedByAdminId: string;
+    issuedAt: FirestoreTimestamp;
+    reopenUntil: FirestoreTimestamp;
+  } | null;
+}
+
+export interface DisputeEvent {
+  id: string;
+  type: string;
+  actorUserId: string;
+  actorRole: "borrower" | "lender" | "admin" | "system";
+  message: string;
+  documentIds: string[];
+  visibility: "shared" | "admin";
+  createdAt?: FirestoreTimestamp;
 }
 
 export interface DisputesResponse {
@@ -676,11 +715,16 @@ export function changeAdminPassword(
 }
 
 // Gives the ads page a typed moderation data source.
-export function getAds(params?: CursorQueryParams) {
+export function getAds(
+  params?: CursorQueryParams & { status?: AdStatus | "all"; search?: string },
+) {
   const searchParams = new URLSearchParams();
   if (typeof params?.limit === "number")
     searchParams.set("limit", String(params.limit));
   if (params?.cursor) searchParams.set("cursor", params.cursor);
+  if (params?.status && params.status !== "all")
+    searchParams.set("status", params.status);
+  if (params?.search) searchParams.set("search", params.search);
   const query = searchParams.toString();
   return apiRequest<AdsResponse & PaginationMeta>(
     `/admin/ads${query ? `?${query}` : ""}`,
@@ -742,11 +786,23 @@ export function getAuditLogs(params?: CursorQueryParams) {
   );
 }
 
-export function getDisputes(params?: CursorQueryParams) {
+export function getDisputes(
+  params?: CursorQueryParams & {
+    status?: DisputeStatus;
+    priority?: DisputePriority;
+    assignedAdminId?: string;
+    search?: string;
+  },
+) {
   const searchParams = new URLSearchParams();
   if (typeof params?.limit === "number")
     searchParams.set("limit", String(params.limit));
   if (params?.cursor) searchParams.set("cursor", params.cursor);
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.priority) searchParams.set("priority", params.priority);
+  if (params?.assignedAdminId)
+    searchParams.set("assignedAdminId", params.assignedAdminId);
+  if (params?.search) searchParams.set("search", params.search);
   const query = searchParams.toString();
   return apiRequest<DisputesResponse & PaginationMeta>(
     `/admin/disputes${query ? `?${query}` : ""}`,
@@ -754,6 +810,85 @@ export function getDisputes(params?: CursorQueryParams) {
       auth: true,
     },
   );
+}
+
+export function getDisputeStats() {
+  return apiRequest<{
+    success: boolean;
+    stats: Record<string, number>;
+  }>("/admin/disputes/stats", { auth: true });
+}
+
+export function getDisputeEvents(disputeId: string) {
+  return apiRequest<{ success: boolean; events: DisputeEvent[] }>(
+    `/admin/disputes/${disputeId}/events`,
+    { auth: true },
+  );
+}
+
+export function getDisputeEvidenceAccess(documentId: string) {
+  return apiRequest<{
+    documentId: string;
+    accessUrl: string;
+    expiresAt: string;
+  }>(`/documents/${documentId}/access`, { auth: true });
+}
+
+export function assignDispute(disputeId: string, adminId?: string) {
+  return apiRequest(`/admin/disputes/${disputeId}/assignment`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify({ adminId }),
+  });
+}
+
+export function changeDisputePriority(
+  disputeId: string,
+  priority: DisputePriority,
+  reason: string,
+) {
+  return apiRequest(`/admin/disputes/${disputeId}/priority`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify({ priority, reason }),
+  });
+}
+
+export function addAdminDisputeComment(
+  disputeId: string,
+  message: string,
+  visibility: "shared" | "admin",
+) {
+  return apiRequest(`/admin/disputes/${disputeId}/comments`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ message, visibility }),
+  });
+}
+
+export function requestDisputeInformation(
+  disputeId: string,
+  requestedFrom: "complainant" | "respondent" | "both",
+  message: string,
+) {
+  return apiRequest(`/admin/disputes/${disputeId}/request-information`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ requestedFrom, message }),
+  });
+}
+
+export function resolveCanonicalDispute(
+  disputeId: string,
+  summary: string,
+  recommendedActions: string[],
+  internalNotes?: string,
+) {
+  return apiRequest(`/admin/disputes/${disputeId}/resolve-canonical`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ summary, recommendedActions, internalNotes }),
+  });
 }
 
 export function resolveDispute(
@@ -777,6 +912,14 @@ export function escalateDispute(
     method: "POST",
     auth: true,
     body: JSON.stringify({ reason, notes }),
+  });
+}
+
+export function closeDispute(disputeId: string, reason: string) {
+  return apiRequest(`/admin/disputes/${disputeId}/close`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ reason }),
   });
 }
 

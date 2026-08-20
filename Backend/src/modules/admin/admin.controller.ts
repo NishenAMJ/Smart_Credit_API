@@ -9,7 +9,9 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  Req,
 } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
 import { AdminService } from './admin.service';
 import { SuspendUserDto } from './dto/suspend-user.dto';
 import { ActivateUserDto } from './dto/activate-user.dto';
@@ -49,20 +51,29 @@ export class AdminController {
   // Suspends a user account and stores the reason.
   @Post('users/suspend')
   @HttpCode(HttpStatus.OK)
-  async suspendUser(@Body() dto: SuspendUserDto) {
-    return this.adminService.suspendUser(dto.userId, dto.reason);
+  async suspendUser(
+    @Body() dto: SuspendUserDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.adminService.suspendUser(dto.userId, dto.reason, req.user.sub);
   }
 
   // Re-activates a suspended user account.
   @Post('users/activate')
   @HttpCode(HttpStatus.OK)
-  async activateUser(@Body() dto: ActivateUserDto) {
-    return this.adminService.activateUser(dto.userId);
+  async activateUser(
+    @Body() dto: ActivateUserDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.adminService.activateUser(dto.userId, req.user.sub);
   }
 
   // Deletes a user document from Firestore.
   @Delete('users/:userId')
-  async deleteUser(@Param('userId') userId: string) {
-    return this.adminService.deleteUser(userId);
+  async deleteUser(
+    @Param('userId') userId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.adminService.deleteUser(userId, req.user.sub);
   }
 }

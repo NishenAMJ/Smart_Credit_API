@@ -409,7 +409,14 @@ export class BorrowerNotificationsService {
   }
 
   private readCategory(value: unknown): BorrowerNotificationCategory {
-    return ['application', 'payment', 'profile', 'system'].includes(
+    return [
+      'application',
+      'payment',
+      'profile',
+      'dispute',
+      'agreement',
+      'system',
+    ].includes(
       value as string,
     )
       ? (value as BorrowerNotificationCategory)

@@ -1,5 +1,7 @@
 export type AgreementStatus =
   | "awaiting_signatures"
+  | "awaiting_disbursement"
+  | "awaiting_borrower_signature"
   | "partially_accepted"
   | "finalizing"
   | "finalization_failed"
@@ -19,6 +21,14 @@ export interface AgreementAcceptanceSummary {
   accepted: boolean;
   signedName: string | null;
   acceptedAt: string | null;
+}
+
+export interface AgreementDisbursementConfirmation {
+  confirmed: boolean;
+  confirmedByLenderId: string | null;
+  confirmedAt: string | null;
+  principalMinor: number | null;
+  externalReference: string | null;
 }
 
 export interface AgreementTerms {
@@ -51,6 +61,7 @@ export interface SharedLegalDocument {
   consentTextVersion: "loan_agreement_consent_v1";
   borrowerAcceptance: AgreementAcceptanceSummary;
   lenderAcceptance: AgreementAcceptanceSummary;
+  disbursementConfirmation: AgreementDisbursementConfirmation;
   pdfDownloadPath: string;
   pdfAvailable: boolean;
   signedPdfGeneratedAt: string | null;

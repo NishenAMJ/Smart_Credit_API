@@ -42,6 +42,19 @@ export type SocketEventMap = {
   socketConnected: { status: string };
   socketDisconnected: { reason: string };
   socketError: { error: string };
+  disputeChanged: {
+    disputeId: string;
+    changeType: string;
+    status: string;
+    updatedAt: string;
+  };
+  agreementChanged: {
+    agreementId: string;
+    loanId: string;
+    changeType: string;
+    status: string;
+    updatedAt: string;
+  };
 };
 
 class ChatSocket {
@@ -151,6 +164,20 @@ class ChatSocket {
       this._emit("messageFailed", data);
     });
 
+    this.socket.on(
+      "dispute:changed",
+      (data: SocketEventMap["disputeChanged"]) => {
+        this._emit("disputeChanged", data);
+      },
+    );
+
+    this.socket.on(
+      "agreement:changed",
+      (data: SocketEventMap["agreementChanged"]) => {
+        this._emit("agreementChanged", data);
+      },
+    );
+
     console.log("[ChatSocket] Connecting to", WS_URL);
   }
 
@@ -193,11 +220,7 @@ class ChatSocket {
     this.socket?.emit("typing", { conversationId, recipientId, isTyping });
   }
 
-  markMessageRead(
-    conversationId: string,
-    messageId: string,
-    senderId: string,
-  ) {
+  markMessageRead(conversationId: string, messageId: string, senderId: string) {
     this.socket?.emit("markRead", { conversationId, messageId, senderId });
   }
 

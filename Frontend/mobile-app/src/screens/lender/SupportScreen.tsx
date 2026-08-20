@@ -1,132 +1,139 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, TextInput,
-  Alert, Linking, ActivityIndicator,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { commonStyles, COLORS } from '../../styles/lender.styles';
-import { LenderHeader } from '../../components/lender';
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  TextInput,
+  Alert,
+  Linking,
+  ActivityIndicator,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { commonStyles, COLORS } from "../../styles/lender.styles";
+import { LenderHeader } from "../../components/lender";
 
 // ── Quick contact options ─────────────────────────────────
 const CONTACT_OPTIONS = [
   {
-    icon: 'phone',
-    label: 'Call Support',
-    sub: '+94 11 234 5678',
+    icon: "phone",
+    label: "Call Support",
+    sub: "+94 11 234 5678",
     color: COLORS.success,
-    bg: '#ECFDF5',
-    action: 'call',
-    value: '+94112345678',
+    bg: "#ECFDF5",
+    action: "call",
+    value: "+94112345678",
   },
   {
-    icon: 'mail',
-    label: 'Email Support',
-    sub: 'support@smartcredit.lk',
+    icon: "mail",
+    label: "Email Support",
+    sub: "support@smartcredit.lk",
     color: COLORS.primary,
-    bg: '#EBF4FF',
-    action: 'email',
-    value: 'support@smartcredit.lk',
+    bg: "#EBF4FF",
+    action: "email",
+    value: "support@smartcredit.lk",
   },
   {
-    icon: 'message-circle',
-    label: 'Live Chat',
-    sub: 'Avg reply time: 5 mins',
-    color: '#8B5CF6',
-    bg: '#F5F3FF',
-    action: 'chat',
-    value: '',
+    icon: "message-circle",
+    label: "Live Chat",
+    sub: "Avg reply time: 5 mins",
+    color: "#8B5CF6",
+    bg: "#F5F3FF",
+    action: "chat",
+    value: "",
   },
 ];
 
 // ── FAQ data ───────────────────────────────────────────────
 const FAQ_ITEMS = [
   {
-    id: 'q1',
-    question: 'How do I create a new advertisement?',
+    id: "q1",
+    question: "How do I create a new advertisement?",
     answer:
-      'Open My Ads and tap the + button, or select Create Ad from your lender dashboard. ' +
-      'Enter the amount range, annual interest rate, tenure, borrower focus, and requirements. ' +
-      'The advertisement is submitted for admin review before it becomes active.',
+      "Open My Ads and tap the + button, or select Create Ad from your lender dashboard. " +
+      "Enter the amount range, annual interest rate, tenure, borrower focus, and requirements. " +
+      "The advertisement is submitted for admin review before it becomes active.",
   },
   {
-    id: 'q2',
-    question: 'How do I check advertisement performance?',
+    id: "q2",
+    question: "How do I check advertisement performance?",
     answer:
-      'Open My Ads to see the applications and funded loans linked to each advertisement. ' +
-      'Tap Analytics on an advertisement to review its application statuses, funded-loan ' +
-      'statuses, and funding rate.',
+      "Open My Ads to see the applications and funded loans linked to each advertisement. " +
+      "Tap Analytics on an advertisement to review its application statuses, funded-loan " +
+      "statuses, and funding rate.",
   },
   {
-    id: 'q3',
-    question: 'How do I verify a borrower payment?',
+    id: "q3",
+    question: "How do I verify a borrower payment?",
     answer:
-      'Use the QR Scanner from your Dashboard to scan the borrower\'s payment QR code. ' +
-      'Verify the amount shown matches what you received, then confirm to record the ' +
-      'payment in their loan history.',
+      "Use the QR Scanner from your Dashboard to scan the borrower's payment QR code. " +
+      "Verify the amount shown matches what you received, then confirm to record the " +
+      "payment in their loan history.",
   },
   {
-    id: 'q4',
-    question: 'What happens if a borrower misses a payment?',
+    id: "q4",
+    question: "What happens if a borrower misses a payment?",
     answer:
-      'Missed payments appear under Payment Reminders with the number of days overdue. ' +
-      'You can contact the borrower using the available reminder tools. If the problem ' +
-      'continues, use Help & Support to report the issue for assistance.',
+      "Missed payments appear under Payment Reminders with the number of days overdue. " +
+      "You can contact the borrower using the available reminder tools. If the problem " +
+      "continues, use Help & Support to report the issue for assistance.",
   },
   {
-    id: 'q5',
-    question: 'Can I edit an advertisement after publishing?',
+    id: "q5",
+    question: "Can I edit an advertisement after publishing?",
     answer:
-      'Yes. Open My Ads and tap Edit on the advertisement. Content changes are submitted ' +
-      'for admin review again. Existing loans keep the financial terms already accepted ' +
-      'in their agreements.',
+      "Yes. Open My Ads and tap Edit on the advertisement. Content changes are submitted " +
+      "for admin review again. Existing loans keep the financial terms already accepted " +
+      "in their agreements.",
   },
   {
-    id: 'q6',
-    question: 'How is my credit exposure calculated?',
+    id: "q6",
+    question: "How is my credit exposure calculated?",
     answer:
-      'Your Portfolio screen shows total lent, total collected, and outstanding amounts ' +
-      'across all active loans. Analytics provides a breakdown by loan type and ' +
-      'repayment performance over time.',
+      "Your Portfolio screen shows total lent, total collected, and outstanding amounts " +
+      "across all active loans. Analytics provides a breakdown by loan type and " +
+      "repayment performance over time.",
   },
   {
-    id: 'q7',
-    question: 'Where can I review loan agreements?',
+    id: "q7",
+    question: "Where can I review loan agreements?",
     answer:
-      'Open Agreements from the lender dashboard to review agreements connected to your ' +
-      'loans. The agreement status shows whether the required parties have accepted it.',
+      "Open Agreements from the lender dashboard to review agreements connected to your " +
+      "loans. The agreement status shows whether the required parties have accepted it.",
   },
 ];
 
 // ── Main Component ────────────────────────────────────────
 export default function SupportScreen({ navigation }: any) {
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
-  const [subject,     setSubject]     = useState('');
-  const [message,     setMessage]     = useState('');
-  const [sending,     setSending]     = useState(false);
-  const [sent,        setSent]        = useState(false);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
 
   const toggleFaq = (id: string) => {
     setExpandedFaq((prev) => (prev === id ? null : id));
   };
 
   const handleContactPress = (option: any) => {
-    if (option.action === 'call') {
+    if (option.action === "call") {
       Linking.openURL(`tel:${option.value}`);
-    } else if (option.action === 'email') {
+    } else if (option.action === "email") {
       Linking.openURL(`mailto:${option.value}`);
-    } else if (option.action === 'chat') {
-      Alert.alert('Live Chat', 'Live chat support is coming soon.');
+    } else if (option.action === "chat") {
+      Alert.alert("Live Chat", "Live chat support is coming soon.");
     }
   };
 
   const handleSendMessage = async () => {
     if (!subject.trim()) {
-      Alert.alert('Error', 'Please enter a subject');
+      Alert.alert("Error", "Please enter a subject");
       return;
     }
     if (!message.trim()) {
-      Alert.alert('Error', 'Please describe your issue');
+      Alert.alert("Error", "Please describe your issue");
       return;
     }
 
@@ -136,10 +143,10 @@ export default function SupportScreen({ navigation }: any) {
       // await SupportService.submitTicket({ subject, message });
       await new Promise((resolve) => setTimeout(resolve, 1200));
       setSent(true);
-      setSubject('');
-      setMessage('');
+      setSubject("");
+      setMessage("");
     } catch {
-      Alert.alert('Error', 'Failed to send message. Please try again.');
+      Alert.alert("Error", "Failed to send message. Please try again.");
     } finally {
       setSending(false);
     }
@@ -148,7 +155,6 @@ export default function SupportScreen({ navigation }: any) {
   return (
     <SafeAreaView style={commonStyles.safe}>
       <ScrollView showsVerticalScrollIndicator={false}>
-
         {/* ── HEADER ──────────────────────────────── */}
         <LenderHeader
           title="Help & Support"
@@ -162,14 +168,35 @@ export default function SupportScreen({ navigation }: any) {
           </View>
           <Text style={styles.introTitle}>We're Here to Help</Text>
           <Text style={[commonStyles.textSecondary, styles.introDesc]}>
-            Browse common questions below, or reach out directly and our
-            team will get back to you.
+            Browse common questions below, or reach out directly and our team
+            will get back to you.
           </Text>
         </View>
 
         <TouchableOpacity
           style={styles.assistantCard}
-          onPress={() => navigation.navigate('AiAssistant')}
+          onPress={() => navigation.navigate("Disputes")}
+          activeOpacity={0.8}
+        >
+          <View style={styles.assistantIcon}>
+            <Feather name="alert-triangle" size={21} color={COLORS.primary} />
+          </View>
+          <View style={styles.assistantCopy}>
+            <Text style={styles.assistantTitle}>Loan Disputes</Text>
+            <Text style={commonStyles.textSecondary}>
+              Raise a case or respond to a borrower in real time.
+            </Text>
+          </View>
+          <Feather
+            name="chevron-right"
+            size={19}
+            color={COLORS.textSecondary}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.assistantCard}
+          onPress={() => navigation.navigate("AiAssistant")}
           activeOpacity={0.8}
         >
           <View style={styles.assistantIcon}>
@@ -178,10 +205,15 @@ export default function SupportScreen({ navigation }: any) {
           <View style={styles.assistantCopy}>
             <Text style={styles.assistantTitle}>Ask the AI Assistant</Text>
             <Text style={commonStyles.textSecondary}>
-              Review your loans, borrowers, payments, collections, and advertisements.
+              Review your loans, borrowers, payments, collections, and
+              advertisements.
             </Text>
           </View>
-          <Feather name="chevron-right" size={19} color={COLORS.textSecondary} />
+          <Feather
+            name="chevron-right"
+            size={19}
+            color={COLORS.textSecondary}
+          />
         </TouchableOpacity>
 
         {/* ── CONTACT OPTIONS ─────────────────────── */}
@@ -202,10 +234,7 @@ export default function SupportScreen({ navigation }: any) {
               >
                 <View style={commonStyles.row}>
                   <View
-                    style={[
-                      styles.contactIcon,
-                      { backgroundColor: option.bg },
-                    ]}
+                    style={[styles.contactIcon, { backgroundColor: option.bg }]}
                   >
                     <Feather
                       name={option.icon as any}
@@ -214,12 +243,8 @@ export default function SupportScreen({ navigation }: any) {
                     />
                   </View>
                   <View>
-                    <Text style={commonStyles.textPrimary}>
-                      {option.label}
-                    </Text>
-                    <Text style={commonStyles.textSecondary}>
-                      {option.sub}
-                    </Text>
+                    <Text style={commonStyles.textPrimary}>{option.label}</Text>
+                    <Text style={commonStyles.textSecondary}>{option.sub}</Text>
                   </View>
                 </View>
                 <Feather
@@ -260,7 +285,7 @@ export default function SupportScreen({ navigation }: any) {
                   </View>
                   <Text style={styles.faqQuestion}>{item.question}</Text>
                   <Feather
-                    name={isOpen ? 'chevron-up' : 'chevron-down'}
+                    name={isOpen ? "chevron-up" : "chevron-down"}
                     size={16}
                     color={COLORS.textSecondary}
                   />
@@ -344,23 +369,17 @@ export default function SupportScreen({ navigation }: any) {
         <Text style={commonStyles.sectionTitle}>Other Resources</Text>
         <View style={styles.settingsList}>
           <TouchableOpacity
-            onPress={() => navigation.navigate('TermsConditions')}
+            onPress={() => navigation.navigate("TermsConditions")}
             activeOpacity={0.7}
           >
             <View style={[commonStyles.rowSpaceBetween, styles.settingItem]}>
               <View style={commonStyles.row}>
                 <View
-                  style={[styles.contactIcon, { backgroundColor: '#EBF4FF' }]}
+                  style={[styles.contactIcon, { backgroundColor: "#EBF4FF" }]}
                 >
-                  <Feather
-                    name="file-text"
-                    size={18}
-                    color={COLORS.primary}
-                  />
+                  <Feather name="file-text" size={18} color={COLORS.primary} />
                 </View>
-                <Text style={commonStyles.textPrimary}>
-                  Terms & Conditions
-                </Text>
+                <Text style={commonStyles.textPrimary}>Terms & Conditions</Text>
               </View>
               <Feather
                 name="chevron-right"
@@ -379,7 +398,7 @@ export default function SupportScreen({ navigation }: any) {
           >
             <View style={commonStyles.row}>
               <View
-                style={[styles.contactIcon, { backgroundColor: '#ECFDF5' }]}
+                style={[styles.contactIcon, { backgroundColor: "#ECFDF5" }]}
               >
                 <Feather name="clock" size={18} color={COLORS.success} />
               </View>
@@ -407,27 +426,27 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: COLORS.surface,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     ...commonStyles.shadowSmall,
   },
   introIconWrap: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#EBF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#EBF4FF",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
   },
   introTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.textPrimary,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   introDesc: {
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 20,
   },
   assistantCard: {
@@ -436,19 +455,19 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CFE2FF',
-    backgroundColor: '#F4F8FF',
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderColor: "#CFE2FF",
+    backgroundColor: "#F4F8FF",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   assistantIcon: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E3EFFF',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E3EFFF",
   },
   assistantCopy: {
     flex: 1,
@@ -457,14 +476,14 @@ const styles = StyleSheet.create({
     marginBottom: 3,
     color: COLORS.textPrimary,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   // Contact list
   contactList: {
     marginHorizontal: 16,
     marginBottom: 20,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderRadius: 12,
     backgroundColor: COLORS.surface,
     ...commonStyles.shadowSmall,
@@ -480,8 +499,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 14,
   },
 
@@ -489,14 +508,14 @@ const styles = StyleSheet.create({
   sectionsList: {
     marginHorizontal: 16,
     marginBottom: 20,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderRadius: 12,
     backgroundColor: COLORS.surface,
     ...commonStyles.shadowSmall,
   },
   faqHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
@@ -508,14 +527,14 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#EBF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#EBF4FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   faqQuestion: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.textPrimary,
   },
   faqBody: {
@@ -544,7 +563,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
     color: COLORS.textSecondary,
     marginBottom: 6,
     marginTop: 10,
@@ -563,13 +582,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderRadius: 10,
     paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     marginTop: 16,
   },
-  sendBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  sendBtnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
 
   // Success card
   successCard: {
@@ -578,26 +597,26 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 24,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 8,
     ...commonStyles.shadowSmall,
   },
   successTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.textPrimary,
     marginTop: 4,
   },
   successBtn: {
     marginTop: 8,
-    backgroundColor: '#EBF4FF',
+    backgroundColor: "#EBF4FF",
     borderRadius: 10,
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
   successBtnText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.primary,
   },
 
@@ -605,7 +624,7 @@ const styles = StyleSheet.create({
   settingsList: {
     marginHorizontal: 16,
     marginBottom: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderRadius: 12,
     backgroundColor: COLORS.surface,
     ...commonStyles.shadowSmall,

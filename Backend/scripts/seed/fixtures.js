@@ -256,6 +256,30 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
       createdAt: referenceDate,
       updatedAt: referenceDate,
     },
+    {
+      applicationId: 'application_003',
+      listingId: 'listing_001',
+      lenderId: 'lender_001',
+      borrowerId: 'borrower_001',
+      requestedPrincipalMinor: 8000000,
+      requestedTenureMonths: 4,
+      requestedPurpose: 'business',
+      purposeDescription:
+        'Short-term working capital for a small inventory purchase.',
+      status: 'converted',
+      lenderDecision: {
+        approvedPrincipalMinor: 8000000,
+        annualInterestRate: 9,
+        approvedTenureMonths: 4,
+        decisionNote:
+          'Approved for a short-term top-up after reviewing repayment history.',
+        decidedAt: referenceDate,
+      },
+      convertedLoanId: 'loan_002',
+      submittedAt: referenceDate,
+      createdAt: referenceDate,
+      updatedAt: referenceDate,
+    },
   ];
 
   const principalMinor = 12000000;
@@ -263,6 +287,13 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
   const totalRepayableMinor = principalMinor + interestAmountMinor;
   const monthlyInstallmentMinor = totalRepayableMinor / 6;
   const paidCount = 2;
+  const newLoanPrincipalMinor = 8000000;
+  const newLoanInterestAmountMinor = 240000;
+  const newLoanTotalRepayableMinor =
+    newLoanPrincipalMinor + newLoanInterestAmountMinor;
+  const newLoanTenureMonths = 4;
+  const newLoanMonthlyInstallmentMinor =
+    newLoanTotalRepayableMinor / newLoanTenureMonths;
   const loans = [
     {
       loanId: 'loan_001',
@@ -272,21 +303,66 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
       borrowerId: 'borrower_001',
       currency: 'LKR',
       principalMinor,
+      principalAmount: principalMinor / 100,
       annualInterestRate: 12,
+      interestRate: 12,
       interestAmountMinor,
+      totalInterest: interestAmountMinor / 100,
       totalRepayableMinor,
+      totalRepayable: totalRepayableMinor / 100,
       monthlyInstallmentMinor,
+      monthlyInstallment: monthlyInstallmentMinor / 100,
       tenureMonths: 6,
       amountPaidMinor: monthlyInstallmentMinor * paidCount,
       remainingBalanceMinor: monthlyInstallmentMinor * (6 - paidCount),
+      outstandingBalance: (monthlyInstallmentMinor * (6 - paidCount)) / 100,
       status: 'active',
       approvedAt: addMonths(referenceDate, -5),
       disbursedAt: addMonths(referenceDate, -5),
       firstPaymentDueAt: addMonths(referenceDate, -4),
+      startDate: addMonths(referenceDate, -5),
+      nextDueDate: addMonths(referenceDate, -2),
       maturityDate: addMonths(referenceDate, 1),
+      endDate: addMonths(referenceDate, 1),
       completedAt: null,
       termsVersion: 1,
+      repaymentsMade: paidCount,
       createdAt: addMonths(referenceDate, -5),
+      updatedAt: referenceDate,
+    },
+    {
+      loanId: 'loan_002',
+      applicationId: 'application_003',
+      listingId: 'listing_001',
+      lenderId: 'lender_001',
+      borrowerId: 'borrower_001',
+      currency: 'LKR',
+      principalMinor: newLoanPrincipalMinor,
+      principalAmount: newLoanPrincipalMinor / 100,
+      annualInterestRate: 9,
+      interestRate: 9,
+      interestAmountMinor: newLoanInterestAmountMinor,
+      totalInterest: newLoanInterestAmountMinor / 100,
+      totalRepayableMinor: newLoanTotalRepayableMinor,
+      totalRepayable: newLoanTotalRepayableMinor / 100,
+      monthlyInstallmentMinor: newLoanMonthlyInstallmentMinor,
+      monthlyInstallment: newLoanMonthlyInstallmentMinor / 100,
+      tenureMonths: newLoanTenureMonths,
+      amountPaidMinor: 0,
+      remainingBalanceMinor: newLoanTotalRepayableMinor,
+      outstandingBalance: newLoanTotalRepayableMinor / 100,
+      status: 'active',
+      approvedAt: referenceDate,
+      disbursedAt: referenceDate,
+      firstPaymentDueAt: addMonths(referenceDate, 1),
+      startDate: referenceDate,
+      nextDueDate: addMonths(referenceDate, 1),
+      maturityDate: addMonths(referenceDate, newLoanTenureMonths),
+      endDate: addMonths(referenceDate, newLoanTenureMonths),
+      completedAt: null,
+      termsVersion: 1,
+      repaymentsMade: 0,
+      createdAt: referenceDate,
       updatedAt: referenceDate,
     },
   ];
@@ -311,7 +387,27 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
       createdAt: addMonths(referenceDate, -5),
       updatedAt: referenceDate,
     };
-  });
+  }).concat(
+    Array.from({ length: newLoanTenureMonths }, (_, index) => {
+      const sequence = index + 1;
+      return {
+        loanId: 'loan_002',
+        installmentId: installmentIdFor(sequence),
+        lenderId: 'lender_001',
+        borrowerId: 'borrower_001',
+        sequence,
+        currency: 'LKR',
+        amountDueMinor: newLoanMonthlyInstallmentMinor,
+        status: 'scheduled',
+        dueAt: addMonths(referenceDate, sequence),
+        paidTransactionId: null,
+        paidAt: null,
+        note: 'Seeded new loan installment awaiting repayment.',
+        createdAt: referenceDate,
+        updatedAt: referenceDate,
+      };
+    }),
+  );
 
   const transactions = [
     {
@@ -333,6 +429,26 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
       initiatedByUserId: 'lender_001',
       completedAt: addMonths(referenceDate, -5),
       createdAt: addMonths(referenceDate, -5),
+    },
+    {
+      transactionId: 'disbursement_loan_002',
+      type: 'disbursement',
+      status: 'completed',
+      currency: 'LKR',
+      amountMinor: newLoanPrincipalMinor,
+      lenderId: 'lender_001',
+      borrowerId: 'borrower_001',
+      loanId: 'loan_002',
+      installmentId: null,
+      listingId: 'listing_001',
+      paymentMethod: 'bank_transfer',
+      externalReference: 'MOCK-DISBURSE-002',
+      idempotencyKey: 'disbursement_loan_002',
+      receiptDocumentId: null,
+      note: 'New seeded loan disbursement.',
+      initiatedByUserId: 'lender_001',
+      completedAt: referenceDate,
+      createdAt: referenceDate,
     },
     ...installments
       .filter((item) => item.status === 'paid')
@@ -361,20 +477,34 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
   const disputes = [
     {
       disputeId: 'dispute_001',
+      disputeCode: 'DSP-000001',
       openedByUserId: 'borrower_001',
       complainantId: 'borrower_001',
+      complainantRole: 'borrower',
       respondentId: 'lender_001',
+      respondentRole: 'lender',
+      borrowerId: 'borrower_001',
+      lenderId: 'lender_001',
+      borrowerName: 'Amal Perera',
+      lenderName: 'Kamal Rathnayake',
       assignedAdminId: 'admin_001',
       loanId: 'loan_001',
       installmentId: 'month_002',
       transactionId: 'repayment_loan_001_month_002',
-      category: 'repayment',
+      category: 'payment',
       subject: 'Repayment verification request',
       description: 'Please confirm the recorded repayment date.',
+      desiredOutcome: 'Verify the receipt and correct the repayment date.',
+      disputedAmountMinor: null,
+      currency: 'LKR',
       evidenceDocumentIds: ['doc_receipt_001'],
       status: 'under_review',
+      priority: 'high',
       resolution: null,
+      acknowledgements: {},
+      reopenCount: 0,
       resolvedAt: null,
+      closedAt: null,
       createdAt: referenceDate,
       updatedAt: referenceDate,
     },
@@ -384,11 +514,13 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
       disputeId: 'dispute_001',
       eventId: 'event_001',
       actorUserId: 'borrower_001',
+      actorRole: 'borrower',
       type: 'created',
       message: 'Dispute opened with receipt evidence.',
       previousStatus: null,
       nextStatus: 'open',
       documentIds: ['doc_receipt_001'],
+      visibility: 'shared',
       createdAt: referenceDate,
     },
   ];
@@ -512,7 +644,69 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
     auditLogs,
   };
 
-  return addBulkFixtures(fixtures, config, referenceDate, passwordHash);
+  const complete = addBulkFixtures(
+    fixtures,
+    config,
+    referenceDate,
+    passwordHash,
+  );
+  const searchTokens = (values) =>
+    [
+      ...new Set(
+        values.filter(Boolean).flatMap((value) => {
+          const normalized = String(value).trim().toLowerCase();
+          return [
+            normalized,
+            ...normalized.split(/[^a-z0-9@+._-]+/).filter(Boolean),
+          ];
+        }),
+      ),
+    ].slice(0, 100);
+  complete.users.forEach((user) => {
+    user.primaryRole =
+      user.roles?.[0] ?? user.role?.[0] ?? user.role ?? 'borrower';
+    user.roles =
+      user.roles ??
+      (Array.isArray(user.role) ? user.role : [user.role ?? user.primaryRole]);
+    user.searchTokens = searchTokens([
+      user.userId,
+      user.fullName,
+      user.email,
+      user.phone,
+      ...user.roles,
+    ]);
+  });
+  complete.loanListings.forEach((listing) => {
+    listing.adminStatus = ['pending_review', 'pending', 'draft'].includes(
+      listing.status,
+    )
+      ? 'pending'
+      : ['active', 'approved', 'rejected'].includes(listing.status)
+        ? listing.status
+        : 'closed';
+    listing.searchTokens = searchTokens([
+      listing.listingId,
+      listing.title,
+      listing.lenderId,
+      listing.lenderName,
+    ]);
+  });
+  complete.disputes.forEach((dispute) => {
+    dispute.searchTokens = searchTokens([
+      dispute.disputeId,
+      dispute.disputeCode,
+      dispute.loanId,
+      dispute.subject,
+      dispute.borrowerName,
+      dispute.lenderName,
+    ]);
+  });
+  complete.transactions.forEach((transaction) => {
+    transaction.platformFeeMinor =
+      transaction.platformFeeMinor ??
+      Math.round(Number(transaction.amountMinor ?? 0) * 0.02);
+  });
+  return complete;
 }
 
 module.exports = { buildSchemaV2Fixtures, installmentIdFor };

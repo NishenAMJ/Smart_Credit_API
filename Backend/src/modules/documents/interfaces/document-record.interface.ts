@@ -1,4 +1,4 @@
-export type DocumentCategory = 'kyc' | 'agreement';
+export type DocumentCategory = 'kyc' | 'agreement' | 'dispute_evidence';
 export type DocumentStatus =
   | 'pending_review'
   | 'approved'
@@ -14,7 +14,8 @@ export type DocumentRelatedEntityType =
   | 'user'
   | 'loan'
   | 'legal_document'
-  | 'loan_agreement';
+  | 'loan_agreement'
+  | 'dispute';
 
 export type ReviewInfo = {
   reviewedAt?: unknown;

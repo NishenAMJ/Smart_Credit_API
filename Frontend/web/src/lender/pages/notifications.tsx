@@ -37,6 +37,7 @@ const CATEGORY_OPTIONS = [
   { key: "transaction", label: "Transactions" },
   { key: "repayment_risk", label: "Risk" },
   { key: "dispute", label: "Disputes" },
+  { key: "agreement", label: "Agreements" },
   { key: "ad", label: "Ads" },
   { key: "system", label: "System" },
 ] as const;
@@ -117,6 +118,8 @@ function getCategoryTone(value: NotificationCategory): string {
       return "warning";
     case "dispute":
       return "danger";
+    case "agreement":
+      return "primary";
     case "ad":
       return "primary";
     case "system":

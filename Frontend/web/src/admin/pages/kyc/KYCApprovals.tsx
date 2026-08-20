@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
 import { Check, Eye, RefreshCw, Search, X } from "lucide-react";
 import {
   approveKyc,
@@ -7,6 +13,7 @@ import {
   rejectKyc,
   type KycDocument,
 } from "../../lib/api";
+import { subscribeToAdminChanges } from "../../lib/admin-realtime";
 import { formatFirestoreDate } from "../../lib/admin-format";
 
 type KycRow = {
@@ -39,7 +46,9 @@ function mapDocument(document: KycDocument): KycRow {
     status: document.status,
     uploadedAt: formatFirestoreDate(document.submittedAt),
     userKycStatus: document.userKycStatus || document.status,
-    reviewedAt: formatFirestoreDate(document.reviewTimestamp || document.reviewedAt),
+    reviewedAt: formatFirestoreDate(
+      document.reviewTimestamp || document.reviewedAt,
+    ),
     reviewerId: document.reviewerId || document.reviewedBy,
     reviewNotes: document.reviewNotes || document.notes || "",
     rejectionReason: document.rejectionReason || "",
@@ -88,12 +97,12 @@ export default function KYCApprovals() {
 
   useEffect(() => {
     void loadKyc();
-    const interval = window.setInterval(() => {
-      void loadKyc();
-    }, 15000);
-
-    return () => window.clearInterval(interval);
   }, [loadKyc]);
+
+  useEffect(
+    () => subscribeToAdminChanges(["kyc"], () => void loadKyc()),
+    [loadKyc],
+  );
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -253,7 +262,9 @@ export default function KYCApprovals() {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={5} style={S.emptyCell}>
-                  {loading ? "Loading pending KYC documents..." : "No documents found."}
+                  {loading
+                    ? "Loading pending KYC documents..."
+                    : "No documents found."}
                 </td>
               </tr>
             ) : (
@@ -276,8 +287,12 @@ export default function KYCApprovals() {
                   <td>{record.uploadedAt}</td>
                   <td>
                     <div style={S.cellStack}>
-                      <span className={statusClass(record.status)}>{record.status}</span>
-                      <span style={S.mutedText}>User: {record.userKycStatus}</span>
+                      <span className={statusClass(record.status)}>
+                        {record.status}
+                      </span>
+                      <span style={S.mutedText}>
+                        User: {record.userKycStatus}
+                      </span>
                     </div>
                   </td>
                   <td>
@@ -340,14 +355,36 @@ export default function KYCApprovals() {
             <div style={S.detailGrid}>
               <Detail label="User" value={selectedRecord.fullName} />
               <Detail label="User ID" value={selectedRecord.userId} />
-              <Detail label="Document Type" value={formatLabel(selectedRecord.documentType)} />
-              <Detail label="File Name" value={selectedRecord.originalFilename} />
+              <Detail
+                label="Document Type"
+                value={formatLabel(selectedRecord.documentType)}
+              />
+              <Detail
+                label="File Name"
+                value={selectedRecord.originalFilename}
+              />
               <Detail label="Uploaded" value={selectedRecord.uploadedAt} />
               <Detail label="Current Status" value={selectedRecord.status} />
-              <Detail label="User KYC Status" value={selectedRecord.userKycStatus} />
-              <Detail label="Reviewer" value={selectedRecord.reviewerId || "-"} />
-              <Detail label="Reviewed At" value={selectedRecord.reviewedAt || "-"} />
-              <Detail label="Notes" value={selectedRecord.reviewNotes || selectedRecord.rejectionReason || "-"} />
+              <Detail
+                label="User KYC Status"
+                value={selectedRecord.userKycStatus}
+              />
+              <Detail
+                label="Reviewer"
+                value={selectedRecord.reviewerId || "-"}
+              />
+              <Detail
+                label="Reviewed At"
+                value={selectedRecord.reviewedAt || "-"}
+              />
+              <Detail
+                label="Notes"
+                value={
+                  selectedRecord.reviewNotes ||
+                  selectedRecord.rejectionReason ||
+                  "-"
+                }
+              />
             </div>
 
             <div style={S.previewBox}>
@@ -371,7 +408,9 @@ export default function KYCApprovals() {
         </div>
       )}
 
-      {refreshing && <div style={S.refreshHint}>Refreshing review queue...</div>}
+      {refreshing && (
+        <div style={S.refreshHint}>Refreshing review queue...</div>
+      )}
     </div>
   );
 }

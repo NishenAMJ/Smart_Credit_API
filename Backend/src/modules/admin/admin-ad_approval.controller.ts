@@ -8,22 +8,17 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
-  BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { AdminAdApprovalService } from './admin-ad_approval.service';
-import { Roles }        from '../auth/decorators/roles.decorator';
+import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard }   from '../auth/guards/roles.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 class RejectAdDto {
   reason!: string;
 }
-
-// ── NOTE ──────────────────────────────────────────────────────
-// adminId is taken from query param for now (same pattern as
-// the existing admin controller). Replace with @Req() user.uid
-// once JWT is fully wired to return the admin's uid.
-// ─────────────────────────────────────────────────────────────
 
 @Controller('admin/ads')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,18 +26,31 @@ class RejectAdDto {
 export class AdminAdApprovalController {
   constructor(private readonly approvalService: AdminAdApprovalService) {}
 
+  // Static routes must remain above :adId routes.
+  @Get('stats')
+  async getAdStats() {
+    return this.approvalService.getAdStats();
+  }
+
   // GET /admin/ads/pending/count
   // Badge count for admin dashboard
   @Get('pending/count')
   async getPendingCount() {
-    return this.approvalService.getPendingCount();
+    const response = await this.approvalService.getAdStats();
+    return { count: response.stats.pending };
   }
 
   // GET /admin/ads?status=pending|active|rejected|all
   // List ads filtered by status
   @Get()
-  async getAdsByStatus(@Query('status') status?: string) {
-    return this.approvalService.getAdsByStatus(status ?? 'pending');
+  async getAds(
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+    @Query('status')
+    status?: 'pending' | 'approved' | 'active' | 'rejected' | 'closed',
+    @Query('search') search?: string,
+  ) {
+    return this.approvalService.getAds(limit, cursor, status, search);
   }
 
   // GET /admin/ads/:adId
@@ -57,11 +65,10 @@ export class AdminAdApprovalController {
   @Post(':adId/approve')
   @HttpCode(HttpStatus.OK)
   async approveAd(
-    @Param('adId')     adId:    string,
-    @Query('adminId')  adminId: string,
+    @Param('adId') adId: string,
+    @Req() req: AuthenticatedRequest,
   ) {
-    if (!adminId) throw new BadRequestException('adminId query param required');
-    return this.approvalService.approveAd(adId, adminId);
+    return this.approvalService.approveAd(adId, req.user.sub);
   }
 
   // POST /admin/ads/:adId/reject
@@ -69,12 +76,10 @@ export class AdminAdApprovalController {
   @Post(':adId/reject')
   @HttpCode(HttpStatus.OK)
   async rejectAd(
-    @Param('adId')    adId:    string,
-    @Query('adminId') adminId: string,
-    @Body()           dto:     RejectAdDto,
+    @Param('adId') adId: string,
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: RejectAdDto,
   ) {
-    if (!adminId)    throw new BadRequestException('adminId query param required');
-    if (!dto.reason) throw new BadRequestException('reason is required in body');
-    return this.approvalService.rejectAd(adId, adminId, dto.reason);
+    return this.approvalService.rejectAd(adId, req.user.sub, dto.reason);
   }
 }

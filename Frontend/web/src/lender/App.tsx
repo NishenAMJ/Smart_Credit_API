@@ -17,6 +17,7 @@ import DailyCollectionPage from "./pages/daily-collection";
 import SettingsPage from "./pages/settings";
 import SmsPage from "./pages/sms";
 import LenderAgreementsPage from "./pages/agreements";
+import LenderDisputesPage from "./pages/disputes";
 import LenderProfileModal from "./components/profile/LenderProfileModal";
 import {
   clearStoredSession,
@@ -103,7 +104,11 @@ function App() {
         ) : activeView === "analytics" ? (
           <AnalyticsPage session={session} onNavigate={setActiveView} />
         ) : activeView === "active-ads-requests" ? (
-          <ActiveAdsRequestsPage session={session} onNavigate={setActiveView} />
+          <ActiveAdsRequestsPage
+            session={session}
+            onNavigate={setActiveView}
+            onOpenAgreement={openLoanAgreement}
+          />
         ) : activeView === "create-ad" ? (
           <CreateAdPage session={session} />
         ) : activeView === "pending-requests" ? (
@@ -124,6 +129,8 @@ function App() {
             initialLoanId={agreementLoanId}
             onInitialLoanHandled={clearAgreementLoanId}
           />
+        ) : activeView === "disputes" ? (
+          <LenderDisputesPage session={session} />
         ) : (
           <section className="dashboard-panel">
             <header className="page-header">

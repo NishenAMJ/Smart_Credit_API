@@ -466,7 +466,8 @@ Loan contracts are stored separately from platform legal documents:
 ```text
 agreementId, loanId, applicationId, listingId: string
 version: number
-status: awaiting_signatures | partially_accepted | finalizing |
+status: awaiting_signatures | awaiting_disbursement |
+  awaiting_borrower_signature | partially_accepted | finalizing |
   finalization_failed | fully_accepted | superseded | cancelled
 borrowerId, lenderId: string
 borrower, lender: { userId, fullName, email, phone, role }
@@ -477,6 +478,10 @@ terms: {
 }
 bodyHtml, termsHash, consentTextVersion: string
 borrowerAcceptance, lenderAcceptance: { accepted, signedName, acceptedAt }
+disbursementConfirmation: {
+  confirmed, confirmedByLenderId, confirmedAt, principalMinor,
+  externalReference, ipAddressHash, userAgent
+}
 signedPdfDocumentId, pdfSha256Hash: string | null
 generatedAt, updatedAt, finalizedAt: Timestamp | null
 ```
@@ -484,7 +489,8 @@ generatedAt, updatedAt, finalizedAt: Timestamp | null
 ### `loanAgreementAcceptances/{acceptanceId}`
 
 Append-only party consent record containing the agreement/version/hash, typed
-legal name, role, hashed IP address, user agent, and acceptance timestamp.
+legal name, role, hashed IP address, user agent, acceptance timestamp, and the
+borrower's funds-received attestation.
 
 ### `legalAcceptances/{acceptanceId}`
 

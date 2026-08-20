@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 import {
   CreditCard,
   FileSignature,
@@ -7,52 +7,55 @@ import {
   LogOut,
   Megaphone,
   MessageSquareText,
+  ShieldAlert,
   PanelLeftClose,
   UsersRound,
   type LucideIcon,
-} from 'lucide-react'
-import type { LenderSession } from '../../lib/lender-session'
+} from "lucide-react";
+import type { LenderSession } from "../../lib/lender-session";
 
 type LenderView =
-  | 'dashboard'
-  | 'loans'
-  | 'borrowers'
-  | 'recent-transactions'
-  | 'daily-collection'
-  | 'analytics'
-  | 'active-ads-requests'
-  | 'create-ad'
-  | 'pending-requests'
-  | 'settings'
-  | 'notifications'
-  | 'sms'
-  | 'agreements'
+  | "dashboard"
+  | "loans"
+  | "borrowers"
+  | "recent-transactions"
+  | "daily-collection"
+  | "analytics"
+  | "active-ads-requests"
+  | "create-ad"
+  | "pending-requests"
+  | "settings"
+  | "notifications"
+  | "sms"
+  | "agreements"
+  | "disputes";
 
 type NavItem = {
-  id: LenderView
-  label: string
-  icon: LucideIcon
-}
+  id: LenderView;
+  label: string;
+  icon: LucideIcon;
+};
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'loans', label: 'Loans', icon: Landmark },
-  { id: 'borrowers', label: 'Borrowers', icon: UsersRound },
-  { id: 'agreements', label: 'Agreements', icon: FileSignature },
-  { id: 'recent-transactions', label: 'Payments', icon: CreditCard },
-  { id: 'active-ads-requests', label: 'Advertisements', icon: Megaphone },
-  { id: 'sms', label: 'SMS', icon: MessageSquareText },
-]
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "loans", label: "Loans", icon: Landmark },
+  { id: "borrowers", label: "Borrowers", icon: UsersRound },
+  { id: "agreements", label: "Agreements", icon: FileSignature },
+  { id: "disputes", label: "Disputes", icon: ShieldAlert },
+  { id: "recent-transactions", label: "Payments", icon: CreditCard },
+  { id: "active-ads-requests", label: "Advertisements", icon: Megaphone },
+  { id: "sms", label: "SMS", icon: MessageSquareText },
+];
 
-const SIDEBAR_COLLAPSE_STORAGE_KEY = 'smart-credit:lender-sidebar-collapsed'
+const SIDEBAR_COLLAPSE_STORAGE_KEY = "smart-credit:lender-sidebar-collapsed";
 
 type LenderSidebarProps = {
-  activeView: LenderView
-  onNavigate: (view: LenderView) => void
-  session: LenderSession
-  onOpenProfile: () => void
-  onLogout: () => void
-}
+  activeView: LenderView;
+  onNavigate: (view: LenderView) => void;
+  session: LenderSession;
+  onOpenProfile: () => void;
+  onLogout: () => void;
+};
 
 export default function LenderSidebar({
   activeView,
@@ -61,36 +64,38 @@ export default function LenderSidebar({
   onOpenProfile,
   onLogout,
 }: LenderSidebarProps) {
-  const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(() => {
-    if (typeof window === 'undefined') {
-      return false
+    if (typeof window === "undefined") {
+      return false;
     }
 
-    return window.localStorage.getItem(SIDEBAR_COLLAPSE_STORAGE_KEY) === 'true'
-  })
+    return window.localStorage.getItem(SIDEBAR_COLLAPSE_STORAGE_KEY) === "true";
+  });
 
   useEffect(() => {
     window.localStorage.setItem(
       SIDEBAR_COLLAPSE_STORAGE_KEY,
       String(isDesktopCollapsed),
-    )
-  }, [isDesktopCollapsed])
+    );
+  }, [isDesktopCollapsed]);
 
   const handleNavigate = (view: LenderView) => {
-    onNavigate(view)
-    setIsMobileOpen(false)
-  }
+    onNavigate(view);
+    setIsMobileOpen(false);
+  };
 
-  const lenderInitial = (session.displayName || session.lenderId || 'L')
+  const lenderInitial = (session.displayName || session.lenderId || "L")
     .slice(0, 1)
-    .toUpperCase()
+    .toUpperCase();
 
   return (
     <>
       <div className="lender-sidebar__mobile-bar">
         <div className="lender-sidebar__logo-inner">
-          <div className="lender-sidebar__logo-icon"><Landmark size={20} /></div>
+          <div className="lender-sidebar__logo-icon">
+            <Landmark size={20} />
+          </div>
           <div>
             <div className="lender-sidebar__logo-text">Smart Credit+</div>
             <div className="lender-sidebar__logo-sub">Lender Panel</div>
@@ -101,10 +106,10 @@ export default function LenderSidebar({
           type="button"
           className="lender-sidebar__mobile-toggle"
           aria-expanded={isMobileOpen}
-          aria-label={isMobileOpen ? 'Close menu' : 'Open menu'}
+          aria-label={isMobileOpen ? "Close menu" : "Open menu"}
           onClick={() => setIsMobileOpen((open) => !open)}
         >
-          {isMobileOpen ? 'Close' : 'Menu'}
+          {isMobileOpen ? "Close" : "Menu"}
         </button>
       </div>
 
@@ -118,8 +123,8 @@ export default function LenderSidebar({
       ) : null}
 
       <aside
-        className={`lender-sidebar${isMobileOpen ? ' lender-sidebar--open' : ''}${
-          isDesktopCollapsed ? ' lender-sidebar--collapsed' : ''
+        className={`lender-sidebar${isMobileOpen ? " lender-sidebar--open" : ""}${
+          isDesktopCollapsed ? " lender-sidebar--collapsed" : ""
         }`}
       >
         <div className="lender-sidebar__scroll">
@@ -128,16 +133,25 @@ export default function LenderSidebar({
               <button
                 type="button"
                 className="lender-sidebar__collapse-toggle"
-                aria-label={isDesktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                title={isDesktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                aria-label={
+                  isDesktopCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                }
+                title={
+                  isDesktopCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                }
                 onClick={() => setIsDesktopCollapsed((current) => !current)}
               >
-                <span aria-hidden="true" className="lender-sidebar__collapse-icon">
+                <span
+                  aria-hidden="true"
+                  className="lender-sidebar__collapse-icon"
+                >
                   <PanelLeftClose />
                 </span>
               </button>
 
-              <div className="lender-sidebar__logo-icon"><Landmark size={20} /></div>
+              <div className="lender-sidebar__logo-icon">
+                <Landmark size={20} />
+              </div>
               <div className="lender-sidebar__brand-copy">
                 <div className="lender-sidebar__logo-text">Smart Credit+</div>
                 <div className="lender-sidebar__logo-sub">Lender Panel</div>
@@ -147,17 +161,17 @@ export default function LenderSidebar({
 
           <nav className="lender-sidebar__nav" aria-label="Lender navigation">
             {navItems.map((item) => {
-              const isActive = item.id === activeView
-              const Icon = item.icon
+              const isActive = item.id === activeView;
+              const Icon = item.icon;
 
               return (
                 <button
                   key={item.id}
                   type="button"
                   className={`lender-sidebar__nav-item${
-                    isActive ? ' lender-sidebar__nav-item--active' : ''
+                    isActive ? " lender-sidebar__nav-item--active" : ""
                   }`}
-                  aria-current={isActive ? 'page' : undefined}
+                  aria-current={isActive ? "page" : undefined}
                   title={isDesktopCollapsed ? item.label : undefined}
                   onClick={() => handleNavigate(item.id)}
                 >
@@ -168,9 +182,11 @@ export default function LenderSidebar({
                   <span className="lender-sidebar__nav-icon" aria-hidden="true">
                     <Icon />
                   </span>
-                  <span className="lender-sidebar__nav-label">{item.label}</span>
+                  <span className="lender-sidebar__nav-label">
+                    {item.label}
+                  </span>
                 </button>
-              )
+              );
             })}
           </nav>
         </div>
@@ -183,9 +199,13 @@ export default function LenderSidebar({
               onClick={onOpenProfile}
               title={isDesktopCollapsed ? session.displayName : undefined}
             >
-              <div className="lender-sidebar__admin-avatar">{lenderInitial}</div>
+              <div className="lender-sidebar__admin-avatar">
+                {lenderInitial}
+              </div>
               <div className="lender-sidebar__profile-copy">
-                <div className="lender-sidebar__admin-name">{session.displayName}</div>
+                <div className="lender-sidebar__admin-name">
+                  {session.displayName}
+                </div>
                 <div className="lender-sidebar__admin-role">Lender account</div>
               </div>
             </button>
@@ -205,7 +225,7 @@ export default function LenderSidebar({
         </div>
       </aside>
     </>
-  )
+  );
 }
 
-export type { LenderView }
+export type { LenderView };

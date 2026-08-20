@@ -129,6 +129,8 @@ export type MyKycSubmissionResponse = {
 
 export type LegalDocumentStatus =
   | "awaiting_signatures"
+  | "awaiting_disbursement"
+  | "awaiting_borrower_signature"
   | "partially_accepted"
   | "finalizing"
   | "finalization_failed"
@@ -162,6 +164,14 @@ export type LegalAcceptanceSummary = {
   acceptedAt: string | null;
 };
 
+export type LegalDisbursementConfirmation = {
+  confirmed: boolean;
+  confirmedByLenderId: string | null;
+  confirmedAt: string | null;
+  principalMinor: number | null;
+  externalReference: string | null;
+};
+
 export type LegalDocument = {
   id: string;
   loanId: string;
@@ -184,6 +194,7 @@ export type LegalDocument = {
   consentTextVersion: "loan_agreement_consent_v1";
   borrowerAcceptance: LegalAcceptanceSummary;
   lenderAcceptance: LegalAcceptanceSummary;
+  disbursementConfirmation: LegalDisbursementConfirmation;
   pdfDownloadPath: string;
   pdfAvailable: boolean;
   signedPdfGeneratedAt: string | null;

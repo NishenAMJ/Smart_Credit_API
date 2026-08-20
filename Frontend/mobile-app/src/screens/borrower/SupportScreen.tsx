@@ -84,9 +84,7 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
     }
 
     if (actionId === "qa-3") {
-      navigation.navigate("ContactSupport", {
-        initialCategory: "dispute",
-      });
+      navigation.navigate("Disputes");
     }
   };
 
@@ -138,10 +136,15 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
           <View style={styles.assistantCopy}>
             <Text style={styles.assistantTitle}>Ask the AI Assistant</Text>
             <Text style={styles.assistantSubtitle}>
-              Get read-only help with your loans, payments, applications, and KYC status.
+              Get read-only help with your loans, payments, applications, and
+              KYC status.
             </Text>
           </View>
-          <Feather name="chevron-right" size={20} color={COLORS.textSecondary} />
+          <Feather
+            name="chevron-right"
+            size={20}
+            color={COLORS.textSecondary}
+          />
         </TouchableOpacity>
 
         <View style={styles.quickActionRow}>

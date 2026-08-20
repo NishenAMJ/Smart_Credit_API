@@ -3,6 +3,7 @@ import type {
   SharedLegalDocument,
 } from "../../legal/types";
 import { API_BASE_URL, getAuthHeaders } from "./api-config";
+import { io } from "socket.io-client";
 
 type DocumentResponse = {
   message?: string;
@@ -70,6 +71,24 @@ export async function retryLenderAgreementFinalization(
   return readJson<DocumentResponse>(response);
 }
 
+export async function confirmLenderDisbursement(
+  agreementId: string,
+  externalReference?: string,
+): Promise<DocumentResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/legal/documents/${encodeURIComponent(agreementId)}/disbursement-confirmation`,
+    {
+      method: "POST",
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        confirmationAccepted: true,
+        externalReference: externalReference?.trim() || undefined,
+      }),
+    },
+  );
+  return readJson<DocumentResponse>(response);
+}
+
 export async function downloadLenderAgreement(
   agreement: SharedLegalDocument,
 ): Promise<void> {
@@ -91,4 +110,19 @@ export async function downloadLenderAgreement(
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+export function subscribeToAgreementChanges(
+  token: string,
+  onChange: () => void,
+) {
+  const socket = io(API_BASE_URL.replace(/\/api\/?$/, ""), {
+    transports: ["websocket"],
+    auth: { token: `Bearer ${token}` },
+  });
+  socket.on("agreement:changed", onChange);
+  socket.io.on("reconnect", onChange);
+  return () => {
+    socket.disconnect();
+  };
 }

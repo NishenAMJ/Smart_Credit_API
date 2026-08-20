@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
@@ -15,6 +16,7 @@ import {
   loanAgreementIdFor,
 } from '../legal/loan-agreement.builder';
 import type { LoanAgreementParty } from '../legal/legal.types';
+import { ChatGateway } from '../chat/gateway/chat.gateway';
 
 export interface ApproveApplicationInput {
   approvedPrincipalMinor: number;
@@ -32,7 +34,10 @@ export interface SettleInstallmentInput {
 
 @Injectable()
 export class CoreLedgerService {
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    @Optional() private readonly gateway?: ChatGateway,
+  ) {}
 
   async approveApplication(
     applicationId: string,
@@ -47,6 +52,7 @@ export class CoreLedgerService {
     const loanRef = db.collection(COLLECTIONS.loans).doc();
     const agreementId = loanAgreementIdFor(loanRef.id, 1);
     const agreementRef = db.collection('loanAgreements').doc(agreementId);
+    let approvedBorrowerId = '';
 
     await db.runTransaction(async (transaction) => {
       const applicationSnapshot = await transaction.get(applicationRef);
@@ -68,6 +74,7 @@ export class CoreLedgerService {
 
       const listingId = String(application.listingId ?? '');
       const borrowerId = String(application.borrowerId ?? '');
+      approvedBorrowerId = borrowerId;
       if (!listingId || !borrowerId) {
         throw new BadRequestException(
           'Application listing and borrower references are required.',
@@ -75,12 +82,16 @@ export class CoreLedgerService {
       }
       const [listingSnapshot, lenderSnapshot, borrowerSnapshot] =
         await Promise.all([
-          transaction.get(db.collection(COLLECTIONS.loanListings).doc(listingId)),
+          transaction.get(
+            db.collection(COLLECTIONS.loanListings).doc(listingId),
+          ),
           transaction.get(db.collection(COLLECTIONS.users).doc(lenderId)),
           transaction.get(db.collection(COLLECTIONS.users).doc(borrowerId)),
         ]);
       if (!listingSnapshot.exists) {
-        throw new NotFoundException('The application listing no longer exists.');
+        throw new NotFoundException(
+          'The application listing no longer exists.',
+        );
       }
       if (!lenderSnapshot.exists || !borrowerSnapshot.exists) {
         throw new NotFoundException('A loan participant no longer exists.');
@@ -183,6 +194,63 @@ export class CoreLedgerService {
       });
     });
 
+    const notificationTime = Timestamp.now();
+    const realtimePayload = {
+      agreementId,
+      loanId: loanRef.id,
+      status: 'awaiting_signatures',
+      changeType: 'created',
+      updatedAt: notificationTime.toDate().toISOString(),
+    };
+    this.gateway?.emitToUser(lenderId, 'agreement:changed', realtimePayload);
+    this.gateway?.emitToUser(
+      approvedBorrowerId,
+      'agreement:changed',
+      realtimePayload,
+    );
+    await Promise.all([
+      db.collection('borrowerNotifications').add({
+        borrowerId: approvedBorrowerId,
+        category: 'agreement',
+        severity: 'info',
+        title: 'Loan agreement created',
+        message:
+          'Your application was approved. The lender must sign and confirm the external transfer before you can sign.',
+        isRead: false,
+        relatedEntityType: 'loanAgreement',
+        relatedEntityId: agreementId,
+        actionTarget: 'Agreement',
+        metadata: {
+          agreementId,
+          loanId: loanRef.id,
+          status: 'awaiting_signatures',
+        },
+        createdAt: notificationTime,
+        updatedAt: notificationTime,
+        readAt: null,
+      }),
+      db.collection('notifications').add({
+        userId: lenderId,
+        category: 'agreement',
+        eventType: 'created',
+        title: 'Agreement ready to sign',
+        body: 'The approved loan agreement is ready for your signature.',
+        severity: 'info',
+        isRead: false,
+        createdAt: notificationTime,
+        readAt: null,
+        entityType: 'loanAgreement',
+        entityId: agreementId,
+        actionLabel: 'Open agreement',
+        actionTarget: 'agreements',
+        metadata: {
+          agreementId,
+          loanId: loanRef.id,
+          status: 'awaiting_signatures',
+        },
+      }),
+    ]);
+
     return { loanId: loanRef.id, agreementId };
   }
 
@@ -250,6 +318,7 @@ export class CoreLedgerService {
         status: 'completed',
         currency: 'LKR',
         amountMinor: amount,
+        platformFeeMinor: Math.round(amount * 0.02),
         lenderId: loan.lenderId,
         borrowerId,
         loanId,

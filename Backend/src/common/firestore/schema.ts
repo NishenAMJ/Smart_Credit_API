@@ -208,6 +208,7 @@ export interface TransactionDocument {
   status: 'pending' | 'completed' | 'failed' | 'reversed';
   currency: Currency;
   amountMinor: number;
+  platformFeeMinor: number;
   lenderId: string | null;
   borrowerId: string | null;
   loanId: string | null;
@@ -220,6 +221,129 @@ export interface TransactionDocument {
   note: string | null;
   initiatedByUserId: string;
   completedAt: Timestamp | null;
+  createdAt: Timestamp;
+}
+
+export type LoanAgreementStatus =
+  | 'awaiting_signatures'
+  | 'awaiting_disbursement'
+  | 'awaiting_borrower_signature'
+  | 'partially_accepted'
+  | 'finalizing'
+  | 'finalization_failed'
+  | 'fully_accepted'
+  | 'superseded'
+  | 'cancelled';
+
+export interface LoanAgreementDocument {
+  agreementId: string;
+  loanId: string;
+  applicationId: string;
+  listingId: string;
+  version: number;
+  status: LoanAgreementStatus;
+  borrowerId: string;
+  lenderId: string;
+  borrowerAcceptance: {
+    accepted: boolean;
+    signedName: string | null;
+    acceptedAt: Timestamp | null;
+  };
+  lenderAcceptance: {
+    accepted: boolean;
+    signedName: string | null;
+    acceptedAt: Timestamp | null;
+  };
+  disbursementConfirmation: {
+    confirmed: boolean;
+    confirmedByLenderId: string | null;
+    confirmedAt: Timestamp | null;
+    principalMinor: number | null;
+    externalReference: string | null;
+    ipAddressHash: string | null;
+    userAgent: string | null;
+  };
+  termsHash: string;
+  updatedAt: Timestamp;
+  finalizedAt: Timestamp | null;
+  finalizationError: string | null;
+}
+
+export interface LoanAgreementAcceptanceDocument {
+  acceptanceId: string;
+  agreementId: string;
+  loanId: string;
+  userId: string;
+  role: 'borrower' | 'lender';
+  agreementVersion: number;
+  termsHash: string;
+  signedName: string;
+  consentAccepted: true;
+  consentTextVersion: 'loan_agreement_consent_v1';
+  ipAddressHash: string | null;
+  userAgent: string | null;
+  acceptedAt: Timestamp;
+  fundsReceivedConfirmed: boolean;
+}
+
+export type DisputeStatus =
+  | 'open'
+  | 'under_review'
+  | 'awaiting_response'
+  | 'escalated'
+  | 'resolved'
+  | 'closed';
+
+export interface DisputeDocument {
+  disputeId: string;
+  disputeCode: string;
+  loanId: string;
+  transactionId: string | null;
+  installmentId: string | null;
+  complainantId: string;
+  complainantRole: 'borrower' | 'lender';
+  respondentId: string;
+  respondentRole: 'borrower' | 'lender';
+  borrowerId: string;
+  lenderId: string;
+  borrowerName: string;
+  lenderName: string;
+  category: 'payment' | 'loan_terms' | 'fraud' | 'conduct' | 'other';
+  subject: string;
+  description: string;
+  desiredOutcome: string;
+  disputedAmountMinor: number | null;
+  currency: Currency;
+  evidenceDocumentIds: string[];
+  status: DisputeStatus;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  assignedAdminId: string | null;
+  resolution: {
+    summary: string;
+    recommendedActions: string[];
+    issuedByAdminId: string;
+    issuedAt: Timestamp;
+    reopenUntil: Timestamp;
+  } | null;
+  acknowledgements: Record<string, Timestamp>;
+  reopenCount: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  resolvedAt: Timestamp | null;
+  closedAt: Timestamp | null;
+}
+
+export interface DisputeEventDocument {
+  eventId: string;
+  disputeId: string;
+  type: string;
+  actorUserId: string;
+  actorRole: UserRole | 'system';
+  message: string;
+  documentIds: string[];
+  visibility: 'shared' | 'admin';
+  previousStatus: DisputeStatus | null;
+  nextStatus: DisputeStatus | null;
   createdAt: Timestamp;
 }
 

@@ -41,6 +41,7 @@ export type BorrowerStackParamList = {
   LoanAgreement: { initialLoanId?: string } | undefined;
   NearbyLendersMap: undefined;
   AiAssistant: undefined;
+  Disputes: undefined;
 };
 
 export type BorrowerNavigation =

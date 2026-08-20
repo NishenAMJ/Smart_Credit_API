@@ -4,6 +4,8 @@ import type { UserRole } from '../auth/auth.types';
 
 export type LoanAgreementStatus =
   | 'awaiting_signatures'
+  | 'awaiting_disbursement'
+  | 'awaiting_borrower_signature'
   | 'partially_accepted'
   | 'finalizing'
   | 'finalization_failed'
@@ -37,6 +39,16 @@ export interface LoanAgreementAcceptanceSummary {
   acceptedAt: Timestamp | null;
 }
 
+export interface LoanAgreementDisbursementConfirmation {
+  confirmed: boolean;
+  confirmedByLenderId: string | null;
+  confirmedAt: Timestamp | null;
+  principalMinor: number | null;
+  externalReference: string | null;
+  ipAddressHash: string | null;
+  userAgent: string | null;
+}
+
 export interface LoanAgreementDocument {
   agreementId: string;
   loanId: string;
@@ -56,6 +68,7 @@ export interface LoanAgreementDocument {
   consentTextVersion: 'loan_agreement_consent_v1';
   borrowerAcceptance: LoanAgreementAcceptanceSummary;
   lenderAcceptance: LoanAgreementAcceptanceSummary;
+  disbursementConfirmation: LoanAgreementDisbursementConfirmation;
   generatedByUserId: string;
   generatedByRole: UserRole | 'system';
   generatedAt: Timestamp;
@@ -84,6 +97,7 @@ export interface LoanAgreementAcceptanceDocument {
   ipAddressHash: string | null;
   userAgent: string | null;
   acceptedAt: Timestamp;
+  fundsReceivedConfirmed: boolean;
 }
 
 export interface AcceptLoanAgreementInput {
@@ -91,6 +105,14 @@ export interface AcceptLoanAgreementInput {
   consentAccepted: boolean;
   agreementVersion: number;
   termsHash: string;
+  ipAddress?: string;
+  userAgent?: string;
+  fundsReceivedConfirmed?: boolean;
+}
+
+export interface ConfirmAgreementDisbursementInput {
+  confirmationAccepted: boolean;
+  externalReference?: string;
   ipAddress?: string;
   userAgent?: string;
 }

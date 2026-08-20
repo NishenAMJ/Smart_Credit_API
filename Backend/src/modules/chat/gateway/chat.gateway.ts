@@ -79,8 +79,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
      *   });
      */
     const raw =
-      client.handshake.auth?.token ??
-      client.handshake.headers['authorization'];
+      client.handshake.auth?.token ?? client.handshake.headers['authorization'];
 
     if (!raw) {
       this.logger.warn(`[${client.id}] Rejected — no token in handshake`);
@@ -117,7 +116,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.users.setOnlineStatus(userId, true);
     this.server.emit('userOnline', { userId, isOnline: true });
 
-    this.logger.log(`[${client.id}] Connected — userId: ${userId} role: ${payload.role}`);
+    this.logger.log(
+      `[${client.id}] Connected — userId: ${userId} role: ${payload.role}`,
+    );
 
     await this.flushOfflineQueue(userId, client);
   }
@@ -152,7 +153,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       throw new WsException('Invalid sendMessage payload');
     }
 
-    const isBlocked = await this.blocks.isBlocked(senderId, payload.recipientId);
+    const isBlocked = await this.blocks.isBlocked(
+      senderId,
+      payload.recipientId,
+    );
     if (isBlocked) {
       client.emit('messageFailed', {
         messageId: payload.message.id,
@@ -161,11 +165,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    const delivered = this.deliverToUser(payload.recipientId, 'receiveMessage', {
-      ...payload.message,
-      conversationId: payload.conversationId,
-      status: 'delivered',
-    });
+    const delivered = this.deliverToUser(
+      payload.recipientId,
+      'receiveMessage',
+      {
+        ...payload.message,
+        conversationId: payload.conversationId,
+        status: 'delivered',
+      },
+    );
 
     if (delivered) {
       client.emit('messageDelivered', {
@@ -173,7 +181,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         conversationId: payload.conversationId,
         status: 'delivered',
       });
-      this.logger.log(`Message ${payload.message.id} delivered to ${payload.recipientId}`);
+      this.logger.log(
+        `Message ${payload.message.id} delivered to ${payload.recipientId}`,
+      );
     } else {
       if (!this.offlineQueue.has(payload.recipientId)) {
         this.offlineQueue.set(payload.recipientId, []);
@@ -185,7 +195,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         conversationId: payload.conversationId,
         status: 'sent',
       });
-      this.logger.log(`Message ${payload.message.id} queued for offline user ${payload.recipientId}`);
+      this.logger.log(
+        `Message ${payload.message.id} queued for offline user ${payload.recipientId}`,
+      );
     }
   }
 
@@ -236,13 +248,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  private deliverToUser(userId: string, event: string, data: any): boolean {
+  emitToUser(userId: string, event: string, data: unknown): boolean {
+    if (!this.server?.sockets) return false;
     const socketIds = this.userSockets.get(userId);
     if (!socketIds || socketIds.size === 0) return false;
     for (const socketId of socketIds) {
       this.server.sockets.sockets.get(socketId)?.emit(event, data);
     }
     return true;
+  }
+
+  emitToRole(role: string, event: string, data: unknown): number {
+    if (!this.server?.sockets) return 0;
+    let delivered = 0;
+    for (const socket of this.server.sockets.sockets.values()) {
+      if (socket.data?.role === role) {
+        socket.emit(event, data);
+        delivered += 1;
+      }
+    }
+    return delivered;
+  }
+
+  private deliverToUser(userId: string, event: string, data: any): boolean {
+    return this.emitToUser(userId, event, data);
   }
 
   private async flushOfflineQueue(userId: string, client: Socket) {

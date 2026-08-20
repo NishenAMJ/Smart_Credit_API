@@ -65,14 +65,6 @@ export default function Analytics() {
     void loadReports();
   }, [loadReports]);
 
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      void loadReports();
-    }, 10000);
-
-    return () => window.clearInterval(interval);
-  }, [loadReports]);
-
   const summaryCards = [
     {
       label: "Total Loans",

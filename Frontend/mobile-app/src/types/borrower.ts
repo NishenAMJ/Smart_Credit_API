@@ -14,7 +14,8 @@ export type ApplicationStatus =
   | "approved"
   | "rejected"
   | "cancelled"
-  | "funded";
+  | "funded"
+  | "converted";
 
 export type PaymentStatus = "completed" | "pending" | "failed" | string;
 
@@ -101,6 +102,7 @@ export interface BorrowerRepayment {
 export interface BorrowerApplication {
   applicationId?: string;
   requestId?: string;
+  convertedLoanId?: string | null;
   adId?: string;
   status?: ApplicationStatus;
   createdAt?: string;

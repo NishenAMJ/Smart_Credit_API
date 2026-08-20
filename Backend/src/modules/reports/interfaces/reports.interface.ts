@@ -61,6 +61,11 @@ export interface DashboardAnalytics {
     totalRevenue: number;
     activeDisputes: number;
   };
+  userRoles: {
+    admin: number;
+    borrower: number;
+    lender: number;
+  };
   recentActivity: {
     newUsersToday: number;
     loansCreatedToday: number;

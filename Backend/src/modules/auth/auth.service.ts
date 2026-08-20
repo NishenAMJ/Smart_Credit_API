@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { type CollectionReference, Timestamp } from 'firebase-admin/firestore';
 
 import { FirebaseService } from '../../firebase/firebase.service';
+import { buildSearchTokens } from '../../common/firestore/search-tokens';
 import {
   AuthResponseDto,
   MeResponseDto,
@@ -76,6 +77,7 @@ export class AuthService {
     const user: UserDocument = {
       userId: userRef.id,
       roles: [registerDto.role],
+      primaryRole: registerDto.role,
       fullName: registerDto.fullName.trim(),
       photoUrl: null,
       phone: phoneNormalized,
@@ -100,6 +102,13 @@ export class AuthService {
           : null,
       kycStatus: 'not_submitted',
       accountStatus: 'active',
+      searchTokens: buildSearchTokens([
+        userRef.id,
+        registerDto.fullName,
+        emailLower,
+        phoneNormalized,
+        registerDto.role,
+      ]),
       createdAt: now,
       updatedAt: now,
       lastLoginAt: null,

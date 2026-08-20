@@ -72,6 +72,7 @@ export function buildLoanAgreement(input: {
     consentTextVersion: LOAN_AGREEMENT_CONSENT_TEXT_VERSION,
     borrowerAcceptance: emptyAcceptance(),
     lenderAcceptance: emptyAcceptance(),
+    disbursementConfirmation: emptyDisbursementConfirmation(),
     generatedByUserId: input.generatedByUserId,
     generatedByRole: input.generatedByRole,
     generatedAt: input.now,
@@ -140,6 +141,10 @@ export function buildAgreementHtml(agreement: LoanAgreementDocument): string {
     <li>Disputes are handled through the Smart Credit dispute workflow. This template requires legal review before production use.</li>
   </ol>
 
+  <div class="card"><strong>External transfer confirmation</strong><br />${disbursementHtml(
+    agreement,
+  )}</div>
+
   <div class="signatures">
     ${signatureBlock(agreement.borrowerAcceptance, 'Borrower')}
     ${signatureBlock(agreement.lenderAcceptance, 'Lender')}
@@ -165,6 +170,30 @@ export function formatCurrencyMinor(value: number): string {
 
 function emptyAcceptance() {
   return { accepted: false, signedName: null, acceptedAt: null };
+}
+
+function emptyDisbursementConfirmation() {
+  return {
+    confirmed: false,
+    confirmedByLenderId: null,
+    confirmedAt: null,
+    principalMinor: null,
+    externalReference: null,
+    ipAddressHash: null,
+    userAgent: null,
+  };
+}
+
+function disbursementHtml(agreement: LoanAgreementDocument): string {
+  const confirmation = agreement.disbursementConfirmation;
+  if (!confirmation?.confirmed) return 'Pending lender confirmation';
+  return `Confirmed at: ${escapeHtml(
+    confirmation.confirmedAt?.toDate().toISOString() ?? 'Unknown',
+  )}<br />Amount: ${escapeHtml(
+    formatCurrencyMinor(confirmation.principalMinor ?? agreement.terms.principalMinor),
+  )}<br />External reference: ${escapeHtml(
+    confirmation.externalReference ?? 'Not provided',
+  )}`;
 }
 
 function partyHtml(party: LoanAgreementParty): string {

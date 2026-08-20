@@ -256,7 +256,9 @@ export class BorrowerService {
     amount: number,
     paidAmount: number,
   ): string {
-    const status = String(value ?? '').trim().toLowerCase();
+    const status = String(value ?? '')
+      .trim()
+      .toLowerCase();
 
     if (['paid', 'completed'].includes(status) || paidAmount >= amount) {
       return 'paid';
@@ -911,6 +913,8 @@ export class BorrowerService {
       borrowerId: dto.borrowerId,
       lenderId: loan.lenderId,
       amount: dto.amount,
+      amountMinor: Math.round(dto.amount * 100),
+      platformFeeMinor: Math.round(dto.amount * 2),
       principalPaid,
       interestPaid,
       paymentMethod: dto.paymentMethod,
@@ -935,6 +939,8 @@ export class BorrowerService {
       borrowerId: dto.borrowerId,
       lenderId: loan.lenderId,
       amount: dto.amount,
+      amountMinor: Math.round(dto.amount * 100),
+      platformFeeMinor: Math.round(dto.amount * 2),
       type: 'repayment',
       status,
       paymentMethod: dto.paymentMethod,
@@ -990,8 +996,7 @@ export class BorrowerService {
           paidAmount,
           amountPaid: paidAmount,
           remainingAmount,
-          paidTransactionId:
-            remainingAmount === 0 ? transactionRef.id : null,
+          paidTransactionId: remainingAmount === 0 ? transactionRef.id : null,
           paidAt: remainingAmount === 0 ? now : null,
           updatedAt: now,
         });
@@ -1106,34 +1111,35 @@ export class BorrowerService {
 
     const nonceRef = this.db.collection(this.QR_NONCES_COL).doc(payload.nonce);
 
-    const validateNonce = async (markUsed: boolean) => this.db.runTransaction(async (tx) => {
-      const nonceDoc = await tx.get(nonceRef);
-      if (!nonceDoc.exists) {
-        throw new BadRequestException('QR nonce not found.');
-      }
+    const validateNonce = async (markUsed: boolean) =>
+      this.db.runTransaction(async (tx) => {
+        const nonceDoc = await tx.get(nonceRef);
+        if (!nonceDoc.exists) {
+          throw new BadRequestException('QR nonce not found.');
+        }
 
-      const nonceData = nonceDoc.data() as
-        | { used?: boolean; expiresAt?: number }
-        | undefined;
+        const nonceData = nonceDoc.data() as
+          | { used?: boolean; expiresAt?: number }
+          | undefined;
 
-      if (nonceData?.used) {
-        throw new BadRequestException('QR code has already been used.');
-      }
+        if (nonceData?.used) {
+          throw new BadRequestException('QR code has already been used.');
+        }
 
-      if (
-        typeof nonceData?.expiresAt === 'number' &&
-        nonceData.expiresAt < Date.now()
-      ) {
-        throw new BadRequestException('QR code is expired.');
-      }
+        if (
+          typeof nonceData?.expiresAt === 'number' &&
+          nonceData.expiresAt < Date.now()
+        ) {
+          throw new BadRequestException('QR code is expired.');
+        }
 
-      if (markUsed) {
-        tx.update(nonceRef, {
-          used: true,
-          usedAt: FieldValue.serverTimestamp(),
-        });
-      }
-    });
+        if (markUsed) {
+          tx.update(nonceRef, {
+            used: true,
+            usedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      });
 
     await validateNonce(consume);
 
@@ -1212,7 +1218,7 @@ export class BorrowerService {
       .sort(
         (a, b) =>
           this.timestampToMillis(b.paidAt as TimestampLike) -
-          this.timestampToMillis(a.paidAt as TimestampLike) ||
+            this.timestampToMillis(a.paidAt as TimestampLike) ||
           this.timestampToMillis(b.createdAt as TimestampLike) -
             this.timestampToMillis(a.createdAt as TimestampLike),
       );

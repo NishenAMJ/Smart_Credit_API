@@ -29,6 +29,7 @@ import { DisputesModule } from './modules/disputes/disputes.module';
 import { QrScannerModule } from './modules/qrScanner/qr-scanner.module';
 import { LocationModule } from './modules/location/location.module';
 import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
+import { AdminQueryCacheModule } from './common/cache/admin-query-cache.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    AdminQueryCacheModule,
     CoreLedgerModule,
     FirebaseModule,
     AuthModule,

@@ -3,6 +3,7 @@ export type NotificationCategory =
   | 'transaction'
   | 'repayment_risk'
   | 'dispute'
+  | 'agreement'
   | 'ad'
   | 'system';
 
@@ -13,6 +14,7 @@ export type NotificationEntityType =
   | 'transaction'
   | 'loan'
   | 'dispute'
+  | 'loanAgreement'
   | 'ad'
   | 'system'
   | null;
@@ -23,6 +25,8 @@ export type NotificationActionTarget =
   | 'analytics'
   | 'create-ad'
   | 'settings'
+  | 'disputes'
+  | 'agreements'
   | null;
 
 export type NotificationStateFilter = 'all' | 'unread' | 'read';
@@ -30,6 +34,7 @@ export type NotificationStateFilter = 'all' | 'unread' | 'read';
 export interface LenderNotificationMetadata {
   borrowerId?: string;
   loanId?: string;
+  agreementId?: string;
   adId?: string;
   amount?: number;
   status?: string;

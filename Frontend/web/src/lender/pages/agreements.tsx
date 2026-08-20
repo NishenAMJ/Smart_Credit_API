@@ -10,10 +10,12 @@ import {
 import type { SharedLegalDocument } from "../../legal/types";
 import {
   acceptLenderAgreement,
+  confirmLenderDisbursement,
   downloadLenderAgreement,
   fetchLenderAgreements,
   fetchLatestLenderAgreement,
   retryLenderAgreementFinalization,
+  subscribeToAgreementChanges,
 } from "../lib/legal-agreements-api";
 import type { LenderSession } from "../lib/lender-session";
 import AgreementPortfolioCard from "../components/agreements/AgreementPortfolioCard";
@@ -48,12 +50,20 @@ export default function LenderAgreementsPage({
 }: Props) {
   const [records, setRecords] = useState<SharedLegalDocument[]>([]);
   const [selected, setSelected] = useState<SharedLegalDocument | null>(null);
-  const [signedName, setSignedName] = useState(session.displayName);
+  const [signedName, setSignedName] = useState("");
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [transferConfirmed, setTransferConfirmed] = useState(false);
+  const [transferReference, setTransferReference] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    if (selected && !selected.lenderAcceptance.accepted) {
+      setSignedName(selected.lender.fullName);
+    }
+  }, [selected]);
 
   async function loadList() {
     setLoading(true);
@@ -83,6 +93,11 @@ export default function LenderAgreementsPage({
     // Session changes remount the lender workspace; no token is copied into state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.lenderId]);
+
+  useEffect(
+    () => subscribeToAgreementChanges(session.accessToken, loadList),
+    [session.accessToken],
+  );
 
   useEffect(() => {
     if (!initialLoanId) return;
@@ -169,6 +184,31 @@ export default function LenderAgreementsPage({
     }
   }
 
+  async function handleConfirmTransfer() {
+    if (!selected || !transferConfirmed) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await confirmLenderDisbursement(
+        selected.id,
+        transferReference,
+      );
+      if (response.document) setSelected(response.document);
+      setNotice(response.message ?? "External transfer confirmed.");
+      setTransferConfirmed(false);
+      setTransferReference("");
+      await loadList();
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to confirm the external transfer.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleDownload() {
     if (!selected) return;
     setBusy(true);
@@ -187,6 +227,8 @@ export default function LenderAgreementsPage({
   }
 
   const lenderSigned = selected?.lenderAcceptance.accepted ?? false;
+  const disbursementConfirmed =
+    selected?.disbursementConfirmation.confirmed ?? false;
 
   return (
     <section className="dashboard-panel lender-agreements">
@@ -340,6 +382,18 @@ export default function LenderAgreementsPage({
                   ? `${selected.lenderAcceptance.signedName} signed`
                   : "Awaiting your signature"}
               </p>
+              <p>
+                <CheckCircle2 size={16} /> External transfer: {" "}
+                {disbursementConfirmed
+                  ? `Confirmed${
+                      selected.disbursementConfirmation.externalReference
+                        ? ` (${selected.disbursementConfirmation.externalReference})`
+                        : ""
+                    }`
+                  : lenderSigned
+                    ? "Waiting for your confirmation"
+                    : "Sign the agreement first"}
+              </p>
             </div>
 
             {!selected.legacyReadOnly && !lenderSigned ? (
@@ -349,8 +403,12 @@ export default function LenderAgreementsPage({
                   <input
                     className="input"
                     value={signedName}
-                    onChange={(event) => setSignedName(event.target.value)}
+                    readOnly
+                    aria-describedby="verified-signing-name-help"
                   />
+                  <small id="verified-signing-name-help">
+                    Verified profile name. Update your profile if this is incorrect.
+                  </small>
                 </label>
                 <label className="lender-agreements__consent">
                   <input
@@ -373,6 +431,41 @@ export default function LenderAgreementsPage({
                   onClick={() => void handleSign()}
                 >
                   <FileSignature size={17} /> Sign agreement
+                </button>
+              </div>
+            ) : null}
+
+            {!selected.legacyReadOnly && lenderSigned && !disbursementConfirmed ? (
+              <div className="lender-agreements__sign-form">
+                <label>
+                  <span>External transfer reference (optional)</span>
+                  <input
+                    className="input"
+                    value={transferReference}
+                    onChange={(event) => setTransferReference(event.target.value)}
+                    placeholder="Bank reference or receipt number"
+                  />
+                </label>
+                <label className="lender-agreements__consent">
+                  <input
+                    type="checkbox"
+                    checked={transferConfirmed}
+                    onChange={(event) =>
+                      setTransferConfirmed(event.target.checked)
+                    }
+                  />
+                  <span>
+                    I confirm that I sent the agreement principal to the
+                    borrower outside Smart Credit.
+                  </span>
+                </label>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  disabled={busy || !transferConfirmed}
+                  onClick={() => void handleConfirmTransfer()}
+                >
+                  Confirm funds sent
                 </button>
               </div>
             ) : null}

@@ -128,10 +128,21 @@ export default function NotificationsScreen({
     void fetchNotifications();
   }, [fetchNotifications]);
 
+  const handleNotificationPress = async (item: BorrowerNotification) => {
+    await markOneAsRead(item);
+    if (item.category === "agreement") {
+      const loanId =
+        typeof item.metadata.loanId === "string"
+          ? item.metadata.loanId
+          : undefined;
+      navigation.navigate("LoanAgreement", { initialLoanId: loanId });
+    }
+  };
+
   const renderNotificationItem = ({ item }: { item: BorrowerNotification }) => (
     <TouchableOpacity
       style={styles.notificationCard}
-      onPress={() => void markOneAsRead(item)}
+      onPress={() => void handleNotificationPress(item)}
     >
       <View
         style={[
