@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api-config'
+import { API_BASE_URL, getAuthHeaders } from './api-config'
 
 export type DefaultLandingPage = 'dashboard' | 'analytics'
 export type DefaultAnalyticsRange = '30d' | '90d' | '365d'
@@ -70,6 +70,7 @@ export async function fetchLenderSettings(
 ): Promise<LenderSettings> {
   const response = await fetch(
     `${API_BASE_URL}/lender-settings/${encodeURIComponent(lenderId)}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {
@@ -87,9 +88,9 @@ export async function updateLenderSettings(
     `${API_BASE_URL}/lender-settings/${encodeURIComponent(lenderId)}`,
     {
       method: 'PATCH',
-      headers: {
+      headers: getAuthHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify(payload),
     },
   )

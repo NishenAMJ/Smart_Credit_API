@@ -96,6 +96,7 @@ export async function fetchDashboardSummary(
 ): Promise<DashboardSummaryResponse> {
   const response = await fetch(
     `${API_BASE_URL}/dashboard/summary?lenderId=${encodeURIComponent(lenderId)}`,
+    { headers: getAuthHeaders() },
   );
 
   if (!response.ok) {
@@ -123,6 +124,7 @@ export async function fetchDashboardBorrowers(
 
   const response = await fetch(
     `${API_BASE_URL}/dashboard/borrowers?${params.toString()}`,
+    { headers: getAuthHeaders() },
   );
 
   if (!response.ok) {
@@ -140,6 +142,7 @@ export async function fetchBorrowerDetails(
     `${API_BASE_URL}/dashboard/borrowers/${borrowerId}?lenderId=${encodeURIComponent(
       lenderId,
     )}`,
+    { headers: getAuthHeaders() },
   );
 
   if (!response.ok) {

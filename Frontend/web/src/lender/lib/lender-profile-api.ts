@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api-config'
+import { API_BASE_URL, getAuthHeaders } from './api-config'
 
 export type LenderProfile = {
   lenderId: string
@@ -50,6 +50,7 @@ async function parseError(response: Response, fallback: string): Promise<never> 
 export async function fetchLenderProfile(lenderId: string): Promise<LenderProfile> {
   const response = await fetch(
     `${API_BASE_URL}/lender-profile/${encodeURIComponent(lenderId)}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {
@@ -67,9 +68,9 @@ export async function updateLenderProfile(
     `${API_BASE_URL}/lender-profile/${encodeURIComponent(lenderId)}`,
     {
       method: 'PATCH',
-      headers: {
+      headers: getAuthHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify(payload),
     },
   )

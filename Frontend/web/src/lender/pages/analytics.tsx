@@ -9,7 +9,7 @@ import type {
   AnalyticsTrendPoint,
 } from '../lib/analytics-api'
 import type { LenderSession } from '../lib/lender-session'
-import { API_BASE_URL } from '../lib/api-config'
+import { API_BASE_URL, getAuthHeaders } from '../lib/api-config'
 
 const RANGE_OPTIONS = [
   { key: '30d', label: '30 Days' },
@@ -97,6 +97,7 @@ async function fetchAnalyticsOverview(
     `${API_BASE_URL}/analytics/overview?lenderId=${encodeURIComponent(
       lenderId,
     )}&range=${encodeURIComponent(range)}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {
@@ -114,6 +115,7 @@ async function fetchAnalyticsSummary(
     `${API_BASE_URL}/analytics/summary?lenderId=${encodeURIComponent(
       lenderId,
     )}&range=${encodeURIComponent(range)}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {
@@ -132,6 +134,7 @@ async function fetchAnalyticsDrilldown(
     `${API_BASE_URL}/analytics/drilldown?lenderId=${encodeURIComponent(
       lenderId,
     )}&type=${encodeURIComponent(type)}&range=${encodeURIComponent(range)}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {

@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api-config'
+import { API_BASE_URL, getAuthHeaders } from './api-config'
 
 export type AnalyticsRange = {
   key: string
@@ -127,7 +127,10 @@ export async function fetchAnalyticsDrilldown(
     searchParams.set('cursor', options.cursor)
   }
 
-  const response = await fetch(`${API_BASE_URL}/analytics/drilldown?${searchParams.toString()}`)
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/drilldown?${searchParams.toString()}`,
+    { headers: getAuthHeaders() },
+  )
 
   if (!response.ok) {
     throw new Error(`Analytics drilldown failed with status ${response.status}`)

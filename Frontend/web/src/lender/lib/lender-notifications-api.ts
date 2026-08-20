@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api-config'
+import { API_BASE_URL, getAuthHeaders } from './api-config'
 
 export type NotificationCategory =
   | 'loan_request'
@@ -105,6 +105,7 @@ export async function fetchLenderNotifications(
 
   const response = await fetch(
     `${API_BASE_URL}/lender-notifications?${searchParams.toString()}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {
@@ -119,6 +120,7 @@ export async function fetchLenderNotificationSummary(
 ): Promise<LenderNotificationsSummaryResponse> {
   const response = await fetch(
     `${API_BASE_URL}/lender-notifications/summary?lenderId=${encodeURIComponent(lenderId)}`,
+    { headers: getAuthHeaders() },
   )
 
   if (!response.ok) {
@@ -136,9 +138,9 @@ export async function markNotificationAsRead(
     `${API_BASE_URL}/lender-notifications/${encodeURIComponent(notificationId)}/read`,
     {
       method: 'PATCH',
-      headers: {
+      headers: getAuthHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify({ lenderId }),
     },
   )
@@ -168,6 +170,7 @@ export async function markAllNotificationsAsRead(
     `${API_BASE_URL}/lender-notifications/mark-all-read?${searchParams.toString()}`,
     {
       method: 'PATCH',
+      headers: getAuthHeaders(),
     },
   )
 
