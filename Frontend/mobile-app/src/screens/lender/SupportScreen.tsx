@@ -50,19 +50,19 @@ const CONTACT_OPTIONS = [
 const FAQ_ITEMS = [
   {
     id: "q1",
-    question: "How do I create a new loan offer?",
+    question: "How do I create a new advertisement?",
     answer:
-      'Go to your Dashboard and tap "New Offer" under Quick Actions, or navigate to ' +
-      "My Offers and tap the + button. Fill in the loan type, amount range, interest " +
-      "rate, and tenure, then publish your offer.",
+      "Open My Ads and tap the + button, or select Create Ad from your lender dashboard. " +
+      "Enter the amount range, annual interest rate, tenure, borrower focus, and requirements. " +
+      "The advertisement is submitted for admin review before it becomes active.",
   },
   {
     id: "q2",
-    question: "How does boosting an advertisement work?",
+    question: "How do I check advertisement performance?",
     answer:
-      "Boosting moves your ad to the top of search results for a set period. Open " +
-      "My Ads, select an ad, tap Boost, choose a package, make the payment, and enter " +
-      "the payment reference number to activate it.",
+      "Open My Ads to see the applications and funded loans linked to each advertisement. " +
+      "Tap Analytics on an advertisement to review its application statuses, funded-loan " +
+      "statuses, and funding rate.",
   },
   {
     id: "q3",
@@ -77,16 +77,16 @@ const FAQ_ITEMS = [
     question: "What happens if a borrower misses a payment?",
     answer:
       "Missed payments appear under Payment Reminders with the number of days overdue. " +
-      "You can send a reminder directly from the app. If payments remain overdue for an " +
-      "extended period, you can escalate the case under Legal Actions.",
+      "You can contact the borrower using the available reminder tools. If the problem " +
+      "continues, use Help & Support to report the issue for assistance.",
   },
   {
     id: "q5",
-    question: "Can I edit a loan offer after publishing?",
+    question: "Can I edit an advertisement after publishing?",
     answer:
-      "Yes. Go to My Offers, select the offer you want to change, and tap Edit. You can " +
-      "update the interest rate, amount range, and other details unless the offer " +
-      "already has active loans tied to specific terms.",
+      "Yes. Open My Ads and tap Edit on the advertisement. Content changes are submitted " +
+      "for admin review again. Existing loans keep the financial terms already accepted " +
+      "in their agreements.",
   },
   {
     id: "q6",
@@ -98,10 +98,10 @@ const FAQ_ITEMS = [
   },
   {
     id: "q7",
-    question: "Is there a fee for creating advertisements?",
+    question: "Where can I review loan agreements?",
     answer:
-      "No, creating and publishing standard advertisements is completely free. Fees only " +
-      "apply when you choose to boost an ad for increased visibility.",
+      "Open Agreements from the lender dashboard to review agreements connected to your " +
+      "loans. The agreement status shows whether the required parties have accepted it.",
   },
 ];
 

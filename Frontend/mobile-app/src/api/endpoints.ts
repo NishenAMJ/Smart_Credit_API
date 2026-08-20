@@ -40,8 +40,7 @@ export const ENDPOINTS = {
     accept: (documentId: string) => `/legal/documents/${documentId}/accept`,
     confirmDisbursement: (documentId: string) =>
       `/legal/documents/${documentId}/disbursement-confirmation`,
-    finalize: (documentId: string) =>
-      `/legal/documents/${documentId}/finalize`,
+    finalize: (documentId: string) => `/legal/documents/${documentId}/finalize`,
     download: (documentId: string) => `/legal/documents/${documentId}/download`,
     list: "/legal/documents",
   },
@@ -76,6 +75,7 @@ export const ENDPOINTS = {
     make: "/borrower/payments",
     generateQr: "/borrower/payments/generate-qr",
     verifyQr: "/borrower/payments/verify-qr",
+    initiatePayHere: "/borrower/payments/payhere/initiate",
   },
   transactions: {
     list: "/borrower/transactions",

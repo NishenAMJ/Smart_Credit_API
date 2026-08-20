@@ -4,10 +4,8 @@
 
  * Centralised service layer for all Lender screens.
  *
- * Auth pattern mirrors advertisement.service.ts:
- *   - The shared auth layer in api.ts owns the current user id.
- *   - Every request embeds lenderId as a query-param so the backend can scope data
- *   - x-user-id header is also sent by api.ts automatically
+ * The shared auth layer in api.ts owns the access token. Canonical lender
+ * endpoints derive ownership from the verified JWT rather than request input.
  *
  * Backend routes consumed (global prefix: /api):
  *   GET  /dashboard/summary?lenderId=                       → DashboardService.getSummary
@@ -18,11 +16,8 @@
  *   GET  /analytics/summary?lenderId=&range=                → AnalyticsService.getSummary
  *   GET  /lender-profile/:lenderId                          → LenderProfileService.getProfile
  *   PATCH /lender-profile/:lenderId                         → LenderProfileService.updateProfile
- *   GET  /lender/:lenderId/offers                           → LoanOffersService.getMyOffers
- *   POST  /lender-mobile/offers?lenderId=                   → LoanOffersService.createOffer
- *   PATCH /lender-mobile/offers/:id?lenderId=               → LoanOffersService.updateOffer
  *   POST  /loan-requests/:id/decision                       → LoanRequestsService.decideRequest
- *   GET  /lender-mobile/payment-reminders?lenderId=         → PaymentRemindersService.getReminders
+ *   GET  /lender-mobile/payment-reminders                   → PaymentRemindersService.getReminders
  *
  * @format
  */
@@ -194,8 +189,60 @@ export const PaymentsService = {
    * GET /api/payments/loans/:loanId?lenderId=
    */
   getLoanLedger: async (loanId: string) => {
-    const lenderId = getLenderId();
-    return api.get(`/payments/loans/${loanId}?lenderId=${lenderId}`);
+    return api.get(`/payments/loans/${loanId}`);
+  },
+
+  recordInstallmentPayment: async (
+    loanId: string,
+    installmentId: string,
+    amount: number,
+    note?: string,
+  ) =>
+    api.post(
+      `/payments/loans/${loanId}/installments/${installmentId}/payments`,
+      { amount, note: note?.trim() || null },
+    ),
+};
+
+export interface LenderLoan {
+  id: string;
+  applicationId: string | null;
+  listingId: string | null;
+  borrower: { id: string; fullName: string; email: string };
+  currency: string;
+  principal: number;
+  totalRepayable: number;
+  monthlyInstallment: number;
+  amountPaid: number;
+  remainingBalance: number;
+  annualInterestRate: number;
+  tenureMonths: number;
+  status: string;
+  disbursedAt: string | null;
+  maturityDate: string | null;
+  createdAt: string | null;
+  installmentProgress: {
+    total: number;
+    paid: number;
+    overdue: number;
+    nextDueAt: string | null;
+  };
+}
+
+export const LenderLoansService = {
+  getLoans: async (opts: {
+    pageSize?: number;
+    cursor?: string;
+    status?: string;
+    search?: string;
+  } = {}): Promise<{ loans: LenderLoan[]; summary: any; pageInfo: any }> => {
+    const params = new URLSearchParams();
+    if (opts.pageSize) params.append("pageSize", String(opts.pageSize));
+    if (opts.cursor) params.append("cursor", opts.cursor);
+    if (opts.status) params.append("status", opts.status);
+    if (opts.search) params.append("search", opts.search);
+    const query = params.toString();
+    return api.get(`/lender/loans${query ? `?${query}` : ""}`);
   },
 };
 
@@ -248,57 +295,6 @@ export const LenderProfileService = {
   },
 };
 
-// LoanOffersService 
-
-
-export const LoanOffersService = {
-  /**
-   * Fetch this lender's own loan offers.
-   * GET /api/lender/:lenderId/offers
-   */
-  getMyOffers: async (): Promise<{ offers: any[] }> => {
-    const lenderId = getLenderId();
-    return api.get(`/lender/${lenderId}/offers`);
-  },
-
-  /**
-   * Create a new loan offer.
-   * POST /api/lender-mobile/offers?lenderId=
-   */
-  createOffer: async (data: {
-    loanType: string;
-    minAmount: number;
-    maxAmount: number;
-    interestRate: number;
-    tenureMonths: number;
-    active: boolean;
-  }) => {
-    const lenderId = getLenderId();
-    return api.post(`/lender-mobile/offers?lenderId=${lenderId}`, data);
-  },
-
-  /**
-   * Update an existing loan offer.
-   * PATCH /api/lender-mobile/offers/:offerId?lenderId=
-   */
-  updateOffer: async (
-    offerId: string,
-    data: {
-      minAmount?: number;
-      maxAmount?: number;
-      interestRate?: number;
-      tenureMonths?: number;
-      active?: boolean;
-    },
-  ) => {
-    const lenderId = getLenderId();
-    return api.patch(
-      `/lender-mobile/offers/${offerId}?lenderId=${lenderId}`,
-      data,
-    );
-  },
-};
-
 // PaymentRemindersService 
 
 
@@ -308,7 +304,11 @@ export const PaymentRemindersService = {
    * GET /api/lender-mobile/payment-reminders?lenderId=
    */
   getReminders: async () => {
-    const lenderId = getLenderId();
-    return api.get(`/lender-mobile/payment-reminders?lenderId=${lenderId}`);
+    return api.get(`/lender-mobile/payment-reminders`);
   },
+};
+
+export const QrPaymentService = {
+  recordPayment: async (qrData: string) =>
+    api.post("/lender-mobile/qr-scanner/scan-payment", { qrData }),
 };

@@ -39,8 +39,6 @@ export class LenderProfileService {
     lenderId: string,
     input: UpdateLenderProfileInput,
   ): Promise<LenderProfileResponse> {
-    this.validateInput(input);
-
     const docRef = this.firebaseService
       .getDb()
       .collection('users')
@@ -57,24 +55,29 @@ export class LenderProfileService {
       throw new NotFoundException(`Lender ${lenderId} was not found.`);
     }
 
-    const updates = {
-      fullName: input.fullName.trim(),
-      email: input.email.trim(),
-      phone: input.phone.trim(),
-      address: input.address.trim(),
-      city: input.city.trim(),
-      district: input.district.trim(),
-      'lenderProfile.businessName': input.businessName.trim(),
-      responseTimeHours: input.responseTimeHours,
-      preferredRegions: this.uniqueRegions(input.preferredRegions),
-      updatedAt: Timestamp.now(),
-      searchKeywords: this.buildSearchKeywords([
-        input.fullName,
-        input.businessName,
-        input.city,
-        input.district,
-      ]),
-    };
+    this.validateInput(input);
+    const updates: Record<string, unknown> = { updatedAt: Timestamp.now() };
+    if (input.fullName !== undefined) updates.fullName = input.fullName.trim();
+    if (input.email !== undefined)
+      updates.email = input.email.trim().toLowerCase();
+    if (input.phone !== undefined) updates.phone = input.phone.trim();
+    if (input.address !== undefined) updates.address = input.address.trim();
+    if (input.city !== undefined) updates.city = input.city.trim();
+    if (input.district !== undefined) updates.district = input.district.trim();
+    if (input.businessName !== undefined)
+      updates['lenderProfile.businessName'] = input.businessName.trim();
+    if (input.responseTimeHours !== undefined)
+      updates.responseTimeHours = input.responseTimeHours;
+    if (input.preferredRegions !== undefined)
+      updates.preferredRegions = this.uniqueRegions(input.preferredRegions);
+
+    const current = this.mapProfile(lenderId, data);
+    updates.searchKeywords = this.buildSearchKeywords([
+      input.fullName ?? current.fullName,
+      input.businessName ?? current.businessName ?? '',
+      input.city ?? current.city ?? '',
+      input.district ?? current.district ?? '',
+    ]);
 
     await docRef.update(updates);
     const updatedSnapshot = await docRef.get();
@@ -86,25 +89,34 @@ export class LenderProfileService {
   }
 
   private validateInput(input: UpdateLenderProfileInput): void {
-    if (input.fullName.trim().length < 3) {
+    if (input.fullName !== undefined && input.fullName.trim().length < 3) {
       throw new BadRequestException('fullName must be at least 3 characters.');
     }
 
-    if (!input.email.includes('@')) {
+    if (input.email !== undefined && !input.email.includes('@')) {
       throw new BadRequestException('email must be valid.');
     }
 
-    if (input.businessName.trim().length < 3) {
+    if (
+      input.businessName !== undefined &&
+      input.businessName.trim().length < 3
+    ) {
       throw new BadRequestException(
         'businessName must be at least 3 characters.',
       );
     }
 
-    if (input.city.trim().length < 2 || input.district.trim().length < 2) {
-      throw new BadRequestException('city and district are required.');
+    if (input.city !== undefined && input.city.trim().length < 2) {
+      throw new BadRequestException('city must be at least 2 characters.');
+    }
+    if (input.district !== undefined && input.district.trim().length < 2) {
+      throw new BadRequestException('district must be at least 2 characters.');
     }
 
-    if (input.responseTimeHours <= 0 || input.responseTimeHours > 72) {
+    if (
+      input.responseTimeHours !== undefined &&
+      (input.responseTimeHours <= 0 || input.responseTimeHours > 72)
+    ) {
       throw new BadRequestException(
         'responseTimeHours must be between 1 and 72.',
       );

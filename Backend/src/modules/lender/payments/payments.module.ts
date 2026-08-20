@@ -19,6 +19,6 @@ import { LenderSmsModule } from '../sms/lender-sms.module';
     PaymentsDataService,
     PaymentsExportService,
   ],
-  exports: [PaymentsService],
+  exports: [PaymentsService, InstallmentPaymentService],
 })
 export class PaymentsModule {}

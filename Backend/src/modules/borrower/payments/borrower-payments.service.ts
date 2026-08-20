@@ -1,4 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createHash, randomUUID } from 'crypto';
+import { FieldValue } from 'firebase-admin/firestore';
+import { FirebaseService } from '../../../firebase/firebase.service';
 import { BORROWER_MONEY } from '../shared/borrower.constants';
 import { RepaymentMethod } from '../applications/dto/loan-application.dto';
 import {
@@ -21,9 +29,39 @@ type PaymentRecord = Record<string, unknown> & {
   paymentProofUrl?: unknown;
 };
 
+type PayHereOrder = {
+  orderId: string;
+  loanId: string;
+  borrowerId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  repaymentId?: string | null;
+};
+
+type PayHereNotification = {
+  merchant_id?: string;
+  order_id?: string;
+  payment_id?: string;
+  payhere_amount?: string;
+  payhere_currency?: string;
+  status_code?: string;
+  md5sig?: string;
+};
+
 @Injectable()
 export class BorrowerPaymentsService {
-  constructor(private readonly borrowerService: BorrowerService) {}
+  private readonly PAYHERE_ORDERS_COL = 'payherePayments';
+
+  constructor(
+    private readonly borrowerService: BorrowerService,
+    private readonly configService: ConfigService,
+    private readonly firebaseService: FirebaseService,
+  ) {}
+
+  private get db() {
+    return this.firebaseService.db;
+  }
 
   async getPayments(borrowerId: string) {
     const loans = await this.borrowerService.getLoans(borrowerId);
@@ -189,6 +227,256 @@ export class BorrowerPaymentsService {
       transactionReference: payload.transactionReference,
       paymentProofUrl: payload.paymentProofUrl,
     });
+  }
+
+  async initiatePayHerePayment(payload: {
+    loanId: string;
+    amount: number;
+    borrowerId: string;
+    requestBaseUrl: string;
+  }) {
+    const merchantId = this.configService.get<string>('PAYHERE_MERCHANT_ID');
+    const merchantSecret = this.configService.get<string>(
+      'PAYHERE_MERCHANT_SECRET',
+    );
+
+    if (!merchantId || !merchantSecret) {
+      throw new InternalServerErrorException(
+        'PayHere is not configured on the server.',
+      );
+    }
+
+    if (!payload.amount || payload.amount <= 0) {
+      throw new BadRequestException('Payment amount must be greater than 0.');
+    }
+
+    const [loan, profile] = await Promise.all([
+      this.borrowerService.getLoanById(payload.loanId, payload.borrowerId),
+      this.borrowerService.getProfile(payload.borrowerId),
+    ]);
+
+    if (payload.amount > loan.outstandingBalance) {
+      throw new BadRequestException(
+        `Payment amount (LKR ${payload.amount}) exceeds outstanding balance (LKR ${loan.outstandingBalance}).`,
+      );
+    }
+
+    const baseUrl = this.getPublicBaseUrl(payload.requestBaseUrl);
+    const orderId = `PH-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const currency =
+      this.configService.get<string>('PAYHERE_CURRENCY') ?? 'LKR';
+    const amount = this.formatAmount(payload.amount);
+    const checkoutUrl =
+      this.configService.get<string>('PAYHERE_CHECKOUT_URL') ??
+      (this.isPayHereSandbox()
+        ? 'https://sandbox.payhere.lk/pay/checkout'
+        : 'https://www.payhere.lk/pay/checkout');
+    const firstName = this.getFirstName(profile.fullName);
+    const lastName = this.getLastName(profile.fullName);
+    const address = profile.address
+      ? [profile.address.line1, profile.address.line2]
+          .filter(Boolean)
+          .join(', ')
+      : 'N/A';
+    const city =
+      profile.address?.city || profile.address?.district || 'Colombo';
+    const country =
+      this.configService.get<string>('PAYHERE_COUNTRY') ?? 'Sri Lanka';
+
+    const payment = {
+      merchant_id: merchantId,
+      return_url:
+        this.configService.get<string>('PAYHERE_RETURN_URL') ??
+        `${baseUrl}/api/borrower/payments/payhere/result/success`,
+      cancel_url:
+        this.configService.get<string>('PAYHERE_CANCEL_URL') ??
+        `${baseUrl}/api/borrower/payments/payhere/result/cancelled`,
+      notify_url:
+        this.configService.get<string>('PAYHERE_NOTIFY_URL') ??
+        `${baseUrl}/api/borrower/payments/payhere/notify`,
+      first_name: firstName,
+      last_name: lastName,
+      email: profile.email || 'customer@smartcredit.local',
+      phone: profile.phone || '0770000000',
+      address: address || 'N/A',
+      city,
+      country,
+      order_id: orderId,
+      items: `Smart Credit repayment for ${loan.loanId}`,
+      currency,
+      amount,
+      custom_1: payload.borrowerId,
+      custom_2: payload.loanId,
+      hash: this.generateCheckoutHash(merchantId, orderId, amount, currency),
+    };
+
+    await this.db.collection(this.PAYHERE_ORDERS_COL).doc(orderId).set({
+      orderId,
+      loanId: payload.loanId,
+      borrowerId: payload.borrowerId,
+      amount: payload.amount,
+      formattedAmount: amount,
+      currency,
+      status: 'initiated',
+      checkoutUrl,
+      payment,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      orderId,
+      paymentPageUrl: `${baseUrl}/api/borrower/payments/payhere/checkout/${orderId}`,
+      checkoutUrl,
+      payment,
+    };
+  }
+
+  async renderPayHereCheckout(orderId: string) {
+    const doc = await this.db
+      .collection(this.PAYHERE_ORDERS_COL)
+      .doc(orderId)
+      .get();
+
+    if (!doc.exists) {
+      throw new BadRequestException('PayHere order not found.');
+    }
+
+    const data = doc.data() as { checkoutUrl?: string; payment?: unknown };
+    const checkoutUrl = String(data.checkoutUrl ?? '');
+    const payment =
+      data.payment && typeof data.payment === 'object'
+        ? (data.payment as Record<string, string>)
+        : null;
+
+    if (!checkoutUrl || !payment) {
+      throw new BadRequestException('PayHere order is incomplete.');
+    }
+
+    const inputs = Object.entries(payment)
+      .map(
+        ([name, value]) =>
+          `<input type="hidden" name="${this.escapeHtml(name)}" value="${this.escapeHtml(String(value))}" />`,
+      )
+      .join('\n');
+
+    return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redirecting to PayHere</title>
+    <style>
+      body { font-family: Arial, sans-serif; display: grid; min-height: 100vh; place-items: center; margin: 0; color: #111827; }
+      main { text-align: center; padding: 24px; }
+      button { background: #0f62fe; border: 0; border-radius: 8px; color: #fff; font-weight: 700; padding: 12px 18px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>Redirecting to PayHere...</p>
+      <form id="payhere-form" method="post" action="${this.escapeHtml(checkoutUrl)}">
+        ${inputs}
+        <button type="submit">Continue to PayHere</button>
+      </form>
+    </main>
+    <script>document.getElementById('payhere-form').submit();</script>
+  </body>
+</html>`;
+  }
+
+  renderPayHereResult(status: 'success' | 'cancelled') {
+    const title =
+      status === 'success' ? 'Payment submitted' : 'Payment cancelled';
+    const detail =
+      status === 'success'
+        ? 'PayHere is confirming your payment. You can return to Smart Credit and refresh your payments.'
+        : 'You can return to Smart Credit and try again when ready.';
+
+    return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+    <style>
+      body { font-family: Arial, sans-serif; display: grid; min-height: 100vh; place-items: center; margin: 0; color: #111827; background: #f9fafb; }
+      main { max-width: 420px; text-align: center; padding: 24px; }
+    </style>
+  </head>
+  <body><main><h1>${title}</h1><p>${detail}</p></main></body>
+</html>`;
+  }
+
+  async handlePayHereNotification(payload: PayHereNotification) {
+    const merchantId = this.configService.get<string>('PAYHERE_MERCHANT_ID');
+    const orderId = payload.order_id;
+
+    if (!merchantId || payload.merchant_id !== merchantId || !orderId) {
+      throw new BadRequestException('Invalid PayHere notification.');
+    }
+
+    if (!this.isValidPayHereNotification(payload)) {
+      throw new BadRequestException('Invalid PayHere signature.');
+    }
+
+    const orderRef = this.db.collection(this.PAYHERE_ORDERS_COL).doc(orderId);
+    const orderDoc = await orderRef.get();
+
+    if (!orderDoc.exists) {
+      throw new BadRequestException('PayHere order not found.');
+    }
+
+    const order = orderDoc.data() as PayHereOrder;
+    const statusCode = String(payload.status_code ?? '');
+    const notificationAmount = Number(payload.payhere_amount);
+    const notificationCurrency = String(payload.payhere_currency ?? '');
+
+    if (
+      this.formatAmount(notificationAmount) !==
+        this.formatAmount(order.amount) ||
+      notificationCurrency !== order.currency
+    ) {
+      throw new BadRequestException('PayHere payment details do not match.');
+    }
+
+    if (order.status === 'completed' && order.repaymentId) {
+      return { accepted: true, alreadyProcessed: true };
+    }
+
+    if (statusCode !== '2') {
+      await orderRef.update({
+        status: this.mapPayHereStatus(statusCode),
+        payherePaymentId: payload.payment_id ?? null,
+        notification: payload,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      return { accepted: true, completed: false };
+    }
+
+    const repayment = await this.borrowerService.makeRepayment({
+      loanId: order.loanId,
+      borrowerId: order.borrowerId,
+      amount: order.amount,
+      paymentMethod: RepaymentMethod.CARD,
+      transactionReference: payload.payment_id ?? order.orderId,
+    });
+
+    await orderRef.update({
+      status: 'completed',
+      repaymentId: repayment.repaymentId,
+      payherePaymentId: payload.payment_id ?? null,
+      notification: payload,
+      updatedAt: FieldValue.serverTimestamp(),
+      completedAt: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      accepted: true,
+      completed: true,
+      repaymentId: repayment.repaymentId,
+    };
   }
 
   generateQrToken(loanId: string, borrowerId: string, amount?: number) {
@@ -424,5 +712,90 @@ export class BorrowerPaymentsService {
     }
 
     return typeof value === 'string' ? value : null;
+  }
+
+  private generateCheckoutHash(
+    merchantId: string,
+    orderId: string,
+    amount: string,
+    currency: string,
+  ) {
+    const merchantSecret = this.configService.get<string>(
+      'PAYHERE_MERCHANT_SECRET',
+    );
+    const hashedSecret = this.md5(merchantSecret ?? '').toUpperCase();
+
+    return this.md5(
+      `${merchantId}${orderId}${amount}${currency}${hashedSecret}`,
+    ).toUpperCase();
+  }
+
+  private isValidPayHereNotification(payload: PayHereNotification) {
+    const merchantSecret = this.configService.get<string>(
+      'PAYHERE_MERCHANT_SECRET',
+    );
+    const localMd5sig = this.md5(
+      `${payload.merchant_id ?? ''}${payload.order_id ?? ''}${payload.payhere_amount ?? ''}${payload.payhere_currency ?? ''}${payload.status_code ?? ''}${this.md5(merchantSecret ?? '').toUpperCase()}`,
+    ).toUpperCase();
+
+    return localMd5sig === String(payload.md5sig ?? '').toUpperCase();
+  }
+
+  private md5(value: string) {
+    return createHash('md5').update(value).digest('hex');
+  }
+
+  private formatAmount(amount: number) {
+    return Number(amount).toFixed(2);
+  }
+
+  private isPayHereSandbox() {
+    return ['true', '1', 'yes', 'sandbox'].includes(
+      String(this.configService.get<string>('PAYHERE_SANDBOX') ?? '')
+        .trim()
+        .toLowerCase(),
+    );
+  }
+
+  private getPublicBaseUrl(requestBaseUrl: string) {
+    const configured =
+      this.configService.get<string>('PAYHERE_PUBLIC_BASE_URL') ??
+      this.configService.get<string>('PUBLIC_API_BASE_URL') ??
+      this.configService.get<string>('API_PUBLIC_URL');
+
+    return (configured || requestBaseUrl)
+      .replace(/\/api\/?$/, '')
+      .replace(/\/$/, '');
+  }
+
+  private getFirstName(fullName?: string) {
+    const parts = String(fullName ?? 'Smart Credit')
+      .trim()
+      .split(/\s+/);
+    return parts[0] || 'Smart';
+  }
+
+  private getLastName(fullName?: string) {
+    const parts = String(fullName ?? 'Customer')
+      .trim()
+      .split(/\s+/);
+    return parts.length > 1 ? parts.slice(1).join(' ') : 'Customer';
+  }
+
+  private mapPayHereStatus(statusCode: string) {
+    if (statusCode === '0') return 'pending';
+    if (statusCode === '-1') return 'cancelled';
+    if (statusCode === '-2') return 'failed';
+    if (statusCode === '-3') return 'charged_back';
+    return 'unknown';
+  }
+
+  private escapeHtml(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 }

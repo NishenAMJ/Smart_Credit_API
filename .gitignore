@@ -3,6 +3,7 @@ dist/
 build/
 .env
 .DS_Store
+**/.DS_Store
 .vscode/
 .idea/
 *.log

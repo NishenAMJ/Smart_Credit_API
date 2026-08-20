@@ -7,6 +7,7 @@ import {
   Param,
   Get,
   Req,
+  Query,
 } from '@nestjs/common';
 import { QrScannerService } from './qr-scanner.service';
 import { ScanPaymentSlipDto } from './dto/scan-payment-slip.dto';
@@ -54,9 +55,14 @@ export class QrScannerController {
   @Get('payment-history/:loanId')
   async getPaymentHistory(
     @Param('loanId') loanId: string,
-    @Body('limit') limit?: number,
+    @Req() req: AuthenticatedRequest,
+    @Query('limit') limit?: string,
   ) {
-    return this.qrScannerService.getPaymentHistory(loanId, limit);
+    return this.qrScannerService.getPaymentHistory(
+      req.user.sub,
+      loanId,
+      Number(limit) || 10,
+    );
   }
 
   /**

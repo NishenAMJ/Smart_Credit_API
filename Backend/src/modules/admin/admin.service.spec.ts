@@ -20,15 +20,17 @@ describe('AdminService', () => {
       update: updateMock,
       delete: deleteMock,
     }));
-    const orderedQuery: Record<string, jest.Mock> = {};
-    orderedQuery.get = getMock;
-    orderedQuery.limit = jest.fn(() => orderedQuery);
-    orderedQuery.startAfter = jest.fn(() => orderedQuery);
-    collectionMock = jest.fn(() => ({
+    const query = {
       get: getMock,
       doc: docMock,
-      orderBy: jest.fn(() => orderedQuery),
-    }));
+      orderBy: jest.fn(),
+      startAfter: jest.fn(),
+      limit: jest.fn(),
+    };
+    query.orderBy.mockReturnValue(query);
+    query.startAfter.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
+    collectionMock = jest.fn(() => query);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

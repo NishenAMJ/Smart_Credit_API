@@ -123,7 +123,7 @@ export class InstallmentPaymentService {
         completedAt: paymentTimestamp,
         type: 'repayment',
         status: 'completed',
-        paymentMethod: 'bank_transfer',
+        paymentMethod: input.paymentMethod ?? 'bank_transfer',
         externalReference: null,
         idempotencyKey: transactionId,
         receiptDocumentId: null,

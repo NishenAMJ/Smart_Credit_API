@@ -36,7 +36,7 @@ describe('DashboardService', () => {
     const service = new DashboardService({ getDb: () => db } as any);
 
     jest
-      .spyOn(service as any, 'getTotalBorrowersFromRelations')
+      .spyOn(service as any, 'getTotalBorrowersFromLoans')
       .mockResolvedValue(5);
     jest
       .spyOn(service as any, 'getTodaysPaymentsCollection')

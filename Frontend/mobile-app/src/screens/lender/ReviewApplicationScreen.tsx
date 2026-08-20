@@ -19,7 +19,7 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
   // The full `app` object may also be passed from LenderDashboardScreen
   const passedApp = route?.params?.app;
   const appId =
-    route?.params?.appId || passedApp?.id || passedApp?.requestId || "unknown";
+    route?.params?.appId || passedApp?.requestId || "unknown";
 
   const [app, setApp] = useState<any>(passedApp ?? null);
   const [loading, setLoading] = useState(!passedApp);
@@ -120,13 +120,13 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
 
   // Resolve fields from both dashboard-shape and loan-requests-shape
   const borrowerName = app?.borrowerName ?? app?.name ?? "Unknown";
-  const borrowerId = app?.borrowerId ?? app?.id ?? "--";
+  const borrowerId = app?.borrowerId ?? "--";
   const creditScore = app?.borrowerCreditScore ?? app?.creditScore ?? null;
   const requestedAmount = app?.requestedAmount ?? app?.amount ?? 0;
   const roi =
     app?.suggestedInterestRate ?? app?.interestRate ?? app?.roi ?? "--";
   const tenureMonths = app?.tenureMonths ?? app?.duration ?? "--";
-  const status = app?.status ?? "pending";
+  const status = app?.status ?? "submitted";
   const purpose = app?.purpose ?? "--";
   const kycStatus = app?.borrowerKycStatus ?? "--";
 
@@ -220,10 +220,7 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
           />
         ) : (
           <>
-            {(status === "open" ||
-              status === "under_review" ||
-              status === "matched" ||
-              status === "pending") && (
+            {(status === "submitted" || status === "under_review") && (
               <>
                 <TouchableOpacity
                   style={commonStyles.primaryButton}

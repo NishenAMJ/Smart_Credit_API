@@ -28,6 +28,7 @@ import {
   LenderAdResponse,
   LenderAdsListResponse,
 } from './lender-ads.types';
+import { LenderAdAnalyticsService } from './lender-ad-analytics.service';
 
 @Injectable()
 export class LenderAdsService {
@@ -37,6 +38,7 @@ export class LenderAdsService {
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly notificationWriter: LenderNotificationWriterService,
+    private readonly analyticsService: LenderAdAnalyticsService,
   ) {}
 
   async createAd(
@@ -184,7 +186,7 @@ export class LenderAdsService {
         .limit(safePageSize + 1)
         .get();
 
-      return this.buildAdsPage(
+      return await this.buildAdsPage(
         lenderId,
         snapshot.docs,
         safePageSize,
@@ -231,7 +233,7 @@ export class LenderAdsService {
         safeStartIndex + safePageSize + 1,
       );
 
-      return this.buildAdsPage(
+      return await this.buildAdsPage(
         lenderId,
         pagedDocs,
         safePageSize,
@@ -240,15 +242,23 @@ export class LenderAdsService {
     }
   }
 
-  private buildAdsPage(
+  private async buildAdsPage(
     lenderId: string,
     docs: QueryDocumentSnapshot<DocumentData>[],
     pageSize: number,
     hasMore: boolean,
-  ): LenderAdsListResponse {
-    const items = docs
+  ): Promise<LenderAdsListResponse> {
+    const mappedItems = docs
       .slice(0, pageSize)
       .map((doc) => this.mapLenderAd(doc.id, lenderId, doc.data()));
+    const counts = await this.analyticsService.getCountsForAds(
+      mappedItems.map((item) => item.adId),
+    );
+    const items = mappedItems.map((item) => ({
+      ...item,
+      applicationCount: counts.get(item.adId)?.applicationCount ?? 0,
+      fundedLoansCount: counts.get(item.adId)?.fundedLoansCount ?? 0,
+    }));
 
     return {
       lenderId,
@@ -352,6 +362,109 @@ export class LenderAdsService {
     }
     if (input.active !== undefined) {
       update.status = input.active ? 'active' : 'paused';
+    }
+
+    await ref.update(update);
+    const updated = await ref.get();
+    return this.mapLenderAd(updated.id, lenderId, updated.data() ?? {});
+  }
+
+  async updateAd(
+    lenderId: string,
+    adId: string,
+    input: Partial<CreateLenderAdInput> & { status?: string },
+  ): Promise<LenderAdResponse> {
+    const db = this.firebaseService.getDb();
+    const ref = db.collection('loanListings').doc(adId);
+    const snapshot = await ref.get();
+    if (!snapshot.exists) {
+      throw new NotFoundException(`Lender ad ${adId} was not found.`);
+    }
+    if (snapshot.get('lenderId') !== lenderId) {
+      throw new ForbiddenException('You can only update your own lender ads.');
+    }
+
+    const current = snapshot.data() ?? {};
+    const update: Record<string, unknown> = { updatedAt: Timestamp.now() };
+    const contentChanged = Object.keys(input).some(
+      (key) => key !== 'status' && input[key as keyof typeof input] !== undefined,
+    );
+
+    if (input.headline !== undefined) update.title = input.headline.trim();
+    if (input.supportNote !== undefined)
+      update.description = input.supportNote.trim();
+    if (input.borrowerFocus !== undefined)
+      update.borrowerFocus = input.borrowerFocus.trim();
+    if (input.processingTime !== undefined)
+      update.processingTime = input.processingTime.trim();
+    if (input.repaymentStyle !== undefined)
+      update.repaymentStyle = input.repaymentStyle.trim();
+    if (input.requirements !== undefined)
+      update.requirements = input.requirements.trim();
+    if (input.minAmount !== undefined)
+      update.minAmountMinor = Math.round(input.minAmount * 100);
+    if (input.maxAmount !== undefined) {
+      update.maxAmountMinor = Math.round(input.maxAmount * 100);
+      update.availableCapitalMinor = Math.round(input.maxAmount * 100);
+    }
+    if (input.interestRate !== undefined) {
+      update.minInterestRateAnnual = input.interestRate;
+      update.maxInterestRateAnnual = input.interestRate;
+    }
+    if (input.tenureMonths !== undefined)
+      update.maxTenureMonths = input.tenureMonths;
+
+    if (contentChanged) {
+      const merged: CreateLenderAdInput = {
+        headline: input.headline ?? readString(current.title) ?? '',
+        minAmount:
+          input.minAmount ?? readNumber(current.minAmountMinor) / 100,
+        maxAmount:
+          input.maxAmount ?? readNumber(current.maxAmountMinor) / 100,
+        interestRate:
+          input.interestRate ?? readNumber(current.minInterestRateAnnual),
+        tenureMonths:
+          input.tenureMonths ?? readNumber(current.maxTenureMonths),
+        borrowerFocus:
+          input.borrowerFocus ??
+          readString(current.borrowerFocus) ??
+          (readStringArray(current.purposeCategories).join(', ') ||
+            'Eligible borrowers'),
+        processingTime:
+          input.processingTime ??
+          readString(current.processingTime) ??
+          'Within 2 business days',
+        repaymentStyle:
+          input.repaymentStyle ??
+          readString(current.repaymentStyle) ??
+          'Monthly installments',
+        requirements:
+          input.requirements ??
+          readString(current.requirements) ??
+          'Approved KYC and supporting financial documents',
+        supportNote:
+          input.supportNote ?? readString(current.description) ?? '',
+      };
+      this.validateCreateInput(merged);
+      update.purposeCategories = this.buildPreferredPurposes(merged);
+      update.status = 'pending_review';
+      update.adminReview = {
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectionReason: null,
+      };
+      update.publishedAt = null;
+    } else if (input.status !== undefined) {
+      const currentStatus = getAdStatus(current);
+      if (input.status === 'paused' && currentStatus === 'active') {
+        update.status = 'paused';
+      } else if (input.status === 'active' && currentStatus === 'paused') {
+        update.status = 'active';
+      } else {
+        throw new BadRequestException(
+          'Only active advertisements can be paused and only paused advertisements can be resumed.',
+        );
+      }
     }
 
     await ref.update(update);

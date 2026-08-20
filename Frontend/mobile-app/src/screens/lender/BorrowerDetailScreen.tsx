@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
@@ -13,7 +14,30 @@ import { LenderHeader } from "../../components/lender";
 import { DashboardService } from "../../services/lender.service";
 
 export default function BorrowerDetailScreen({ navigation, route }: any) {
-  const borrower = route?.params?.borrower;
+  const initialBorrower = route?.params?.borrower;
+  const borrowerId = initialBorrower?.id;
+  const [borrower, setBorrower] = useState<any>(initialBorrower ?? null);
+  const [loading, setLoading] = useState(Boolean(borrowerId));
+
+  useEffect(() => {
+    if (!borrowerId) return;
+    DashboardService.getBorrowerDetails(borrowerId)
+      .then(setBorrower)
+      .finally(() => setLoading(false));
+  }, [borrowerId]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.safe}>
+        <LenderHeader title="Borrower" onBackPress={() => navigation.goBack()} />
+        <ActivityIndicator
+          style={{ marginTop: 40 }}
+          color={COLORS.primary}
+          size="large"
+        />
+      </SafeAreaView>
+    );
+  }
 
   if (!borrower) {
     return (
@@ -43,6 +67,7 @@ export default function BorrowerDetailScreen({ navigation, route }: any) {
     rating,
     isActive,
     createdAt,
+    loans = [],
   } = borrower;
 
   const getScoreColor = () => {
@@ -152,14 +177,42 @@ export default function BorrowerDetailScreen({ navigation, route }: any) {
           </View>
         </View>
 
-        {/* Actions */}
-        <View style={styles.buttonGroup}>
-          <TouchableOpacity
-            style={commonStyles.primaryButton}
-            onPress={() => navigation.navigate("LoanDetails", { loanId: id })}
-          >
-            <Text style={commonStyles.buttonText}>View Loans</Text>
-          </TouchableOpacity>
+        <View style={commonStyles.card}>
+          <Text style={commonStyles.sectionTitle}>Loans with this lender</Text>
+          {loans.length === 0 ? (
+            <Text style={commonStyles.textSecondary}>No loans found.</Text>
+          ) : (
+            loans.map((loan: any) => (
+              <TouchableOpacity
+                key={loan.id}
+                style={styles.loanRow}
+                onPress={() =>
+                  navigation.navigate("LoanDetails", { loanId: loan.id })
+                }
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={commonStyles.textPrimary}>
+                    LKR {Number(loan.amount ?? 0).toLocaleString()}
+                  </Text>
+                  <Text style={commonStyles.textSecondary}>
+                    {String(loan.status ?? "unknown").replace("_", " ")}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={commonStyles.textSecondary}>Outstanding</Text>
+                  <Text style={commonStyles.textPrimary}>
+                    LKR {Number(loan.remainingAmount ?? 0).toLocaleString()}
+                  </Text>
+                </View>
+                <Feather
+                  name="chevron-right"
+                  size={18}
+                  color={COLORS.textSecondary}
+                  style={{ marginLeft: 8 }}
+                />
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         <View style={commonStyles.spacer32} />
@@ -212,6 +265,13 @@ const styles = StyleSheet.create({
   buttonGroup: {
     paddingHorizontal: 16,
     paddingVertical: 16,
+  },
+  loanRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
   emptyText: { color: COLORS.textSecondary },

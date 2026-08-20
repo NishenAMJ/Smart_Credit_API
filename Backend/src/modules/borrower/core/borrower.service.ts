@@ -1091,7 +1091,7 @@ export class BorrowerService {
   /**
    * Verifies signed QR token integrity and marks nonce as used.
    */
-  async verifyQrToken(token: string) {
+  async verifyQrToken(token: string, consume = true) {
     let payload: QrTokenPayload;
 
     try {
@@ -1106,7 +1106,7 @@ export class BorrowerService {
 
     const nonceRef = this.db.collection(this.QR_NONCES_COL).doc(payload.nonce);
 
-    await this.db.runTransaction(async (tx) => {
+    const validateNonce = async (markUsed: boolean) => this.db.runTransaction(async (tx) => {
       const nonceDoc = await tx.get(nonceRef);
       if (!nonceDoc.exists) {
         throw new BadRequestException('QR nonce not found.');
@@ -1127,11 +1127,15 @@ export class BorrowerService {
         throw new BadRequestException('QR code is expired.');
       }
 
-      tx.update(nonceRef, {
-        used: true,
-        usedAt: FieldValue.serverTimestamp(),
-      });
+      if (markUsed) {
+        tx.update(nonceRef, {
+          used: true,
+          usedAt: FieldValue.serverTimestamp(),
+        });
+      }
     });
+
+    await validateNonce(consume);
 
     await this.getLoanById(payload.loanId, payload.borrowerId);
 

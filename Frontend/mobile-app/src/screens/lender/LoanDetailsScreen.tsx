@@ -77,7 +77,14 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
 
   const principalAmount = loan.amount ?? 0;
   const remainingAmount = loan.remainingAmount ?? 0;
-  const paidAmount = principalAmount - remainingAmount;
+  const totalRepayable = installments.reduce(
+    (total, installment) => total + Number(installment.amount ?? 0),
+    0,
+  );
+  const paidAmount = installments.reduce(
+    (total, installment) => total + Number(installment.paidAmount ?? 0),
+    0,
+  );
   const status = loan.status ?? "active";
   const interestRate = loan.interestRate ?? "--";
   const tenureMonths = loan.tenureMonths ?? "--";
@@ -85,9 +92,9 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
     ? new Date(loan.createdAt).toLocaleDateString()
     : "--";
 
-  // Find next pending installment
+  // Canonical unpaid installment states are scheduled, due, and overdue.
   const nextInstallment = installments.find(
-    (i) => i.status === "pending" || i.status === "partial",
+    (i) => ["scheduled", "due", "overdue"].includes(i.status),
   );
   const nextDueDate = nextInstallment?.dueDate
     ? new Date(nextInstallment.dueDate).toLocaleDateString()
@@ -96,8 +103,8 @@ export default function LoanDetailsScreen({ navigation, route }: any) {
 
   // Progress
   const progressPercent =
-    principalAmount > 0
-      ? Math.min(Math.round((paidAmount / principalAmount) * 100), 100)
+    totalRepayable > 0
+      ? Math.min(Math.round((paidAmount / totalRepayable) * 100), 100)
       : 0;
 
   // Installment stats

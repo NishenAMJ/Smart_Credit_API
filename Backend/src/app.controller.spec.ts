@@ -11,7 +11,7 @@ describe('AppController', () => {
       controllers: [AppController],
       providers: [
         AppService,
-        { provide: FirebaseService, useValue: { db: {} } },
+        { provide: FirebaseService, useValue: {} },
         {
           provide: 'FIREBASE_APP',
           useValue: { name: 'test', options: { projectId: 'test-project' } },
