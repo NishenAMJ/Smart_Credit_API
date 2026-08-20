@@ -37,6 +37,37 @@ separate implementations. `basic` is useful for a quick local smoke dataset;
 `history` is the default realistic account-history dataset; and `volume` is
 for pagination and performance testing.
 
+## Commands
+
+Run from `Backend/`:
+
+```bash
+# Seed checks (no database writes)
+npm run seed:basic:check
+npm run seed:bulk:check
+npm run seed:volume:check
+
+# Seed writes
+npm run seed:basic
+npm run seed:bulk
+npm run seed:volume
+```
+
+Operational and quality commands:
+
+```bash
+# Firestore indexes
+npm run firestore:indexes:check
+npm run firestore:indexes:deploy
+
+# Loan agreement migration
+npm run migrate:loan-agreements
+MIGRATION_ENABLED=true npm run migrate:loan-agreements:apply
+
+# Lender module architecture checks
+npm run architecture:lender
+```
+
 ## Operations and maintenance
 
 - `operations/firestore/` checks or creates required Firestore indexes.

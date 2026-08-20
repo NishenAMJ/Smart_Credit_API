@@ -104,12 +104,19 @@ Copy the required non-secret settings from `Backend/.env.seed.example` into
 | `SEED_APPLICATION_COUNT` |              `150` | Additional loan applications                   |
 | `SEED_LOAN_COUNT`        |               `80` | Applications converted into loans              |
 | `SEED_MAX_WRITES`        |             `5000` | Refuse a run exceeding this document count     |
+| `SEED_LOGIN_DETAILS_MODE`|        `overwrite` | Login file strategy: `overwrite`, `if-missing`, `backup` |
 | `SEED_WRITE_BATCH_SIZE`  |              `200` | Maximum writes in one atomic Firestore batch   |
 | `SEED_WRITE_DELAY_MS`    |              `100` | Pause between batches to smooth write load     |
 | `SEED_DEFAULT_PASSWORD`  |  `SmartCredit@123` | Password for generated accounts                |
 
 `SEED_LOAN_COUNT` cannot exceed `SEED_APPLICATION_COUNT`. Listings require at
 least one lender; applications require at least one listing and borrower.
+`SEED_LOGIN_DETAILS_MODE` controls how generated login files are handled:
+
+- `overwrite`: regenerate the file every run (default).
+- `if-missing`: create only when the file does not exist.
+- `backup`: create a timestamped `.bak` copy before writing a fresh file.
+
 `SEED_WRITE_BATCH_SIZE` must be between 1 and Firestore's maximum of 500.
 
 The current defaults expand to 2,538 documents after dependent installments,
