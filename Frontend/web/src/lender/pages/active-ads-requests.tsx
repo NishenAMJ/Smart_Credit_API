@@ -29,6 +29,7 @@ import type { LenderSession } from "../lib/lender-session";
 type ActiveAdsRequestsPageProps = {
   session: LenderSession;
   onNavigate: (view: LenderView) => void;
+  onOpenAgreement: (loanId: string) => void;
 };
 
 type AdStatusGroup = "active" | "pending_review";
@@ -339,6 +340,7 @@ function AdvertisementPreview({
 
 export default function ActiveAdsRequestsPage({
   session,
+  onOpenAgreement,
 }: ActiveAdsRequestsPageProps) {
   const [activeResponse, setActiveResponse] =
     useState<LenderAdsListResponse | null>(null);
@@ -503,6 +505,9 @@ export default function ActiveAdsRequestsPage({
             }
           : current,
       );
+      if (decision === "approve" && result.loanId) {
+        onOpenAgreement(result.loanId);
+      }
     } catch (decisionFailure) {
       setDecisionError(
         decisionFailure instanceof Error

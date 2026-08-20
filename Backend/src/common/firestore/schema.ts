@@ -223,6 +223,68 @@ export interface TransactionDocument {
   createdAt: Timestamp;
 }
 
+export type LoanAgreementStatus =
+  | 'awaiting_signatures'
+  | 'awaiting_disbursement'
+  | 'awaiting_borrower_signature'
+  | 'partially_accepted'
+  | 'finalizing'
+  | 'finalization_failed'
+  | 'fully_accepted'
+  | 'superseded'
+  | 'cancelled';
+
+export interface LoanAgreementDocument {
+  agreementId: string;
+  loanId: string;
+  applicationId: string;
+  listingId: string;
+  version: number;
+  status: LoanAgreementStatus;
+  borrowerId: string;
+  lenderId: string;
+  borrowerAcceptance: {
+    accepted: boolean;
+    signedName: string | null;
+    acceptedAt: Timestamp | null;
+  };
+  lenderAcceptance: {
+    accepted: boolean;
+    signedName: string | null;
+    acceptedAt: Timestamp | null;
+  };
+  disbursementConfirmation: {
+    confirmed: boolean;
+    confirmedByLenderId: string | null;
+    confirmedAt: Timestamp | null;
+    principalMinor: number | null;
+    externalReference: string | null;
+    ipAddressHash: string | null;
+    userAgent: string | null;
+  };
+  termsHash: string;
+  updatedAt: Timestamp;
+  finalizedAt: Timestamp | null;
+  finalizationError: string | null;
+}
+
+export interface LoanAgreementAcceptanceDocument {
+  acceptanceId: string;
+  agreementId: string;
+  loanId: string;
+  userId: string;
+  role: 'borrower' | 'lender';
+  agreementVersion: number;
+  termsHash: string;
+  signedName: string;
+  consentAccepted: true;
+  consentTextVersion: 'loan_agreement_consent_v1';
+  ipAddressHash: string | null;
+  userAgent: string | null;
+  acceptedAt: Timestamp;
+  fundsReceivedConfirmed: boolean;
+}
+
 export type DisputeStatus =
   | 'open'
   | 'under_review'

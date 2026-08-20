@@ -104,7 +104,11 @@ function App() {
         ) : activeView === "analytics" ? (
           <AnalyticsPage session={session} onNavigate={setActiveView} />
         ) : activeView === "active-ads-requests" ? (
-          <ActiveAdsRequestsPage session={session} onNavigate={setActiveView} />
+          <ActiveAdsRequestsPage
+            session={session}
+            onNavigate={setActiveView}
+            onOpenAgreement={openLoanAgreement}
+          />
         ) : activeView === "create-ad" ? (
           <CreateAdPage session={session} />
         ) : activeView === "pending-requests" ? (

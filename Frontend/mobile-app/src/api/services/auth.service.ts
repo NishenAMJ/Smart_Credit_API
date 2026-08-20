@@ -90,10 +90,22 @@ export async function acceptLegalDocument(
     consentAccepted: true;
     agreementVersion: number;
     termsHash: string;
+    fundsReceivedConfirmed?: boolean;
   },
 ) {
   const response = await apiClient.post<LegalDocumentResponse>(
     ENDPOINTS.legal.accept(documentId),
+    payload,
+  );
+  return response.data;
+}
+
+export async function confirmAgreementDisbursement(
+  documentId: string,
+  payload: { confirmationAccepted: true; externalReference?: string },
+) {
+  const response = await apiClient.post<LegalDocumentResponse>(
+    ENDPOINTS.legal.confirmDisbursement(documentId),
     payload,
   );
   return response.data;

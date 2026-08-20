@@ -27,6 +27,14 @@ export class LegalAcceptanceSummaryDto {
   acceptedAt!: string | null;
 }
 
+export class LegalDisbursementConfirmationDto {
+  confirmed!: boolean;
+  confirmedByLenderId!: string | null;
+  confirmedAt!: string | null;
+  principalMinor!: number | null;
+  externalReference!: string | null;
+}
+
 export class LegalDocumentDto {
   id!: string;
   loanId!: string;
@@ -49,6 +57,7 @@ export class LegalDocumentDto {
   consentTextVersion!: 'loan_agreement_consent_v1';
   borrowerAcceptance!: LegalAcceptanceSummaryDto;
   lenderAcceptance!: LegalAcceptanceSummaryDto;
+  disbursementConfirmation!: LegalDisbursementConfirmationDto;
   pdfDownloadPath!: string;
   pdfAvailable!: boolean;
   signedPdfGeneratedAt!: string | null;
@@ -61,6 +70,12 @@ export class AcceptLegalDocumentDto {
   consentAccepted!: boolean;
   agreementVersion!: number;
   termsHash!: string;
+  fundsReceivedConfirmed?: boolean;
+}
+
+export class ConfirmAgreementDisbursementDto {
+  confirmationAccepted!: boolean;
+  externalReference?: string;
 }
 
 export class GenerateLegalDocumentResponseDto {

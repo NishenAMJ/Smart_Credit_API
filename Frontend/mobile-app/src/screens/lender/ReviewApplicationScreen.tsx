@@ -64,10 +64,10 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
           onPress: async () => {
             setSubmitting(true);
             try {
-              await LoanRequestsService.approveRequest(appId);
-              Alert.alert("Success", "Application approved successfully!", [
-                { text: "OK", onPress: () => navigation.goBack() },
-              ]);
+              const result = await LoanRequestsService.approveRequest(appId);
+              navigation.replace("LoanAgreement", {
+                initialLoanId: result.loanId,
+              });
             } catch (e: any) {
               Alert.alert(
                 "Error",

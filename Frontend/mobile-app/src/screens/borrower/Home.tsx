@@ -29,6 +29,7 @@ import { getMyLoans } from "../../api/services/loan.service";
 import { transactionService } from "../../api/services/transaction.service";
 import { profileService } from "../../api/services/profile.service";
 import { creditScoreService } from "../../api/services/creditScore.service";
+import { listLegalDocuments } from "../../api/services/auth.service";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { TYPOGRAPHY } from "../../constants/typography";
@@ -40,6 +41,7 @@ import type {
   BorrowerProfile,
 } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
+import type { LegalDocument } from "../../types/auth";
 
 type DashboardSummary = {
   profile?: Partial<BorrowerProfile>;
@@ -68,6 +70,8 @@ export default function Home({ navigation }: MyLoansScreenProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [pendingAgreement, setPendingAgreement] =
+    useState<LegalDocument | null>(null);
 
   const HEADER_MAX_HEIGHT = 330;
   const HEADER_MIN_HEIGHT = 120;
@@ -102,12 +106,19 @@ export default function Home({ navigation }: MyLoansScreenProps) {
   const fetchData = async () => {
     try {
       setErrorMessage("");
-      const [dashboardResponse, loanData, transactionResponse, creditResponse] =
+      const [
+        dashboardResponse,
+        loanData,
+        transactionResponse,
+        creditResponse,
+        agreementResponse,
+      ] =
         await Promise.all([
           dashboardService.getDashboard(),
           getMyLoans("active"),
           transactionService.getMyTransactions(),
           creditScoreService.getMyCreditScore().catch(() => null),
+          listLegalDocuments().catch(() => null),
         ]);
 
       let dashData = dashboardResponse;
@@ -169,6 +180,13 @@ export default function Home({ navigation }: MyLoansScreenProps) {
       setDashboard(dashData);
       setLoans(loanData ?? []);
       setTransactions(transactionResponse?.data ?? []);
+      setPendingAgreement(
+        agreementResponse?.documents.find((agreement) =>
+          ["awaiting_borrower_signature", "finalization_failed"].includes(
+            agreement.status,
+          ),
+        ) ?? null,
+      );
     } catch (error) {
       const message = getApiErrorMessage(
         error,
@@ -382,6 +400,30 @@ export default function Home({ navigation }: MyLoansScreenProps) {
             />
             <Text style={styles.errorBannerText}>{errorMessage}</Text>
           </View>
+        ) : null}
+
+        {pendingAgreement ? (
+          <TouchableOpacity
+            style={styles.agreementBanner}
+            onPress={() =>
+              navigation.navigate("LoanAgreement", {
+                initialLoanId: pendingAgreement.loanId,
+              })
+            }
+          >
+            <Feather name="file-text" size={22} color={COLORS.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.agreementBannerTitle}>
+                Agreement action required
+              </Text>
+              <Text style={styles.agreementBannerText}>
+                {pendingAgreement.status === "finalization_failed"
+                  ? "Both signatures are saved. Retry agreement finalization."
+                  : "Confirm receipt of funds and sign your loan agreement."}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={20} color={COLORS.primary} />
+          </TouchableOpacity>
         ) : null}
 
         <View style={styles.quickActionsRow}>
@@ -824,6 +866,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 1,
+  },
+  agreementBanner: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 14,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+  },
+  agreementBannerTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  agreementBannerText: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
   },
   snapshotLabel: {
     fontSize: 12,

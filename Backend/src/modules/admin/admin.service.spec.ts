@@ -20,9 +20,14 @@ describe('AdminService', () => {
       update: updateMock,
       delete: deleteMock,
     }));
+    const orderedQuery: Record<string, jest.Mock> = {};
+    orderedQuery.get = getMock;
+    orderedQuery.limit = jest.fn(() => orderedQuery);
+    orderedQuery.startAfter = jest.fn(() => orderedQuery);
     collectionMock = jest.fn(() => ({
       get: getMock,
       doc: docMock,
+      orderBy: jest.fn(() => orderedQuery),
     }));
 
     const module: TestingModule = await Test.createTestingModule({
@@ -48,6 +53,8 @@ describe('AdminService', () => {
 
   it('filters users and removes passwordHash from the response', async () => {
     getMock.mockResolvedValue({
+      empty: false,
+      size: 2,
       docs: [
         {
           id: 'admin-1',

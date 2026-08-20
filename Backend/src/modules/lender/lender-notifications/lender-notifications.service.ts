@@ -30,6 +30,7 @@ const CATEGORY_ORDER: NotificationCategory[] = [
   'transaction',
   'repayment_risk',
   'dispute',
+  'agreement',
   'ad',
   'system',
 ];
@@ -316,6 +317,7 @@ export class LenderNotificationsService {
       'transaction',
       'loan',
       'dispute',
+      'loanAgreement',
       'ad',
       'system',
       null,
@@ -332,6 +334,7 @@ export class LenderNotificationsService {
       'create-ad',
       'settings',
       'disputes',
+      'agreements',
       null,
     ].includes(value as NotificationActionTarget)
       ? (value as NotificationActionTarget)

@@ -142,7 +142,13 @@ export const LoanRequestsService = {
    * POST /api/loan-requests/:appId/decision
    */
   approveRequest: async (appId: string, notes?: string) => {
-    return api.post(`/loan-requests/${appId}/decision`, {
+    return api.post<{
+      requestId: string;
+      status: "converted";
+      updatedAt: string;
+      loanId: string;
+      agreementId: string;
+    }>(`/loan-requests/${appId}/decision`, {
       decision: "approve",
       note: notes,
     });

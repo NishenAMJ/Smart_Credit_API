@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type {
   AcceptLegalDocumentDto,
   AcceptLegalDocumentResponseDto,
+  ConfirmAgreementDisbursementDto,
   GenerateLegalDocumentResponseDto,
   GetLegalDocumentResponseDto,
   ListLegalDocumentsResponseDto,
@@ -99,6 +100,26 @@ export class LegalController {
         consentAccepted: body.consentAccepted,
         agreementVersion: body.agreementVersion,
         termsHash: body.termsHash,
+        fundsReceivedConfirmed: body.fundsReceivedConfirmed,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      },
+    );
+  }
+
+  @Post('documents/:documentId/disbursement-confirmation')
+  confirmDisbursement(
+    @Param('documentId') documentId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() body: ConfirmAgreementDisbursementDto,
+  ): Promise<AcceptLegalDocumentResponseDto> {
+    return this.legalService.confirmDisbursement(
+      documentId,
+      request.user.sub,
+      request.user.role,
+      {
+        confirmationAccepted: body.confirmationAccepted,
+        externalReference: body.externalReference,
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'],
       },

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +15,7 @@ import { listLegalDocuments } from "../../api/services/auth.service";
 import type { LegalDocument } from "../../types/auth";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
+import { chatSocket } from "../../services/socketService";
 
 export default function AgreementsListScreen({ navigation }: any) {
   const [documents, setDocuments] = useState<LegalDocument[]>([]);
@@ -38,6 +39,16 @@ export default function AgreementsListScreen({ navigation }: any) {
       fetchDocuments().finally(() => setLoading(false));
     }, []),
   );
+
+  useEffect(() => {
+    const refresh = () => void fetchDocuments();
+    chatSocket.on("agreementChanged", refresh);
+    chatSocket.on("socketConnected", refresh);
+    return () => {
+      chatSocket.off("agreementChanged", refresh);
+      chatSocket.off("socketConnected", refresh);
+    };
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);

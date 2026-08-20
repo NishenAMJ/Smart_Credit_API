@@ -11,6 +11,7 @@ export type BorrowerNotification = {
     | "payment"
     | "profile"
     | "dispute"
+    | "agreement"
     | "system";
   severity: "info" | "success" | "warning" | "critical";
   title: string;

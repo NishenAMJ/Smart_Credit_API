@@ -414,6 +414,7 @@ export class BorrowerNotificationsService {
       'payment',
       'profile',
       'dispute',
+      'agreement',
       'system',
     ].includes(
       value as string,

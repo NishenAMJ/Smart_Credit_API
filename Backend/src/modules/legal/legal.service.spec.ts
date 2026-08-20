@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 
 import type { UserDocument } from '../auth/auth.types';
@@ -36,6 +40,11 @@ function createMemoryFirestore(initial: Record<string, StoredRecord>) {
     let maximum = Number.POSITIVE_INFINITY;
     const query: any = {
       doc: (id?: string) => doc(`${path}/${id ?? `auto_${++autoId}`}`),
+      add: jest.fn(async (value: StoredRecord) => {
+        const reference = doc(`${path}/auto_${++autoId}`);
+        records.set(reference.path, value);
+        return reference;
+      }),
       where: (field: string, _operator: string, value: unknown) => {
         filters.push([field, value]);
         return query;
@@ -125,6 +134,7 @@ describe('LegalService', () => {
   let records: Map<string, StoredRecord>;
   let mediaService: { uploadBufferAsDocument: jest.Mock; generateSignedDeliveryUrl: jest.Mock };
   let documentsService: { createSystemGeneratedRecord: jest.Mock; getById: jest.Mock };
+  let gateway: { emitToUser: jest.Mock };
 
   beforeEach(() => {
     const memory = createMemoryFirestore({
@@ -168,6 +178,7 @@ describe('LegalService', () => {
       createSystemGeneratedRecord: jest.fn(async ({ id }) => ({ id })),
       getById: jest.fn(async () => null),
     };
+    gateway = { emitToUser: jest.fn() };
 
     service = new LegalService(
       { db: memory.db } as any,
@@ -175,6 +186,7 @@ describe('LegalService', () => {
       mediaService as any,
       documentsService as any,
       { get: jest.fn(() => 'a'.repeat(64)) } as any,
+      gateway as any,
     );
   });
 
@@ -182,15 +194,41 @@ describe('LegalService', () => {
     return service.generateLoanAgreement('loan-1', 'lender-1', 'lender');
   }
 
-  function acceptance(document: Awaited<ReturnType<typeof generate>>) {
+  function acceptance(
+    document: Awaited<ReturnType<typeof generate>>,
+    role: 'borrower' | 'lender',
+  ) {
     return {
-      signedName: 'Legal Name',
+      signedName: role === 'borrower' ? 'Borrower User' : 'Lender User',
       consentAccepted: true,
       agreementVersion: document.version,
       termsHash: document.termsHash,
+      fundsReceivedConfirmed: role === 'borrower' ? true : undefined,
       ipAddress: '127.0.0.1',
       userAgent: 'jest',
     };
+  }
+
+  async function lenderSignAndConfirm(
+    agreement: Awaited<ReturnType<typeof generate>>,
+  ) {
+    await service.acceptDocument(
+      agreement.id,
+      'lender-1',
+      'lender',
+      acceptance(agreement, 'lender'),
+    );
+    return service.confirmDisbursement(
+      agreement.id,
+      'lender-1',
+      'lender',
+      {
+        confirmationAccepted: true,
+        externalReference: 'BANK-TRANSFER-1',
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
+      },
+    );
   }
 
   it('generates a deterministic versioned agreement only for the loan lender', async () => {
@@ -209,21 +247,21 @@ describe('LegalService', () => {
 
   it('records an idempotent first acceptance without exposing audit details', async () => {
     const agreement = await generate();
-    const input = acceptance(agreement);
+    const input = acceptance(agreement, 'lender');
     const first = await service.acceptDocument(
       agreement.id,
       'lender-1',
       'lender',
-      { ...input, signedName: 'Lender Legal Name' },
+      input,
     );
     const repeated = await service.acceptDocument(
       agreement.id,
       'lender-1',
       'lender',
-      { ...input, signedName: 'Lender Legal Name' },
+      input,
     );
 
-    expect(first.document.status).toBe('partially_accepted');
+    expect(first.document.status).toBe('awaiting_disbursement');
     expect(repeated.document.lenderAcceptance.accepted).toBe(true);
     expect(
       [...records.keys()].filter((path) =>
@@ -240,7 +278,7 @@ describe('LegalService', () => {
         agreement.id,
         'borrower-1',
         'borrower',
-        acceptance(agreement),
+        acceptance(agreement, 'borrower'),
       ),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(
@@ -248,13 +286,93 @@ describe('LegalService', () => {
     ).toBe(false);
   });
 
+  it('requires transfer confirmation and borrower receipt attestation', async () => {
+    const agreement = await generate();
+    await service.acceptDocument(
+      agreement.id,
+      'lender-1',
+      'lender',
+      acceptance(agreement, 'lender'),
+    );
+    await expect(
+      service.acceptDocument(
+        agreement.id,
+        'borrower-1',
+        'borrower',
+        acceptance(agreement, 'borrower'),
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    await service.confirmDisbursement(
+      agreement.id,
+      'lender-1',
+      'lender',
+      { confirmationAccepted: true },
+    );
+    await expect(
+      service.acceptDocument(
+        agreement.id,
+        'borrower-1',
+        'borrower',
+        {
+          ...acceptance(agreement, 'borrower'),
+          fundsReceivedConfirmed: false,
+        },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('allows only the loan lender to confirm transfer and is idempotent', async () => {
+    const agreement = await generate();
+    await service.acceptDocument(
+      agreement.id,
+      'lender-1',
+      'lender',
+      acceptance(agreement, 'lender'),
+    );
+    await expect(
+      service.confirmDisbursement(
+        agreement.id,
+        'borrower-1',
+        'borrower',
+        { confirmationAccepted: true },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    const first = await service.confirmDisbursement(
+      agreement.id,
+      'lender-1',
+      'lender',
+      { confirmationAccepted: true, externalReference: 'BANK-TRANSFER-1' },
+    );
+    const repeated = await service.confirmDisbursement(
+      agreement.id,
+      'lender-1',
+      'lender',
+      { confirmationAccepted: true, externalReference: 'BANK-TRANSFER-1' },
+    );
+    expect(first.document.status).toBe('awaiting_borrower_signature');
+    expect(repeated.document.disbursementConfirmation).toMatchObject({
+      confirmed: true,
+      principalMinor: 1_200_000,
+      externalReference: 'BANK-TRANSFER-1',
+    });
+  });
+
+  it('rejects a typed signing name that differs from the verified profile', async () => {
+    const agreement = await generate();
+    await expect(
+      service.acceptDocument(agreement.id, 'lender-1', 'lender', {
+        ...acceptance(agreement, 'lender'),
+        signedName: 'Someone Else',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('activates after the second signature with one ledger entry and exact installments', async () => {
     const agreement = await generate();
-    const input = acceptance(agreement);
-    await service.acceptDocument(agreement.id, 'lender-1', 'lender', {
-      ...input,
-      signedName: 'Lender Legal Name',
-    });
+    const input = acceptance(agreement, 'borrower');
+    await lenderSignAndConfirm(agreement);
     const result = await service.acceptDocument(
       agreement.id,
       'borrower-1',
@@ -273,6 +391,33 @@ describe('LegalService', () => {
       1_344_000,
     );
     expect(mediaService.uploadBufferAsDocument).toHaveBeenCalledTimes(1);
+    expect(gateway.emitToUser).toHaveBeenCalledWith(
+      'borrower-1',
+      'agreement:changed',
+      expect.objectContaining({
+        agreementId: agreement.id,
+        loanId: 'loan-1',
+        changeType: 'activated',
+      }),
+    );
+    expect(gateway.emitToUser).toHaveBeenCalledWith(
+      'lender-1',
+      'agreement:changed',
+      expect.objectContaining({ changeType: 'activated' }),
+    );
+    expect(
+      [...records.entries()].some(
+        ([path, value]) =>
+          path.startsWith('borrowerNotifications/') &&
+          value.category === 'agreement',
+      ),
+    ).toBe(true);
+    expect(
+      [...records.entries()].some(
+        ([path, value]) =>
+          path.startsWith('notifications/') && value.category === 'agreement',
+      ),
+    ).toBe(true);
   });
 
   it('retains signatures after upload failure and retries without duplicate ledger data', async () => {
@@ -280,11 +425,8 @@ describe('LegalService', () => {
       new Error('Cloudinary unavailable'),
     );
     const agreement = await generate();
-    const input = acceptance(agreement);
-    await service.acceptDocument(agreement.id, 'lender-1', 'lender', {
-      ...input,
-      signedName: 'Lender Legal Name',
-    });
+    const input = acceptance(agreement, 'borrower');
+    await lenderSignAndConfirm(agreement);
     const failed = await service.acceptDocument(
       agreement.id,
       'borrower-1',

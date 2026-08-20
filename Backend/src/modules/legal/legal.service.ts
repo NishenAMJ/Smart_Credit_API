@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -17,6 +18,7 @@ import type { UserRole, UserDocument } from '../auth/auth.types';
 import { AuthService } from '../auth/auth.service';
 import { DocumentsService } from '../documents/documents.service';
 import { MediaService } from '../media/media.service';
+import { ChatGateway } from '../chat/gateway/chat.gateway';
 import type {
   AcceptLegalDocumentResponseDto,
   LegalDocumentDto,
@@ -31,6 +33,7 @@ import {
 } from './loan-agreement.builder';
 import type {
   AcceptLoanAgreementInput,
+  ConfirmAgreementDisbursementInput,
   LoanAgreementAcceptanceDocument,
   LoanAgreementDocument,
   LoanAgreementParty,
@@ -58,6 +61,7 @@ export class LegalService {
     private readonly mediaService: MediaService,
     private readonly documentsService: DocumentsService,
     private readonly configService: ConfigService,
+    @Optional() private readonly gateway?: ChatGateway,
   ) {
     this.agreements = this.firebaseService.db.collection(
       'loanAgreements',
@@ -210,12 +214,22 @@ export class LegalService {
       throw new ForbiddenException('Only a borrower or lender can sign.');
     }
     this.validateAcceptanceInput(input);
+    const signer = await this.authService.getUserById(userId);
+    if (
+      this.normalizeName(input.signedName) !==
+      this.normalizeName(signer.fullName)
+    ) {
+      throw new BadRequestException(
+        'The signing name must match your verified profile name.',
+      );
+    }
 
     const agreementRef = this.agreements.doc(agreementId);
     const acceptanceRef = this.acceptances.doc(
       agreementAcceptanceIdFor(agreementId, userRole),
     );
     const auditSalt = this.getAuditSalt();
+    let acceptanceWasCreated = false;
 
     const acceptedAgreement = await this.firebaseService.db.runTransaction(
       async (transaction) => {
@@ -240,6 +254,17 @@ export class LegalService {
         if (userRole === 'borrower' && !agreement.lenderAcceptance.accepted) {
           throw new ConflictException(
             'The lender must sign this agreement before the borrower can sign.',
+          );
+        }
+        const disbursement = this.disbursementOf(agreement);
+        if (userRole === 'borrower' && !disbursement.confirmed) {
+          throw new ConflictException(
+            'The lender must confirm the external transfer before the borrower can sign.',
+          );
+        }
+        if (userRole === 'borrower' && input.fundsReceivedConfirmed !== true) {
+          throw new BadRequestException(
+            'The borrower must confirm receipt of funds before signing.',
           );
         }
         if (
@@ -285,6 +310,8 @@ export class LegalService {
             : null,
           userAgent: input.userAgent?.slice(0, 500) || null,
           acceptedAt: now,
+          fundsReceivedConfirmed:
+            userRole === 'borrower' && input.fundsReceivedConfirmed === true,
         };
         const merged: LoanAgreementDocument = {
           ...agreement,
@@ -310,11 +337,12 @@ export class LegalService {
         const bothAccepted =
           merged.borrowerAcceptance.accepted &&
           merged.lenderAcceptance.accepted;
-        merged.status = bothAccepted ? 'finalizing' : 'partially_accepted';
+        merged.status = bothAccepted ? 'finalizing' : 'awaiting_disbursement';
         merged.finalizationStartedAt = bothAccepted ? now : null;
         merged.bodyHtml = buildAgreementHtml(merged);
 
         transaction.create(acceptanceRef, acceptance);
+        acceptanceWasCreated = true;
         transaction.update(agreementRef, {
           borrowerAcceptance: merged.borrowerAcceptance,
           lenderAcceptance: merged.lenderAcceptance,
@@ -324,6 +352,13 @@ export class LegalService {
           finalizationStartedAt: merged.finalizationStartedAt,
           finalizationError: null,
         });
+        transaction.update(
+          this.firebaseService.db.collection('loans').doc(agreement.loanId),
+          {
+            agreementStatus: merged.status,
+            updatedAt: now,
+          },
+        );
         return merged;
       },
     );
@@ -332,17 +367,44 @@ export class LegalService {
       acceptedAgreement.borrowerAcceptance.accepted &&
       acceptedAgreement.lenderAcceptance.accepted;
     if (!bothAccepted || acceptedAgreement.status === 'fully_accepted') {
+      if (acceptanceWasCreated) {
+        await this.publishAgreementChange(
+          acceptedAgreement,
+          userRole === 'lender' ? 'lender_signed' : 'borrower_signed',
+          userRole === 'lender'
+            ? 'Lender signature recorded'
+            : 'Borrower signature recorded',
+          userRole === 'lender'
+            ? 'The lender signed the agreement. The external transfer must now be confirmed.'
+            : 'The borrower signed the agreement.',
+        );
+      }
       return {
         message:
           userRole === 'lender'
-            ? 'Lender signature recorded. The agreement is waiting for the borrower.'
+            ? 'Lender signature recorded. Confirm the external transfer next.'
             : 'Loan agreement acceptance recorded.',
         document: this.toDto(acceptedAgreement),
       };
     }
 
+    if (acceptanceWasCreated) {
+      await this.publishAgreementChange(
+        acceptedAgreement,
+        'borrower_signed',
+        'Borrower signature recorded',
+        'The borrower confirmed receipt and signed. Agreement finalization has started.',
+      );
+    }
+
     try {
       const finalized = await this.finalizeAgreementRecord(agreementId);
+      await this.publishAgreementChange(
+        finalized,
+        'activated',
+        'Loan agreement completed',
+        'Both parties signed and the loan is now active.',
+      );
       return {
         message:
           'The lender and borrower signed in sequence. The loan is now active.',
@@ -350,12 +412,109 @@ export class LegalService {
       };
     } catch {
       const failed = await this.markFinalizationFailed(agreementId);
+      await this.publishAgreementChange(
+        failed,
+        'finalization_failed',
+        'Agreement finalization needs attention',
+        'Both signatures are safe, but PDF finalization must be retried.',
+      );
       return {
         message:
           'Both signatures were saved, but PDF finalization failed. Retry is available.',
         document: this.toDto(failed),
       };
     }
+  }
+
+  async confirmDisbursement(
+    agreementId: string,
+    userId: string,
+    userRole: UserRole,
+    input: ConfirmAgreementDisbursementInput,
+  ): Promise<AcceptLegalDocumentResponseDto> {
+    if (userRole !== 'lender')
+      throw new ForbiddenException(
+        'Only the lender on the agreement can confirm the transfer.',
+      );
+    if (input.confirmationAccepted !== true)
+      throw new BadRequestException('Explicit transfer confirmation is required.');
+    const externalReference = input.externalReference?.trim() || null;
+    if (externalReference && externalReference.length > 160)
+      throw new BadRequestException('The transfer reference is too long.');
+
+    const agreementRef = this.agreements.doc(agreementId);
+    let confirmed!: LoanAgreementDocument;
+    let confirmationWasCreated = false;
+    await this.firebaseService.db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(agreementRef);
+      if (!snapshot.exists) throw new NotFoundException('Loan agreement not found.');
+      const agreement = snapshot.data() as LoanAgreementDocument;
+      this.assertAgreementAccess(agreement, userId, userRole);
+      if (agreement.legacyReadOnly)
+        throw new ConflictException('Migrated legacy agreements are read-only.');
+      if (!agreement.lenderAcceptance.accepted)
+        throw new ConflictException('The lender must sign before confirming transfer.');
+      if (agreement.borrowerAcceptance.accepted)
+        throw new ConflictException('This agreement is already signed by the borrower.');
+      const prior = this.disbursementOf(agreement);
+      if (prior.confirmed) {
+        if (
+          externalReference &&
+          prior.externalReference &&
+          externalReference !== prior.externalReference
+        )
+          throw new ConflictException(
+            'The transfer was already confirmed with a different reference.',
+          );
+        confirmed = { ...agreement, disbursementConfirmation: prior };
+        return;
+      }
+      const now = Timestamp.now();
+      const confirmation = {
+        confirmed: true,
+        confirmedByLenderId: userId,
+        confirmedAt: now,
+        principalMinor: agreement.terms.principalMinor,
+        externalReference,
+        ipAddressHash: input.ipAddress
+          ? createHmac('sha256', this.getAuditSalt())
+              .update(input.ipAddress)
+              .digest('hex')
+          : null,
+        userAgent: input.userAgent?.slice(0, 500) || null,
+      };
+      confirmed = {
+        ...agreement,
+        status: 'awaiting_borrower_signature',
+        disbursementConfirmation: confirmation,
+        bodyHtml: '',
+        updatedAt: now,
+      };
+      confirmationWasCreated = true;
+      confirmed.bodyHtml = buildAgreementHtml(confirmed);
+      transaction.update(agreementRef, {
+        status: confirmed.status,
+        disbursementConfirmation: confirmation,
+        bodyHtml: confirmed.bodyHtml,
+        updatedAt: now,
+      });
+      transaction.update(
+        this.firebaseService.db.collection('loans').doc(agreement.loanId),
+        { agreementStatus: confirmed.status, updatedAt: now },
+      );
+    });
+    if (confirmationWasCreated) {
+      await this.publishAgreementChange(
+        confirmed,
+        'disbursement_confirmed',
+        'Funds sent by lender',
+        'The lender confirmed the external transfer. The borrower can now confirm receipt and sign.',
+      );
+    }
+    return {
+      message: 'External transfer confirmed. The borrower can now sign.',
+      document: this.toDto(confirmed),
+    };
   }
 
   async retryFinalization(
@@ -375,6 +534,12 @@ export class LegalService {
       throw new ConflictException('Both signatures are required first.');
     }
     const finalized = await this.finalizeAgreementRecord(agreementId);
+    await this.publishAgreementChange(
+      finalized,
+      'activated',
+      'Loan agreement completed',
+      'Agreement finalization completed and the loan is active.',
+    );
     return {
       message: 'Agreement finalization completed.',
       document: this.toDto(finalized),
@@ -772,6 +937,9 @@ export class LegalService {
       consentTextVersion: agreement.consentTextVersion,
       borrowerAcceptance: this.toAcceptanceDto(agreement.borrowerAcceptance),
       lenderAcceptance: this.toAcceptanceDto(agreement.lenderAcceptance),
+      disbursementConfirmation: this.toDisbursementDto(
+        this.disbursementOf(agreement),
+      ),
       pdfDownloadPath: `/api/legal/documents/${agreement.agreementId}/download`,
       pdfAvailable: Boolean(agreement.signedPdfDocumentId),
       signedPdfGeneratedAt:
@@ -789,6 +957,122 @@ export class LegalService {
       signedName: acceptance.signedName,
       acceptedAt: acceptance.acceptedAt?.toDate().toISOString() ?? null,
     };
+  }
+
+  private toDisbursementDto(
+    confirmation: LoanAgreementDocument['disbursementConfirmation'],
+  ) {
+    return {
+      confirmed: confirmation.confirmed,
+      confirmedByLenderId: confirmation.confirmedByLenderId,
+      confirmedAt: confirmation.confirmedAt?.toDate().toISOString() ?? null,
+      principalMinor: confirmation.principalMinor,
+      externalReference: confirmation.externalReference,
+    };
+  }
+
+  private disbursementOf(
+    agreement: LoanAgreementDocument,
+  ): LoanAgreementDocument['disbursementConfirmation'] {
+    if (agreement.disbursementConfirmation) {
+      return agreement.disbursementConfirmation;
+    }
+    const legacy = agreement as LoanAgreementDocument & {
+      transferConfirmed?: boolean;
+      fundsTransferredConfirmed?: boolean;
+      transferConfirmedAt?: Timestamp | null;
+      disbursementConfirmedAt?: Timestamp | null;
+      externalTransferReference?: string | null;
+    };
+    const confirmedAt =
+      legacy.transferConfirmedAt ?? legacy.disbursementConfirmedAt ?? null;
+    const confirmed =
+      legacy.transferConfirmed === true ||
+      legacy.fundsTransferredConfirmed === true ||
+      Boolean(confirmedAt) ||
+      agreement.status === 'awaiting_borrower_signature' ||
+      agreement.status === 'fully_accepted';
+    return {
+      confirmed,
+      confirmedByLenderId: confirmed ? agreement.lenderId : null,
+      confirmedAt,
+      principalMinor: confirmed ? agreement.terms.principalMinor : null,
+      externalReference: legacy.externalTransferReference ?? null,
+      ipAddressHash: null,
+      userAgent: confirmed ? 'legacy-compatible-record' : null,
+    };
+  }
+
+  private normalizeName(value: string): string {
+    return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en');
+  }
+
+  private async publishAgreementChange(
+    agreement: LoanAgreementDocument,
+    changeType: string,
+    title: string,
+    message: string,
+  ) {
+    const updatedAt = agreement.updatedAt.toDate().toISOString();
+    const payload = {
+      agreementId: agreement.agreementId,
+      loanId: agreement.loanId,
+      status: agreement.status,
+      changeType,
+      updatedAt,
+    };
+    this.gateway?.emitToUser(
+      agreement.borrowerId,
+      'agreement:changed',
+      payload,
+    );
+    this.gateway?.emitToUser(agreement.lenderId, 'agreement:changed', payload);
+    const now = Timestamp.now();
+    await Promise.all([
+      this.firebaseService.db.collection('borrowerNotifications').add({
+        borrowerId: agreement.borrowerId,
+        category: 'agreement',
+        severity:
+          changeType === 'finalization_failed' ? 'warning' : 'info',
+        title,
+        message,
+        isRead: false,
+        relatedEntityType: 'loanAgreement',
+        relatedEntityId: agreement.agreementId,
+        actionTarget: 'Agreement',
+        metadata: {
+          agreementId: agreement.agreementId,
+          loanId: agreement.loanId,
+          status: agreement.status,
+          changeType,
+        },
+        createdAt: now,
+        updatedAt: now,
+        readAt: null,
+      }),
+      this.firebaseService.db.collection('notifications').add({
+        userId: agreement.lenderId,
+        category: 'agreement',
+        eventType: changeType,
+        title,
+        body: message,
+        severity:
+          changeType === 'finalization_failed' ? 'warning' : 'info',
+        isRead: false,
+        createdAt: now,
+        readAt: null,
+        entityType: 'loanAgreement',
+        entityId: agreement.agreementId,
+        actionLabel: 'Open agreement',
+        actionTarget: 'agreements',
+        metadata: {
+          agreementId: agreement.agreementId,
+          loanId: agreement.loanId,
+          status: agreement.status,
+          changeType,
+        },
+      }),
+    ]);
   }
 
   private async buildAgreementPdf(

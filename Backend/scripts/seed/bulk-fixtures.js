@@ -297,17 +297,19 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
     const amounts = distribute(totalRepayableMinor, tenureMonths);
     const lifecycle = index % 10;
     const paidCount =
-      lifecycle === 0
+      index <= 4
+        ? 0
+        : lifecycle === 0
         ? tenureMonths
         : lifecycle < 3
           ? 0
           : Math.min(tenureMonths - 1, index % tenureMonths);
     const status =
-      lifecycle === 0
+      index <= 4
+        ? 'pending_disbursement'
+        : lifecycle === 0
         ? 'completed'
-        : lifecycle === 1
-          ? 'pending_disbursement'
-          : lifecycle === 2
+        : lifecycle === 2
             ? 'overdue'
             : 'active';
     const approvedAt = application.createdAt;
@@ -432,15 +434,20 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
     });
   });
 
-  fixtures.loans
-    .filter((loan) => loan.status === 'pending_disbursement')
-    .forEach((loan, index) => {
+  let pendingAgreementIndex = 0;
+  fixtures.loans.forEach((loan) => {
       const agreementId = `agreement_${loan.loanId}_v001`;
       const borrower = fixtures.users.find(
         (user) => user.userId === loan.borrowerId,
       );
       const lender = fixtures.users.find((user) => user.userId === loan.lenderId);
-      const partiallyAccepted = index % 2 === 1;
+      const agreementPhase =
+        loan.status === 'pending_disbursement'
+          ? Math.min(pendingAgreementIndex++, 3)
+          : 4;
+      const lenderAccepted = agreementPhase >= 1;
+      const transferConfirmed = agreementPhase >= 2;
+      const borrowerAccepted = agreementPhase >= 3;
       const terms = {
         currency: 'LKR',
         principalMinor: loan.principalMinor,
@@ -466,7 +473,7 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
           }),
         )
         .digest('hex');
-      const lenderAcceptance = partiallyAccepted
+      const lenderAcceptance = lenderAccepted
         ? {
             accepted: true,
             signedName: lender?.fullName ?? 'Seed lender',
@@ -479,9 +486,16 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
         applicationId: loan.applicationId,
         listingId: loan.listingId,
         version: 1,
-        status: partiallyAccepted
-          ? 'partially_accepted'
-          : 'awaiting_signatures',
+        status:
+          agreementPhase === 0
+            ? 'awaiting_signatures'
+            : agreementPhase === 1
+              ? 'awaiting_disbursement'
+              : agreementPhase === 2
+                ? 'awaiting_borrower_signature'
+                : agreementPhase === 3
+                  ? 'finalization_failed'
+                  : 'fully_accepted',
         title: `Smart Credit Loan Agreement - ${loan.loanId}`,
         summary: 'Seeded unsigned loan agreement for development.',
         borrowerId: loan.borrowerId,
@@ -504,24 +518,49 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
         bodyHtml: `<h1>Smart Credit Loan Agreement</h1><p>Seed agreement ${agreementId}</p>`,
         termsHash,
         consentTextVersion: 'loan_agreement_consent_v1',
-        borrowerAcceptance: { accepted: false, signedName: null, acceptedAt: null },
+        borrowerAcceptance: borrowerAccepted
+          ? {
+              accepted: true,
+              signedName: borrower?.fullName ?? 'Seed borrower',
+              acceptedAt: referenceDate,
+            }
+          : { accepted: false, signedName: null, acceptedAt: null },
         lenderAcceptance,
+        disbursementConfirmation: transferConfirmed
+          ? {
+              confirmed: true,
+              confirmedByLenderId: loan.lenderId,
+              confirmedAt: referenceDate,
+              principalMinor: loan.principalMinor,
+              externalReference: `SEED-D-${loan.loanId}`,
+              ipAddressHash: null,
+              userAgent: 'bulk-seed',
+            }
+          : {
+              confirmed: false,
+              confirmedByLenderId: null,
+              confirmedAt: null,
+              principalMinor: null,
+              externalReference: null,
+              ipAddressHash: null,
+              userAgent: null,
+            },
         generatedByUserId: loan.lenderId,
         generatedByRole: 'lender',
         generatedAt: loan.approvedAt,
         updatedAt: referenceDate,
-        finalizedAt: null,
+        finalizedAt: agreementPhase === 4 ? referenceDate : null,
         finalizationStartedAt: null,
-        finalizationError: null,
+        finalizationError: agreementPhase === 3
+          ? 'Seeded finalization failure for retry testing.'
+          : null,
         signedPdfDocumentId: null,
         signedPdfGeneratedAt: null,
         pdfSha256Hash: null,
       });
       loan.currentAgreementId = agreementId;
-      loan.agreementStatus = partiallyAccepted
-        ? 'partially_accepted'
-        : 'awaiting_signatures';
-      if (partiallyAccepted) {
+      loan.agreementStatus = fixtures.loanAgreements.at(-1).status;
+      if (lenderAccepted) {
         fixtures.loanAgreementAcceptances.push({
           acceptanceId: `${agreementId}_lender`,
           agreementId,
@@ -536,6 +575,25 @@ function addBulkFixtures(fixtures, config, referenceDate, passwordHash) {
           ipAddressHash: null,
           userAgent: 'bulk-seed',
           acceptedAt: referenceDate,
+          fundsReceivedConfirmed: false,
+        });
+      }
+      if (borrowerAccepted) {
+        fixtures.loanAgreementAcceptances.push({
+          acceptanceId: `${agreementId}_borrower`,
+          agreementId,
+          loanId: loan.loanId,
+          userId: loan.borrowerId,
+          role: 'borrower',
+          agreementVersion: 1,
+          termsHash,
+          signedName: borrower?.fullName ?? 'Seed borrower',
+          consentAccepted: true,
+          consentTextVersion: 'loan_agreement_consent_v1',
+          ipAddressHash: null,
+          userAgent: 'bulk-seed',
+          acceptedAt: referenceDate,
+          fundsReceivedConfirmed: true,
         });
       }
     });

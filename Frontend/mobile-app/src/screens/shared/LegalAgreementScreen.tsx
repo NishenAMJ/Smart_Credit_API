@@ -22,10 +22,12 @@ import { useAuth } from "../../context/AuthContext";
 import { API_BASE_URL } from "../../services/api";
 import {
   acceptLegalDocument,
+  confirmAgreementDisbursement,
   generateLegalDocument,
   getLatestLegalDocument,
   retryLegalDocumentFinalization,
 } from "../../api/services/auth.service";
+import { chatSocket } from "../../services/socketService";
 import type { LegalDocument, MobileRole } from "../../types/auth";
 
 type LegalAgreementScreenProps = {
@@ -44,10 +46,15 @@ export default function LegalAgreementScreen({
   const [loanId, setLoanId] = useState(routedLoanId);
   const [signedName, setSignedName] = useState("");
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [fundsReceivedConfirmed, setFundsReceivedConfirmed] = useState(false);
+  const [transferConfirmed, setTransferConfirmed] = useState(false);
+  const [transferReference, setTransferReference] = useState("");
   const [document, setDocument] = useState<LegalDocument | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(
-    "Enter a loan ID to load the latest agreement. Lenders can also generate a new one.",
+    routedLoanId
+      ? "Loading the agreement..."
+      : "Enter a loan ID to load the latest agreement. Lenders can also generate a new one.",
   );
   const [error, setError] = useState("");
 
@@ -56,7 +63,10 @@ export default function LegalAgreementScreen({
       ? document?.borrowerAcceptance.accepted
       : document?.lenderAcceptance.accepted;
   const lenderHasSigned = document?.lenderAcceptance.accepted ?? false;
-  const canSignInSequence = role === "lender" || lenderHasSigned;
+  const disbursementConfirmed =
+    document?.disbursementConfirmation.confirmed ?? false;
+  const canSignInSequence =
+    role === "lender" || (lenderHasSigned && disbursementConfirmed);
 
   async function handleLoadLatest(idToLoad?: string) {
     const trimmedLoanId = (idToLoad || loanId).trim();
@@ -137,6 +147,8 @@ export default function LegalAgreementScreen({
         consentAccepted: true,
         agreementVersion: document.version,
         termsHash: document.termsHash,
+        fundsReceivedConfirmed:
+          role === "borrower" ? fundsReceivedConfirmed : undefined,
       });
       setDocument(response.document);
 
@@ -161,12 +173,58 @@ export default function LegalAgreementScreen({
   }
 
   useEffect(() => {
+    if (session?.user.fullName) setSignedName(session.user.fullName);
+  }, [session?.user.fullName]);
+
+  useEffect(() => {
     if (routedLoanId) {
       setLoanId(routedLoanId);
       void handleLoadLatest(routedLoanId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routedLoanId]);
+
+  useEffect(() => {
+    const refreshAgreement = (event: { loanId: string }) => {
+      const currentLoanId = document?.loanId ?? loanId;
+      if (currentLoanId && event.loanId === currentLoanId)
+        void handleLoadLatest(currentLoanId);
+    };
+    const refreshAfterReconnect = () => {
+      const currentLoanId = document?.loanId ?? loanId;
+      if (currentLoanId) void handleLoadLatest(currentLoanId);
+    };
+    chatSocket.on("agreementChanged", refreshAgreement);
+    chatSocket.on("socketConnected", refreshAfterReconnect);
+    return () => {
+      chatSocket.off("agreementChanged", refreshAgreement);
+      chatSocket.off("socketConnected", refreshAfterReconnect);
+    };
+  }, [document?.loanId, loanId]);
+
+  async function handleConfirmDisbursement() {
+    if (!document || !transferConfirmed) return;
+    try {
+      setLoading(true);
+      setError("");
+      const response = await confirmAgreementDisbursement(document.id, {
+        confirmationAccepted: true,
+        externalReference: transferReference.trim() || undefined,
+      });
+      setDocument(response.document);
+      setMessage(response.message ?? "External transfer confirmed.");
+      setTransferConfirmed(false);
+      await refreshWorkspace();
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Failed to confirm the external transfer.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleRetryFinalization() {
     if (!document) return;
@@ -232,7 +290,10 @@ export default function LegalAgreementScreen({
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => void refreshWorkspace()}
+          onRefresh={() => {
+            void refreshWorkspace();
+            if (loanId) void handleLoadLatest(loanId);
+          }}
           tintColor={COLORS.primary}
         />
       }
@@ -245,35 +306,40 @@ export default function LegalAgreementScreen({
             : "Review and sign the agreement first. The borrower signs afterward, and Smart Credit does not execute or verify the external transfer."}
         </Text>
 
-        <View style={styles.stack}>
-          <Text style={styles.label}>Loan ID</Text>
-          <Input
-            value={loanId}
-            onChangeText={setLoanId}
-            placeholder="Paste a loan document ID"
-            autoCapitalize="none"
-            editable={!routedLoanId}
-          />
-        </View>
+        {routedLoanId ? (
+          <DetailRow label="Loan ID" value={routedLoanId} />
+        ) : (
+          <>
+            <View style={styles.stack}>
+              <Text style={styles.label}>Loan ID</Text>
+              <Input
+                value={loanId}
+                onChangeText={setLoanId}
+                placeholder="Paste a loan document ID"
+                autoCapitalize="none"
+              />
+            </View>
 
-        <View style={styles.actionRow}>
-          <Button
-            onPress={() => void handleLoadLatest()}
-            disabled={loading}
-            style={styles.actionButton}
-          >
-            {loading ? "Loading..." : "Load latest"}
-          </Button>
-          {role === "lender" ? (
-            <Button
-              onPress={() => void handleGenerate()}
-              disabled={loading}
-              style={styles.actionButton}
-            >
-              {loading ? "Generating..." : "Generate"}
-            </Button>
-          ) : null}
-        </View>
+            <View style={styles.actionRow}>
+              <Button
+                onPress={() => void handleLoadLatest()}
+                disabled={loading}
+                style={styles.actionButton}
+              >
+                {loading ? "Loading..." : "Load latest"}
+              </Button>
+              {role === "lender" ? (
+                <Button
+                  onPress={() => void handleGenerate()}
+                  disabled={loading}
+                  style={styles.actionButton}
+                >
+                  {loading ? "Generating..." : "Generate"}
+                </Button>
+              ) : null}
+            </View>
+          </>
+        )}
 
         <Text style={styles.helper}>{message}</Text>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -297,6 +363,18 @@ export default function LegalAgreementScreen({
             <DetailRow
               label="Lender signed name"
               value={document.lenderAcceptance.signedName ?? "Pending signer name"}
+            />
+            <DetailRow
+              label="External transfer"
+              value={
+                disbursementConfirmed
+                  ? `Confirmed${
+                      document.disbursementConfirmation.externalReference
+                        ? ` · ${document.disbursementConfirmation.externalReference}`
+                        : ""
+                    }`
+                  : "Waiting for lender confirmation"
+              }
             />
             <DetailRow
               label="Principal"
@@ -328,35 +406,98 @@ export default function LegalAgreementScreen({
               <Text style={styles.label}>Your legal signing name</Text>
               <Input
                 value={signedName}
-                onChangeText={setSignedName}
+                editable={false}
                 placeholder="Enter your full legal name"
               />
+              <Text style={styles.helperText}>
+                This is your verified profile name. Update your profile if it is incorrect.
+              </Text>
             </View>
 
-            {role === "borrower" && !lenderHasSigned ? (
+            {role === "borrower" && !canSignInSequence ? (
               <Text style={styles.sequenceNotice}>
-                Waiting for the lender to sign this agreement first.
+                {!lenderHasSigned
+                  ? "Waiting for the lender to sign this agreement first."
+                  : "Waiting for the lender to confirm the external transfer."}
               </Text>
             ) : null}
 
-            {!document.legacyReadOnly && !isPartyAccepted && canSignInSequence ? (
-              <TouchableOpacity
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: consentAccepted }}
-                style={styles.consentRow}
-                onPress={() => setConsentAccepted((current) => !current)}
-              >
-                <Feather
-                  name={consentAccepted ? "check-square" : "square"}
-                  size={22}
-                  color={consentAccepted ? COLORS.primary : COLORS.textSecondary}
+            {role === "lender" && lenderHasSigned && !disbursementConfirmed ? (
+              <View style={styles.stack}>
+                <Text style={styles.label}>External transfer reference (optional)</Text>
+                <Input
+                  value={transferReference}
+                  onChangeText={setTransferReference}
+                  placeholder="Bank reference or receipt number"
+                  autoCapitalize="none"
                 />
-                <Text style={styles.consentText}>
-                  {role === "borrower"
-                    ? `I reviewed version ${document.version}, agree to these terms, and am signing after the lender-first external transfer step. Smart Credit does not independently verify that transfer.`
-                    : `I reviewed version ${document.version}, agree to these terms, and intend my typed legal name to be my lender signature before the borrower signs.`}
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: transferConfirmed }}
+                  style={styles.consentRow}
+                  onPress={() => setTransferConfirmed((current) => !current)}
+                >
+                  <Feather
+                    name={transferConfirmed ? "check-square" : "square"}
+                    size={22}
+                    color={transferConfirmed ? COLORS.primary : COLORS.textSecondary}
+                  />
+                  <Text style={styles.consentText}>
+                    I confirm that I sent the agreement principal to the borrower outside Smart Credit.
+                  </Text>
+                </TouchableOpacity>
+                <Button
+                  onPress={() => void handleConfirmDisbursement()}
+                  disabled={loading || !transferConfirmed}
+                >
+                  Confirm funds sent
+                </Button>
+              </View>
+            ) : null}
+
+            {!document.legacyReadOnly && !isPartyAccepted && canSignInSequence ? (
+              <View style={styles.stack}>
+                {role === "borrower" ? (
+                  <TouchableOpacity
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: fundsReceivedConfirmed }}
+                    style={styles.consentRow}
+                    onPress={() =>
+                      setFundsReceivedConfirmed((current) => !current)
+                    }
+                  >
+                    <Feather
+                      name={fundsReceivedConfirmed ? "check-square" : "square"}
+                      size={22}
+                      color={
+                        fundsReceivedConfirmed
+                          ? COLORS.primary
+                          : COLORS.textSecondary
+                      }
+                    />
+                    <Text style={styles.consentText}>
+                      I confirm that I received the principal from the lender.
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: consentAccepted }}
+                  style={styles.consentRow}
+                  onPress={() => setConsentAccepted((current) => !current)}
+                >
+                  <Feather
+                    name={consentAccepted ? "check-square" : "square"}
+                    size={22}
+                    color={consentAccepted ? COLORS.primary : COLORS.textSecondary}
+                  />
+                  <Text style={styles.consentText}>
+                    {role === "borrower"
+                      ? `I reviewed version ${document.version}, agree to these terms, and intend my verified typed name to be my electronic signature.`
+                      : `I reviewed version ${document.version}, agree to these terms, and intend my verified typed name to be my lender signature.`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ) : null}
 
             <View style={styles.actionColumn}>
@@ -367,7 +508,8 @@ export default function LegalAgreementScreen({
                   Boolean(isPartyAccepted) ||
                   document.legacyReadOnly ||
                   !canSignInSequence ||
-                  !consentAccepted
+                  !consentAccepted ||
+                  (role === "borrower" && !fundsReceivedConfirmed)
                 }
               >
                 {document.legacyReadOnly
@@ -375,7 +517,7 @@ export default function LegalAgreementScreen({
                   : isPartyAccepted
                     ? "Agreement accepted"
                     : !canSignInSequence
-                      ? "Waiting for lender signature"
+                      ? "Waiting for lender transfer confirmation"
                     : "Sign agreement"}
               </Button>
               {document.status === "finalization_failed" ? (
@@ -439,6 +581,11 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 13,
     fontWeight: "500",
+  },
+  helperText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
   },
   actionRow: {
     flexDirection: "row",

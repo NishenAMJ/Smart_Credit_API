@@ -48,6 +48,13 @@ export type SocketEventMap = {
     status: string;
     updatedAt: string;
   };
+  agreementChanged: {
+    agreementId: string;
+    loanId: string;
+    changeType: string;
+    status: string;
+    updatedAt: string;
+  };
 };
 
 class ChatSocket {
@@ -161,6 +168,13 @@ class ChatSocket {
       "dispute:changed",
       (data: SocketEventMap["disputeChanged"]) => {
         this._emit("disputeChanged", data);
+      },
+    );
+
+    this.socket.on(
+      "agreement:changed",
+      (data: SocketEventMap["agreementChanged"]) => {
+        this._emit("agreementChanged", data);
       },
     );
 

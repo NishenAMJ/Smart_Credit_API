@@ -171,11 +171,27 @@ function validateFixtures(fixtures) {
     assert(userIds.has(agreement.borrowerId), `agreement borrower ${agreement.borrowerId} is missing`);
     assert(userIds.has(agreement.lenderId), `agreement lender ${agreement.lenderId} is missing`);
     assert(/^[a-f0-9]{64}$/.test(agreement.termsHash), `agreement ${agreement.agreementId} hash is invalid`);
-    if (agreement.status === 'partially_accepted') {
+    if (['awaiting_disbursement', 'partially_accepted'].includes(agreement.status)) {
       assert(
         agreement.lenderAcceptance.accepted &&
           !agreement.borrowerAcceptance.accepted,
         `agreement ${agreement.agreementId} must be lender-signed first`,
+      );
+    }
+    if (agreement.status === 'awaiting_borrower_signature') {
+      assert(
+        agreement.lenderAcceptance.accepted &&
+          agreement.disbursementConfirmation.confirmed &&
+          !agreement.borrowerAcceptance.accepted,
+        `agreement ${agreement.agreementId} must be transfer-confirmed`,
+      );
+    }
+    if (agreement.status === 'finalization_failed') {
+      assert(
+        agreement.lenderAcceptance.accepted &&
+          agreement.disbursementConfirmation.confirmed &&
+          agreement.borrowerAcceptance.accepted,
+        `agreement ${agreement.agreementId} must retain both signatures`,
       );
     }
   });

@@ -16,6 +16,7 @@ describe('LegalController', () => {
       getDocumentById: jest.fn(),
       getLatestLoanDocument: jest.fn(),
       acceptDocument: jest.fn(),
+      confirmDisbursement: jest.fn(),
       retryFinalization: jest.fn(),
       downloadDocumentPdf: jest.fn(),
     };
@@ -24,6 +25,29 @@ describe('LegalController', () => {
       providers: [{ provide: LegalService, useValue: legalService }],
     }).compile();
     controller = module.get(LegalController);
+  });
+
+  it('records transfer confirmation using only the authenticated lender identity', async () => {
+    const body = {
+      confirmationAccepted: true,
+      externalReference: 'BANK-123',
+    };
+    await controller.confirmDisbursement(
+      'agreement-1',
+      request('lender'),
+      body,
+    );
+
+    expect(legalService.confirmDisbursement).toHaveBeenCalledWith(
+      'agreement-1',
+      'lender-1',
+      'lender',
+      expect.objectContaining({
+        ...body,
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest-agent',
+      }),
+    );
   });
 
   function request(role: 'borrower' | 'lender' | 'admin') {

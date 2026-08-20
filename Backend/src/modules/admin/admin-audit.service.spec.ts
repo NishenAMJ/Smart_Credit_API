@@ -48,7 +48,7 @@ describe('AdminAuditService', () => {
     const approvedAt = new Date('2026-04-27T04:30:00.000Z');
     const snapshots: Record<string, unknown> = {
       users: snapshot([]),
-      ads: snapshot([
+      loanListings: snapshot([
         {
           id: 'seed-active-ad',
           data: { status: 'active', lenderName: 'Seed Lender' },
@@ -103,7 +103,7 @@ describe('AdminAuditService', () => {
           },
         },
       ]),
-      ads: snapshot([]),
+      loanListings: snapshot([]),
       disputes: snapshot([
         {
           id: 'seed-resolved-dispute',

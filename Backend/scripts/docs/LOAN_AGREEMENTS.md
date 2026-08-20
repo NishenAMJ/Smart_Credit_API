@@ -23,14 +23,18 @@ CORS setup is required. Restart Nest after changing the environment.
 
 1. A lender approval creates one `pending_disbursement` loan and version-one
    agreement in one Firestore transaction.
-2. The lender signs the exact agreement version and terms hash first. The
-   external money transfer occurs outside Smart Credit and is not tracked or
-   independently verified by the application.
-3. The borrower signs after that external step. This second signature generates
+2. The lender signs the exact agreement version and terms hash first, moving the
+   agreement to `awaiting_disbursement`.
+3. The lender explicitly records that the external transfer was sent, with an
+   optional bank reference. Smart Credit stores this attestation but does not
+   execute or independently verify the transfer. The agreement then moves to
+   `awaiting_borrower_signature`.
+4. The borrower confirms receipt of funds and signs using their verified profile
+   name. This second signature generates
    an authenticated Cloudinary PDF, writes its
    deterministic `documents` record, creates the disbursement ledger entry and
    monthly installments, and activates the loan.
-4. If PDF finalization fails, signatures remain valid and either participant
+5. If PDF finalization fails, signatures and transfer confirmation remain valid and either participant
    can retry. Deterministic IDs prevent duplicate ledger or installment data.
 
 PDFs are downloaded through the authenticated backend endpoint. Clients must
@@ -58,8 +62,9 @@ existing loan.
 
 ## Development seeds
 
-Both seed editions create deterministic awaiting-signature and partially
-accepted records without fake Cloudinary URLs:
+The seed editions include deterministic unsigned, lender-signed,
+transfer-confirmed, finalization-failed, and fully accepted records without fake
+Cloudinary URLs:
 
 ```bash
 npm run seed:basic:check

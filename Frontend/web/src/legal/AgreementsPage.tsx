@@ -138,7 +138,7 @@ export default function AgreementsPage({
               fontSize: 12,
             }}
           >
-            <CheckCircle2 size={14} /> Ready for disbursement
+            <CheckCircle2 size={14} /> Loan activated
           </div>
         </div>
         <div className="summary-card">
@@ -177,6 +177,8 @@ export default function AgreementsPage({
             [
               "all",
               "fully_accepted",
+              "awaiting_borrower_signature",
+              "awaiting_disbursement",
               "partially_accepted",
               "awaiting_signatures",
               "finalization_failed",

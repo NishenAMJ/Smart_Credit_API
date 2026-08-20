@@ -38,6 +38,8 @@ export const ENDPOINTS = {
     generate: (loanId: string) => `/legal/documents/generate/${loanId}`,
     latestByLoan: (loanId: string) => `/legal/documents/loan/${loanId}/latest`,
     accept: (documentId: string) => `/legal/documents/${documentId}/accept`,
+    confirmDisbursement: (documentId: string) =>
+      `/legal/documents/${documentId}/disbursement-confirmation`,
     finalize: (documentId: string) =>
       `/legal/documents/${documentId}/finalize`,
     download: (documentId: string) => `/legal/documents/${documentId}/download`,

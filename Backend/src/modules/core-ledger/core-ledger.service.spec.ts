@@ -42,6 +42,11 @@ describe('CoreLedgerService agreement approval', () => {
     const db: any = {
       collection: (name: string) => ({
         doc: (id?: string) => reference(`${name}/${id ?? `loan-${++generated}`}`),
+        add: async (value: Record<string, unknown>) => {
+          const ref = reference(`${name}/notification-${++generated}`);
+          records.set(ref.path, value);
+          return ref;
+        },
       }),
       runTransaction: async (work: (transaction: any) => unknown) =>
         work({
@@ -55,7 +60,8 @@ describe('CoreLedgerService agreement approval', () => {
             records.set(ref.path, { ...records.get(ref.path), ...value }),
         }),
     };
-    const service = new CoreLedgerService({ db } as any);
+    const gateway = { emitToUser: jest.fn() };
+    const service = new CoreLedgerService({ db } as any, gateway as any);
 
     const result = await service.approveApplication(
       'application-1',
@@ -83,6 +89,7 @@ describe('CoreLedgerService agreement approval', () => {
       status: 'awaiting_signatures',
       borrowerAcceptance: { accepted: false },
       lenderAcceptance: { accepted: false },
+      disbursementConfirmation: { confirmed: false },
     });
     expect(
       [...records.keys()].filter((path) => path.includes('/installments/')),
@@ -91,6 +98,19 @@ describe('CoreLedgerService agreement approval', () => {
       status: 'converted',
       convertedLoanId: 'loan-1',
     });
+    expect(gateway.emitToUser).toHaveBeenCalledWith(
+      'borrower-1',
+      'agreement:changed',
+      expect.objectContaining({
+        agreementId: 'agreement_loan-1_v001',
+        changeType: 'created',
+      }),
+    );
+    expect(gateway.emitToUser).toHaveBeenCalledWith(
+      'lender-1',
+      'agreement:changed',
+      expect.objectContaining({ changeType: 'created' }),
+    );
 
     await expect(
       service.approveApplication('application-1', 'lender-1', {
