@@ -57,12 +57,14 @@ export class ReportsService {
         this.getCount(usersCollection.where('status', '==', 'inactive')),
         this.getCount(usersCollection.where('accountStatus', '==', 'pending')),
         this.getCount(
-          usersCollection.where('role', 'array-contains', 'borrower'),
+          usersCollection.where('roles', 'array-contains', 'borrower'),
         ),
         this.getCount(
-          usersCollection.where('role', 'array-contains', 'lender'),
+          usersCollection.where('roles', 'array-contains', 'lender'),
         ),
-        this.getCount(usersCollection.where('role', 'array-contains', 'admin')),
+        this.getCount(
+          usersCollection.where('roles', 'array-contains', 'admin'),
+        ),
         this.getCount(usersCollection.where('createdAt', '>=', monthStart)),
       ]);
       const activeUsers = Math.max(

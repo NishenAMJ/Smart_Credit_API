@@ -1,177 +1,243 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
-import * as admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { FirebaseService } from '../../firebase/firebase.service';
+import { rethrowFirebaseError } from '../../common/firebase-error';
+
+type AdminAdStatus = 'pending' | 'approved' | 'active' | 'rejected' | 'closed';
 
 @Injectable()
 export class AdminAdApprovalService {
-  private db = getFirestore();
-  private collection = 'loanListings';
+  private static readonly DEFAULT_PAGE_SIZE = 10;
+  private static readonly MAX_PAGE_SIZE = 100;
+  private readonly collection = 'loanListings';
 
-  // ── Get all ads by status (pending / active / rejected / all) ──
-  async getAdsByStatus(status?: string): Promise<any[]> {
-    let query: FirebaseFirestore.Query = this.db.collection(this.collection);
+  constructor(private readonly firebaseService: FirebaseService) {}
 
-    if (status && status !== 'all') {
-      query = query.where('status', '==', status);
-    }
-
-    const snapshot = await query.orderBy('createdAt', 'desc').get();
-
-    if (snapshot.empty) return [];
-
-    return snapshot.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        adId: data.adId,
-        lenderId: data.lenderId,
-        lenderName: data.lenderName,
-        title: data.title,
-        description: data.description,
-        minAmount: data.minAmount,
-        maxAmount: data.maxAmount,
-        preferredInterestRate: data.preferredInterestRate,
-        location: data.location,
-        preferredPurposes: data.preferredPurposes,
-        status: data.status,
-        rejectionReason: (data as any).rejectionReason ?? null,
-        createdAt: data.createdAt.toDate().toISOString(),
-        expiresAt: data.expiresAt.toDate().toISOString(),
-      };
-    });
+  private get db() {
+    return this.firebaseService.db;
   }
 
-  // ── Get single ad detail for review ───────────────────────────
-  async getAdDetail(adId: string): Promise<any> {
-    const doc = await this.db.collection(this.collection).doc(adId).get();
+  private parseLimit(limit?: string): number {
+    const parsed = Number(limit ?? AdminAdApprovalService.DEFAULT_PAGE_SIZE);
+    if (!Number.isFinite(parsed))
+      return AdminAdApprovalService.DEFAULT_PAGE_SIZE;
+    return Math.min(
+      Math.max(Math.trunc(parsed), 1),
+      AdminAdApprovalService.MAX_PAGE_SIZE,
+    );
+  }
 
-    if (!doc.exists) {
-      throw new NotFoundException(`Ad ${adId} not found`);
+  private normalizeStatus(status: unknown): AdminAdStatus {
+    switch (status) {
+      case 'pending_review':
+      case 'draft':
+        return 'pending';
+      case 'active':
+        return 'active';
+      case 'approved':
+        return 'approved';
+      case 'rejected':
+        return 'rejected';
+      case 'paused':
+      case 'expired':
+      case 'closed':
+      default:
+        return 'closed';
     }
+  }
 
-    const data = doc.data()!;
+  private mapAd(id: string, data: FirebaseFirestore.DocumentData) {
+    const review =
+      data.adminReview && typeof data.adminReview === 'object'
+        ? data.adminReview
+        : {};
 
     return {
-      adId: data.adId,
+      id,
+      adId: data.listingId ?? data.adId ?? id,
       lenderId: data.lenderId,
       lenderName: data.lenderName,
       lenderPhotoURL: data.lenderPhotoURL,
       lenderRating: data.lenderRating,
       title: data.title,
       description: data.description,
-      minAmount: data.minAmount,
-      maxAmount: data.maxAmount,
-      preferredInterestRate: data.preferredInterestRate,
+      minAmount:
+        typeof data.minAmountMinor === 'number'
+          ? data.minAmountMinor / 100
+          : data.minAmount,
+      maxAmount:
+        typeof data.maxAmountMinor === 'number'
+          ? data.maxAmountMinor / 100
+          : data.maxAmount,
+      preferredInterestRate:
+        data.minInterestRateAnnual ?? data.preferredInterestRate,
       minTenureMonths: data.minTenureMonths,
       maxTenureMonths: data.maxTenureMonths,
-      preferredPurposes: data.preferredPurposes,
-      availableCapital: data.availableCapital,
+      preferredPurposes: data.purposeCategories ?? data.preferredPurposes ?? [],
+      availableCapital:
+        typeof data.availableCapitalMinor === 'number'
+          ? data.availableCapitalMinor / 100
+          : data.availableCapital,
       responseTimeHours: data.responseTimeHours,
       location: data.location,
-      searchKeywords: data.searchKeywords,
-      status: data.status,
-      rejectionReason: (data as any).rejectionReason ?? null,
-      createdAt: data.createdAt.toDate().toISOString(),
-      expiresAt: data.expiresAt.toDate().toISOString(),
+      status: this.normalizeStatus(data.status),
+      rejectionReason: review.rejectionReason ?? data.rejectionReason ?? null,
+      reviewedAt: review.reviewedAt,
+      approvedAt: data.publishedAt ?? data.approvedAt,
+      rejectedAt: data.rejectedAt,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      expiresAt: data.expiresAt,
     };
   }
 
-  // ── Approve a pending ad ──────────────────────────────────────
-  async approveAd(adId: string, adminId: string): Promise<{ message: string }> {
+  async getAds(limit?: string, cursor?: string) {
+    try {
+      const pageSize = this.parseLimit(limit);
+      let query: FirebaseFirestore.Query = this.db
+        .collection(this.collection)
+        .orderBy('createdAt', 'desc');
+
+      if (cursor) {
+        const cursorDoc = await this.db
+          .collection(this.collection)
+          .doc(cursor)
+          .get();
+        if (cursorDoc.exists) query = query.startAfter(cursorDoc);
+      }
+
+      const snapshot = await query.limit(pageSize + 1).get();
+      const hasMore = snapshot.docs.length > pageSize;
+      const pageDocs = snapshot.docs.slice(0, pageSize);
+
+      return {
+        success: true,
+        count: pageDocs.length,
+        ads: pageDocs.map((doc) => this.mapAd(doc.id, doc.data())),
+        hasMore,
+        nextCursor: hasMore ? pageDocs[pageDocs.length - 1]?.id : undefined,
+      };
+    } catch (error) {
+      rethrowFirebaseError(error, 'Failed to fetch lender ads');
+    }
+  }
+
+  async getAdStats() {
+    try {
+      const snapshot = await this.db.collection(this.collection).get();
+      const stats = {
+        all: snapshot.size,
+        active: 0,
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+        closed: 0,
+      };
+
+      snapshot.docs.forEach((doc) => {
+        stats[this.normalizeStatus(doc.data().status)] += 1;
+      });
+      return { success: true, stats };
+    } catch (error) {
+      rethrowFirebaseError(error, 'Failed to fetch lender ad statistics');
+    }
+  }
+
+  async getAdDetail(adId: string) {
+    const doc = await this.db.collection(this.collection).doc(adId).get();
+    if (!doc.exists) throw new NotFoundException(`Ad ${adId} not found`);
+    return { success: true, ad: this.mapAd(doc.id, doc.data() ?? {}) };
+  }
+
+  async approveAd(adId: string, adminId: string) {
     const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
+    if (!docSnap.exists) throw new NotFoundException(`Ad ${adId} not found`);
 
-    if (!docSnap.exists) {
-      throw new NotFoundException(`Ad ${adId} not found`);
-    }
-
-    const data = docSnap.data()!;
-
-    if (data.status !== 'pending') {
+    const data = docSnap.data() ?? {};
+    if (!['pending_review', 'pending', 'draft'].includes(data.status)) {
       throw new BadRequestException(
         `Ad is already ${data.status}. Only pending ads can be approved.`,
       );
     }
 
+    const now = Timestamp.now();
     await docRef.update({
       status: 'active',
-      approvedAt: admin.firestore.Timestamp.now(),
-      approvedBy: adminId,
-      rejectionReason: admin.firestore.FieldValue.delete(), // clear any old rejection
-      updatedAt: admin.firestore.Timestamp.now(),
+      adminReview: {
+        reviewedBy: adminId,
+        reviewedAt: now,
+        rejectionReason: null,
+      },
+      publishedAt: now,
+      updatedAt: now,
     });
-
-    // ── Notify lender via Firestore notifications collection ─────
-    await this.db.collection('notifications').add({
-      userId: data.lenderId,
-      type: 'ad_approved',
-      title: 'Ad Approved ✅',
-      message: `Your ad "${data.title}" has been approved and is now live.`,
+    await this.writeNotification(
+      data,
       adId,
-      read: false,
-      createdAt: admin.firestore.Timestamp.now(),
-    });
-
-    return { message: `Ad "${data.title}" approved and is now active` };
+      'ad_approved',
+      'Ad Approved',
+      `Your ad "${data.title}" has been approved and is now live.`,
+    );
+    return { success: true, status: 'active' };
   }
 
-  // ── Reject a pending ad ───────────────────────────────────────
-  async rejectAd(
-    adId: string,
-    adminId: string,
-    reason: string,
-  ): Promise<{ message: string }> {
-    if (!reason?.trim()) {
+  async rejectAd(adId: string, adminId: string, reason: string) {
+    if (!reason?.trim())
       throw new BadRequestException('Rejection reason is required');
-    }
 
     const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
+    if (!docSnap.exists) throw new NotFoundException(`Ad ${adId} not found`);
 
-    if (!docSnap.exists) {
-      throw new NotFoundException(`Ad ${adId} not found`);
-    }
-
-    const data = docSnap.data()!;
-
-    if (data.status !== 'pending') {
+    const data = docSnap.data() ?? {};
+    if (!['pending_review', 'pending', 'draft'].includes(data.status)) {
       throw new BadRequestException(
         `Ad is already ${data.status}. Only pending ads can be rejected.`,
       );
     }
 
+    const now = Timestamp.now();
     await docRef.update({
       status: 'rejected',
-      rejectionReason: reason.trim(),
-      rejectedAt: admin.firestore.Timestamp.now(),
-      rejectedBy: adminId,
-      updatedAt: admin.firestore.Timestamp.now(),
+      adminReview: {
+        reviewedBy: adminId,
+        reviewedAt: now,
+        rejectionReason: reason.trim(),
+      },
+      publishedAt: null,
+      rejectedAt: now,
+      updatedAt: now,
     });
-
-    // ── Notify lender ─────────────────────────────────────────────
-    await this.db.collection('notifications').add({
-      userId: data.lenderId,
-      type: 'ad_rejected',
-      title: 'Ad Rejected ❌',
-      message: `Your ad "${data.title}" was rejected. Reason: ${reason.trim()}`,
+    await this.writeNotification(
+      data,
       adId,
-      read: false,
-      createdAt: admin.firestore.Timestamp.now(),
-    });
-
-    return { message: `Ad "${data.title}" rejected` };
+      'ad_rejected',
+      'Ad Rejected',
+      `Your ad "${data.title}" was rejected. Reason: ${reason.trim()}`,
+    );
+    return { success: true, status: 'rejected' };
   }
 
-  // ── Get pending ads count (for admin dashboard badge) ─────────
-  async getPendingCount(): Promise<{ count: number }> {
-    const snapshot = await this.db
-      .collection(this.collection)
-      .where('status', '==', 'pending')
-      .get();
-
-    return { count: snapshot.size };
+  private async writeNotification(
+    data: FirebaseFirestore.DocumentData,
+    adId: string,
+    type: string,
+    title: string,
+    message: string,
+  ) {
+    await this.db.collection('notifications').add({
+      userId: data.lenderId,
+      type,
+      title,
+      message,
+      adId,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
   }
 }

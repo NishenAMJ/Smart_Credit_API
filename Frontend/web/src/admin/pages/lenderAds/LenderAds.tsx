@@ -227,7 +227,7 @@ export default function LenderAds() {
   async function handleApprove(adId: string) {
     try {
       await approveAd(adId);
-      syncAdStatus(adId, "approved");
+      syncAdStatus(adId, "active");
       await loadAdStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to approve ad.");
