@@ -387,6 +387,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
 
     try {
       setLoading(true);
+      let resumingExistingAccount = false;
 
       try {
         await registerPublicUser({
@@ -399,16 +400,33 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
       } catch (registerError) {
         const message =
           registerError instanceof Error ? registerError.message : "";
-        if (!message.toLowerCase().includes("already exists")) {
+        if (
+          !message
+            .toLowerCase()
+            .includes("account with that email already exists")
+        ) {
           throw registerError;
         }
+
+        resumingExistingAccount = true;
       }
 
-      const authResponse = await loginWithRole(
-        registerForm.email.trim(),
-        registerForm.password,
-        "lender",
-      );
+      let authResponse: Awaited<ReturnType<typeof loginWithRole>>;
+      try {
+        authResponse = await loginWithRole(
+          registerForm.email.trim(),
+          registerForm.password,
+          "lender",
+        );
+      } catch (loginError) {
+        if (resumingExistingAccount) {
+          throw new Error(
+            "An account already exists with this email. Enter the original password to resume KYC submission, or return to Log In.",
+          );
+        }
+
+        throw loginError;
+      }
 
       await submitKyc(authResponse.accessToken, {
         documentType: registerForm.kyc.documentType,
