@@ -44,9 +44,7 @@ export class LenderOffersService {
   ): Promise<LoanOffer> {
     this.logger.log(`Creating lender ad for mobile lender ${lenderId}`);
     const loanType = String(input.loanType ?? 'Personal').trim() || 'Personal';
-    const ad = await this.lenderAdsService.createAd({
-      lenderId,
-      lenderName: null,
+    const ad = await this.lenderAdsService.createAd(lenderId, {
       headline: `${loanType} financing offer`,
       minAmount: Number(input.minAmount) || 0,
       maxAmount: Number(input.maxAmount) || 0,

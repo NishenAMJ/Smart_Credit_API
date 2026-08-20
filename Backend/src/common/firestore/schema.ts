@@ -22,6 +22,7 @@ export const COLLECTIONS = {
   userLocations: 'userLocations',
   auditLogs: 'auditLogs',
   systemSettings: 'systemSettings',
+  smsDeliveries: 'smsDeliveries',
 } as const;
 
 export type UserRole = 'borrower' | 'lender' | 'admin';

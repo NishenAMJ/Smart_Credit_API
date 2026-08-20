@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { repaymentTransactionIdFor } from '../../../common/firestore/schema';
 import { FirebaseService } from '../../../firebase/firebase.service';
@@ -14,13 +19,21 @@ import {
 } from './payments.types';
 import { PaymentLedgerDetailsService } from './payment-ledger-details.service';
 import { PaymentsService } from './payments.service';
+import {
+  PAYMENT_RECEIVED_NOTIFIER,
+  type PaymentReceivedNotifier,
+} from '../shared/payment-received-notifier.port';
 
 @Injectable()
 export class InstallmentPaymentService {
+  private readonly logger = new Logger(InstallmentPaymentService.name);
+
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly paymentsService: PaymentsService,
     private readonly ledgerDetailsService: PaymentLedgerDetailsService,
+    @Inject(PAYMENT_RECEIVED_NOTIFIER)
+    private readonly paymentReceivedNotifier: PaymentReceivedNotifier,
   ) {}
 
   async record(
@@ -59,11 +72,17 @@ export class InstallmentPaymentService {
         !installmentSnapshot.exists ||
         loanSnapshot.get('lenderId') !== lenderId
       ) {
-        return false;
+        return null;
       }
 
       const loan = loanSnapshot.data() ?? {};
       const installment = installmentSnapshot.data() ?? {};
+      const borrowerId = readString(loan.borrowerId);
+      if (!borrowerId) {
+        throw new BadRequestException(
+          'This loan does not have a valid borrower account.',
+        );
+      }
       const normalizedInstallment = getNormalizedInstallment(installment);
       const installmentAmount = readNumber(installment.amountDueMinor) / 100;
       const paidAmount =
@@ -130,7 +149,12 @@ export class InstallmentPaymentService {
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      return true;
+      return {
+        transactionId,
+        borrowerId,
+        amountMinor: Math.round(input.amount * 100),
+        remainingBalanceMinor: Math.round(nextBalance * 100),
+      };
     });
 
     if (!recorded) {
@@ -138,7 +162,22 @@ export class InstallmentPaymentService {
     }
 
     this.paymentsService.invalidateLenderCache(lenderId);
-    return this.ledgerDetailsService.get(lenderId, loanId);
+    const details = await this.ledgerDetailsService.get(lenderId, loanId);
+
+    await this.paymentReceivedNotifier
+      .sendForRecordedPayment({
+        ...recorded,
+        lenderId,
+        loanId,
+        paidAt,
+      })
+      .catch((error: unknown) => {
+        this.logger.warn(
+          `Payment ${recorded.transactionId} was recorded, but SMS processing failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+      });
+
+    return details;
   }
 
   private normalizeNote(value: string | null | undefined): string | null {

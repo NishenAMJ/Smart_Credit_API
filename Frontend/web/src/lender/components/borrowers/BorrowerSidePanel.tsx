@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronRight, UserRound, X } from "lucide-react";
 import LoanDetailsModal from "../loans/LoanDetailsModal";
+import LoanPortfolioCard from "../loans/LoanPortfolioCard";
 import {
   fetchBorrowerDetails,
   type BorrowerDetails,
@@ -13,6 +14,7 @@ type BorrowerSidePanelProps = {
   borrowerId: string;
   onClose: () => void;
   onOpenLoan?: (loanId: string) => void;
+  onOpenAgreement?: (loanId: string) => void;
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-LK", {
@@ -48,6 +50,7 @@ export default function BorrowerSidePanel({
   borrowerId,
   onClose,
   onOpenLoan,
+  onOpenAgreement,
 }: BorrowerSidePanelProps) {
   const [borrower, setBorrower] = useState<BorrowerDetails | null>(null);
   const [view, setView] = useState<"loans" | "profile">("loans");
@@ -168,19 +171,47 @@ export default function BorrowerSidePanel({
                   </span>
                   <div>
                     <h3>{borrower.fullName}</h3>
-                    <p>{borrower.isActive ? "Active account" : "Inactive account"}</p>
+                    <p>
+                      {borrower.isActive
+                        ? "Active account"
+                        : "Inactive account"}
+                    </p>
                   </div>
                 </div>
 
                 <dl className="borrower-panel-profile__details">
-                  <div><dt>Phone</dt><dd>{borrower.phone ?? "Not available"}</dd></div>
-                  <div><dt>Email</dt><dd>{borrower.email || "Not available"}</dd></div>
-                  <div><dt>Address</dt><dd>{borrower.address ?? "Not available"}</dd></div>
-                  <div><dt>NIC</dt><dd>{borrower.nic ?? "Not available"}</dd></div>
-                  <div><dt>KYC status</dt><dd>{formatLabel(borrower.kycStatus)}</dd></div>
-                  <div><dt>Credit score</dt><dd>{borrower.creditScore ?? "Not available"}</dd></div>
-                  <div><dt>Joined</dt><dd>{formatDate(borrower.createdAt)}</dd></div>
-                  <div><dt>Outstanding</dt><dd>{formatCurrency(borrower.outstandingAmount)}</dd></div>
+                  <div>
+                    <dt>Phone</dt>
+                    <dd>{borrower.phone ?? "Not available"}</dd>
+                  </div>
+                  <div>
+                    <dt>Email</dt>
+                    <dd>{borrower.email || "Not available"}</dd>
+                  </div>
+                  <div>
+                    <dt>Address</dt>
+                    <dd>{borrower.address ?? "Not available"}</dd>
+                  </div>
+                  <div>
+                    <dt>NIC</dt>
+                    <dd>{borrower.nic ?? "Not available"}</dd>
+                  </div>
+                  <div>
+                    <dt>KYC status</dt>
+                    <dd>{formatLabel(borrower.kycStatus)}</dd>
+                  </div>
+                  <div>
+                    <dt>Credit score</dt>
+                    <dd>{borrower.creditScore ?? "Not available"}</dd>
+                  </div>
+                  <div>
+                    <dt>Joined</dt>
+                    <dd>{formatDate(borrower.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Outstanding</dt>
+                    <dd>{formatCurrency(borrower.outstandingAmount)}</dd>
+                  </div>
                 </dl>
               </section>
             ) : (
@@ -190,7 +221,10 @@ export default function BorrowerSidePanel({
                   className="borrower-panel-name-button"
                   onClick={() => setView("profile")}
                 >
-                  <span className="borrower-panel-name-button__avatar" aria-hidden="true">
+                  <span
+                    className="borrower-panel-name-button__avatar"
+                    aria-hidden="true"
+                  >
                     <UserRound size={20} />
                   </span>
                   <span>
@@ -203,34 +237,34 @@ export default function BorrowerSidePanel({
                 <div className="borrower-panel-section-heading">
                   <div>
                     <h3>Loans with you</h3>
-                    <p>{borrower.loanCount} total · {borrower.activeLoansCount} active</p>
+                    <p>
+                      {borrower.loanCount} total · {borrower.activeLoansCount}{" "}
+                      active
+                    </p>
                   </div>
-                  <strong>{formatCurrency(borrower.outstandingAmount)} remaining</strong>
+                  <strong>
+                    {formatCurrency(borrower.outstandingAmount)} remaining
+                  </strong>
                 </div>
 
                 <div className="borrower-panel-loan-list">
                   {borrower.loans.length > 0 ? (
                     borrower.loans.map((loan) => (
-                      <button
-                        type="button"
-                        className="borrower-panel-loan-card"
+                      <LoanPortfolioCard
                         key={loan.id}
-                        onClick={() => openLoan(loan)}
-                      >
-                        <div>
-                          <strong>{formatCurrency(loan.amount)}</strong>
-                          <span className="badge badge-gray">{formatLabel(loan.status)}</span>
-                        </div>
-                        <dl>
-                          <div><dt>Remaining</dt><dd>{formatCurrency(loan.remainingAmount)}</dd></div>
-                          <div><dt>Interest</dt><dd>{loan.interestRate.toFixed(1)}%</dd></div>
-                          <div><dt>Tenure</dt><dd>{loan.tenureMonths} months</dd></div>
-                          <div><dt>Started</dt><dd>{formatDate(loan.createdAt)}</dd></div>
-                        </dl>
-                      </button>
+                        status={loan.status}
+                        principal={loan.amount}
+                        remaining={loan.remainingAmount}
+                        interestRate={loan.interestRate}
+                        tenureMonths={loan.tenureMonths}
+                        createdAt={loan.createdAt}
+                        onOpen={() => openLoan(loan)}
+                      />
                     ))
                   ) : (
-                    <div className="borrower-panel-state">No lender-linked loans.</div>
+                    <div className="borrower-panel-state">
+                      No lender-linked loans.
+                    </div>
                   )}
                 </div>
               </div>
@@ -244,6 +278,7 @@ export default function BorrowerSidePanel({
           lenderId={session.lenderId}
           loanId={selectedLoanId}
           borrowerName={borrower?.fullName}
+          onOpenAgreement={onOpenAgreement}
           onClose={() => setSelectedLoanId(null)}
         />
       ) : null}

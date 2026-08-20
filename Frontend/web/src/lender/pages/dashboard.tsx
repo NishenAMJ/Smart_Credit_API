@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   CircleAlert,
-  ClipboardList,
   Megaphone,
   Settings,
   Users,
@@ -76,17 +75,12 @@ type DashboardPageProps = {
 };
 
 type DashboardQuickAction = {
-  id: Extract<LenderView, "pending-requests" | "settings" | "notifications">;
+  id: Extract<LenderView, "settings" | "notifications">;
   icon: LucideIcon;
   label: string;
 };
 
 const quickActions: DashboardQuickAction[] = [
-  {
-    id: "pending-requests",
-    icon: ClipboardList,
-    label: "Pending requests",
-  },
   {
     id: "settings",
     icon: Settings,
@@ -316,9 +310,7 @@ export default function DashboardPage({
               Lender workspace for collections, portfolio health, borrower
               activity, and ad performance.
             </p>
-            <p className="dashboard-context-pill">
-              {session.displayName}
-            </p>
+            <p className="dashboard-context-pill">{session.displayName}</p>
           </div>
           <div className="dashboard-header-tools">
             <PaymentCsvExport />

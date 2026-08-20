@@ -7,9 +7,10 @@ import { PaymentLedgerDetailsService } from './payment-ledger-details.service';
 import { PaymentsDataService } from './payments-data.service';
 import { PaymentsService } from './payments.service';
 import { PaymentsExportService } from './payments-export.service';
+import { LenderSmsModule } from '../sms/lender-sms.module';
 
 @Module({
-  imports: [FirebaseModule, AuthModule],
+  imports: [FirebaseModule, AuthModule, LenderSmsModule],
   controllers: [PaymentsController],
   providers: [
     PaymentsService,

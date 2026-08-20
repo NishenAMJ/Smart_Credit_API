@@ -5,8 +5,6 @@ export interface CursorPageInfo {
 }
 
 export interface CreateLenderAdInput {
-  lenderId: string;
-  lenderName: string | null;
   headline: string;
   minAmount: number;
   maxAmount: number;
@@ -25,6 +23,10 @@ export interface LenderAdResponse {
   lenderId: string;
   title: string;
   description: string;
+  borrowerFocus: string;
+  processingTime: string;
+  repaymentStyle: string;
+  requirements: string;
   minAmount: number;
   maxAmount: number;
   preferredInterestRate: number;

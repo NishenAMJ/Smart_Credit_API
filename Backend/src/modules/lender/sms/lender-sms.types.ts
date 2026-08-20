@@ -3,6 +3,18 @@ export type LenderSmsSettings = {
   configured: boolean;
   sender: string | null;
   updatedAt: string | null;
+  paymentReceived: PaymentReceivedSmsSettings;
+};
+
+export type PaymentReceivedSmsSettings = {
+  enabled: boolean;
+  template: string;
+  updatedAt: string | null;
+};
+
+export type UpdatePaymentReceivedSmsInput = {
+  enabled?: boolean;
+  template?: string;
 };
 
 export type SmsBorrower = {

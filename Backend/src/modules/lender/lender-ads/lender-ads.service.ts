@@ -18,6 +18,7 @@ import {
   orderByDateAndId,
   readDate,
   readNumber,
+  readString,
   readStringArray,
 } from '../../../firebase/firestore-query.utils';
 import { getAdStatus } from '../../../firebase/firestore-seed.utils';
@@ -31,35 +32,44 @@ import {
 @Injectable()
 export class LenderAdsService {
   private readonly logger = new Logger(LenderAdsService.name);
+  private hasWarnedAboutMissingIndex = false;
 
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly notificationWriter: LenderNotificationWriterService,
   ) {}
 
-  async createAd(input: CreateLenderAdInput): Promise<LenderAdResponse> {
+  async createAd(
+    lenderId: string,
+    input: CreateLenderAdInput,
+  ): Promise<LenderAdResponse> {
     this.validateCreateInput(input);
 
+    if (!lenderId.trim()) {
+      throw new BadRequestException('Authenticated lender ID is required.');
+    }
+
     const db = this.firebaseService.getDb();
-    const lenderSnapshot = await db
-      .collection('users')
-      .doc(input.lenderId)
-      .get();
-    const lenderData = lenderSnapshot.data();
+    const lenderSnapshot = await db.collection('users').doc(lenderId).get();
+
+    if (!lenderSnapshot.exists) {
+      throw new NotFoundException('The authenticated lender was not found.');
+    }
+
+    const lenderData = lenderSnapshot.data() ?? {};
+    const lenderProfile =
+      lenderData.lenderProfile && typeof lenderData.lenderProfile === 'object'
+        ? (lenderData.lenderProfile as Record<string, unknown>)
+        : {};
     const now = Timestamp.now();
     const expiresAt = Timestamp.fromDate(this.getExpiryDate(now.toDate(), 30));
     const docRef = db.collection('loanListings').doc();
     const title = input.headline.trim();
     const preferredPurposes = this.buildPreferredPurposes(input);
     const lenderName =
-      typeof lenderData?.businessName === 'string' &&
-      lenderData.businessName.trim().length > 0
-        ? lenderData.businessName
-        : input.lenderName;
-    const location =
-      typeof lenderData?.city === 'string' && lenderData.city.trim().length > 0
-        ? lenderData.city
-        : '';
+      readString(lenderProfile.businessName, lenderData.fullName) ??
+      'Verified lender';
+    const location = readString(lenderData.city, lenderData.district) ?? '';
     const responseTimeHours =
       typeof lenderData?.responseTimeHours === 'number' &&
       Number.isFinite(lenderData.responseTimeHours)
@@ -67,9 +77,10 @@ export class LenderAdsService {
         : 24;
     const document = {
       listingId: docRef.id,
-      lenderId: input.lenderId,
+      lenderId,
+      lenderName,
       title,
-      description: `${input.borrowerFocus.trim()}. ${input.supportNote.trim()}`,
+      description: input.supportNote.trim(),
       purposeCategories: preferredPurposes,
       minAmountMinor: Math.round(input.minAmount * 100),
       maxAmountMinor: Math.round(input.maxAmount * 100),
@@ -80,6 +91,11 @@ export class LenderAdsService {
       location,
       currency: 'LKR',
       repaymentFrequency: 'monthly',
+      borrowerFocus: input.borrowerFocus.trim(),
+      processingTime: input.processingTime.trim(),
+      repaymentStyle: input.repaymentStyle.trim(),
+      requirements: input.requirements.trim(),
+      responseTimeHours,
       status: 'pending_review',
       availableCapitalMinor: Math.round(input.maxAmount * 100),
       adminReview: {
@@ -96,12 +112,12 @@ export class LenderAdsService {
     await docRef.set(document);
     await this.notificationWriter.create({
       id: `ad-published-${docRef.id}`,
-      lenderId: input.lenderId,
+      lenderId,
       category: 'ad',
       eventType: 'ad_published',
-      title: 'Lender ad published',
-      message: `${title} is now available in your lender workspace.`,
-      severity: 'success',
+      title: 'Advertisement submitted',
+      message: `${title} was submitted for admin review.`,
+      severity: 'info',
       createdAt: now.toDate(),
       relatedEntityType: 'ad',
       relatedEntityId: docRef.id,
@@ -120,6 +136,10 @@ export class LenderAdsService {
       lenderId: document.lenderId,
       title: document.title,
       description: document.description,
+      borrowerFocus: document.borrowerFocus,
+      processingTime: document.processingTime,
+      repaymentStyle: input.repaymentStyle.trim(),
+      requirements: document.requirements,
       minAmount: document.minAmountMinor / 100,
       maxAmount: document.maxAmountMinor / 100,
       preferredInterestRate: document.minInterestRateAnnual,
@@ -146,16 +166,19 @@ export class LenderAdsService {
     lenderId: string,
     pageSize = 6,
     cursor?: string | null,
+    status?: string | null,
   ): Promise<LenderAdsListResponse> {
     const safePageSize = Math.min(Math.max(pageSize, 1), 12);
     const collection = this.firebaseService.getDb().collection('loanListings');
+    const normalizedStatus = this.normalizeStatusFilter(status);
+    const lenderQuery = collection.where('lenderId', '==', lenderId);
+    const scopedQuery = normalizedStatus
+      ? lenderQuery.where('status', '==', normalizedStatus)
+      : lenderQuery;
 
     try {
       const snapshot = await applyDateCursor(
-        orderByDateAndId(
-          collection.where('lenderId', '==', lenderId),
-          'createdAt',
-        ),
+        orderByDateAndId(scopedQuery, 'createdAt'),
         cursor,
       )
         .limit(safePageSize + 1)
@@ -172,16 +195,24 @@ export class LenderAdsService {
         throw error;
       }
 
-      this.logger.warn(
-        'The lender ads composite index is unavailable. Using in-memory ordering until the Firestore index is ready.',
-      );
+      if (!this.hasWarnedAboutMissingIndex) {
+        this.logger.warn(
+          'The lender ads composite index is unavailable. Using in-memory ordering temporarily. Deploy firestore.indexes.json and wait until the index is READY.',
+        );
+        this.hasWarnedAboutMissingIndex = true;
+      }
       const snapshot = await collection.where('lenderId', '==', lenderId).get();
-      const orderedDocs = snapshot.docs.slice().sort((left, right) => {
-        const leftTime = readDate(left.get('createdAt'))?.getTime() ?? 0;
-        const rightTime = readDate(right.get('createdAt'))?.getTime() ?? 0;
+      const orderedDocs = snapshot.docs
+        .filter(
+          (doc) =>
+            !normalizedStatus || getAdStatus(doc.data()) === normalizedStatus,
+        )
+        .sort((left, right) => {
+          const leftTime = readDate(left.get('createdAt'))?.getTime() ?? 0;
+          const rightTime = readDate(right.get('createdAt'))?.getTime() ?? 0;
 
-        return rightTime - leftTime || right.id.localeCompare(left.id);
-      });
+          return rightTime - leftTime || right.id.localeCompare(left.id);
+        });
       const decodedCursor = decodeCursor(cursor);
       const startIndex = decodedCursor
         ? orderedDocs.findIndex((doc) => {
@@ -247,6 +278,25 @@ export class LenderAdsService {
     );
   }
 
+  private normalizeStatusFilter(status?: string | null): string | null {
+    if (!status) return null;
+
+    const supportedStatuses = new Set([
+      'draft',
+      'pending_review',
+      'active',
+      'paused',
+      'rejected',
+      'expired',
+      'closed',
+    ]);
+    if (!supportedStatuses.has(status)) {
+      throw new BadRequestException('Unsupported advertisement status.');
+    }
+
+    return status;
+  }
+
   async updateAdFromMobile(
     lenderId: string,
     adId: string,
@@ -310,15 +360,16 @@ export class LenderAdsService {
   }
 
   private validateCreateInput(input: CreateLenderAdInput): void {
-    if (!input.lenderId.trim()) {
-      throw new BadRequestException('lenderId is required.');
-    }
-
     if (input.headline.trim().length < 12) {
       throw new BadRequestException('headline must be at least 12 characters.');
     }
 
-    if (input.minAmount <= 0 || input.maxAmount <= 0) {
+    if (
+      !Number.isFinite(input.minAmount) ||
+      !Number.isFinite(input.maxAmount) ||
+      input.minAmount <= 0 ||
+      input.maxAmount <= 0
+    ) {
       throw new BadRequestException(
         'Loan amount range must be greater than zero.',
       );
@@ -330,12 +381,24 @@ export class LenderAdsService {
       );
     }
 
-    if (input.interestRate <= 0) {
-      throw new BadRequestException('interestRate must be greater than zero.');
+    if (
+      !Number.isFinite(input.interestRate) ||
+      input.interestRate <= 0 ||
+      input.interestRate > 100
+    ) {
+      throw new BadRequestException(
+        'interestRate must be greater than zero and no more than 100.',
+      );
     }
 
-    if (input.tenureMonths <= 0) {
-      throw new BadRequestException('tenureMonths must be greater than zero.');
+    if (
+      !Number.isInteger(input.tenureMonths) ||
+      input.tenureMonths <= 0 ||
+      input.tenureMonths > 120
+    ) {
+      throw new BadRequestException(
+        'tenureMonths must be a whole number between 1 and 120.',
+      );
     }
 
     if (input.borrowerFocus.trim().length < 8) {
@@ -416,6 +479,16 @@ export class LenderAdsService {
           ? data.title
           : 'Untitled ad',
       description: typeof data.description === 'string' ? data.description : '',
+      borrowerFocus:
+        readString(data.borrowerFocus) ??
+        readStringArray(data.purposeCategories)[0] ??
+        'Eligible borrowers',
+      processingTime:
+        readString(data.processingTime) ?? 'Within 2 business days',
+      repaymentStyle: readString(data.repaymentStyle) ?? 'Monthly installments',
+      requirements:
+        readString(data.requirements) ??
+        'Approved KYC and supporting financial documents',
       minAmount: this.toNumber(data.minAmountMinor) / 100,
       maxAmount: this.toNumber(data.maxAmountMinor) / 100,
       preferredInterestRate: this.toNumber(data.minInterestRateAnnual),
@@ -427,7 +500,7 @@ export class LenderAdsService {
       availableCapital: this.toNumber(data.availableCapitalMinor) / 100,
       applicationCount: 0,
       fundedLoansCount: 0,
-      responseTimeHours: 24,
+      responseTimeHours: this.toNumber(data.responseTimeHours) || 24,
       lenderName: typeof data.lenderName === 'string' ? data.lenderName : null,
       expiresAt: this.toIsoString(data.expiresAt),
       createdAt: this.toIsoString(data.createdAt),

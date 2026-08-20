@@ -92,7 +92,10 @@ function App() {
         ) : activeView === "loans" ? (
           <LoansPage session={session} onOpenAgreement={openLoanAgreement} />
         ) : activeView === "borrowers" ? (
-          <BorrowersPage session={session} />
+          <BorrowersPage
+            session={session}
+            onOpenAgreement={openLoanAgreement}
+          />
         ) : activeView === "recent-transactions" ? (
           <RecentTransactionsPage session={session} />
         ) : activeView === "daily-collection" ? (

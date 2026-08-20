@@ -1,99 +1,102 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
   CircleDollarSign,
+  EllipsisVertical,
   FileSignature,
   Landmark,
   ReceiptText,
   X,
-} from 'lucide-react'
+} from "lucide-react";
 import {
   fetchLoanLedgerDetails,
   recordInstallmentPayment,
   type LoanLedgerDetailsResponse,
   type LoanLedgerInstallmentDetail,
-} from '../../lib/recent-transactions-api'
+} from "../../lib/recent-transactions-api";
 
 type LoanDetailsModalProps = {
-  lenderId: string
-  loanId: string
-  borrowerName?: string | null
-  initialShowPayments?: boolean
-  onPaymentRecorded?: () => void
-  onOpenAgreement?: (loanId: string) => void
-  onClose: () => void
-}
+  lenderId: string;
+  loanId: string;
+  borrowerName?: string | null;
+  initialShowPayments?: boolean;
+  onPaymentRecorded?: () => void;
+  onOpenAgreement?: (loanId: string) => void;
+  onClose: () => void;
+};
 
 type PaymentFormState = {
-  installmentId: string | null
-  amount: string
-  paidAt: string
-  note: string
-  isSaving: boolean
-  error: string | null
-  success: string | null
-}
+  installmentId: string | null;
+  amount: string;
+  paidAt: string;
+  note: string;
+  isSaving: boolean;
+  error: string | null;
+  success: string | null;
+};
 
-const currencyFormatter = new Intl.NumberFormat('en-LK', {
-  style: 'currency',
-  currency: 'LKR',
+const currencyFormatter = new Intl.NumberFormat("en-LK", {
+  style: "currency",
+  currency: "LKR",
   maximumFractionDigits: 0,
-})
+});
 
 function getLocalDateValue(date = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Colombo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date)
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
-  return `${values.year}-${values.month}-${values.day}`
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Colombo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function createEmptyPaymentForm(): PaymentFormState {
   return {
     installmentId: null,
-    amount: '',
+    amount: "",
     paidAt: getLocalDateValue(),
-    note: '',
+    note: "",
     isSaving: false,
     error: null,
     success: null,
-  }
+  };
 }
 
 function formatCurrency(value: number): string {
-  return currencyFormatter.format(value)
+  return currencyFormatter.format(value);
 }
 
 function formatLabel(value: string): string {
   return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function formatDate(value: string | null): string {
-  if (!value) return 'Not available'
-  const date = new Date(value)
+  if (!value) return "Not available";
+  const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? 'Not available'
-    : new Intl.DateTimeFormat('en-LK', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      }).format(date)
+    ? "Not available"
+    : new Intl.DateTimeFormat("en-LK", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }).format(date);
 }
 
 function getStatusBadgeClass(value: string): string {
-  if (value === 'overdue' || value === 'failed') return 'badge-danger'
-  if (value === 'paid' || value === 'completed') return 'badge-success'
-  return 'badge-gray'
+  if (value === "overdue" || value === "failed") return "badge-danger";
+  if (value === "paid" || value === "completed") return "badge-success";
+  return "badge-gray";
 }
 
 function getOutstanding(installment: LoanLedgerInstallmentDetail): number {
-  return Math.max(0, installment.amount - installment.paidAmount)
+  return Math.max(0, installment.amount - installment.paidAmount);
 }
 
 export default function LoanDetailsModal({
@@ -105,50 +108,58 @@ export default function LoanDetailsModal({
   onOpenAgreement,
   onClose,
 }: LoanDetailsModalProps) {
-  const [details, setDetails] = useState<LoanLedgerDetailsResponse | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [showPayments, setShowPayments] = useState(initialShowPayments)
+  const [details, setDetails] = useState<LoanLedgerDetailsResponse | null>(
+    null,
+  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showPayments, setShowPayments] = useState(initialShowPayments);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(
     createEmptyPaymentForm,
-  )
+  );
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     async function loadDetails() {
-      setIsLoading(true)
-      setError(null)
+      setIsLoading(true);
+      setError(null);
 
       try {
-        const response = await fetchLoanLedgerDetails(lenderId, loanId)
-        if (isMounted) setDetails(response)
+        const response = await fetchLoanLedgerDetails(lenderId, loanId);
+        if (isMounted) setDetails(response);
       } catch (loadError) {
         if (isMounted) {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load loan details.',
-          )
+              : "Failed to load loan details.",
+          );
         }
       } finally {
-        if (isMounted) setIsLoading(false)
+        if (isMounted) setIsLoading(false);
       }
     }
 
-    void loadDetails()
+    void loadDetails();
     return () => {
-      isMounted = false
-    }
-  }, [lenderId, loanId])
+      isMounted = false;
+    };
+  }, [lenderId, loanId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+      if (event.key !== "Escape") return;
+      if (isMoreMenuOpen) {
+        setIsMoreMenuOpen(false);
+      } else {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMoreMenuOpen, onClose]);
 
   const payments = useMemo(
     () =>
@@ -165,33 +176,33 @@ export default function LoanDetailsModal({
             new Date(left.createdAt ?? 0).getTime(),
         ),
     [details],
-  )
+  );
 
   const nextUnpaidInstallment = details?.installments.find(
     (installment) => getOutstanding(installment) > 0,
-  )
+  );
 
   function openPaymentForm(installment: LoanLedgerInstallmentDetail) {
-    setShowPayments(true)
+    setShowPayments(true);
     setPaymentForm({
       installmentId: installment.id,
       amount: String(getOutstanding(installment)),
       paidAt: getLocalDateValue(),
-      note: '',
+      note: "",
       isSaving: false,
       error: null,
       success: null,
-    })
+    });
   }
 
   async function handleRecordPayment(installmentId: string) {
-    const amount = Number(paymentForm.amount)
+    const amount = Number(paymentForm.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setPaymentForm((current) => ({
         ...current,
-        error: 'The installment does not have a valid outstanding amount.',
-      }))
-      return
+        error: "The installment does not have a valid outstanding amount.",
+      }));
+      return;
     }
 
     setPaymentForm((current) => ({
@@ -199,7 +210,7 @@ export default function LoanDetailsModal({
       isSaving: true,
       error: null,
       success: null,
-    }))
+    }));
 
     try {
       const updatedDetails = await recordInstallmentPayment(
@@ -211,14 +222,14 @@ export default function LoanDetailsModal({
           paidAt: paymentForm.paidAt,
           note: paymentForm.note,
         },
-      )
+      );
 
-      setDetails(updatedDetails)
+      setDetails(updatedDetails);
       setPaymentForm({
         ...createEmptyPaymentForm(),
-        success: 'Payment recorded successfully.',
-      })
-      onPaymentRecorded?.()
+        success: "Payment recorded successfully.",
+      });
+      onPaymentRecorded?.();
     } catch (saveError) {
       setPaymentForm((current) => ({
         ...current,
@@ -226,8 +237,8 @@ export default function LoanDetailsModal({
         error:
           saveError instanceof Error
             ? saveError.message
-            : 'Failed to record the payment.',
-      }))
+            : "Failed to record the payment.",
+      }));
     }
   }
 
@@ -254,14 +265,45 @@ export default function LoanDetailsModal({
               {borrowerName ? <p>{borrowerName}</p> : null}
             </div>
           </div>
-          <button
-            className="loan-details-card__close"
-            type="button"
-            onClick={onClose}
-          >
-            <X size={19} />
-            <span className="sr-only">Close</span>
-          </button>
+          <div className="loan-details-card__header-actions">
+            {onOpenAgreement ? (
+              <div className="loan-details-more-menu">
+                <button
+                  className="loan-details-card__more"
+                  type="button"
+                  aria-label="More loan actions"
+                  aria-haspopup="menu"
+                  aria-expanded={isMoreMenuOpen}
+                  onClick={() => setIsMoreMenuOpen((current) => !current)}
+                >
+                  <EllipsisVertical size={20} />
+                </button>
+                {isMoreMenuOpen ? (
+                  <div className="loan-details-more-menu__popover" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsMoreMenuOpen(false);
+                        onClose();
+                        onOpenAgreement(loanId);
+                      }}
+                    >
+                      <FileSignature size={17} /> View agreement
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <button
+              className="loan-details-card__close"
+              type="button"
+              onClick={onClose}
+            >
+              <X size={19} />
+              <span className="sr-only">Close</span>
+            </button>
+          </div>
         </header>
 
         <div className="loan-details-card__body">
@@ -269,7 +311,7 @@ export default function LoanDetailsModal({
             <div className="loan-details-state">Loading loan details...</div>
           ) : error || !details ? (
             <div className="loan-details-state loan-details-state--error">
-              {error ?? 'Loan details are unavailable.'}
+              {error ?? "Loan details are unavailable."}
             </div>
           ) : (
             <>
@@ -284,7 +326,9 @@ export default function LoanDetailsModal({
                 </div>
                 <div>
                   <span>Outstanding</span>
-                  <strong>{formatCurrency(details.loan.remainingAmount)}</strong>
+                  <strong>
+                    {formatCurrency(details.loan.remainingAmount)}
+                  </strong>
                 </div>
                 <div>
                   <span>Annual interest</span>
@@ -301,18 +345,6 @@ export default function LoanDetailsModal({
               </div>
 
               <div className="loan-details-actions">
-                {onOpenAgreement ? (
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={() => {
-                      onClose()
-                      onOpenAgreement(loanId)
-                    }}
-                  >
-                    <FileSignature size={18} /> Agreement
-                  </button>
-                ) : null}
                 <button
                   className="loan-details-payments-toggle"
                   type="button"
@@ -333,11 +365,12 @@ export default function LoanDetailsModal({
                   type="button"
                   disabled={!nextUnpaidInstallment}
                   onClick={() =>
-                    nextUnpaidInstallment && openPaymentForm(nextUnpaidInstallment)
+                    nextUnpaidInstallment &&
+                    openPaymentForm(nextUnpaidInstallment)
                   }
                 >
                   <CircleDollarSign size={18} />
-                  {nextUnpaidInstallment ? 'Record payment' : 'All paid'}
+                  {nextUnpaidInstallment ? "Record payment" : "All paid"}
                 </button>
               </div>
 
@@ -351,9 +384,9 @@ export default function LoanDetailsModal({
                 <div className="loan-details-payments">
                   {details.installments.length ? (
                     details.installments.map((installment, index) => {
-                      const outstanding = getOutstanding(installment)
+                      const outstanding = getOutstanding(installment);
                       const isFormOpen =
-                        paymentForm.installmentId === installment.id
+                        paymentForm.installmentId === installment.id;
 
                       return (
                         <article
@@ -377,7 +410,9 @@ export default function LoanDetailsModal({
                           <div className="loan-installment-record__summary">
                             <div>
                               <span>Amount due</span>
-                              <strong>{formatCurrency(installment.amount)}</strong>
+                              <strong>
+                                {formatCurrency(installment.amount)}
+                              </strong>
                             </div>
                             <div>
                               <span>Paid</span>
@@ -395,7 +430,7 @@ export default function LoanDetailsModal({
                               disabled={outstanding <= 0}
                               onClick={() => openPaymentForm(installment)}
                             >
-                              {outstanding > 0 ? 'Record payment' : 'Paid'}
+                              {outstanding > 0 ? "Record payment" : "Paid"}
                             </button>
                           </div>
 
@@ -478,8 +513,8 @@ export default function LoanDetailsModal({
                                   }
                                 >
                                   {paymentForm.isSaving
-                                    ? 'Recording...'
-                                    : 'Confirm payment'}
+                                    ? "Recording..."
+                                    : "Confirm payment"}
                                 </button>
                               </div>
                             </div>
@@ -493,7 +528,9 @@ export default function LoanDetailsModal({
                                   key={payment.id}
                                 >
                                   <div className="dashboard-table__stack">
-                                    <strong>{formatCurrency(payment.amount)}</strong>
+                                    <strong>
+                                      {formatCurrency(payment.amount)}
+                                    </strong>
                                     <span className="dashboard-table__subcopy">
                                       {formatDate(payment.createdAt)}
                                     </span>
@@ -510,7 +547,7 @@ export default function LoanDetailsModal({
                             </div>
                           ) : null}
                         </article>
-                      )
+                      );
                     })
                   ) : (
                     <div className="loan-details-state">
@@ -524,5 +561,5 @@ export default function LoanDetailsModal({
         </div>
       </section>
     </div>
-  )
+  );
 }

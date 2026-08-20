@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Banknote, CircleCheckBig, Landmark, Wallet } from "lucide-react";
 import BorrowerSidePanel from "../components/borrowers/BorrowerSidePanel";
 import LoanDetailsModal from "../components/loans/LoanDetailsModal";
+import LoanPortfolioCard from "../components/loans/LoanPortfolioCard";
 import type { LenderSession } from "../lib/lender-session";
 import {
   fetchLenderLoans,
@@ -18,24 +19,6 @@ const currencyFormatter = new Intl.NumberFormat("en-LK", {
 
 function formatCurrency(value: number): string {
   return currencyFormatter.format(value);
-}
-
-function formatLabel(value: string): string {
-  return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return "Not set";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Not set"
-    : new Intl.DateTimeFormat("en-LK", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      }).format(date);
 }
 
 export default function LoansPage({
@@ -220,99 +203,45 @@ export default function LoansPage({
             </form>
           </div>
 
-          <div className="table-container">
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th>Borrower</th>
-                  <th>Status</th>
-                  <th>Loan Amount</th>
-                  <th>Remaining</th>
-                  <th>Monthly Installment</th>
-                  <th>Installments</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td className="table-empty" colSpan={6}>
-                      Loading loans...
-                    </td>
-                  </tr>
-                ) : error ? (
-                  <tr>
-                    <td className="table-empty" colSpan={6}>
-                      {error}
-                    </td>
-                  </tr>
-                ) : response?.loans.length ? (
-                  response.loans.map((loan) => (
-                    <tr
-                      className="dashboard-table__row"
-                      key={loan.id}
-                      onClick={() =>
-                        setSelectedLoan({
-                          loanId: loan.id,
-                          borrowerName: loan.borrower.fullName,
-                          showPayments: false,
-                        })
-                      }
-                    >
-                      <td>
-                        <button
-                          type="button"
-                          className="borrower-name borrower-name--button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedBorrowerId(loan.borrower.id);
-                          }}
-                        >
-                          {loan.borrower.fullName}
-                        </button>
-                      </td>
-                      <td>
-                        <span className="badge badge-gray">
-                          {formatLabel(loan.status)}
-                        </span>
-                      </td>
-                      <td>{formatCurrency(loan.principal)}</td>
-                      <td>{formatCurrency(loan.remainingBalance)}</td>
-                      <td>{formatCurrency(loan.monthlyInstallment)}</td>
-                      <td>
-                        <button
-                          className="loan-installments-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedLoan({
-                              loanId: loan.id,
-                              borrowerName: loan.borrower.fullName,
-                              showPayments: true,
-                            });
-                          }}
-                        >
-                          <span>
-                            {loan.installmentProgress.paid}/
-                            {loan.installmentProgress.total} paid
-                          </span>
-                          <span className="dashboard-table__subcopy">
-                            Next:{" "}
-                            {formatDate(loan.installmentProgress.nextDueAt)}
-                          </span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td className="table-empty" colSpan={6}>
-                      No loans match this view.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          {isLoading ? (
+            <div className="table-empty">Loading loans...</div>
+          ) : error ? (
+            <div className="table-empty">{error}</div>
+          ) : response?.loans.length ? (
+            <div className="portfolio-loan-grid">
+              {response.loans.map((loan) => (
+                <LoanPortfolioCard
+                  key={loan.id}
+                  borrowerName={loan.borrower.fullName}
+                  status={loan.status}
+                  principal={loan.principal}
+                  remaining={loan.remainingBalance}
+                  interestRate={loan.annualInterestRate}
+                  tenureMonths={loan.tenureMonths}
+                  createdAt={loan.createdAt}
+                  monthlyInstallment={loan.monthlyInstallment}
+                  installmentProgress={loan.installmentProgress}
+                  onOpen={() =>
+                    setSelectedLoan({
+                      loanId: loan.id,
+                      borrowerName: loan.borrower.fullName,
+                      showPayments: false,
+                    })
+                  }
+                  onOpenBorrower={() => setSelectedBorrowerId(loan.borrower.id)}
+                  onOpenPayments={() =>
+                    setSelectedLoan({
+                      loanId: loan.id,
+                      borrowerName: loan.borrower.fullName,
+                      showPayments: true,
+                    })
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="table-empty">No loans match this view.</div>
+          )}
 
           <div className="table-footer">
             <p>Page {currentPage}</p>
@@ -355,6 +284,7 @@ export default function LoansPage({
         <BorrowerSidePanel
           session={session}
           borrowerId={selectedBorrowerId}
+          onOpenAgreement={onOpenAgreement}
           onClose={() => setSelectedBorrowerId(null)}
         />
       ) : null}
