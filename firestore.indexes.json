@@ -120,6 +120,14 @@
       ]
     },
     {
+      "collectionGroup": "loanApplications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "listingId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "loans",
       "queryScope": "COLLECTION",
       "fields": [
@@ -135,6 +143,14 @@
         { "fieldPath": "lenderId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "loans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "listingId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
       ]
     },
     {

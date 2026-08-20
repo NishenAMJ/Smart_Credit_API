@@ -16,10 +16,12 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import {
   CreateLenderAdInput,
+  LenderAdAnalyticsResponse,
   LenderAdResponse,
   LenderAdsListResponse,
 } from './lender-ads.types';
 import { LenderAdsService } from './lender-ads.service';
+import { LenderAdAnalyticsService } from './lender-ad-analytics.service';
 
 type CreateLenderAdBody = {
   headline?: string;
@@ -42,7 +44,10 @@ type UpdateLenderAdBody = Partial<CreateLenderAdBody> & {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('lender')
 export class LenderAdsController {
-  constructor(private readonly lenderAdsService: LenderAdsService) {}
+  constructor(
+    private readonly lenderAdsService: LenderAdsService,
+    private readonly analyticsService: LenderAdAnalyticsService,
+  ) {}
 
   @Post()
   createAd(
@@ -69,6 +74,14 @@ export class LenderAdsController {
       cursor?.trim() || null,
       status?.trim() || null,
     );
+  }
+
+  @Get(':adId/analytics')
+  getAdAnalytics(
+    @Req() request: AuthenticatedRequest,
+    @Param('adId') adId: string,
+  ): Promise<LenderAdAnalyticsResponse> {
+    return this.analyticsService.getAdAnalytics(request.user.sub, adId);
   }
 
   @Patch(':adId')

@@ -53,14 +53,25 @@ describe('LenderAdsService', () => {
         }),
       }),
     };
+    const listings = { where: jest.fn().mockReturnValue(query) };
     const db = {
-      collection: jest.fn().mockReturnValue({
-        where: jest.fn().mockReturnValue(query),
-      }),
+      collection: jest.fn().mockReturnValue(listings),
     };
     const firebaseService = { getDb: () => db } as any;
     const notificationWriter = { create: jest.fn() } as any;
-    const service = new LenderAdsService(firebaseService, notificationWriter);
+    const analyticsService = {
+      getCountsForAds: jest.fn().mockResolvedValue(
+        new Map([
+          ['ad_1', { applicationCount: 2, fundedLoansCount: 1 }],
+          ['ad_2', { applicationCount: 2, fundedLoansCount: 1 }],
+        ]),
+      ),
+    } as any;
+    const service = new LenderAdsService(
+      firebaseService,
+      notificationWriter,
+      analyticsService,
+    );
 
     jest
       .spyOn(firestoreQueryUtils, 'orderByDateAndId')
@@ -74,6 +85,8 @@ describe('LenderAdsService', () => {
     expect(db.collection).toHaveBeenCalledWith('loanListings');
     expect(result.ads).toHaveLength(2);
     expect(result.ads[0].status).toBe('active');
+    expect(result.ads[0].applicationCount).toBe(2);
+    expect(result.ads[0].fundedLoansCount).toBe(1);
     expect(result.pageInfo.hasMore).toBe(true);
     expect(result.pageInfo.nextCursor).toBeTruthy();
   });
@@ -110,12 +123,12 @@ describe('LenderAdsService', () => {
       }),
     };
     const where = jest.fn().mockReturnValue(unindexedQuery);
-    const db = {
-      collection: jest.fn().mockReturnValue({ where }),
-    };
+    const listings = { where };
+    const db = { collection: jest.fn().mockReturnValue(listings) };
     const service = new LenderAdsService(
       { getDb: () => db } as any,
       { create: jest.fn() } as any,
+      { getCountsForAds: jest.fn().mockResolvedValue(new Map()) } as any,
     );
 
     jest
@@ -132,4 +145,5 @@ describe('LenderAdsService', () => {
     expect(result.pageInfo.nextCursor).toBeTruthy();
     expect(where).toHaveBeenCalledWith('lenderId', '==', 'lender_1');
   });
+
 });

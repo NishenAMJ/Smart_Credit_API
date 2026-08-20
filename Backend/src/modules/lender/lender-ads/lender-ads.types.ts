@@ -61,3 +61,27 @@ export interface LenderAdsListResponse {
   ads: LenderAdResponse[];
   pageInfo: CursorPageInfo;
 }
+
+export interface LenderAdAnalyticsResponse {
+  adId: string;
+  title: string;
+  status: string;
+  createdAt: string | null;
+  expiresAt: string | null;
+  applications: {
+    total: number;
+    submitted: number;
+    underReview: number;
+    approved: number;
+    rejected: number;
+    converted: number;
+  };
+  loans: {
+    funded: number;
+    active: number;
+    overdue: number;
+    completed: number;
+    defaulted: number;
+  };
+  fundingRate: number;
+}

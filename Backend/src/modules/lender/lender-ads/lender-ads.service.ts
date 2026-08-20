@@ -28,6 +28,7 @@ import {
   LenderAdResponse,
   LenderAdsListResponse,
 } from './lender-ads.types';
+import { LenderAdAnalyticsService } from './lender-ad-analytics.service';
 
 @Injectable()
 export class LenderAdsService {
@@ -37,6 +38,7 @@ export class LenderAdsService {
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly notificationWriter: LenderNotificationWriterService,
+    private readonly analyticsService: LenderAdAnalyticsService,
   ) {}
 
   async createAd(
@@ -184,7 +186,7 @@ export class LenderAdsService {
         .limit(safePageSize + 1)
         .get();
 
-      return this.buildAdsPage(
+      return await this.buildAdsPage(
         lenderId,
         snapshot.docs,
         safePageSize,
@@ -231,7 +233,7 @@ export class LenderAdsService {
         safeStartIndex + safePageSize + 1,
       );
 
-      return this.buildAdsPage(
+      return await this.buildAdsPage(
         lenderId,
         pagedDocs,
         safePageSize,
@@ -240,15 +242,23 @@ export class LenderAdsService {
     }
   }
 
-  private buildAdsPage(
+  private async buildAdsPage(
     lenderId: string,
     docs: QueryDocumentSnapshot<DocumentData>[],
     pageSize: number,
     hasMore: boolean,
-  ): LenderAdsListResponse {
-    const items = docs
+  ): Promise<LenderAdsListResponse> {
+    const mappedItems = docs
       .slice(0, pageSize)
       .map((doc) => this.mapLenderAd(doc.id, lenderId, doc.data()));
+    const counts = await this.analyticsService.getCountsForAds(
+      mappedItems.map((item) => item.adId),
+    );
+    const items = mappedItems.map((item) => ({
+      ...item,
+      applicationCount: counts.get(item.adId)?.applicationCount ?? 0,
+      fundedLoansCount: counts.get(item.adId)?.fundedLoansCount ?? 0,
+    }));
 
     return {
       lenderId,

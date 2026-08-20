@@ -190,7 +190,7 @@ export default function MyAdsScreen({ navigation }: any) {
           </View>
           <View>
             <Text style={commonStyles.textSmall}>Applications</Text>
-            <Text style={commonStyles.textPrimary}>{item.applicationCount}</Text>
+            <Text style={commonStyles.textPrimary}>{item.applicationCount ?? 0}</Text>
           </View>
         </View>
 
@@ -198,6 +198,16 @@ export default function MyAdsScreen({ navigation }: any) {
 
         {/* ── Action Buttons ── */}
         <View style={{ flexDirection: "row", gap: 6 }}>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate("AdAnalytics", { adId: item.adId })}
+            style={{ flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.border }}
+            accessibilityRole="button"
+            accessibilityLabel={`View analytics for ${item.title}`}
+          >
+            <Feather name="bar-chart-2" size={16} color={COLORS.textPrimary} />
+            <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>Analytics</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => navigation.navigate("EditAd", { ad: item })}
@@ -235,7 +245,7 @@ export default function MyAdsScreen({ navigation }: any) {
       <View style={commonStyles.header}>
         <View style={commonStyles.headerFlexRow}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={22} color="#fff" />
+            <Feather name="arrow-left" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <Text style={commonStyles.headerTitle}>My Ads</Text>
           <View style={{ width: 22 }} />
@@ -252,11 +262,11 @@ export default function MyAdsScreen({ navigation }: any) {
       <View style={commonStyles.header}>
         <View style={commonStyles.headerFlexRow}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={22} color="#fff" />
+            <Feather name="arrow-left" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <Text style={commonStyles.headerTitle}>My Ads</Text>
           <TouchableOpacity onPress={() => navigation.navigate("CreateAd")}>
-            <Feather name="plus" size={22} color="#fff" />
+            <Feather name="plus" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>

@@ -35,11 +35,11 @@ const TERMS_SECTIONS = [
   },
   {
     id: 'fees',
-    title: '4. Platform Fees & Boosting',
+    title: '4. Platform Services',
     content:
-      'Smart Credit charges a service fee for boosting advertisements to increase visibility. All boost ' +
-      'payments are non-refundable once the boost period has started. Standard loan offers and advertisements ' +
-      'remain free to create and publish.',
+      'The platform provides advertisement publishing, application review, agreement, portfolio, and collection ' +
+      'tools. Any paid service introduced by Smart Credit must display its fee and applicable terms before the ' +
+      'lender confirms the transaction.',
   },
   {
     id: 'repayments',
