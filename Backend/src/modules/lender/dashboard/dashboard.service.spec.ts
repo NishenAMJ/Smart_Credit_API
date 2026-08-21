@@ -41,9 +41,7 @@ describe('DashboardService', () => {
     jest
       .spyOn(service as any, 'getTodaysPaymentsCollection')
       .mockResolvedValue(27500);
-    jest
-      .spyOn(service as any, 'getOverduePaymentsCount')
-      .mockResolvedValue(2);
+    jest.spyOn(service as any, 'getOverduePaymentsCount').mockResolvedValue(2);
     jest.spyOn(service as any, 'getActiveAdsCount').mockResolvedValue(3);
 
     const result = await service.getSummary('lender_1');
@@ -138,6 +136,68 @@ describe('DashboardService', () => {
       totalBorrowedAmount: 100000,
       outstandingAmount: 60000,
       isActive: true,
+    });
+  });
+
+  it('returns details for a canonical borrower with a roles array', async () => {
+    const borrowerSnapshot = {
+      id: 'borrower_1',
+      exists: true,
+      data: () => ({
+        roles: ['borrower'],
+        fullName: 'Borrower One',
+        email: 'borrower@example.com',
+        accountStatus: 'active',
+        kycStatus: 'approved',
+        borrowerProfile: { creditScore: 735 },
+      }),
+    };
+    const loanSnapshot = {
+      docs: [
+        createDoc('loan_1', {
+          borrowerId: 'borrower_1',
+          principalMinor: 10000000,
+          remainingBalanceMinor: 6000000,
+          annualInterestRate: 12,
+          tenureMonths: 6,
+          status: 'active',
+          createdAt: new Date('2026-07-01T00:00:00.000Z'),
+        }),
+      ],
+    };
+    const secondWhere = { get: jest.fn().mockResolvedValue(loanSnapshot) };
+    const firstWhere = {
+      where: jest.fn().mockReturnValue(secondWhere),
+    };
+    const db = {
+      collection: jest.fn((name: string) => {
+        if (name === 'users') {
+          return {
+            doc: jest.fn(() => ({
+              get: jest.fn().mockResolvedValue(borrowerSnapshot),
+            })),
+          };
+        }
+
+        return { where: jest.fn().mockReturnValue(firstWhere) };
+      }),
+    };
+    const service = new DashboardService({ getDb: () => db } as any);
+
+    const result = await service.getBorrowerDetails('lender_1', 'borrower_1');
+
+    expect(result).toMatchObject({
+      id: 'borrower_1',
+      role: 'borrower',
+      creditScore: 735,
+      loanCount: 1,
+      activeLoansCount: 1,
+      loans: [
+        expect.objectContaining({
+          id: 'loan_1',
+          interestRate: 12,
+        }),
+      ],
     });
   });
 

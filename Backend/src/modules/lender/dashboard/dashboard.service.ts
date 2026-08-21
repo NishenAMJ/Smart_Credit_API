@@ -59,18 +59,22 @@ export class DashboardService {
 
   async getSummary(lenderId: string): Promise<DashboardSummaryResponse> {
     const db = this.firebaseService.getDb();
-    const [userSnapshot, totalBorrowers, todaysCollection, overduePayments, activeAds] =
-      await Promise.all([
-        db.collection('users').doc(lenderId).get(),
-        this.getTotalBorrowersFromLoans(db, lenderId),
-        this.getTodaysPaymentsCollection(db, lenderId),
-        this.getOverduePaymentsCount(db, lenderId),
-        this.getActiveAdsCount(db, lenderId),
-      ]);
+    const [
+      userSnapshot,
+      totalBorrowers,
+      todaysCollection,
+      overduePayments,
+      activeAds,
+    ] = await Promise.all([
+      db.collection('users').doc(lenderId).get(),
+      this.getTotalBorrowersFromLoans(db, lenderId),
+      this.getTodaysPaymentsCollection(db, lenderId),
+      this.getOverduePaymentsCount(db, lenderId),
+      this.getActiveAdsCount(db, lenderId),
+    ]);
 
     const userData = userSnapshot.data();
-    const lenderName =
-      userData?.fullName || userData?.name || 'Unnamed Lender';
+    const lenderName = userData?.fullName || userData?.name || 'Unnamed Lender';
 
     console.log(`[DashboardService] Stats for ${lenderId} (${lenderName}):`, {
       totalBorrowers,
@@ -153,7 +157,11 @@ export class DashboardService {
 
     const data = snapshot.data();
 
-    if (!data || !hasRole(data.role, 'borrower')) {
+    const isBorrower =
+      data &&
+      (hasRole(data.role, 'borrower') || hasRole(data.roles, 'borrower'));
+
+    if (!data || !isBorrower) {
       return null;
     }
 
@@ -177,7 +185,7 @@ export class DashboardService {
 
     return {
       id: snapshot.id,
-      role: hasRole(data.role, 'borrower') ? 'borrower' : 'unknown',
+      role: 'borrower',
       fullName:
         typeof data.fullName === 'string' && data.fullName.trim().length > 0
           ? data.fullName
@@ -192,7 +200,10 @@ export class DashboardService {
         typeof data.creditScore === 'number' &&
         Number.isFinite(data.creditScore)
           ? data.creditScore
-          : null,
+          : this.toNullableNumber(
+              (data.borrowerProfile as Record<string, unknown> | undefined)
+                ?.creditScore,
+            ),
       rating:
         typeof data.rating === 'number' && Number.isFinite(data.rating)
           ? data.rating
@@ -512,8 +523,7 @@ export class DashboardService {
     const firstLoan = loans
       .filter((loan) => loan.createdAt)
       .sort(
-        (left, right) =>
-          left.createdAt!.getTime() - right.createdAt!.getTime(),
+        (left, right) => left.createdAt!.getTime() - right.createdAt!.getTime(),
       )[0];
 
     return firstLoan?.createdAt ? firstLoan.createdAt.toISOString() : null;
@@ -530,7 +540,7 @@ export class DashboardService {
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
       amount: getLoanAmount(data),
       remainingAmount: await computeLoanRemainingAmount(db, doc.id, data),
-      interestRate: this.toNumber(data.interestRate),
+      interestRate: this.toNumber(data.annualInterestRate ?? data.interestRate),
       tenureMonths: this.toNumber(data.tenureMonths),
       status: typeof data.status === 'string' ? data.status : 'unknown',
       createdAt: getLoanCreatedAt(data),
@@ -591,5 +601,4 @@ export class DashboardService {
   private sum(values: number[]): number {
     return values.reduce((total, value) => total + value, 0);
   }
-
 }
