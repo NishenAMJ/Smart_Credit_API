@@ -7,6 +7,8 @@ export type LenderSession = {
 
 const SESSION_STORAGE_KEY = 'smart-credit:lender-session'
 const ACCOUNTS_STORAGE_KEY = 'smart-credit:lender-accounts'
+const SHARED_SESSION_STORAGE_KEY = 'smart-credit-shared-auth-session'
+const LEGACY_AUTH_PARAMS = ['accessToken', 'lenderId', 'displayName', 'email']
 
 function canUseStorage(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -43,22 +45,6 @@ function safeParseAccounts(value: string | null): LenderSession[] {
   }
 }
 
-function readStoredAccounts(): LenderSession[] {
-  if (!canUseStorage()) {
-    return []
-  }
-
-  return safeParseAccounts(window.localStorage.getItem(ACCOUNTS_STORAGE_KEY))
-}
-
-function writeStoredAccounts(accounts: LenderSession[]) {
-  if (!canUseStorage()) {
-    return
-  }
-
-  window.localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts))
-}
-
 export function getStoredSession(): LenderSession | null {
   if (!canUseStorage()) {
     return null
@@ -88,16 +74,33 @@ export function clearStoredSession() {
   }
 
   window.localStorage.removeItem(SESSION_STORAGE_KEY)
+  window.localStorage.removeItem(ACCOUNTS_STORAGE_KEY)
+  window.localStorage.removeItem(SHARED_SESSION_STORAGE_KEY)
 }
 
 export function updateStoredSession(session: LenderSession) {
   setStoredSession(session)
+  window.localStorage.removeItem(ACCOUNTS_STORAGE_KEY)
+}
 
-  const existingAccounts = readStoredAccounts()
-  const nextAccounts = existingAccounts.filter(
-    (account) => account.lenderId !== session.lenderId,
+export function removeLegacyAuthParams() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const url = new URL(window.location.href)
+  const hadLegacyParams = LEGACY_AUTH_PARAMS.some((key) =>
+    url.searchParams.has(key),
   )
 
-  nextAccounts.unshift(session)
-  writeStoredAccounts(nextAccounts)
+  if (!hadLegacyParams) {
+    return
+  }
+
+  LEGACY_AUTH_PARAMS.forEach((key) => url.searchParams.delete(key))
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`,
+  )
 }

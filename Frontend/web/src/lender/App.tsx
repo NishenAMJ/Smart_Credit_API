@@ -3,13 +3,13 @@ import "./App.css";
 import LenderLayout from "./components/layout/LenderLayout";
 import type { LenderView } from "./components/common/LenderSidebar";
 import { useCallback, useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 import AnalyticsPage from "./pages/analytics";
 import ActiveAdsRequestsPage from "./pages/active-ads-requests";
 import CreateAdPage from "./pages/create-ad";
 import DashboardPage from "./pages/dashboard";
 import LoansPage from "./pages/loans";
 import BorrowersPage from "./pages/borrowers";
-import AuthPage from "./pages/auth";
 import PendingRequestsPage from "./pages/pending-requests";
 import NotificationsPage from "./pages/notifications";
 import RecentTransactionsPage from "./pages/recent-transactions";
@@ -22,13 +22,17 @@ import LenderProfileModal from "./components/profile/LenderProfileModal";
 import {
   clearStoredSession,
   getStoredSession,
+  removeLegacyAuthParams,
   updateStoredSession,
   type LenderSession,
 } from "./lib/lender-session";
 import type { LenderProfile } from "./lib/lender-profile-api";
 import AiAssistant from "../components/assistant/AiAssistant";
 
+removeLegacyAuthParams();
+
 function App() {
+  const navigate = useNavigate();
   const [activeView, setActiveView] = useState<LenderView>("dashboard");
   const [session, setSession] = useState<LenderSession | null>(() =>
     getStoredSession(),
@@ -43,16 +47,11 @@ function App() {
     setActiveView("agreements");
   }
 
-  function handleLogin(input: LenderSession) {
-    updateStoredSession(input);
-    setSession(input);
-    setActiveView("dashboard");
-  }
-
   function handleLogout() {
     clearStoredSession();
     setSession(null);
     setActiveView("dashboard");
+    navigate("/signin", { replace: true });
   }
 
   function handleProfileSaved(profile: LenderProfile) {
@@ -76,7 +75,7 @@ function App() {
     .replace(/\b\w/g, (character: string) => character.toUpperCase());
 
   if (!session) {
-    return <AuthPage onLogin={handleLogin} />;
+    return <Navigate to="/signin" replace />;
   }
 
   return (

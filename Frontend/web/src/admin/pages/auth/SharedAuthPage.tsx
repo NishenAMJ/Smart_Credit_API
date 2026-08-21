@@ -3,7 +3,6 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-  LENDER_APP_URL,
   loginWithRole,
   registerPublicUser,
   submitKyc,
@@ -179,13 +178,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   function redirectToLender(nextSession: SharedSession) {
     clearAdminSession();
     setLenderSession(nextSession.accessToken, nextSession.user);
-
-    const handoffUrl = new URL(LENDER_APP_URL, window.location.origin);
-    handoffUrl.searchParams.set("accessToken", nextSession.accessToken);
-    handoffUrl.searchParams.set("lenderId", nextSession.user.uid);
-    handoffUrl.searchParams.set("displayName", nextSession.user.fullName);
-    handoffUrl.searchParams.set("email", nextSession.user.email);
-    window.location.assign(handoffUrl.toString());
+    navigate("/lender", { replace: true });
   }
 
   function handleSuccessfulSession(

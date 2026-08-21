@@ -9,7 +9,6 @@ import type { AdminAuthResponse } from "../types/admin-auth";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api";
-export const LENDER_APP_URL = import.meta.env.VITE_LENDER_APP_URL ?? "/lender";
 
 export type FirestoreTimestamp = { _seconds?: number };
 export type AdminUserRole = "admin" | "borrower" | "lender";
