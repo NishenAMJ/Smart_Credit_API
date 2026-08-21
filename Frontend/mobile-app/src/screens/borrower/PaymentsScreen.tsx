@@ -174,7 +174,7 @@ export default function PaymentsScreen({
     if (activeTab === "Upcoming") {
       let upcoming = payments.filter((p) => {
         const s = String(p.status || "").toLowerCase();
-        return s !== "paid" && s !== "completed";
+        return !["paid", "completed", "rejected", "failed"].includes(s);
       });
 
       // If the backend returned no upcoming stubs but the dashboard shows a next
@@ -212,13 +212,13 @@ export default function PaymentsScreen({
     // Merge paid repayments from `payments` + all `transactions`, deduplicate by ID
     const paidRepayments = payments.filter((p) => {
       const s = String(p.status || "").toLowerCase();
-      return s === "paid" || s === "completed";
+      return ["paid", "completed", "rejected", "failed"].includes(s);
     });
 
     const txAsRepayments: BorrowerRepayment[] = transactions
       .filter((t) => {
         const s = String(t.status || "").toLowerCase();
-        return s === "paid" || s === "completed";
+        return ["paid", "completed", "rejected", "failed"].includes(s);
       })
       .map((t) => ({
         paymentId: t.transactionId ?? t.repaymentId,
@@ -232,6 +232,9 @@ export default function PaymentsScreen({
         type: t.type,
         paymentMethod: t.paymentMethod,
         lenderName: t.lenderName,
+        verificationStatus: t.verificationStatus,
+        statusLabel: t.statusLabel,
+        statusDetail: t.statusDetail,
       }));
 
     // Merge and deduplicate by ID
@@ -410,8 +413,9 @@ export default function PaymentsScreen({
       setProcessingPaymentId(selectedBankTransferPayment.paymentId || null);
       setUploadingReceipt(true);
 
-      const proofUrl = await paymentService.uploadPaymentReceipt(
-        paymentProof.uri,
+      const receiptDocumentId = await paymentService.uploadPaymentReceipt(
+        paymentProof,
+        loanId,
       );
 
       await paymentService.makeRepayment({
@@ -419,7 +423,7 @@ export default function PaymentsScreen({
         amount: amount,
         paymentMethod: "bank_transfer",
         transactionReference: `TXN-${Date.now()}`,
-        paymentProofUrl: proofUrl,
+        receiptDocumentId,
       });
 
       Alert.alert(
@@ -585,7 +589,11 @@ export default function PaymentsScreen({
       )}
 
       {activeTab === "Upcoming" &&
-        payments.some((p) => p.status === "PENDING") && (
+        payments.some((p) =>
+          ["pending", "pending_verification"].includes(
+            String(p.status ?? "").toLowerCase(),
+          ),
+        ) && (
           <View style={styles.pendingBanner}>
             <Feather name="clock" size={16} color="#B45309" />
             <Text style={styles.pendingBannerText}>

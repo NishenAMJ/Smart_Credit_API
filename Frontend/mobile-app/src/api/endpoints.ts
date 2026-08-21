@@ -16,7 +16,6 @@ export const ENDPOINTS = {
   MY_PAYMENTS: "/borrower/payments",
   CREATE_PAYMENT: "/borrower/payments",
   GENERATE_QR: "/borrower/payments/generate-qr",
-  UPLOAD_RECEIPT: "/borrower/payments/upload-receipt",
   MY_TRANSACTIONS: "/borrower/transactions",
   TRANSACTION_DETAILS: (transactionId: string) =>
     `/borrower/transactions/${transactionId}`,

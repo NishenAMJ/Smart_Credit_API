@@ -90,6 +90,7 @@ export interface BorrowerRepayment {
   paidAt?: string;
   transactionReference?: string;
   paymentProofUrl?: string;
+  receiptDocumentId?: string;
   paymentMethod?: string;
   type?: string;
   timestamp?: string;
