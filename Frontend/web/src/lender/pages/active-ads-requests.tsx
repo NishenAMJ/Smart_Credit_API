@@ -38,10 +38,19 @@ const AD_PAGE_SIZE = 12;
 const REQUEST_LIMIT = 30;
 const ACTIONABLE_REQUEST_STATUSES = new Set([
   "open",
+  "pending",
   "submitted",
   "under_review",
   "matched",
+  "approved",
   "pending_kyc",
+]);
+const TERMINAL_REQUEST_STATUSES = new Set([
+  "converted",
+  "rejected",
+  "withdrawn",
+  "cancelled",
+  "funded",
 ]);
 
 const currencyFormatter = new Intl.NumberFormat("en-LK", {
@@ -636,6 +645,9 @@ export default function ActiveAdsRequestsPage({
                     const isActionable = ACTIONABLE_REQUEST_STATUSES.has(
                       request.status,
                     );
+                    const isTerminal = TERMINAL_REQUEST_STATUSES.has(
+                      request.status,
+                    );
                     const isUpdating = decisionRequestId === request.requestId;
                     return (
                       <article
@@ -708,7 +720,9 @@ export default function ActiveAdsRequestsPage({
                             </>
                           ) : (
                             <p className="request-decision-complete">
-                              This request already has a final decision.
+                              {isTerminal
+                                ? "This request already has a final decision."
+                                : "This request is not ready for a lender decision."}
                             </p>
                           )}
                         </div>

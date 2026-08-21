@@ -18,8 +18,7 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
   // appId can come from navigation params (from ApplicationsReceivedScreen)
   // The full `app` object may also be passed from LenderDashboardScreen
   const passedApp = route?.params?.app;
-  const appId =
-    route?.params?.appId || passedApp?.requestId || "unknown";
+  const appId = route?.params?.appId || passedApp?.requestId || "unknown";
 
   const [app, setApp] = useState<any>(passedApp ?? null);
   const [loading, setLoading] = useState(!passedApp);
@@ -127,6 +126,15 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
     app?.suggestedInterestRate ?? app?.interestRate ?? app?.roi ?? "--";
   const tenureMonths = app?.tenureMonths ?? app?.duration ?? "--";
   const status = app?.status ?? "submitted";
+  const isActionable = [
+    "open",
+    "pending",
+    "submitted",
+    "under_review",
+    "matched",
+    "pending_kyc",
+    "approved",
+  ].includes(String(status).toLowerCase());
   const purpose = app?.purpose ?? "--";
   const kycStatus = app?.borrowerKycStatus ?? "--";
 
@@ -220,7 +228,7 @@ export default function ReviewApplicationScreen({ navigation, route }: any) {
           />
         ) : (
           <>
-            {(status === "submitted" || status === "under_review") && (
+            {isActionable && (
               <>
                 <TouchableOpacity
                   style={commonStyles.primaryButton}

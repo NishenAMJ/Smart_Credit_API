@@ -73,7 +73,7 @@ export default function MyApplicationsScreen({
 
     if (activeFilter === "pending") {
       return applications.filter((app) =>
-        ["pending", "under_review"].includes(
+        ["pending", "submitted", "under_review"].includes(
           String(app.status ?? "").toLowerCase(),
         ),
       );

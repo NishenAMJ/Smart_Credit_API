@@ -9,11 +9,13 @@ export type LoanStatus =
 
 export type ApplicationStatus =
   | "draft"
+  | "submitted"
   | "pending"
   | "under_review"
   | "approved"
   | "rejected"
   | "cancelled"
+  | "withdrawn"
   | "funded"
   | "converted";
 
