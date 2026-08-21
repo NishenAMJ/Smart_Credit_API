@@ -44,12 +44,15 @@ export type LenderSettings = {
 }
 
 export type UpdateLenderSettingsPayload = {
-  notifications: LenderSettingsNotifications
-  lendingDefaults: LenderSettingsLendingDefaults
-  workspace: LenderSettingsWorkspace
+  notifications?: Partial<LenderSettingsNotifications>
+  lendingDefaults?: Partial<LenderSettingsLendingDefaults>
+  workspace?: Partial<LenderSettingsWorkspace>
 }
 
-async function parseError(response: Response, fallback: string): Promise<never> {
+async function parseError(
+  response: Response,
+  fallback: string,
+): Promise<never> {
   try {
     const body = (await response.json()) as { message?: string | string[] }
     const message = Array.isArray(body.message)
