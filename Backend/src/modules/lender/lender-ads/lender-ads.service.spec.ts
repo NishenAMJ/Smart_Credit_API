@@ -1,6 +1,9 @@
 import * as firestoreQueryUtils from '../../../firebase/firestore-query.utils';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { validateCreateLenderAdInput } from './lender-ad.validation';
+import {
+  normalizeLenderAdStatusFilter,
+  validateCreateLenderAdInput,
+} from './lender-ad.validation';
 import { LenderAdsService } from './lender-ads.service';
 
 function createDoc(id: string, data: Record<string, unknown>) {
@@ -272,9 +275,7 @@ describe('LenderAdsService', () => {
   });
 
   it('maps the inactive filter to every non-public advertisement status', () => {
-    const service = new LenderAdsService({} as any, {} as any, {} as any);
-
-    expect((service as any).normalizeStatusFilter('inactive')).toEqual([
+    expect(normalizeLenderAdStatusFilter('inactive')).toEqual([
       'draft',
       'paused',
       'rejected',
@@ -284,10 +285,8 @@ describe('LenderAdsService', () => {
   });
 
   it('rejects unsupported advertisement status filters', () => {
-    const service = new LenderAdsService({} as any, {} as any, {} as any);
-
-    expect(() =>
-      (service as any).normalizeStatusFilter('not-a-status'),
-    ).toThrow(BadRequestException);
+    expect(() => normalizeLenderAdStatusFilter('not-a-status')).toThrow(
+      BadRequestException,
+    );
   });
 });

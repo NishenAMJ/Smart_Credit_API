@@ -2,6 +2,29 @@ import { BadRequestException } from '@nestjs/common';
 
 import type { CreateLenderAdInput } from './lender-ads.types';
 
+const FILTERABLE_AD_STATUSES = new Set([
+  'draft',
+  'pending_review',
+  'active',
+  'paused',
+  'rejected',
+  'expired',
+  'closed',
+]);
+
+export function normalizeLenderAdStatusFilter(
+  status?: string | null,
+): string[] | null {
+  if (!status) return null;
+  if (status === 'inactive') {
+    return ['draft', 'paused', 'rejected', 'expired', 'closed'];
+  }
+  if (!FILTERABLE_AD_STATUSES.has(status)) {
+    throw new BadRequestException('Unsupported advertisement status.');
+  }
+  return [status];
+}
+
 export function validateCreateLenderAdInput(input: CreateLenderAdInput): void {
   if (input.headline.trim().length < 12) {
     throw new BadRequestException('headline must be at least 12 characters.');

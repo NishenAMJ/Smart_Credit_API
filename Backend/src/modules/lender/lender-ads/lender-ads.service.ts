@@ -30,7 +30,10 @@ import {
 } from './lender-ads.types';
 import { LenderAdAnalyticsService } from './lender-ad-analytics.service';
 import { buildSearchTokens } from '../../../common/firestore/search-tokens';
-import { validateCreateLenderAdInput } from './lender-ad.validation';
+import {
+  normalizeLenderAdStatusFilter,
+  validateCreateLenderAdInput,
+} from './lender-ad.validation';
 
 @Injectable()
 export class LenderAdsService {
@@ -187,7 +190,7 @@ export class LenderAdsService {
   ): Promise<LenderAdsListResponse> {
     const safePageSize = Math.min(Math.max(pageSize, 1), 12);
     const collection = this.firebaseService.getDb().collection('loanListings');
-    const normalizedStatuses = this.normalizeStatusFilter(status);
+    const normalizedStatuses = normalizeLenderAdStatusFilter(status);
     const lenderQuery = collection.where('lenderId', '==', lenderId);
     const scopedQuery = normalizedStatuses
       ? normalizedStatuses.length === 1
@@ -304,29 +307,6 @@ export class LenderAdsService {
       typeof candidate.details === 'string' &&
       candidate.details.toLowerCase().includes('requires an index')
     );
-  }
-
-  private normalizeStatusFilter(status?: string | null): string[] | null {
-    if (!status) return null;
-
-    if (status === 'inactive') {
-      return ['draft', 'paused', 'rejected', 'expired', 'closed'];
-    }
-
-    const supportedStatuses = new Set([
-      'draft',
-      'pending_review',
-      'active',
-      'paused',
-      'rejected',
-      'expired',
-      'closed',
-    ]);
-    if (!supportedStatuses.has(status)) {
-      throw new BadRequestException('Unsupported advertisement status.');
-    }
-
-    return [status];
   }
 
   async updateAdFromMobile(
