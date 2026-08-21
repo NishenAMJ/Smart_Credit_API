@@ -22,7 +22,6 @@ import TermsConditionsScreen from "../screens/lender/TermsConditionsScreen";
 import SupportScreen from "../screens/lender/SupportScreen";
 import AiAssistantScreen from "../screens/shared/AiAssistantScreen";
 import DisputesScreen from "../screens/shared/DisputesScreen";
-import LenderKycScreen from "../screens/lender/LenderKycScreen";
 import KycResubmissionScreen from "../screens/borrower/KycResubmissionScreen";
 
 // Use require to bypass module resolution issues
