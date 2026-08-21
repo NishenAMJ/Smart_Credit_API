@@ -199,6 +199,37 @@ export class DocumentsService {
     }
   }
 
+  // Returns KYC review history across pending, approved, and rejected files.
+  async getKycReview(limit: number, cursor?: string) {
+    try {
+      let query: FirebaseFirestore.Query = this.collection
+        .where('category', '==', 'kyc')
+        .orderBy('createdAt', 'desc');
+
+      if (cursor) {
+        const cursorDoc = await this.collection.doc(cursor).get();
+        if (cursorDoc.exists) query = query.startAfter(cursorDoc);
+      }
+
+      const snapshot = await query.limit(limit + 1).get();
+      const documents = snapshot.docs
+        .slice(0, limit)
+        .map((doc) => ({ id: doc.id, ...doc.data() }) as DocumentRecord)
+        .filter((doc) => doc.status !== 'deleted');
+
+      return {
+        documents,
+        hasMore: snapshot.size > limit,
+        nextCursor:
+          snapshot.size > limit
+            ? documents[documents.length - 1]?.id
+            : undefined,
+      };
+    } catch (error) {
+      rethrowFirebaseError(error, 'Failed to fetch KYC review history');
+    }
+  }
+
   // Stores the outcome of an admin review on the document record itself.
   async updateReviewStatus(
     documentId: string,

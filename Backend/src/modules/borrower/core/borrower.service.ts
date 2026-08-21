@@ -568,6 +568,9 @@ export class BorrowerService {
     return {
       userId: doc.id,
       ...profileData,
+      // The users record is the canonical KYC review state. Derive this value
+      // at read time so an approved account never remains pending in mobile.
+      kycVerified: userData.kycStatus === 'approved',
       photoURL,
       profilePicture: profileData.profilePicture ?? userData.profilePicture,
       profilePictureUrl:

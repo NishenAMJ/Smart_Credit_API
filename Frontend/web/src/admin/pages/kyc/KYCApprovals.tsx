@@ -34,6 +34,17 @@ type KycRow = {
   accessUrl?: string;
 };
 
+type KycSubmissionRow = {
+  userId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  uploadedAt: string;
+  status: KycRow["status"];
+  userKycStatus: string;
+  documents: KycRow[];
+};
+
 function mapDocument(document: KycDocument): KycRow {
   return {
     id: document.id,
@@ -75,6 +86,8 @@ export default function KYCApprovals() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<KycRow | null>(null);
+  const [selectedSubmission, setSelectedSubmission] =
+    useState<KycSubmissionRow | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewError, setPreviewError] = useState("");
@@ -104,36 +117,63 @@ export default function KYCApprovals() {
     [loadKyc],
   );
 
+  const submissions = useMemo(() => {
+    const grouped = new Map<string, KycRow[]>();
+    records.forEach((record) => {
+      grouped.set(record.userId, [
+        ...(grouped.get(record.userId) ?? []),
+        record,
+      ]);
+    });
+
+    return [...grouped.entries()].map(([userId, documents]) => {
+      const first = documents[0];
+      return {
+        userId,
+        fullName: first.fullName,
+        email: first.email,
+        phone: first.phone,
+        uploadedAt: first.uploadedAt,
+        status: first.status,
+        userKycStatus: first.userKycStatus,
+        documents,
+      } satisfies KycSubmissionRow;
+    });
+  }, [records]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return records.filter((record) =>
+    return submissions.filter((submission) =>
       [
-        record.fullName,
-        record.userId,
-        record.email,
-        record.phone,
-        record.documentType,
-        record.originalFilename,
-        record.id,
-        record.userKycStatus,
+        submission.fullName,
+        submission.userId,
+        submission.email,
+        submission.phone,
+        submission.userKycStatus,
+        ...submission.documents.flatMap((document) => [
+          document.documentType,
+          document.originalFilename,
+          document.id,
+        ]),
       ]
         .join(" ")
         .toLowerCase()
         .includes(q),
     );
-  }, [records, search]);
+  }, [search, submissions]);
 
   const counts = useMemo(
     () => ({
-      total: records.length,
-      pending: records.filter((record) => record.status === "pending").length,
-      approved: records.filter((record) => record.status === "approved").length,
-      rejected: records.filter((record) => record.status === "rejected").length,
+      total: submissions.length,
+      pending: submissions.filter((item) => item.status === "pending").length,
+      approved: submissions.filter((item) => item.status === "approved").length,
+      rejected: submissions.filter((item) => item.status === "rejected").length,
     }),
-    [records],
+    [submissions],
   );
 
-  async function openPreview(record: KycRow) {
+  async function openPreview(record: KycRow, submission?: KycSubmissionRow) {
+    if (submission) setSelectedSubmission(submission);
     setSelectedRecord(record);
     setPreviewUrl("");
     setPreviewError("");
@@ -155,11 +195,13 @@ export default function KYCApprovals() {
     await loadKyc();
     if (selectedRecord?.id === documentId) {
       setSelectedRecord(null);
+      setSelectedSubmission(null);
       setPreviewUrl("");
     }
   }
 
-  async function handleApprove(record: KycRow) {
+  async function handleApprove(submission: KycSubmissionRow) {
+    const record = submission.documents[0];
     if (
       !window.confirm(
         `Approve the complete KYC submission for ${record.fullName}? All pending documents in this submission will be approved.`,
@@ -179,7 +221,8 @@ export default function KYCApprovals() {
     }
   }
 
-  async function handleReject(record: KycRow) {
+  async function handleReject(submission: KycSubmissionRow) {
+    const record = submission.documents[0];
     const reason = window.prompt("Enter a rejection reason or note:");
     if (!reason || !reason.trim()) {
       return;
@@ -210,8 +253,8 @@ export default function KYCApprovals() {
         <div>
           <h1 className="page-title">KYC Reviews</h1>
           <p className="page-subtitle">
-            Inspect every pending document through secure Cloudinary previews,
-            then approve or reject the lender's complete KYC submission.
+            Review each user's complete KYC submission and inspect every file
+            through a secure preview before making a decision.
           </p>
         </div>
         <button className="btn btn-secondary" onClick={() => void loadKyc()}>
@@ -260,7 +303,7 @@ export default function KYCApprovals() {
           <thead>
             <tr>
               <th>User</th>
-              <th>Document</th>
+              <th>Submission</th>
               <th>Uploaded</th>
               <th>Current Status</th>
               <th>Actions</th>
@@ -276,30 +319,34 @@ export default function KYCApprovals() {
                 </td>
               </tr>
             ) : (
-              filtered.map((record) => (
-                <tr key={record.id}>
+              filtered.map((submission) => (
+                <tr key={submission.userId}>
                   <td>
                     <div style={S.cellStack}>
-                      <strong>{record.fullName}</strong>
-                      <span style={S.mutedText}>{record.userId}</span>
-                      <span style={S.mutedText}>{record.email}</span>
-                      <span style={S.mutedText}>{record.phone}</span>
+                      <strong>{submission.fullName}</strong>
+                      <span style={S.mutedText}>{submission.userId}</span>
+                      <span style={S.mutedText}>{submission.email}</span>
+                      <span style={S.mutedText}>{submission.phone}</span>
                     </div>
                   </td>
                   <td>
                     <div style={S.cellStack}>
-                      <span>{formatLabel(record.documentType)}</span>
-                      <span style={S.mutedText}>{record.originalFilename}</span>
+                      <span>{submission.documents.length} documents</span>
+                      <span style={S.mutedText}>
+                        {submission.documents
+                          .map((document) => formatLabel(document.documentType))
+                          .join(", ")}
+                      </span>
                     </div>
                   </td>
-                  <td>{record.uploadedAt}</td>
+                  <td>{submission.uploadedAt}</td>
                   <td>
                     <div style={S.cellStack}>
-                      <span className={statusClass(record.status)}>
-                        {record.status}
+                      <span className={statusClass(submission.status)}>
+                        {submission.status}
                       </span>
                       <span style={S.mutedText}>
-                        User: {record.userKycStatus}
+                        User: {submission.userKycStatus}
                       </span>
                     </div>
                   </td>
@@ -307,26 +354,28 @@ export default function KYCApprovals() {
                     <div style={S.actionRow}>
                       <button
                         className="btn btn-secondary"
-                        onClick={() => void openPreview(record)}
-                        disabled={busyId === record.id}
+                        onClick={() =>
+                          void openPreview(submission.documents[0], submission)
+                        }
+                        disabled={busyId === submission.documents[0].id}
                       >
                         <Eye size={14} style={{ marginRight: 6 }} />
                         View
                       </button>
-                      {record.status === "pending" && (
+                      {submission.status === "pending" && (
                         <>
                           <button
                             className="btn btn-success"
-                            onClick={() => void handleApprove(record)}
-                            disabled={busyId === record.id}
+                            onClick={() => void handleApprove(submission)}
+                            disabled={busyId === submission.documents[0].id}
                           >
                             <Check size={14} style={{ marginRight: 6 }} />
                             Approve
                           </button>
                           <button
                             className="btn btn-danger"
-                            onClick={() => void handleReject(record)}
-                            disabled={busyId === record.id}
+                            onClick={() => void handleReject(submission)}
+                            disabled={busyId === submission.documents[0].id}
                           >
                             <X size={14} style={{ marginRight: 6 }} />
                             Reject
@@ -343,7 +392,13 @@ export default function KYCApprovals() {
       </div>
 
       {selectedRecord && (
-        <div style={S.modalOverlay} onClick={() => setSelectedRecord(null)}>
+        <div
+          style={S.modalOverlay}
+          onClick={() => {
+            setSelectedRecord(null);
+            setSelectedSubmission(null);
+          }}
+        >
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
             <div style={S.modalHeader}>
               <div>
@@ -354,11 +409,32 @@ export default function KYCApprovals() {
               </div>
               <button
                 className="btn btn-secondary"
-                onClick={() => setSelectedRecord(null)}
+                onClick={() => {
+                  setSelectedRecord(null);
+                  setSelectedSubmission(null);
+                }}
               >
                 Close
               </button>
             </div>
+
+            {selectedSubmission && (
+              <div style={S.documentTabs}>
+                {selectedSubmission.documents.map((document) => (
+                  <button
+                    key={document.id}
+                    className={
+                      document.id === selectedRecord.id
+                        ? "btn btn-primary"
+                        : "btn btn-secondary"
+                    }
+                    onClick={() => void openPreview(document)}
+                  >
+                    {formatLabel(document.documentType)}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div style={S.detailGrid}>
               <Detail label="User" value={selectedRecord.fullName} />
@@ -526,6 +602,12 @@ const S: Record<string, CSSProperties> = {
     margin: "4px 0 0",
     color: "#6B7280",
     fontSize: 13,
+  },
+  documentTabs: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
   },
   detailGrid: {
     display: "grid",

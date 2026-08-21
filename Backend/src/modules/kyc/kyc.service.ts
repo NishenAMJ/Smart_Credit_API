@@ -69,7 +69,10 @@ export class KycService {
   }
 
   // Converts the generic document record shape into the smaller KYC response format.
-  private mapDocumentToKycDocument(document: DocumentRecord): KycDocument {
+  private mapDocumentToKycDocument(
+    document: DocumentRecord,
+    currentUserKycStatus?: string,
+  ): KycDocument {
     const status =
       document.status === 'pending_review'
         ? 'pending'
@@ -83,7 +86,7 @@ export class KycService {
       fullName: document.fullName,
       email: document.email,
       phone: document.phone,
-      userKycStatus: document.userKycStatus,
+      userKycStatus: currentUserKycStatus ?? document.userKycStatus,
       documentType: document.documentType,
       originalFilename: document.originalFilename,
       mimeType: document.mimeType,
@@ -619,16 +622,26 @@ export class KycService {
   async getPendingKyc(limit?: string, cursor?: string) {
     try {
       const pageSize = this.parseLimit(limit);
-      const result = await this.documentsService.getPendingReview(
-        pageSize,
-        cursor,
+      const result = await this.documentsService.getKycReview(pageSize, cursor);
+      const userIds = [...new Set(result.documents.map((doc) => doc.userId))];
+      const userSnapshots = await Promise.all(
+        userIds.map((userId) => this.db.collection('users').doc(userId).get()),
+      );
+      const currentStatuses = new Map(
+        userSnapshots.map((snapshot, index) => {
+          const status = snapshot.data()?.kycStatus;
+          return [
+            snapshot.id || userIds[index],
+            typeof status === 'string' ? status : 'not_submitted',
+          ];
+        }),
       );
 
       return {
         success: true,
         count: result.documents.length,
         documents: result.documents.map((doc) =>
-          this.mapDocumentToKycDocument(doc),
+          this.mapDocumentToKycDocument(doc, currentStatuses.get(doc.userId)),
         ),
         hasMore: result.hasMore,
         nextCursor: result.nextCursor,

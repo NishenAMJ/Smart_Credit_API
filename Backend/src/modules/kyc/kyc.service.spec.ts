@@ -21,7 +21,7 @@ describe('KycService', () => {
     findDuplicate: jest.Mock;
     createRecord: jest.Mock;
     listByUser: jest.Mock;
-    getPendingReview: jest.Mock;
+    getKycReview: jest.Mock;
     updateReviewStatus: jest.Mock;
     getById: jest.Mock;
   };
@@ -87,7 +87,7 @@ describe('KycService', () => {
         fileSize: input.uploadedMedia.bytes,
       })),
       listByUser: jest.fn().mockResolvedValue([]),
-      getPendingReview: jest.fn().mockResolvedValue({
+      getKycReview: jest.fn().mockResolvedValue({
         documents: [],
         hasMore: false,
         nextCursor: undefined,
@@ -166,6 +166,7 @@ describe('KycService', () => {
             role: ['borrower'],
             roles: ['borrower'],
             primaryRole: 'borrower',
+            kycStatus: 'pending',
           }),
         }),
         set: userSet,
@@ -453,7 +454,7 @@ describe('KycService', () => {
   });
 
   it('returns pending review documents and user documents', async () => {
-    documentsService.getPendingReview.mockResolvedValueOnce({
+    documentsService.getKycReview.mockResolvedValueOnce({
       documents: [
         {
           id: 'doc-1',
@@ -504,6 +505,7 @@ describe('KycService', () => {
     const userDocs = await service.getUserDocuments('user-1');
 
     expect(pending.documents).toHaveLength(1);
+    expect(pending.documents[0].userKycStatus).toBe('pending');
     expect(userDocs.documents).toHaveLength(1);
   });
 
