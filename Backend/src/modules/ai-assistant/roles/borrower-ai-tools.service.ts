@@ -412,19 +412,24 @@ export class BorrowerAiToolsService {
   }
 
   private async getKycStatus(userId: string) {
-    const [userSnapshot, submissions] = await Promise.all([
+    const [userSnapshot, documents] = await Promise.all([
       this.db.collection('users').doc(userId).get(),
       this.db
-        .collection('kycSubmissions')
+        .collection('documents')
         .where('userId', '==', userId)
         .limit(20)
         .get(),
     ]);
-    const latest = submissions.docs
+    const accountKycStatus = readString(
+      userSnapshot.get('kycStatus'),
+      'not_submitted',
+    ).toLowerCase();
+    const latest = documents.docs
+      .filter((doc) => readString(doc.get('category')) === 'kyc')
       .map((doc) => ({
         submissionId: doc.id,
-        status: readString(doc.get('status'), 'unknown').toLowerCase(),
-        submittedAt: toIso(doc.get('submittedAt') ?? doc.get('createdAt')),
+        status: accountKycStatus,
+        submittedAt: toIso(doc.get('uploadedAt') ?? doc.get('createdAt')),
       }))
       .sort(
         (a, b) =>
@@ -432,10 +437,7 @@ export class BorrowerAiToolsService {
           (new Date(String(a.submittedAt)).getTime() || 0),
       )[0];
     return {
-      accountKycStatus: readString(
-        userSnapshot.get('kycStatus'),
-        'not_submitted',
-      ).toLowerCase(),
+      accountKycStatus,
       latestSubmission: latest ?? null,
     };
   }

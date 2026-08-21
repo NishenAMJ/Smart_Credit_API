@@ -7,7 +7,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
@@ -23,6 +23,7 @@ import { ChatGateway } from '../chat/gateway/chat.gateway';
 import { buildSearchTokens } from '../../common/firestore/search-tokens';
 import { writeAuditLog } from '../../common/audit/write-audit-log';
 import { ResubmitKycDto } from './dto/resubmit-kyc.dto';
+import { hasRole } from '../../firebase/firestore-query.utils';
 
 type KycUploadField = {
   documentType:
@@ -36,6 +37,8 @@ type KycUploadField = {
 };
 
 type KycPayloadFieldKey =
+  | 'nic'
+  | 'documentNumber'
   | 'nicFrontDataUrl'
   | 'nicBackDataUrl'
   | 'documentFrontUrl'
@@ -365,7 +368,6 @@ export class KycService {
       phoneNumber: user.phone ?? '',
       nic: user.nic ?? '',
       birthDate: user.dateOfBirth ?? '',
-      passwordHash: '',
       ...dto,
     });
     const createdDocuments: DocumentRecord[] = [];
@@ -378,7 +380,7 @@ export class KycService {
         );
       }
 
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FieldValue.serverTimestamp();
       const documentRefs = Object.fromEntries(
         createdDocuments.map((document) => [
           document.documentType,
@@ -466,16 +468,12 @@ export class KycService {
         'phoneNumber',
         existingUser?.phone,
       );
-      const nic = this.resolveOptionalField(dto, 'nic', existingUser?.nic);
+      const nic =
+        this.firstDefined(dto, ['nic', 'documentNumber']) ?? existingUser?.nic;
       const birthDate = this.resolveOptionalField(
         dto,
         'birthDate',
         existingUser?.dateOfBirth,
-      );
-      const passwordHash = this.resolveOptionalField(
-        dto,
-        'passwordHash',
-        undefined,
       );
 
       const documentRefs: Record<string, string> = {};
@@ -512,7 +510,7 @@ export class KycService {
           version: profileUpload.version,
           format: profileUpload.format ?? null,
           fileSize: profileUpload.bytes,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         };
       }
 
@@ -545,7 +543,6 @@ export class KycService {
           ...(birthDate ? { dateOfBirth: birthDate } : {}),
           photoURL: profilePhotoUrl,
           profilePicture: profilePictureData,
-          ...(passwordHash ? { passwordHash } : {}),
           creditScore: 0,
           rating: 0,
           totalLoansCompleted: 0,
@@ -570,14 +567,16 @@ export class KycService {
             branchCode: dto.branchCode ?? '',
             accountType: dto.accountType ?? '',
             documentRefs,
-            submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+            submittedAt: FieldValue.serverTimestamp(),
           },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         }),
         { merge: true },
       );
       this.emitAdminChange(userId, 'submitted');
+
+      const currentSubmission = await this.getMySubmission(userId);
 
       return {
         success: true,
@@ -585,6 +584,7 @@ export class KycService {
         kycStatus: 'pending',
         documentIds,
         message: 'KYC submitted successfully',
+        submission: currentSubmission.submission,
       };
     } catch (error) {
       for (const document of createdDocuments) {
@@ -684,6 +684,106 @@ export class KycService {
     }
   }
 
+  // Builds the mobile KYC view from the canonical user status and latest active files.
+  async getMySubmission(userId: string) {
+    try {
+      const [userSnapshot, documents] = await Promise.all([
+        this.db.collection('users').doc(userId).get(),
+        this.documentsService.listByUser(userId, 'kyc'),
+      ]);
+
+      if (!userSnapshot.exists) {
+        throw new NotFoundException('User not found');
+      }
+
+      const user = userSnapshot.data() as ExistingKycUser & {
+        kycStatus?: string;
+        kycFiles?: { submittedAt?: unknown };
+        rejectionReason?: string;
+        notes?: string;
+        updatedAt?: unknown;
+      };
+      const status = this.normalizeUserKycStatus(user.kycStatus);
+
+      if (status === 'not_submitted' && documents.length === 0) {
+        return { submission: null };
+      }
+
+      const latestDocument = documents[0];
+      const latestReview = documents.find(
+        (document) => document.reviewTimestamp || document.review?.reviewedAt,
+      );
+
+      return {
+        submission: {
+          id: latestDocument?.id ?? userId,
+          userId,
+          status,
+          documentType: 'national_identity_card',
+          documentNumber: user.nic ?? '',
+          fullName: user.fullName ?? '',
+          reviewNotes:
+            user.rejectionReason ||
+            user.notes ||
+            latestReview?.review?.rejectionReason ||
+            latestReview?.reviewNotes ||
+            latestReview?.review?.notes ||
+            '',
+          submittedAt: this.toIsoString(
+            user.kycFiles?.submittedAt ??
+              latestDocument?.uploadedAt ??
+              user.updatedAt,
+          ),
+          reviewedAt: this.toOptionalIsoString(
+            latestReview?.reviewTimestamp ?? latestReview?.review?.reviewedAt,
+          ),
+          reviewedBy:
+            latestReview?.reviewerId ?? latestReview?.review?.reviewedBy,
+        },
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      console.error('Error fetching current KYC submission:', error);
+      rethrowFirebaseError(error, 'Failed to fetch current KYC submission');
+    }
+  }
+
+  private normalizeUserKycStatus(
+    value?: string,
+  ): 'not_submitted' | 'pending' | 'approved' | 'rejected' {
+    if (value === 'approved' || value === 'rejected' || value === 'pending') {
+      return value;
+    }
+
+    return 'not_submitted';
+  }
+
+  private toOptionalIsoString(value: unknown): string | undefined {
+    return value ? this.toIsoString(value) : undefined;
+  }
+
+  private toIsoString(value: unknown): string {
+    if (value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+      return (value as { toDate: () => Date }).toDate().toISOString();
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString();
+      }
+    }
+
+    return new Date(0).toISOString();
+  }
+
   // Approves a document and mirrors that result back onto the user's profile.
   async approveDocument(
     documentId: string,
@@ -692,7 +792,7 @@ export class KycService {
   ) {
     try {
       const documentRef = this.db.collection('documents').doc(documentId);
-      const reviewTimestamp = admin.firestore.FieldValue.serverTimestamp();
+      const reviewTimestamp = FieldValue.serverTimestamp();
       const selectedDocument = await this.documentsService.getById(documentId);
       if (!selectedDocument || selectedDocument.category !== 'kyc') {
         throw new NotFoundException('KYC document not found');
@@ -712,9 +812,18 @@ export class KycService {
         (document) => document.status === 'pending_review',
       );
       const result = await this.db.runTransaction(async (transaction) => {
-        const snapshot = await transaction.get(documentRef);
+        const userRef = this.db
+          .collection('users')
+          .doc(selectedDocument.userId);
+        const [snapshot, userSnapshot] = await Promise.all([
+          transaction.get(documentRef),
+          transaction.get(userRef),
+        ]);
         if (!snapshot.exists) {
           throw new NotFoundException('KYC document not found');
+        }
+        if (!userSnapshot.exists) {
+          throw new NotFoundException('User not found');
         }
 
         const document = {
@@ -733,12 +842,18 @@ export class KycService {
         }
 
         const reviewNotes = notes?.trim() ?? '';
-        const userRef = this.db.collection('users').doc(document.userId);
+        const user = userSnapshot.data() ?? {};
+        const isLender = hasRole(user.roles ?? user.role, 'lender');
+        const isBorrower =
+          hasRole(user.roles ?? user.role, 'borrower') || !isLender;
         const borrowerRef = this.db
           .collection('borrowers')
           .doc(document.userId);
-        const notificationRef = this.db
+        const borrowerNotificationRef = this.db
           .collection('borrowerNotifications')
+          .doc(`kyc-approved-${document.userId}`);
+        const lenderNotificationRef = this.db
+          .collection('notifications')
           .doc(`kyc-approved-${document.userId}`);
 
         for (const pendingDocument of pendingDocuments) {
@@ -772,40 +887,70 @@ export class KycService {
           notes: reviewNotes,
           updatedAt: reviewTimestamp,
         });
-        transaction.set(
-          borrowerRef,
-          { kycVerified: true, updatedAt: reviewTimestamp },
-          { merge: true },
-        );
-        transaction.set(
-          notificationRef,
-          {
-            borrowerId: document.userId,
-            category: 'profile',
-            severity: 'success',
-            title: 'KYC approved',
-            message: 'Your identity verification was approved.',
-            isRead: false,
-            readAt: null,
-            relatedEntityType: 'profile',
-            relatedEntityId: document.userId,
-            actionTarget: 'profile',
-            createdAt: reviewTimestamp,
-            updatedAt: reviewTimestamp,
-            metadata: { kycStatus: 'approved' },
-          },
-          { merge: true },
-        );
-        transaction.delete(
-          this.db
-            .collection('borrowerNotifications')
-            .doc(`profile-kyc-${document.userId}`),
-        );
-        transaction.delete(
-          this.db
-            .collection('borrowerNotifications')
-            .doc(`kyc-rejected-${document.userId}`),
-        );
+        if (isBorrower) {
+          transaction.set(
+            borrowerRef,
+            { kycVerified: true, updatedAt: reviewTimestamp },
+            { merge: true },
+          );
+          transaction.set(
+            borrowerNotificationRef,
+            {
+              borrowerId: document.userId,
+              category: 'profile',
+              severity: 'success',
+              title: 'KYC approved',
+              message: 'Your identity verification was approved.',
+              isRead: false,
+              readAt: null,
+              relatedEntityType: 'profile',
+              relatedEntityId: document.userId,
+              actionTarget: 'profile',
+              createdAt: reviewTimestamp,
+              updatedAt: reviewTimestamp,
+              metadata: { kycStatus: 'approved' },
+            },
+            { merge: true },
+          );
+          transaction.delete(
+            this.db
+              .collection('borrowerNotifications')
+              .doc(`profile-kyc-${document.userId}`),
+          );
+          transaction.delete(
+            this.db
+              .collection('borrowerNotifications')
+              .doc(`kyc-rejected-${document.userId}`),
+          );
+        }
+        if (isLender) {
+          transaction.set(
+            lenderNotificationRef,
+            {
+              notificationId: `kyc-approved-${document.userId}`,
+              userId: document.userId,
+              category: 'system',
+              eventType: 'kyc_approved',
+              title: 'KYC approved',
+              body: 'Your identity verification was approved.',
+              severity: 'success',
+              isRead: false,
+              readAt: null,
+              entityType: 'system',
+              entityId: document.userId,
+              actionLabel: 'Open settings',
+              actionTarget: 'settings',
+              createdAt: reviewTimestamp,
+              metadata: { status: 'approved' },
+            },
+            { merge: true },
+          );
+          transaction.delete(
+            this.db
+              .collection('notifications')
+              .doc(`kyc-rejected-${document.userId}`),
+          );
+        }
         return {
           userId: document.userId,
           documentIds: pendingDocuments.map((item) => item.id),
@@ -852,7 +997,7 @@ export class KycService {
   ) {
     try {
       const documentRef = this.db.collection('documents').doc(documentId);
-      const reviewTimestamp = admin.firestore.FieldValue.serverTimestamp();
+      const reviewTimestamp = FieldValue.serverTimestamp();
       const rejectionReason = reason.trim();
       const selectedDocument = await this.documentsService.getById(documentId);
       if (!selectedDocument || selectedDocument.category !== 'kyc') {
@@ -862,9 +1007,18 @@ export class KycService {
         await this.documentsService.listByUser(selectedDocument.userId, 'kyc')
       ).filter((document) => document.status === 'pending_review');
       const result = await this.db.runTransaction(async (transaction) => {
-        const snapshot = await transaction.get(documentRef);
+        const userRef = this.db
+          .collection('users')
+          .doc(selectedDocument.userId);
+        const [snapshot, userSnapshot] = await Promise.all([
+          transaction.get(documentRef),
+          transaction.get(userRef),
+        ]);
         if (!snapshot.exists) {
           throw new NotFoundException('KYC document not found');
+        }
+        if (!userSnapshot.exists) {
+          throw new NotFoundException('User not found');
         }
 
         const document = {
@@ -882,12 +1036,18 @@ export class KycService {
           );
         }
 
-        const userRef = this.db.collection('users').doc(document.userId);
+        const user = userSnapshot.data() ?? {};
+        const isLender = hasRole(user.roles ?? user.role, 'lender');
+        const isBorrower =
+          hasRole(user.roles ?? user.role, 'borrower') || !isLender;
         const borrowerRef = this.db
           .collection('borrowers')
           .doc(document.userId);
-        const notificationRef = this.db
+        const borrowerNotificationRef = this.db
           .collection('borrowerNotifications')
+          .doc(`kyc-rejected-${document.userId}`);
+        const lenderNotificationRef = this.db
+          .collection('notifications')
           .doc(`kyc-rejected-${document.userId}`);
 
         for (const pendingDocument of pendingDocuments) {
@@ -921,38 +1081,63 @@ export class KycService {
           notes: rejectionReason,
           updatedAt: reviewTimestamp,
         });
-        transaction.set(
-          borrowerRef,
-          { kycVerified: false, updatedAt: reviewTimestamp },
-          { merge: true },
-        );
-        transaction.set(
-          notificationRef,
-          {
-            borrowerId: document.userId,
-            category: 'profile',
-            severity: 'warning',
-            title: 'KYC needs new documents',
-            message: rejectionReason,
-            isRead: false,
-            readAt: null,
-            relatedEntityType: 'profile',
-            relatedEntityId: document.userId,
-            actionTarget: 'kyc-resubmit',
-            createdAt: reviewTimestamp,
-            updatedAt: reviewTimestamp,
-            metadata: {
-              kycStatus: 'rejected',
-              rejectionReason,
+        if (isBorrower) {
+          transaction.set(
+            borrowerRef,
+            { kycVerified: false, updatedAt: reviewTimestamp },
+            { merge: true },
+          );
+          transaction.set(
+            borrowerNotificationRef,
+            {
+              borrowerId: document.userId,
+              category: 'profile',
+              severity: 'warning',
+              title: 'KYC needs new documents',
+              message: rejectionReason,
+              isRead: false,
+              readAt: null,
+              relatedEntityType: 'profile',
+              relatedEntityId: document.userId,
+              actionTarget: 'kyc-resubmit',
+              createdAt: reviewTimestamp,
+              updatedAt: reviewTimestamp,
+              metadata: {
+                kycStatus: 'rejected',
+                rejectionReason,
+              },
             },
-          },
-          { merge: true },
-        );
-        transaction.delete(
-          this.db
-            .collection('borrowerNotifications')
-            .doc(`profile-kyc-${document.userId}`),
-        );
+            { merge: true },
+          );
+          transaction.delete(
+            this.db
+              .collection('borrowerNotifications')
+              .doc(`profile-kyc-${document.userId}`),
+          );
+        }
+        if (isLender) {
+          transaction.set(
+            lenderNotificationRef,
+            {
+              notificationId: `kyc-rejected-${document.userId}`,
+              userId: document.userId,
+              category: 'system',
+              eventType: 'kyc_rejected',
+              title: 'KYC needs new documents',
+              body: rejectionReason,
+              severity: 'warning',
+              isRead: false,
+              readAt: null,
+              entityType: 'system',
+              entityId: document.userId,
+              actionLabel: 'Open settings',
+              actionTarget: 'settings',
+              createdAt: reviewTimestamp,
+              metadata: { status: 'rejected', rejectionReason },
+            },
+            { merge: true },
+          );
+        }
         return {
           userId: document.userId,
           documentIds: pendingDocuments.map((item) => item.id),

@@ -523,6 +523,10 @@ describe('KycService', () => {
   });
 
   it('approves a KYC document and updates the user KYC status', async () => {
+    documentSnapshots['user-1'] = {
+      roles: ['borrower'],
+      accountStatus: 'active',
+    };
     documentSnapshots['doc-1'] = {
       userId: 'user-1',
       category: 'kyc',
@@ -564,6 +568,10 @@ describe('KycService', () => {
   });
 
   it('rejects a KYC document and stores the rejection reason', async () => {
+    documentSnapshots['user-1'] = {
+      roles: ['borrower'],
+      accountStatus: 'active',
+    };
     documentSnapshots['doc-1'] = {
       userId: 'user-1',
       category: 'kyc',

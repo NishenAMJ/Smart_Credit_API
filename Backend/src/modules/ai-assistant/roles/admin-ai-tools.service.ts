@@ -265,7 +265,6 @@ export class AdminAiToolsService {
     const loans = this.db.collection('loans');
     const transactions = this.db.collection('transactions');
     const disputes = this.db.collection('disputes');
-    const kyc = this.db.collection('kycSubmissions');
     const listings = this.db.collection('loanListings');
     const [
       totalUsers,
@@ -296,7 +295,7 @@ export class AdminAiToolsService {
       this.getCount(transactions.where('status', '==', 'failed')),
       this.getCount(disputes.where('status', '==', 'open')),
       this.getCount(disputes.where('status', '==', 'under_review')),
-      this.getCount(kyc.where('status', '==', 'pending')),
+      this.getCount(users.where('kycStatus', '==', 'pending')),
       this.getCount(listings.where('status', '==', 'pending_review')),
       this.getCount(listings.where('status', '==', 'pending')),
     ]);
@@ -440,22 +439,40 @@ export class AdminAiToolsService {
   }
 
   private async listKycSubmissions(status: string | null) {
-    const documents = await this.recentDocuments(
-      'kycSubmissions',
-      status,
-      'submittedAt',
-    );
-    return documents.map((doc) => {
-      const data = doc.data();
-      return {
-        submissionId: readString(data.submissionId, doc.id),
-        userId: readString(data.userId),
-        role: readString(data.role),
-        status: readString(data.status, 'pending').toLowerCase(),
-        submittedAt: toIso(data.submittedAt),
-        reviewedAt: toIso(data.reviewedAt),
-      };
-    });
+    const users = this.db.collection('users');
+    const query = status ? users.where('kycStatus', '==', status) : users;
+    const snapshot = await query.limit(50).get();
+
+    return snapshot.docs
+      .map((doc) => {
+        const data = doc.data();
+        const kycStatus = readString(
+          data.kycStatus,
+          'not_submitted',
+        ).toLowerCase();
+        const roles = Array.isArray(data.roles) ? data.roles : [];
+        const submittedAt =
+          data.kycFiles && typeof data.kycFiles === 'object'
+            ? (data.kycFiles as Record<string, unknown>).submittedAt
+            : undefined;
+
+        return {
+          submissionId: doc.id,
+          userId: readString(data.userId, readString(data.uid, doc.id)),
+          role: readString(data.primaryRole, readString(roles[0])),
+          status: kycStatus,
+          submittedAt: toIso(submittedAt ?? data.updatedAt),
+          reviewedAt:
+            kycStatus === 'approved' || kycStatus === 'rejected'
+              ? toIso(data.updatedAt)
+              : null,
+        };
+      })
+      .filter((submission) => KYC_STATUSES.includes(submission.status as never))
+      .sort((left, right) =>
+        String(right.submittedAt).localeCompare(String(left.submittedAt)),
+      )
+      .slice(0, AdminAiToolsService.LIST_LIMIT);
   }
 
   private async listLoanListings(status: string | null) {

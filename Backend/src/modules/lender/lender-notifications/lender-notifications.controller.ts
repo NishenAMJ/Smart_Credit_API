@@ -6,7 +6,14 @@ import {
   Param,
   Patch,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { resolveAuthenticatedLenderId } from '../lender-request.utils';
 import { LenderNotificationsService } from './lender-notifications.service';
 import {
   LenderNotification,
@@ -21,6 +28,8 @@ type MarkAsReadBody = {
 };
 
 @Controller('lender-notifications')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
 export class LenderNotificationsController {
   constructor(
     private readonly lenderNotificationsService: LenderNotificationsService,
@@ -28,19 +37,20 @@ export class LenderNotificationsController {
 
   @Get('summary')
   getSummary(
+    @Req() req: AuthenticatedRequest,
     @Query('lenderId') lenderId: string,
   ): Promise<LenderNotificationsSummaryResponse> {
-    const normalizedLenderId = lenderId?.trim();
-
-    if (!normalizedLenderId) {
-      throw new BadRequestException('lenderId is required.');
-    }
+    const normalizedLenderId = resolveAuthenticatedLenderId(
+      req.user.sub,
+      lenderId,
+    );
 
     return this.lenderNotificationsService.getSummary(normalizedLenderId);
   }
 
   @Get()
   getNotifications(
+    @Req() req: AuthenticatedRequest,
     @Query('lenderId') lenderId: string,
     @Query('category') category?: string,
     @Query('state') state?: string,
@@ -48,11 +58,10 @@ export class LenderNotificationsController {
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ): Promise<LenderNotificationsListResponse> {
-    const normalizedLenderId = lenderId?.trim();
-
-    if (!normalizedLenderId) {
-      throw new BadRequestException('lenderId is required.');
-    }
+    const normalizedLenderId = resolveAuthenticatedLenderId(
+      req.user.sub,
+      lenderId,
+    );
 
     return this.lenderNotificationsService.getNotifications(
       normalizedLenderId,
@@ -65,15 +74,15 @@ export class LenderNotificationsController {
 
   @Patch('mark-all-read')
   markAllAsRead(
+    @Req() req: AuthenticatedRequest,
     @Query('lenderId') lenderId: string,
     @Query('category') category?: string,
     @Query('state') state?: string,
   ): Promise<MarkAllNotificationsReadResponse> {
-    const normalizedLenderId = lenderId?.trim();
-
-    if (!normalizedLenderId) {
-      throw new BadRequestException('lenderId is required.');
-    }
+    const normalizedLenderId = resolveAuthenticatedLenderId(
+      req.user.sub,
+      lenderId,
+    );
 
     return this.lenderNotificationsService.markAllAsRead(
       normalizedLenderId,
@@ -84,14 +93,14 @@ export class LenderNotificationsController {
 
   @Patch(':notificationId/read')
   markAsRead(
+    @Req() req: AuthenticatedRequest,
     @Param('notificationId') notificationId: string,
     @Body() body: MarkAsReadBody,
   ): Promise<LenderNotification> {
-    const normalizedLenderId = body.lenderId?.trim();
-
-    if (!normalizedLenderId) {
-      throw new BadRequestException('lenderId is required.');
-    }
+    const normalizedLenderId = resolveAuthenticatedLenderId(
+      req.user.sub,
+      body.lenderId,
+    );
 
     if (!notificationId.trim()) {
       throw new BadRequestException('notificationId is required.');

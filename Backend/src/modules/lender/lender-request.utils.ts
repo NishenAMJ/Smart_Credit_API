@@ -1,14 +1,14 @@
 import { ForbiddenException } from '@nestjs/common';
 
-export function resolveAuthenticatedBorrowerId(
+export function resolveAuthenticatedLenderId(
   authenticatedUserId: string,
-  requestedBorrowerId?: string,
+  requestedLenderId?: string,
 ): string {
-  const requested = requestedBorrowerId?.trim();
+  const requested = requestedLenderId?.trim();
 
   if (requested && requested !== authenticatedUserId) {
     throw new ForbiddenException(
-      'You can only access your own borrower workspace.',
+      'You can only access your own lender workspace.',
     );
   }
 

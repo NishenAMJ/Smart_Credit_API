@@ -23,6 +23,7 @@ import { localDatabase } from "../../services/localDatabase";
 
 // ── Settings menu ─────────────────────────────────────────
 const PROFILE_SETTINGS = [
+  { icon: "shield", label: "KYC Verification", screen: "LenderKyc" },
   { icon: "file-text", label: "Terms & Conditions", screen: "TermsConditions" },
   { icon: "help-circle", label: "Help & Support", screen: "Support" },
   { icon: "log-out", label: "Logout", action: "logout" },
@@ -85,7 +86,6 @@ export default function LenderProfileScreen({ navigation }: any) {
         setEditEmail(data?.email ?? "");
         setEditPhone(data?.phone ?? "");
       } catch (err: any) {
-        
         console.warn(
           "Profile load failed:",
           err?.response?.data?.message ?? err?.message,
@@ -149,8 +149,6 @@ export default function LenderProfileScreen({ navigation }: any) {
   };
 
   // ── Save password ─────────────────────────────────────
-  // NOTE: lender-profile controller does not expose a change-password endpoint yet.
-  // LenderProfileService.changePassword() will throw until the backend adds one.
   const handleSavePassword = async () => {
     if (!currentPassword.trim()) {
       Alert.alert("Error", "Enter your current password");

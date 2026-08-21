@@ -41,15 +41,18 @@ export class MediaService {
   private readonly cloudName?: string;
   private readonly apiKey?: string;
   private readonly apiSecret?: string;
+  private readonly mockMode: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.cloudName = this.configService.get<string>('CLOUDINARY_CLOUD_NAME');
     this.apiKey = this.configService.get<string>('CLOUDINARY_API_KEY');
     this.apiSecret = this.configService.get<string>('CLOUDINARY_API_SECRET');
+    this.mockMode =
+      this.configService.get<string>('EXTERNAL_PROVIDER_MODE') === 'mock';
   }
 
   ensureCloudinaryConfigured() {
-    if (this.cloudName && this.apiKey && this.apiSecret) {
+    if (this.mockMode || (this.cloudName && this.apiKey && this.apiSecret)) {
       return;
     }
 
@@ -84,7 +87,9 @@ export class MediaService {
     }
 
     if (sizeInBytes > 3 * 1024 * 1024) {
-      throw new BadRequestException('Profile pictures must be 3 MB or smaller.');
+      throw new BadRequestException(
+        'Profile pictures must be 3 MB or smaller.',
+      );
     }
   }
 
@@ -148,6 +153,10 @@ export class MediaService {
   generateSignedDeliveryUrl(options: SignedUrlOptions) {
     this.ensureCloudinaryConfigured();
 
+    if (this.mockMode) {
+      return `https://mock-cloudinary.test/${encodeURIComponent(options.publicId)}`;
+    }
+
     const versionSegment = options.version ? `v${options.version}` : undefined;
     const publicIdWithFormat = options.format
       ? `${options.publicId}.${options.format}`
@@ -193,6 +202,24 @@ export class MediaService {
     const ttl = options.ttlSeconds ?? 300; // 5 minutes default
     const timestamp = Math.floor(Date.now() / 1000) + ttl;
 
+    if (this.mockMode) {
+      return {
+        category: options.folder.split(
+          '/',
+        )[0] as import('./media.types').MediaUploadCategory,
+        publicId: options.publicId,
+        folder: options.folder,
+        resourceType: options.resourceType,
+        deliveryType: options.deliveryType,
+        uploadUrl: 'https://mock-cloudinary.test/upload',
+        cloudName: 'smart-credit-test',
+        apiKey: 'mock-api-key',
+        timestamp,
+        signature: 'mock-signature',
+        expiresAt: new Date(timestamp * 1000).toISOString(),
+      };
+    }
+
     const sigParams: Record<string, string> = {
       folder: options.folder,
       public_id: options.publicId,
@@ -203,7 +230,9 @@ export class MediaService {
     const signature = this.createUploadSignature(sigParams);
 
     return {
-      category: options.folder.split('/')[0] as import('./media.types').MediaUploadCategory,
+      category: options.folder.split(
+        '/',
+      )[0] as import('./media.types').MediaUploadCategory,
       publicId: options.publicId,
       folder: options.folder,
       resourceType: options.resourceType,
@@ -213,7 +242,7 @@ export class MediaService {
       apiKey: this.apiKey as string,
       timestamp,
       signature,
-      expiresAt: new Date((timestamp) * 1000).toISOString(),
+      expiresAt: new Date(timestamp * 1000).toISOString(),
     };
   }
 
@@ -227,6 +256,20 @@ export class MediaService {
     deliveryType: 'upload' | 'authenticated' = 'authenticated',
   ): Promise<UploadedMedia | null> {
     this.ensureCloudinaryConfigured();
+
+    if (this.mockMode) {
+      return {
+        assetId: `mock-${createHash('sha256').update(publicId).digest('hex').slice(0, 16)}`,
+        publicId,
+        version: 1,
+        format: resourceType === 'raw' ? 'pdf' : 'jpg',
+        bytes: 128,
+        resourceType,
+        deliveryType,
+        secureUrl: `https://mock-cloudinary.test/${encodeURIComponent(publicId)}`,
+        uploadedAt: new Date().toISOString(),
+      };
+    }
 
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = this.createUploadSignature({
@@ -260,7 +303,9 @@ export class MediaService {
     }
 
     if (!response.ok) {
-      throw new InternalServerErrorException('Failed to verify Cloudinary asset.');
+      throw new InternalServerErrorException(
+        'Failed to verify Cloudinary asset.',
+      );
     }
 
     const payload = (await response.json()) as Record<string, unknown>;
@@ -307,6 +352,10 @@ export class MediaService {
     deliveryType: 'upload' | 'authenticated' = 'upload',
   ) {
     this.ensureCloudinaryConfigured();
+
+    if (this.mockMode) {
+      return { result: 'ok', publicId };
+    }
 
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = this.createUploadSignature({
@@ -383,6 +432,22 @@ export class MediaService {
     buffer: Buffer,
     options: CloudinaryUploadOptions,
   ): Promise<UploadedMedia> {
+    if (this.mockMode) {
+      const publicId = `${options.folder}/${options.publicId}`;
+      return {
+        assetId: `mock-${this.computeSha256(buffer).slice(0, 16)}`,
+        publicId,
+        version: 1,
+        format: options.resourceType === 'raw' ? 'pdf' : 'jpg',
+        bytes: buffer.length,
+        resourceType: options.resourceType,
+        deliveryType: options.deliveryType,
+        secureUrl: `https://mock-cloudinary.test/${encodeURIComponent(publicId)}`,
+        folder: options.folder,
+        uploadedAt: new Date().toISOString(),
+      };
+    }
+
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = this.createUploadSignature({
       folder: options.folder,
@@ -431,8 +496,7 @@ export class MediaService {
       assetId: String(payload.asset_id ?? ''),
       publicId: String(payload.public_id ?? ''),
       version: Number(payload.version ?? 0),
-      format:
-        typeof payload.format === 'string' ? payload.format : undefined,
+      format: typeof payload.format === 'string' ? payload.format : undefined,
       bytes: Number(payload.bytes ?? 0),
       resourceType: String(payload.resource_type ?? options.resourceType),
       deliveryType: String(payload.type ?? options.deliveryType),

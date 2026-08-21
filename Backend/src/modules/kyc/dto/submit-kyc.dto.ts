@@ -1,38 +1,52 @@
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsIn,
-  IsOptional,
-  IsString,
-} from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString } from 'class-validator';
 
 export class SubmitKycDto {
+  @IsOptional()
   @IsString()
   @IsIn(['borrower', 'lender'])
-  role: 'borrower' | 'lender';
+  role?: 'borrower' | 'lender';
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  fullName: string;
+  fullName?: string;
 
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  phoneNumber: string;
+  phoneNumber?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  nic: string;
+  nic?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  birthDate: string;
+  documentType?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  passwordHash: string;
+  documentNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  issuingCountry?: string;
+
+  @IsOptional()
+  @IsString()
+  expiryDate?: string;
+
+  @IsOptional()
+  @IsString()
+  birthDate?: string;
+
+  // Accepted only for backwards-compatible validation. Authentication owns
+  // password hashes and the KYC service deliberately ignores this field.
+  @IsOptional()
+  @IsString()
+  passwordHash?: string;
 
   @IsOptional()
   @IsString()

@@ -49,6 +49,13 @@ export class KycMobileController {
     return this.kycService.getUserDocuments(req.user.sub);
   }
 
+  // Returns the canonical user-level KYC state expected by mobile session restoration.
+  @Get('my-submission')
+  @UseGuards(JwtAuthGuard)
+  async getMySubmission(@Req() req: AuthenticatedRequest) {
+    return this.kycService.getMySubmission(req.user.sub);
+  }
+
   // Generates a time-limited access URL so the owner can view a stored KYC file securely.
   @Get('documents/:documentId/access')
   @UseGuards(JwtAuthGuard)
