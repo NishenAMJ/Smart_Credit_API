@@ -41,6 +41,7 @@ export class InstallmentPaymentService {
     loanId: string,
     installmentId: string,
     input: RecordInstallmentPaymentInput,
+    qrContext?: { nonce: string },
   ): Promise<LoanLedgerDetailsResponse | null> {
     const paidAt = input.paidAt?.trim() ? readDate(input.paidAt) : new Date();
 
@@ -60,12 +61,20 @@ export class InstallmentPaymentService {
       .doc(installmentId);
     const paymentTimestamp = Timestamp.fromDate(paidAt);
     const note = this.normalizeNote(input.note);
+    const transactionId = repaymentTransactionIdFor(loanId, installmentId);
+    const transactionRef = db.collection('transactions').doc(transactionId);
+    const nonceRef = qrContext?.nonce
+      ? db.collection('qrNonces').doc(qrContext.nonce)
+      : null;
 
     const recorded = await db.runTransaction(async (transaction) => {
-      const [loanSnapshot, installmentSnapshot] = await Promise.all([
-        transaction.get(loanRef),
-        transaction.get(installmentRef),
-      ]);
+      const [loanSnapshot, installmentSnapshot, ledgerSnapshot, nonceSnapshot] =
+        await Promise.all([
+          transaction.get(loanRef),
+          transaction.get(installmentRef),
+          transaction.get(transactionRef),
+          nonceRef ? transaction.get(nonceRef) : Promise.resolve(null),
+        ]);
 
       if (
         !loanSnapshot.exists ||
@@ -82,6 +91,37 @@ export class InstallmentPaymentService {
         throw new BadRequestException(
           'This loan does not have a valid borrower account.',
         );
+      }
+      if (ledgerSnapshot.exists) {
+        return {
+          transactionId,
+          borrowerId,
+          amountMinor: readNumber(ledgerSnapshot.get('amountMinor')),
+          remainingBalanceMinor: readNumber(loan.remainingBalanceMinor),
+          alreadyRecorded: true,
+        };
+      }
+      if (nonceRef) {
+        if (!nonceSnapshot?.exists) {
+          throw new BadRequestException('QR nonce not found.');
+        }
+        const nonce = nonceSnapshot.data() ?? {};
+        if (nonce.used) {
+          throw new BadRequestException('QR code has already been used.');
+        }
+        if (readNumber(nonce.expiresAt) < Date.now()) {
+          throw new BadRequestException('QR code is expired.');
+        }
+        if (
+          readString(nonce.loanId) !== loanId ||
+          readString(nonce.borrowerId) !== borrowerId ||
+          Math.round(readNumber(nonce.amount) * 100) !==
+            Math.round(input.amount * 100)
+        ) {
+          throw new BadRequestException(
+            'QR payment details do not match this installment.',
+          );
+        }
       }
       const normalizedInstallment = getNormalizedInstallment(installment);
       const installmentAmount = readNumber(installment.amountDueMinor) / 100;
@@ -109,9 +149,6 @@ export class InstallmentPaymentService {
           : currentStatus === 'completed'
             ? 'active'
             : currentStatus;
-      const transactionId = repaymentTransactionIdFor(loanId, installmentId);
-      const transactionRef = db.collection('transactions').doc(transactionId);
-
       transaction.create(transactionRef, {
         transactionId,
         loanId,
@@ -149,12 +186,20 @@ export class InstallmentPaymentService {
         completedAt: nextBalance <= 0 ? paymentTimestamp : null,
         updatedAt: FieldValue.serverTimestamp(),
       });
+      if (nonceRef) {
+        transaction.update(nonceRef, {
+          used: true,
+          usedAt: FieldValue.serverTimestamp(),
+          transactionId,
+        });
+      }
 
       return {
         transactionId,
         borrowerId,
         amountMinor: Math.round(input.amount * 100),
         remainingBalanceMinor: Math.round(nextBalance * 100),
+        alreadyRecorded: false,
       };
     });
 
@@ -164,6 +209,10 @@ export class InstallmentPaymentService {
 
     this.paymentsService.invalidateLenderCache(lenderId);
     const details = await this.ledgerDetailsService.get(lenderId, loanId);
+
+    if (recorded.alreadyRecorded) {
+      return details;
+    }
 
     await this.paymentReceivedNotifier
       .sendForRecordedPayment({

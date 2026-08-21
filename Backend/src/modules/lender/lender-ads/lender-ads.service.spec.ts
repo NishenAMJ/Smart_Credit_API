@@ -1,5 +1,6 @@
 import * as firestoreQueryUtils from '../../../firebase/firestore-query.utils';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { validateCreateLenderAdInput } from './lender-ad.validation';
 import { LenderAdsService } from './lender-ads.service';
 
 function createDoc(id: string, data: Record<string, unknown>) {
@@ -121,10 +122,8 @@ describe('LenderAdsService', () => {
   });
 
   it('rejects an invalid response-time value before writing an ad', async () => {
-    const service = new LenderAdsService({} as any, {} as any, {} as any);
-
     expect(() =>
-      (service as any).validateCreateInput({
+      validateCreateLenderAdInput({
         headline: 'Responsible business lending',
         minAmount: 100000,
         maxAmount: 500000,

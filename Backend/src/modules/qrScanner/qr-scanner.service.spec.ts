@@ -51,14 +51,9 @@ describe('QrScannerService', () => {
       'lender_1',
     );
 
-    expect(borrowerService.verifyQrToken).toHaveBeenNthCalledWith(
-      1,
+    expect(borrowerService.verifyQrToken).toHaveBeenCalledWith(
       'signed-token',
       false,
-    );
-    expect(borrowerService.verifyQrToken).toHaveBeenNthCalledWith(
-      2,
-      'signed-token',
       true,
     );
     expect(installmentPaymentService.record).toHaveBeenCalledWith(
@@ -66,9 +61,8 @@ describe('QrScannerService', () => {
       'loan_1',
       'month_001',
       expect.objectContaining({ amount: 4500 }),
+      { nonce: 'nonce_1' },
     );
-    expect(result.data.transactionId).toBe(
-      'repayment_loan_1_month_001',
-    );
+    expect(result.data.transactionId).toBe('repayment_loan_1_month_001');
   });
 });

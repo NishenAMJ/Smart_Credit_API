@@ -28,8 +28,24 @@ describe('CoreLedgerService agreement approval', () => {
           maxTenureMonths: 24,
         },
       ],
-      ['users/borrower-1', { userId: 'borrower-1', fullName: 'Borrower', email: 'b@example.com', phone: '+94770000001' }],
-      ['users/lender-1', { userId: 'lender-1', fullName: 'Lender', email: 'l@example.com', phone: '+94770000002' }],
+      [
+        'users/borrower-1',
+        {
+          userId: 'borrower-1',
+          fullName: 'Borrower',
+          email: 'b@example.com',
+          phone: '+94770000001',
+        },
+      ],
+      [
+        'users/lender-1',
+        {
+          userId: 'lender-1',
+          fullName: 'Lender',
+          email: 'l@example.com',
+          phone: '+94770000002',
+        },
+      ],
     ]);
     let generated = 0;
     const reference = (path: string): any => ({
@@ -41,7 +57,8 @@ describe('CoreLedgerService agreement approval', () => {
     });
     const db: any = {
       collection: (name: string) => ({
-        doc: (id?: string) => reference(`${name}/${id ?? `loan-${++generated}`}`),
+        doc: (id?: string) =>
+          reference(`${name}/${id ?? `loan-${++generated}`}`),
         add: async (value: Record<string, unknown>) => {
           const ref = reference(`${name}/notification-${++generated}`);
           records.set(ref.path, value);
@@ -118,6 +135,15 @@ describe('CoreLedgerService agreement approval', () => {
         annualInterestRate: 12,
         approvedTenureMonths: 10,
       }),
-    ).rejects.toThrow('cannot create a loan');
+    ).resolves.toEqual(result);
+
+    expect(
+      [...records.keys()].filter((path) => path.startsWith('loans/')),
+    ).toHaveLength(1);
+    expect(
+      [...records.keys()].filter((path) =>
+        path.startsWith('borrowerNotifications/agreement-created-'),
+      ),
+    ).toHaveLength(1);
   });
 });

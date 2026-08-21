@@ -4,7 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FirebaseService } from '../../firebase/firebase.service';
-import { readDate, readNumber, readString } from '../../firebase/firestore-query.utils';
+import {
+  readDate,
+  readNumber,
+  readString,
+} from '../../firebase/firestore-query.utils';
 import { BorrowerService } from '../borrower/core/borrower.service';
 import { InstallmentPaymentService } from '../lender/payments/installment-payment.service';
 import { ScanPaymentSlipDto } from './dto/scan-payment-slip.dto';
@@ -26,6 +30,7 @@ export class QrScannerService {
     const verification = await this.borrowerService.verifyQrToken(
       scanData.qrData,
       false,
+      true,
     );
     const payload = verification.payload;
     const loanRef = this.firebaseService
@@ -65,8 +70,6 @@ export class QrScannerService {
       );
     }
 
-    await this.borrowerService.verifyQrToken(scanData.qrData, true);
-
     const details = await this.installmentPaymentService.record(
       lenderId,
       payload.loanId,
@@ -76,6 +79,7 @@ export class QrScannerService {
         note: 'Recorded from borrower QR code',
         paymentMethod: 'qr',
       },
+      { nonce: payload.nonce },
     );
     if (!details) {
       throw new NotFoundException('The loan installment was not found.');

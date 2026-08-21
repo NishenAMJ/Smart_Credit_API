@@ -30,6 +30,7 @@ import {
 } from './lender-ads.types';
 import { LenderAdAnalyticsService } from './lender-ad-analytics.service';
 import { buildSearchTokens } from '../../../common/firestore/search-tokens';
+import { validateCreateLenderAdInput } from './lender-ad.validation';
 
 @Injectable()
 export class LenderAdsService {
@@ -46,7 +47,7 @@ export class LenderAdsService {
     lenderId: string,
     input: CreateLenderAdInput,
   ): Promise<LenderAdResponse> {
-    this.validateCreateInput(input);
+    validateCreateLenderAdInput(input);
 
     if (!lenderId.trim()) {
       throw new BadRequestException('Authenticated lender ID is required.');
@@ -499,7 +500,7 @@ export class LenderAdsService {
           'Approved KYC and supporting financial documents',
         supportNote: input.supportNote ?? readString(current.description) ?? '',
       };
-      this.validateCreateInput(merged);
+      validateCreateLenderAdInput(merged);
       update.purposeCategories = this.buildPreferredPurposes(merged);
       update.status = 'pending_review';
       update.adminStatus = 'pending';
@@ -521,7 +522,7 @@ export class LenderAdsService {
         update.status = 'paused';
         update.adminStatus = 'closed';
       } else if (input.status === 'active' && currentStatus === 'paused') {
-        this.validateCreateInput({
+        validateCreateLenderAdInput({
           headline: readString(current.title) ?? '',
           minAmount: readNumber(current.minAmountMinor) / 100,
           maxAmount: readNumber(current.maxAmountMinor) / 100,
@@ -552,104 +553,6 @@ export class LenderAdsService {
     await ref.update(update);
     const updated = await ref.get();
     return this.mapLenderAd(updated.id, lenderId, updated.data() ?? {});
-  }
-
-  private validateCreateInput(input: CreateLenderAdInput): void {
-    if (input.headline.trim().length < 12) {
-      throw new BadRequestException('headline must be at least 12 characters.');
-    }
-
-    if (
-      !Number.isFinite(input.minAmount) ||
-      !Number.isFinite(input.maxAmount) ||
-      input.minAmount < 10_000 ||
-      input.maxAmount < 10_000 ||
-      input.minAmount > 5_000_000 ||
-      input.maxAmount > 5_000_000
-    ) {
-      throw new BadRequestException(
-        'Loan amounts must be between LKR 10,000 and LKR 5,000,000.',
-      );
-    }
-
-    if (input.maxAmount < input.minAmount) {
-      throw new BadRequestException(
-        'maxAmount must be greater than or equal to minAmount.',
-      );
-    }
-
-    if (
-      !Number.isFinite(input.interestRate) ||
-      input.interestRate <= 0 ||
-      input.interestRate > 100
-    ) {
-      throw new BadRequestException(
-        'interestRate must be greater than zero and no more than 100.',
-      );
-    }
-
-    if (
-      !Number.isInteger(input.tenureMonths) ||
-      input.tenureMonths < 3 ||
-      input.tenureMonths > 60
-    ) {
-      throw new BadRequestException(
-        'tenureMonths must be a whole number between 3 and 60.',
-      );
-    }
-
-    const minTenureMonths =
-      input.minTenureMonths ?? Math.min(6, input.tenureMonths);
-    if (
-      !Number.isInteger(minTenureMonths) ||
-      minTenureMonths < 3 ||
-      minTenureMonths > input.tenureMonths
-    ) {
-      throw new BadRequestException(
-        'minTenureMonths must be between 3 and the maximum tenure.',
-      );
-    }
-
-    if (input.borrowerFocus.trim().length < 8) {
-      throw new BadRequestException(
-        'borrowerFocus must be at least 8 characters.',
-      );
-    }
-
-    if (input.processingTime.trim().length < 6) {
-      throw new BadRequestException(
-        'processingTime must be at least 6 characters.',
-      );
-    }
-
-    if (
-      input.responseTimeHours !== undefined &&
-      (!Number.isInteger(input.responseTimeHours) ||
-        input.responseTimeHours < 1 ||
-        input.responseTimeHours > 168)
-    ) {
-      throw new BadRequestException(
-        'responseTimeHours must be a whole number between 1 and 168.',
-      );
-    }
-
-    if (input.repaymentStyle.trim().length < 6) {
-      throw new BadRequestException(
-        'repaymentStyle must be at least 6 characters.',
-      );
-    }
-
-    if (input.requirements.trim().length < 12) {
-      throw new BadRequestException(
-        'requirements must be at least 12 characters.',
-      );
-    }
-
-    if (input.supportNote.trim().length < 12) {
-      throw new BadRequestException(
-        'supportNote must be at least 12 characters.',
-      );
-    }
   }
 
   private assertLenderCanSubmitAdvertisement(

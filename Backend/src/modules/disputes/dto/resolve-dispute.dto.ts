@@ -1,10 +1,13 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, MaxLength } from 'class-validator';
 
 export class ResolveDisputeDto {
   @IsString()
-  resolution: string;
+  @IsNotEmpty()
+  @MaxLength(2000)
+  resolution!: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(2000)
   notes?: string;
 }

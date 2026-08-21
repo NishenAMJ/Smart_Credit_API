@@ -166,6 +166,21 @@ export const applicationService = {
     };
   },
 
+  cancelApplication: async (applicationId: string) => {
+    const borrowerId = await getUserId();
+    if (!borrowerId)
+      throw new Error("User session expired. Please log in again.");
+
+    const response = await apiClient.post<{
+      success?: boolean;
+      data?: BorrowerApplication;
+    }>(ENDPOINTS.applications.cancel(applicationId));
+    return {
+      ...response.data,
+      data: normalizeApplication(response.data?.data ?? {}),
+    };
+  },
+
   deleteApplication: async (applicationId: string) => {
     const borrowerId = await getUserId();
     if (!borrowerId)

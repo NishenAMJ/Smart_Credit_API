@@ -10,7 +10,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac } from 'crypto';
 import { Timestamp, type CollectionReference } from 'firebase-admin/firestore';
-import puppeteer from 'puppeteer';
 
 import { installmentIdFor } from '../../common/firestore/schema';
 import { FirebaseService } from '../../firebase/firebase.service';
@@ -1100,6 +1099,9 @@ export class LegalService {
       return this.buildFallbackPdf(agreement);
     }
     try {
+      // Puppeteer is ESM-only. Loading it only when a real PDF is requested
+      // keeps service construction and unit tests independent of the browser.
+      const { default: puppeteer } = await import('puppeteer');
       const browser = await puppeteer.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],

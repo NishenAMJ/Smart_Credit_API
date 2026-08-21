@@ -16,11 +16,9 @@ describe('BorrowerApplicationsService', () => {
     let written: Record<string, unknown> = {};
     const applicationRef = {
       id: 'application_new',
-      set: jest.fn(async (data) => {
-        written = data;
-      }),
       get: jest.fn(async () => ({ data: () => written })),
     };
+    const submissionKeyRef = { id: 'submission-key' };
     const profile = {
       exists: true,
       data: () => ({ kycStatus: 'approved' }),
@@ -38,17 +36,31 @@ describe('BorrowerApplicationsService', () => {
       get: (field: string) => listingData[field as keyof typeof listingData],
       data: () => listingData,
     };
-    const db = {
+    const db: any = {
       collection: jest.fn((name: string) => ({
         doc: jest.fn((id?: string) => {
           if (name === 'users') return { get: jest.fn(async () => profile) };
           if (name === 'loanListings') {
             return { get: jest.fn(async () => listing) };
           }
+          if (name === 'applicationSubmissionKeys') return submissionKeyRef;
           if (!id) return applicationRef;
           throw new Error(`Unexpected application id ${id}`);
         }),
       })),
+      runTransaction: jest.fn(async (work) =>
+        work({
+          get: jest.fn(async (ref) => {
+            if (ref === submissionKeyRef) return { exists: false };
+            throw new Error('Unexpected transaction read');
+          }),
+          create: jest.fn((ref, data) => {
+            expect(ref).toBe(applicationRef);
+            written = data;
+          }),
+          set: jest.fn(),
+        }),
+      ),
     };
     const creditScoreService = {
       getSummary: jest.fn(async () => ({
@@ -85,7 +97,7 @@ describe('BorrowerApplicationsService', () => {
       borrowerCreditScore: 720,
     });
     expect(result.submittedAt).toBeTruthy();
-    expect(applicationRef.set).toHaveBeenCalledTimes(1);
+    expect(db.runTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('maps draft edits to canonical Firestore fields', async () => {
@@ -140,5 +152,35 @@ describe('BorrowerApplicationsService', () => {
       service.submitLoanApplication('application_1', 'borrower_1'),
     ).resolves.toBe(application);
     expect(creditScoreService.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('withdraws an owned application and treats a repeated cancellation as idempotent', async () => {
+    let application = {
+      applicationId: 'application_1',
+      borrowerId: 'borrower_1',
+      status: LoanApplicationStatus.PENDING,
+    } as any;
+    const applicationRef = { id: 'application_1' };
+    const db: any = {
+      collection: () => ({ doc: () => applicationRef }),
+      runTransaction: async (work: (transaction: any) => unknown) =>
+        work({
+          get: async () => ({ exists: true, data: () => application }),
+          update: (_ref: unknown, updates: Record<string, unknown>) => {
+            application = { ...application, ...updates };
+          },
+        }),
+    };
+    const service = new BorrowerApplicationsService({ db } as any, {} as any);
+    jest
+      .spyOn(service, 'getLoanApplicationById')
+      .mockImplementation(async () => application);
+
+    await expect(
+      service.cancelLoanApplication('application_1', 'borrower_1'),
+    ).resolves.toMatchObject({ status: LoanApplicationStatus.CANCELLED });
+    await expect(
+      service.cancelLoanApplication('application_1', 'borrower_1'),
+    ).resolves.toMatchObject({ status: LoanApplicationStatus.CANCELLED });
   });
 });

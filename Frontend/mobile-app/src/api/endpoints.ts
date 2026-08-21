@@ -67,6 +67,7 @@ export const ENDPOINTS = {
     byId: (id: string) => `/borrower/applications/${id}`,
     update: (id: string) => `/borrower/applications/${id}`,
     submit: (id: string) => `/borrower/applications/${id}/submit`,
+    cancel: (id: string) => `/borrower/applications/${id}/cancel`,
     delete: (id: string) => `/borrower/applications/${id}`,
   },
   repayments: {

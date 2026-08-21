@@ -50,9 +50,12 @@ export class CoreLedgerService {
       .collection(COLLECTIONS.loanApplications)
       .doc(applicationId);
     const loanRef = db.collection(COLLECTIONS.loans).doc();
-    const agreementId = loanAgreementIdFor(loanRef.id, 1);
-    const agreementRef = db.collection('loanAgreements').doc(agreementId);
+    let result = {
+      loanId: loanRef.id,
+      agreementId: loanAgreementIdFor(loanRef.id, 1),
+    };
     let approvedBorrowerId = '';
+    let created = false;
 
     await db.runTransaction(async (transaction) => {
       const applicationSnapshot = await transaction.get(applicationRef);
@@ -61,6 +64,14 @@ export class CoreLedgerService {
       }
 
       const application = applicationSnapshot.data() ?? {};
+      if (application.convertedLoanId) {
+        const existingLoanId = String(application.convertedLoanId);
+        result = {
+          loanId: existingLoanId,
+          agreementId: loanAgreementIdFor(existingLoanId, 1),
+        };
+        return;
+      }
       if (
         ![
           'open',
@@ -76,10 +87,6 @@ export class CoreLedgerService {
           `Application in ${String(application.status)} state cannot create a loan.`,
         );
       }
-      if (application.convertedLoanId) {
-        throw new ConflictException('Application already has a loan.');
-      }
-
       const listingId = String(application.listingId ?? '');
       const borrowerId = String(application.borrowerId ?? '');
       approvedBorrowerId = borrowerId;
@@ -126,6 +133,8 @@ export class CoreLedgerService {
       const total = principal + interest;
       const baseInstallment = Math.floor(total / input.approvedTenureMonths);
       const now = Timestamp.now();
+      const agreementId = result.agreementId;
+      const agreementRef = db.collection('loanAgreements').doc(agreementId);
       const terms = {
         currency: 'LKR' as const,
         principalMinor: principal,
@@ -200,12 +209,68 @@ export class CoreLedgerService {
         },
         updatedAt: now,
       });
+
+      transaction.set(
+        db
+          .collection('borrowerNotifications')
+          .doc(`agreement-created-${applicationId}`),
+        {
+          borrowerId,
+          category: 'agreement',
+          severity: 'info',
+          title: 'Loan agreement created',
+          message:
+            'Your application was approved. The lender must sign and confirm the external transfer before you can sign.',
+          isRead: false,
+          relatedEntityType: 'loanAgreement',
+          relatedEntityId: agreementId,
+          actionTarget: 'Agreement',
+          metadata: {
+            agreementId,
+            loanId: loanRef.id,
+            status: 'awaiting_signatures',
+          },
+          createdAt: now,
+          updatedAt: now,
+          readAt: null,
+        },
+      );
+      transaction.set(
+        db
+          .collection('notifications')
+          .doc(`agreement-created-${applicationId}-${lenderId}`),
+        {
+          userId: lenderId,
+          category: 'agreement',
+          eventType: 'created',
+          title: 'Agreement ready to sign',
+          body: 'The approved loan agreement is ready for your signature.',
+          severity: 'info',
+          isRead: false,
+          createdAt: now,
+          readAt: null,
+          entityType: 'loanAgreement',
+          entityId: agreementId,
+          actionLabel: 'Open agreement',
+          actionTarget: 'agreements',
+          metadata: {
+            agreementId,
+            loanId: loanRef.id,
+            status: 'awaiting_signatures',
+          },
+        },
+      );
+      created = true;
     });
+
+    if (!created) {
+      return result;
+    }
 
     const notificationTime = Timestamp.now();
     const realtimePayload = {
-      agreementId,
-      loanId: loanRef.id,
+      agreementId: result.agreementId,
+      loanId: result.loanId,
       status: 'awaiting_signatures',
       changeType: 'created',
       updatedAt: notificationTime.toDate().toISOString(),
@@ -216,50 +281,7 @@ export class CoreLedgerService {
       'agreement:changed',
       realtimePayload,
     );
-    await Promise.all([
-      db.collection('borrowerNotifications').add({
-        borrowerId: approvedBorrowerId,
-        category: 'agreement',
-        severity: 'info',
-        title: 'Loan agreement created',
-        message:
-          'Your application was approved. The lender must sign and confirm the external transfer before you can sign.',
-        isRead: false,
-        relatedEntityType: 'loanAgreement',
-        relatedEntityId: agreementId,
-        actionTarget: 'Agreement',
-        metadata: {
-          agreementId,
-          loanId: loanRef.id,
-          status: 'awaiting_signatures',
-        },
-        createdAt: notificationTime,
-        updatedAt: notificationTime,
-        readAt: null,
-      }),
-      db.collection('notifications').add({
-        userId: lenderId,
-        category: 'agreement',
-        eventType: 'created',
-        title: 'Agreement ready to sign',
-        body: 'The approved loan agreement is ready for your signature.',
-        severity: 'info',
-        isRead: false,
-        createdAt: notificationTime,
-        readAt: null,
-        entityType: 'loanAgreement',
-        entityId: agreementId,
-        actionLabel: 'Open agreement',
-        actionTarget: 'agreements',
-        metadata: {
-          agreementId,
-          loanId: loanRef.id,
-          status: 'awaiting_signatures',
-        },
-      }),
-    ]);
-
-    return { loanId: loanRef.id, agreementId };
+    return result;
   }
 
   async settleInstallment(
@@ -300,9 +322,13 @@ export class CoreLedgerService {
       if (loan.borrowerId !== borrowerId) {
         throw new NotFoundException('Loan or installment not found.');
       }
-      if (ledgerSnapshot.exists || installment.status === 'paid') {
+      if (ledgerSnapshot.exists) {
+        resultingStatus = String(loan.status ?? 'active');
+        return;
+      }
+      if (installment.status === 'paid') {
         throw new ConflictException(
-          'This monthly installment is already paid.',
+          'This monthly installment is paid but its ledger entry is missing.',
         );
       }
       if (!['active', 'overdue'].includes(loan.status)) {

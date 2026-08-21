@@ -14,8 +14,9 @@ import {
 } from '@nestjs/common';
 import {
   LoanApplicationStatus,
-  LoanPurpose,
   RepaymentMethod,
+  CreateLoanApplicationRequestDto,
+  UpdateLoanApplicationRequestDto,
 } from './dto/loan-application.dto';
 import { BorrowerApplicationsService } from './borrower-applications.service';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
@@ -64,24 +65,9 @@ export class BorrowerApplicationsController {
   async createApplication(
     @Req() request: AuthenticatedRequest,
     @Body()
-    payload: {
-      amount?: number;
-      purpose?: string;
-      description?: string;
-      tenureMonths?: number;
-      preferredRepaymentMethod?: string;
-      borrowerId?: string;
-      adId?: string;
-    },
+    payload: CreateLoanApplicationRequestDto,
   ) {
     const id = request.user.sub;
-    const purpose = (payload.purpose ?? 'business').toLowerCase();
-    const loanPurpose = (
-      Object.values(LoanPurpose).includes(purpose as LoanPurpose)
-        ? purpose
-        : LoanPurpose.BUSINESS
-    ) as LoanPurpose;
-
     return {
       success: true,
       data: await this.borrowerApplicationsService.createLoanApplication(
@@ -89,12 +75,11 @@ export class BorrowerApplicationsController {
           borrowerId: id,
           adId: payload.adId,
           amount: Number(payload.amount),
-          loanPurpose,
+          loanPurpose: payload.purpose,
           purposeDescription: payload.description,
           tenureMonths: Number(payload.tenureMonths),
           preferredRepaymentMethod:
-            (payload.preferredRepaymentMethod as RepaymentMethod) ??
-            RepaymentMethod.QR_PAYMENT,
+            payload.preferredRepaymentMethod ?? RepaymentMethod.QR_PAYMENT,
         },
         { submitImmediately: true },
       ),
@@ -105,7 +90,7 @@ export class BorrowerApplicationsController {
   async updateApplication(
     @Req() request: AuthenticatedRequest,
     @Param('requestId') requestId: string,
-    @Body() payload: Record<string, unknown>,
+    @Body() payload: UpdateLoanApplicationRequestDto,
   ) {
     return {
       success: true,
@@ -113,9 +98,11 @@ export class BorrowerApplicationsController {
         requestId,
         request.user.sub,
         {
-          amount: payload.amount as number | undefined,
-          purposeDescription: payload.description as string | undefined,
-          tenureMonths: payload.tenureMonths as number | undefined,
+          amount: payload.amount,
+          loanPurpose: payload.purpose,
+          purposeDescription: payload.description,
+          tenureMonths: payload.tenureMonths,
+          preferredRepaymentMethod: payload.preferredRepaymentMethod,
         },
       ),
     };
@@ -129,6 +116,20 @@ export class BorrowerApplicationsController {
     return {
       success: true,
       data: await this.borrowerApplicationsService.submitLoanApplication(
+        requestId,
+        request.user.sub,
+      ),
+    };
+  }
+
+  @Post(':requestId/cancel')
+  async cancelApplication(
+    @Req() request: AuthenticatedRequest,
+    @Param('requestId') requestId: string,
+  ) {
+    return {
+      success: true,
+      data: await this.borrowerApplicationsService.cancelLoanApplication(
         requestId,
         request.user.sub,
       ),
