@@ -1000,8 +1000,8 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                       <div className="shared-auth-section-head">
                         <strong>Upload files</strong>
                         <span>
-                          Upload clear files for your ID front, optional back,
-                          and selfie with the ID.
+                          Upload clear files for your ID front, ID back, and
+                          selfie with the ID.
                         </span>
                       </div>
 
@@ -1041,6 +1041,11 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                           {uploadStatus.documentBackUrl ? (
                             <small className="shared-auth-success-text">
                               Uploaded: {uploadStatus.documentBackUrl}
+                            </small>
+                          ) : null}
+                          {fieldErrors.documentBackUrl ? (
+                            <small className="shared-auth-error-text">
+                              {fieldErrors.documentBackUrl}
                             </small>
                           ) : null}
                         </label>

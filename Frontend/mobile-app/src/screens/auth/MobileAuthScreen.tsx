@@ -745,7 +745,6 @@ export default function MobileAuthScreen() {
                         label={`${documentLabel} back`}
                         fileName={selectedFiles.documentBackUrl}
                         isUploading={uploadingField === "documentBackUrl"}
-                        optional
                         onPress={() =>
                           void handlePickFile(
                             "documentBackUrl",

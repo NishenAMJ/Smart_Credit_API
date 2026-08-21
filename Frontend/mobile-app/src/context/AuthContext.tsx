@@ -17,7 +17,7 @@ import {
   submitKyc,
 } from "../api/services/auth.service";
 import { setAuthToken } from "../api/axios.config";
-import { getApiErrorMessage } from "../api/api-error";
+import { ApiError, getApiErrorMessage } from "../api/api-error";
 import {
   clearAuthStorage,
   getMobileSession,
@@ -59,6 +59,7 @@ type AuthContextValue = {
   sessionStatus: SessionResponse | null;
   dashboard: DashboardResponse | null;
   kycSubmission: KycSubmission | null;
+  authInitializing: boolean;
   authLoading: boolean;
   refreshing: boolean;
   error: string;
@@ -68,14 +69,21 @@ type AuthContextValue = {
   refreshWorkspace: () => Promise<void>;
 };
 
-export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+export const AuthContext = createContext<AuthContextValue | undefined>(
+  undefined,
+);
 export default AuthContext;
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<MobileSession | null>(null);
-  const [sessionStatus, setSessionStatus] = useState<SessionResponse | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<SessionResponse | null>(
+    null,
+  );
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
-  const [kycSubmission, setKycSubmission] = useState<KycSubmission | null>(null);
+  const [kycSubmission, setKycSubmission] = useState<KycSubmission | null>(
+    null,
+  );
+  const [authInitializing, setAuthInitializing] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -162,12 +170,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
           );
         }
       } finally {
-        if (active) setAuthLoading(false);
+        if (active) {
+          setAuthInitializing(false);
+          setAuthLoading(false);
+        }
       }
     }
 
     void restoreSession();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function signIn(payload: LoginPayload) {
@@ -187,17 +200,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   async function signUp(payload: SignUpPayload) {
+    let accountReady = false;
+    let resumingExistingAccount = false;
     try {
       setAuthLoading(true);
       setError("");
       try {
         await register(payload.account);
+        accountReady = true;
       } catch (registerError) {
         const message =
           registerError instanceof Error ? registerError.message : "";
         if (!message.toLowerCase().includes("already exists")) {
           throw registerError;
         }
+        accountReady = true;
+        resumingExistingAccount = true;
       }
       const loginResponse = await login({
         identifier: payload.account.email,
@@ -212,7 +230,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       await clearAuthStorage();
       resetWorkspaceState();
       setError(
-        nextError instanceof Error ? nextError.message : "Sign up failed.",
+        resumingExistingAccount &&
+          nextError instanceof ApiError &&
+          nextError.status === 401
+          ? "An account already exists with this email or phone. Keep the form open and enter that account's original password, or correct the email or phone before retrying."
+          : accountReady
+            ? `Your account details are saved. Correct the KYC information below and try again. ${getApiErrorMessage(nextError, "KYC submission failed.")}`
+            : getApiErrorMessage(nextError, "Sign up failed."),
       );
       throw nextError;
     } finally {
@@ -253,11 +277,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      session, sessionStatus, dashboard, kycSubmission,
-      authLoading, refreshing, error,
-      signIn, signUp, signOut, refreshWorkspace,
+      session,
+      sessionStatus,
+      dashboard,
+      kycSubmission,
+      authInitializing,
+      authLoading,
+      refreshing,
+      error,
+      signIn,
+      signUp,
+      signOut,
+      refreshWorkspace,
     }),
-    [authLoading, dashboard, error, kycSubmission, refreshing, session, sessionStatus],
+    [
+      authInitializing,
+      authLoading,
+      dashboard,
+      error,
+      kycSubmission,
+      refreshing,
+      session,
+      sessionStatus,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
