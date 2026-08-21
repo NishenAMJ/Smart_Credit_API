@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { DocumentData, QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import {
+  DocumentData,
+  Query,
+  QueryDocumentSnapshot,
+} from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   chunkValues,
@@ -48,14 +52,27 @@ export class PaymentsDataService {
     };
   }
 
-  async getTransactions(loanIds: Set<string>): Promise<TransactionRecord[]> {
+  async getTransactions(
+    loanIds: Set<string>,
+    transactionTypes?: string[],
+  ): Promise<TransactionRecord[]> {
     if (loanIds.size === 0) return [];
 
     const db = this.firebaseService.getDb();
     const snapshots = await Promise.all(
-      chunkValues(Array.from(loanIds), 10).map((ids) =>
-        db.collection('transactions').where('loanId', 'in', ids).get(),
-      ),
+      chunkValues(Array.from(loanIds), 10).map((ids) => {
+        let query: Query<DocumentData> = db
+          .collection('transactions')
+          .where('loanId', 'in', ids);
+
+        if (transactionTypes?.length === 1) {
+          query = query.where('type', '==', transactionTypes[0]);
+        } else if (transactionTypes && transactionTypes.length > 1) {
+          query = query.where('type', 'in', transactionTypes.slice(0, 10));
+        }
+
+        return query.get();
+      }),
     );
 
     return snapshots

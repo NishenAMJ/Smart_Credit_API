@@ -68,6 +68,9 @@ describe('PaymentsService', () => {
       null,
       false,
       false,
+      null,
+      null,
+      'payment',
     );
 
     expect(result.transactions).toEqual([
@@ -82,6 +85,56 @@ describe('PaymentsService', () => {
     ]);
     expect(result.summary.totalTransactions).toBe(0);
     expect(result.searchResultCount).toBeNull();
+    expect(paymentsData.getTransactions).toHaveBeenCalledWith(
+      new Set(['loan_1']),
+      ['repayment'],
+    );
+  });
+
+  it('pushes the disbursement filter into the transaction data query', async () => {
+    const paymentsData = {
+      loadLenderContext: jest.fn().mockResolvedValue(createContext()),
+      getTransactions: jest.fn().mockResolvedValue([
+        {
+          id: 'disbursement_1',
+          loanId: 'loan_1',
+          installmentId: null,
+          paymentId: null,
+          type: 'disbursement',
+          status: 'completed',
+          amount: 50000,
+          createdAt: new Date('2026-04-01T10:00:00.000Z'),
+          source: 'transaction',
+          note: null,
+        },
+      ]),
+      getInstallmentSummaries: jest.fn().mockResolvedValue(new Map()),
+    };
+    const service = new PaymentsService(
+      paymentsData as unknown as PaymentsDataService,
+    );
+
+    const result = await service.getPayments(
+      'lender_1',
+      15,
+      null,
+      false,
+      false,
+      null,
+      null,
+      'disbursement',
+    );
+
+    expect(result.transactions[0]).toEqual(
+      expect.objectContaining({
+        transactionId: 'disbursement_1',
+        type: 'disbursement',
+      }),
+    );
+    expect(paymentsData.getTransactions).toHaveBeenCalledWith(
+      new Set(['loan_1']),
+      ['disbursement'],
+    );
   });
 
   it('applies server-side search to installment identifiers', async () => {

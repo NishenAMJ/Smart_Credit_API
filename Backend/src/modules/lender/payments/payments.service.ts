@@ -7,6 +7,7 @@ import {
 } from '../../../firebase/firestore-query.utils';
 import {
   PaymentListItem,
+  PaymentActivityFilter,
   PaymentsResponse,
   PaymentsSummary,
 } from './payments.types';
@@ -46,6 +47,7 @@ export class PaymentsService {
     includeSearchCount = true,
     search?: string | null,
     date?: string | null,
+    activity: PaymentActivityFilter = 'all',
   ): Promise<PaymentsResponse> {
     const safePageSize = this.clamp(pageSize, 8, 60);
     const normalizedSearch = this.normalizeSearch(search);
@@ -74,6 +76,7 @@ export class PaymentsService {
       cursor,
       normalizedSearch,
       collectionDate,
+      activity,
     );
     const visibleTransactions = pagedTransactions.items.slice(0, safePageSize);
     const activeLoanIds: string[] = Array.from(
@@ -91,6 +94,7 @@ export class PaymentsService {
           loanIds,
           loanIdsList,
           collectionDate,
+          activity,
         )
       : this.createEmptySummary();
     const searchResultCount =
@@ -100,6 +104,7 @@ export class PaymentsService {
             context,
             normalizedSearch,
             collectionDate,
+            activity,
           )
         : null;
 
@@ -176,17 +181,19 @@ export class PaymentsService {
     loanIds: Set<string>,
     loanIdsList: string[],
     collectionDate: LenderDateRange | null,
+    activity: PaymentActivityFilter,
   ): Promise<PaymentsSummary> {
+    const summaryCacheKey = `${lenderId}:${activity}`;
     const cached = collectionDate
       ? null
-      : this.getCachedValue(this.summaryCache, lenderId);
+      : this.getCachedValue(this.summaryCache, summaryCacheKey);
 
     if (cached) {
       return cached;
     }
 
     const allScopedTransactions = (
-      await this.getAllRecentPayments(lenderId, loanIds)
+      await this.getAllRecentPayments(lenderId, loanIds, activity)
     ).filter((transaction) =>
       isWithinLenderDateRange(transaction.createdAt, collectionDate),
     );
@@ -219,7 +226,7 @@ export class PaymentsService {
     } satisfies PaymentsSummary;
 
     if (!collectionDate) {
-      this.setCachedValue(this.summaryCache, lenderId, summary);
+      this.setCachedValue(this.summaryCache, summaryCacheKey, summary);
     }
 
     return summary;
@@ -230,8 +237,9 @@ export class PaymentsService {
     context: LenderLedgerContext,
     search: string,
     collectionDate: LenderDateRange | null,
+    activity: PaymentActivityFilter,
   ): Promise<number> {
-    const cacheKey = `${lenderId}:${collectionDate?.value ?? 'all'}:${search}`;
+    const cacheKey = `${lenderId}:${activity}:${collectionDate?.value ?? 'all'}:${search}`;
     const cached = this.getCachedValue(this.searchCountCache, cacheKey);
 
     if (cached !== null) {
@@ -241,6 +249,7 @@ export class PaymentsService {
     const allScopedTransactions = await this.getAllRecentPayments(
       lenderId,
       context.loanIds,
+      activity,
     );
     const count = allScopedTransactions.filter(
       (transaction) =>
@@ -259,16 +268,18 @@ export class PaymentsService {
     cursor?: string | null,
     search?: string | null,
     collectionDate: LenderDateRange | null = null,
+    activity: PaymentActivityFilter = 'all',
   ): Promise<{ items: TransactionRecord[] }> {
     const items = this.paginateTransactions(
-      (await this.getTopLevelRepaymentsByLoanIds(context.loanIds)).filter(
-        (transaction) =>
-          this.matchesTransactionFilters(
-            transaction,
-            context,
-            search ?? null,
-            collectionDate,
-          ),
+      (
+        await this.getTopLevelActivityByLoanIds(context.loanIds, activity)
+      ).filter((transaction) =>
+        this.matchesTransactionFilters(
+          transaction,
+          context,
+          search ?? null,
+          collectionDate,
+        ),
       ),
       pageSize,
       cursor,
@@ -280,8 +291,9 @@ export class PaymentsService {
   private async getAllRecentPayments(
     _lenderId: string,
     loanIds: Set<string>,
+    activity: PaymentActivityFilter,
   ): Promise<TransactionRecord[]> {
-    return this.getTopLevelRepaymentsByLoanIds(loanIds);
+    return this.getTopLevelActivityByLoanIds(loanIds, activity);
   }
 
   private async getRecentPaymentsForLender(
@@ -294,22 +306,37 @@ export class PaymentsService {
       return [];
     }
 
-    return (await this.getRecentPaymentsPage(context, limit)).items.slice(
-      0,
-      limit,
-    );
+    return (
+      await this.getRecentPaymentsPage(
+        context,
+        limit,
+        null,
+        null,
+        null,
+        'payment',
+      )
+    ).items.slice(0, limit);
   }
 
   private async getInstallmentSummaries(loanIds: string[]) {
     return this.paymentsData.getInstallmentSummaries(loanIds);
   }
 
-  private async getTopLevelRepaymentsByLoanIds(
+  private async getTopLevelActivityByLoanIds(
     loanIds: Set<string>,
+    activity: PaymentActivityFilter,
   ): Promise<TransactionRecord[]> {
-    return (await this.paymentsData.getTransactions(loanIds)).filter(
-      (transaction) =>
-        isCollectedRepayment(transaction.type, transaction.status),
+    return (
+      await this.paymentsData.getTransactions(
+        loanIds,
+        activity === 'payment'
+          ? ['repayment']
+          : activity === 'disbursement'
+            ? ['disbursement']
+            : ['repayment', 'disbursement'],
+      )
+    ).filter((transaction) =>
+      isCollectedRepayment(transaction.type, transaction.status),
     );
   }
 

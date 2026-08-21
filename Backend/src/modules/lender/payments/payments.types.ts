@@ -4,6 +4,8 @@ export interface CursorPageInfo {
   nextCursor: string | null;
 }
 
+export type PaymentActivityFilter = 'all' | 'payment' | 'disbursement';
+
 export interface PaymentsSummary {
   totalTransactions: number;
   totalCollected: number;
