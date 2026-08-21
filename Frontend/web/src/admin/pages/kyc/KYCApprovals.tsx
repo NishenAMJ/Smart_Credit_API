@@ -84,6 +84,12 @@ export default function KYCApprovals() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [summary, setSummary] = useState({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  });
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<KycRow | null>(null);
   const [selectedSubmission, setSelectedSubmission] =
@@ -97,6 +103,7 @@ export default function KYCApprovals() {
     try {
       const response = await getPendingKyc({ limit: 100 });
       setRecords(response.documents.map(mapDocument));
+      setSummary(response.summary);
       setError("");
     } catch (err) {
       setError(
@@ -161,16 +168,6 @@ export default function KYCApprovals() {
         .includes(q),
     );
   }, [search, submissions]);
-
-  const counts = useMemo(
-    () => ({
-      total: submissions.length,
-      pending: submissions.filter((item) => item.status === "pending").length,
-      approved: submissions.filter((item) => item.status === "approved").length,
-      rejected: submissions.filter((item) => item.status === "rejected").length,
-    }),
-    [submissions],
-  );
 
   async function openPreview(record: KycRow, submission?: KycSubmissionRow) {
     if (submission) setSelectedSubmission(submission);
@@ -271,10 +268,10 @@ export default function KYCApprovals() {
 
       <div style={S.summaryGrid}>
         {[
-          { label: "Total", value: counts.total, color: "#2563EB" },
-          { label: "Pending", value: counts.pending, color: "#D97706" },
-          { label: "Approved", value: counts.approved, color: "#059669" },
-          { label: "Rejected", value: counts.rejected, color: "#DC2626" },
+          { label: "Total", value: summary.total, color: "#2563EB" },
+          { label: "Pending", value: summary.pending, color: "#D97706" },
+          { label: "Approved", value: summary.approved, color: "#059669" },
+          { label: "Rejected", value: summary.rejected, color: "#DC2626" },
         ].map((item) => (
           <div key={item.label} className="card" style={S.summaryCard}>
             <p style={{ color: "#6B7280", fontSize: 13 }}>{item.label}</p>

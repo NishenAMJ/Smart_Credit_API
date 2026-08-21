@@ -636,10 +636,26 @@ export class KycService {
           ];
         }),
       );
+      const users = this.db.collection('users');
+      const [pendingCount, approvedCount, rejectedCount] = await Promise.all(
+        ['pending', 'approved', 'rejected'].map(async (status) => {
+          const snapshot = await users
+            .where('kycStatus', '==', status)
+            .count()
+            .get();
+          return snapshot.data().count;
+        }),
+      );
 
       return {
         success: true,
         count: result.documents.length,
+        summary: {
+          total: pendingCount + approvedCount + rejectedCount,
+          pending: pendingCount,
+          approved: approvedCount,
+          rejected: rejectedCount,
+        },
         documents: result.documents.map((doc) =>
           this.mapDocumentToKycDocument(doc, currentStatuses.get(doc.userId)),
         ),

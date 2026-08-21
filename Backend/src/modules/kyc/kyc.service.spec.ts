@@ -153,6 +153,13 @@ describe('KycService', () => {
     };
 
     const usersCollection = {
+      where: jest.fn((_field: string, _operator: string, status: string) => ({
+        count: () => ({
+          get: jest.fn().mockResolvedValue({
+            data: () => ({ count: status === 'pending' ? 1 : 0 }),
+          }),
+        }),
+      })),
       doc: jest.fn(() => ({
         id: 'user-1',
         get: jest.fn().mockResolvedValue({
@@ -506,6 +513,12 @@ describe('KycService', () => {
 
     expect(pending.documents).toHaveLength(1);
     expect(pending.documents[0].userKycStatus).toBe('pending');
+    expect(pending.summary).toEqual({
+      total: 1,
+      pending: 1,
+      approved: 0,
+      rejected: 0,
+    });
     expect(userDocs.documents).toHaveLength(1);
   });
 

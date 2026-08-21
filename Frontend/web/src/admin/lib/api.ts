@@ -180,6 +180,12 @@ export interface KycPendingResponse {
   success: boolean;
   count: number;
   documents: KycDocument[];
+  summary: {
+    total: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+  };
 }
 
 export interface KycDocumentAccessResponse {
