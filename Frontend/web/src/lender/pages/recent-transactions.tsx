@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { Check, Eye, FileCheck2, RefreshCw, X } from 'lucide-react'
 import BorrowerSidePanel from '../components/borrowers/BorrowerSidePanel'
 import PaymentCsvExport from '../components/payments/PaymentCsvExport'
 import type { LenderSession } from '../lib/lender-session'
 import { formatInstallmentLabel } from '../lib/payment-format'
 import {
   fetchRecentTransactions,
+  fetchReceiptAccess,
+  fetchReceiptSubmissions,
+  decideReceiptSubmission,
+  type ReceiptSubmission,
   type RecentTransactionsResponse,
 } from '../lib/recent-transactions-api'
 
@@ -67,6 +71,17 @@ export default function RecentTransactionsPage({
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
     null,
   )
+  const [receiptSubmissions, setReceiptSubmissions] = useState<
+    ReceiptSubmission[]
+  >([])
+  const [receiptError, setReceiptError] = useState<string | null>(null)
+  const [reviewingReceiptId, setReviewingReceiptId] = useState<string | null>(
+    null,
+  )
+  const [rejectingReceiptId, setRejectingReceiptId] = useState<string | null>(
+    null,
+  )
+  const [rejectionReason, setRejectionReason] = useState('')
   const activeCursor = pageCursors[currentPage - 1] ?? null
 
   useEffect(() => {
@@ -123,21 +138,85 @@ export default function RecentTransactionsPage({
     }
   }, [activeCursor, debouncedSearchQuery, reloadVersion, session.lenderId])
 
+  useEffect(() => {
+    let mounted = true
+    fetchReceiptSubmissions()
+      .then((items) => mounted && setReceiptSubmissions(items))
+      .catch(
+        (loadError) =>
+          mounted &&
+          setReceiptError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Failed to load receipt submissions.',
+          ),
+      )
+    return () => {
+      mounted = false
+    }
+  }, [reloadVersion, session.lenderId])
+
+  async function openReceipt(documentId: string) {
+    try {
+      setReceiptError(null)
+      const access = await fetchReceiptAccess(documentId)
+      window.open(access.accessUrl, '_blank', 'noopener,noreferrer')
+    } catch (openError) {
+      setReceiptError(
+        openError instanceof Error
+          ? openError.message
+          : 'Failed to open receipt.',
+      )
+    }
+  }
+
+  async function reviewReceipt(
+    submission: ReceiptSubmission,
+    decision: 'approve' | 'reject',
+  ) {
+    if (decision === 'reject' && rejectionReason.trim().length < 3) {
+      setReceiptError(
+        'Enter a clear rejection reason before rejecting the receipt.',
+      )
+      return
+    }
+    try {
+      setReviewingReceiptId(submission.transactionId)
+      setReceiptError(null)
+      await decideReceiptSubmission(
+        submission.transactionId,
+        decision,
+        decision === 'reject' ? rejectionReason : undefined,
+      )
+      setReceiptSubmissions((current) =>
+        current.filter(
+          (item) => item.transactionId !== submission.transactionId,
+        ),
+      )
+      setRejectingReceiptId(null)
+      setRejectionReason('')
+      setReloadVersion((version) => version + 1)
+    } catch (reviewError) {
+      setReceiptError(
+        reviewError instanceof Error
+          ? reviewError.message
+          : 'Failed to review receipt.',
+      )
+    } finally {
+      setReviewingReceiptId(null)
+    }
+  }
+
   function goToNextPage() {
     const nextCursor = response?.pageInfo.nextCursor
     if (!nextCursor) return
 
-    setPageCursors((current) => [
-      ...current.slice(0, currentPage),
-      nextCursor,
-    ])
+    setPageCursors((current) => [...current.slice(0, currentPage), nextCursor])
     setCurrentPage((page) => page + 1)
   }
 
   const payments = response?.transactions ?? []
-  const visibleStart = payments.length
-    ? (currentPage - 1) * PAGE_SIZE + 1
-    : 0
+  const visibleStart = payments.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0
   const visibleEnd = payments.length ? visibleStart + payments.length - 1 : 0
   const isSearchPending = searchQuery.trim() !== debouncedSearchQuery
 
@@ -155,6 +234,117 @@ export default function RecentTransactionsPage({
           </div>
           <PaymentCsvExport />
         </header>
+
+        <section className="card receipt-review-card">
+          <div className="receipt-review-card__header">
+            <div>
+              <p className="eyebrow">Action required</p>
+              <h2 className="section-title">Bank transfer receipts</h2>
+              <p className="section-subtitle">
+                Confirm only after matching the receipt with your bank records.
+              </p>
+            </div>
+            <span className="receipt-review-count">
+              <FileCheck2 size={16} /> {receiptSubmissions.length} pending
+            </span>
+          </div>
+          {receiptError ? (
+            <p className="receipt-review-error">{receiptError}</p>
+          ) : null}
+          {receiptSubmissions.length ? (
+            <div className="receipt-review-list">
+              {receiptSubmissions.map((submission) => (
+                <article
+                  className="receipt-review-item"
+                  key={submission.transactionId}
+                >
+                  <div className="receipt-review-item__main">
+                    <strong>{submission.borrowerName}</strong>
+                    <span>
+                      {formatInstallmentLabel(submission.installmentId)} ·{' '}
+                      {formatDateTime(submission.submittedAt)}
+                    </span>
+                  </div>
+                  <strong className="receipt-review-item__amount">
+                    {formatCurrency(submission.amount)}
+                  </strong>
+                  <div className="receipt-review-item__actions">
+                    <button
+                      type="button"
+                      className="receipt-action-button"
+                      onClick={() =>
+                        void openReceipt(submission.receiptDocumentId)
+                      }
+                    >
+                      <Eye size={15} /> View
+                    </button>
+                    <button
+                      type="button"
+                      className="receipt-action-button receipt-action-button--approve"
+                      disabled={reviewingReceiptId === submission.transactionId}
+                      onClick={() => void reviewReceipt(submission, 'approve')}
+                    >
+                      <Check size={15} /> Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="receipt-action-button receipt-action-button--reject"
+                      disabled={reviewingReceiptId === submission.transactionId}
+                      onClick={() =>
+                        setRejectingReceiptId(submission.transactionId)
+                      }
+                    >
+                      <X size={15} /> Reject
+                    </button>
+                  </div>
+                  {rejectingReceiptId === submission.transactionId ? (
+                    <div className="receipt-reject-form">
+                      <label>
+                        <span>Reason for rejection</span>
+                        <textarea
+                          value={rejectionReason}
+                          onChange={(event) =>
+                            setRejectionReason(event.target.value)
+                          }
+                          maxLength={500}
+                          placeholder="Explain what is unclear or incorrect on this receipt"
+                        />
+                      </label>
+                      <div>
+                        <button
+                          type="button"
+                          className="receipt-action-button"
+                          onClick={() => {
+                            setRejectingReceiptId(null)
+                            setRejectionReason('')
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="receipt-action-button receipt-action-button--reject"
+                          disabled={
+                            reviewingReceiptId === submission.transactionId
+                          }
+                          onClick={() =>
+                            void reviewReceipt(submission, 'reject')
+                          }
+                        >
+                          Confirm rejection
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="receipt-review-empty">
+              No bank transfer receipts are waiting for review.
+            </div>
+          )}
+        </section>
 
         <section className="card pending-requests-card">
           <div className="borrowers-toolbar">
@@ -240,7 +430,9 @@ export default function RecentTransactionsPage({
                         <button
                           type="button"
                           className="borrower-name borrower-name--button"
-                          onClick={() => setSelectedBorrowerId(payment.borrowerId)}
+                          onClick={() =>
+                            setSelectedBorrowerId(payment.borrowerId)
+                          }
                         >
                           {payment.borrowerName}
                         </button>

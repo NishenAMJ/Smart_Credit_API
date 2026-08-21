@@ -2955,6 +2955,185 @@
   gap: 20px;
 }
 
+.receipt-review-card {
+  display: grid;
+  gap: 16px;
+}
+
+.receipt-review-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.receipt-review-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #b45309;
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-semibold);
+}
+
+.receipt-review-list {
+  display: grid;
+  gap: 10px;
+}
+
+.receipt-review-item {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  align-items: center;
+  gap: 18px;
+  padding: 15px;
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+  background: #ffffff;
+}
+
+.receipt-review-item__main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.receipt-review-item__main strong,
+.receipt-review-item__amount {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+}
+
+.receipt-review-item__main span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.receipt-review-item__actions,
+.receipt-reject-form > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.receipt-action-button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: #ffffff;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-semibold);
+}
+
+.receipt-action-button--approve {
+  border-color: rgba(22, 163, 74, 0.2);
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.receipt-action-button--reject {
+  border-color: rgba(220, 38, 38, 0.18);
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.receipt-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.receipt-reject-form {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border-radius: 11px;
+  background: #fffafa;
+}
+
+.receipt-reject-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-semibold);
+}
+
+.receipt-reject-form textarea {
+  min-height: 76px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-13);
+}
+
+.receipt-review-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #fff1f2;
+  color: #b91c1c;
+  font-size: var(--font-size-12);
+}
+
+.receipt-review-empty {
+  padding: 22px;
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  background: #f8fafc;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-13);
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .receipt-review-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .receipt-review-item__actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .receipt-review-card__header,
+  .receipt-review-item {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .receipt-review-card__header {
+    display: grid;
+  }
+
+  .receipt-review-count {
+    justify-self: start;
+  }
+
+  .receipt-review-item__actions,
+  .receipt-review-item__actions button {
+    width: 100%;
+  }
+
+  .receipt-review-item__actions button {
+    flex: 1;
+  }
+}
+
 .settings-workspace__header {
   align-items: flex-end;
 }

@@ -94,7 +94,23 @@ export type FetchRecentTransactionsOptions = {
   date?: string | null
 }
 
-async function parseError(response: Response, fallback: string): Promise<never> {
+export type ReceiptSubmission = {
+  transactionId: string
+  loanId: string
+  installmentId: string
+  borrowerId: string
+  borrowerName: string
+  amount: number
+  currency: string
+  receiptDocumentId: string
+  submittedAt: string | null
+  status: 'pending_verification'
+}
+
+async function parseError(
+  response: Response,
+  fallback: string,
+): Promise<never> {
   try {
     const body = (await response.json()) as { message?: string | string[] }
     const message = Array.isArray(body.message)
@@ -219,4 +235,45 @@ export async function recordInstallmentPayment(
   }
 
   return response.json()
+}
+
+export async function fetchReceiptSubmissions(): Promise<ReceiptSubmission[]> {
+  const response = await fetch(`${API_BASE_URL}/payments/receipt-submissions`, {
+    headers: getAuthHeaders(),
+  })
+  if (!response.ok) {
+    return parseError(response, 'Failed to load receipt submissions.')
+  }
+  const body = (await response.json()) as { submissions?: ReceiptSubmission[] }
+  return body.submissions ?? []
+}
+
+export async function decideReceiptSubmission(
+  transactionId: string,
+  decision: 'approve' | 'reject',
+  note?: string,
+) {
+  const response = await fetch(
+    `${API_BASE_URL}/payments/receipt-submissions/${encodeURIComponent(transactionId)}/decision`,
+    {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ decision, note: note?.trim() || null }),
+    },
+  )
+  if (!response.ok) {
+    return parseError(response, 'Failed to review the receipt.')
+  }
+  return response.json()
+}
+
+export async function fetchReceiptAccess(documentId: string) {
+  const response = await fetch(
+    `${API_BASE_URL}/documents/${encodeURIComponent(documentId)}/access`,
+    { headers: getAuthHeaders() },
+  )
+  if (!response.ok) {
+    return parseError(response, 'Failed to open the receipt.')
+  }
+  return response.json() as Promise<{ accessUrl: string; expiresAt: string }>
 }
