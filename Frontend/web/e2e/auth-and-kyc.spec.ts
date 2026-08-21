@@ -197,20 +197,40 @@ test("admin disputes use global counts for every active workflow status", async 
       }),
     }),
   );
+  await page.route("**/api/admin/disputes/dispute-1/events", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, events: [] }),
+    }),
+  );
 
   await page.goto("/admin/disputes");
   await expect(page.getByRole("heading", { name: "Disputes" })).toBeVisible();
-  await expect(page.getByText("Payment was not reflected")).toBeVisible();
+  await expect(page.locator(".admin-dispute-workspace")).toBeVisible();
+  await expect(page.locator(".admin-dispute-case")).toHaveCount(1);
 
   for (const [label, value] of [
-    ["All Disputes", "11"],
+    ["All cases", "11"],
     ["Open", "2"],
-    ["In Progress", "4"],
+    ["In progress", "4"],
     ["Escalated", "2"],
     ["Resolved", "2"],
   ] as const) {
     await expect(
-      page.locator(".card").filter({ hasText: label }).getByText(value),
+      page
+        .locator(".admin-dispute-summary__card")
+        .filter({ hasText: label })
+        .getByText(value),
     ).toBeVisible();
   }
+
+  await page.locator(".admin-dispute-case").click();
+  await expect(
+    page.locator(".admin-dispute-detail").getByRole("heading", {
+      name: "Payment was not reflected",
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Case controls" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Case timeline" })).toBeVisible();
 });
