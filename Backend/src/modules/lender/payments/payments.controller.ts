@@ -84,7 +84,7 @@ export class PaymentsController {
   }
 
   private toActivityFilter(value?: string): PaymentActivityFilter {
-    const normalized = value?.trim().toLowerCase() || 'all';
+    const normalized = value?.trim().toLowerCase() || 'payment';
     if (
       normalized !== 'all' &&
       normalized !== 'payment' &&

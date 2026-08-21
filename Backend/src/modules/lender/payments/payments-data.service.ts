@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import {
   DocumentData,
+  FieldPath,
   Query,
   QueryDocumentSnapshot,
+  Timestamp,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import {
   chunkValues,
+  decodeCursor,
   readDate,
   readNumber,
 } from '../../../firebase/firestore-query.utils';
@@ -21,6 +24,7 @@ import type {
   LoanRecord,
   TransactionRecord,
 } from './payments.models';
+import type { LenderDateRange } from '../shared/lender-date-range';
 
 @Injectable()
 export class PaymentsDataService {
@@ -86,6 +90,48 @@ export class PaymentsDataService {
         const rightTime = right.createdAt?.getTime() ?? 0;
         return rightTime - leftTime;
       });
+  }
+
+  async getTransactionPage(
+    lenderId: string,
+    transactionTypes: string[],
+    pageSize: number,
+    cursor?: string | null,
+    dateRange: LenderDateRange | null = null,
+  ): Promise<TransactionRecord[]> {
+    if (transactionTypes.length === 0) return [];
+
+    const db = this.firebaseService.getDb();
+    let query: Query<DocumentData> = db
+      .collection('transactions')
+      .where('lenderId', '==', lenderId)
+      .where('status', '==', 'completed');
+
+    query =
+      transactionTypes.length === 1
+        ? query.where('type', '==', transactionTypes[0])
+        : query.where('type', 'in', transactionTypes.slice(0, 10));
+
+    if (dateRange) {
+      query = query
+        .where('createdAt', '>=', Timestamp.fromDate(dateRange.start))
+        .where('createdAt', '<', Timestamp.fromDate(dateRange.end));
+    }
+
+    query = query
+      .orderBy('createdAt', 'desc')
+      .orderBy(FieldPath.documentId(), 'desc');
+
+    const decodedCursor = decodeCursor(cursor);
+    if (decodedCursor) {
+      query = query.startAfter(
+        Timestamp.fromDate(decodedCursor.date),
+        decodedCursor.id,
+      );
+    }
+
+    const snapshot = await query.limit(pageSize).get();
+    return snapshot.docs.map((doc) => this.mapTransaction(doc));
   }
 
   async getInstallmentSummaries(loanIds: string[]) {

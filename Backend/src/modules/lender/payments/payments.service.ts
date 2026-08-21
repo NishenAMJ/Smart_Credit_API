@@ -47,7 +47,7 @@ export class PaymentsService {
     includeSearchCount = true,
     search?: string | null,
     date?: string | null,
-    activity: PaymentActivityFilter = 'all',
+    activity: PaymentActivityFilter = 'payment',
   ): Promise<PaymentsResponse> {
     const safePageSize = this.clamp(pageSize, 8, 60);
     const normalizedSearch = this.normalizeSearch(search);
@@ -268,8 +268,30 @@ export class PaymentsService {
     cursor?: string | null,
     search?: string | null,
     collectionDate: LenderDateRange | null = null,
-    activity: PaymentActivityFilter = 'all',
+    activity: PaymentActivityFilter = 'payment',
   ): Promise<{ items: TransactionRecord[] }> {
+    const transactionTypes = this.transactionTypesFor(activity);
+
+    if (!search) {
+      const items = (
+        await this.paymentsData.getTransactionPage(
+          context.lenderId,
+          transactionTypes,
+          pageSize + 1,
+          cursor,
+          collectionDate,
+        )
+      ).filter((transaction) =>
+        this.matchesTransactionFilters(
+          transaction,
+          context,
+          null,
+          collectionDate,
+        ),
+      );
+      return { items };
+    }
+
     const items = this.paginateTransactions(
       (
         await this.getTopLevelActivityByLoanIds(context.loanIds, activity)
@@ -329,15 +351,17 @@ export class PaymentsService {
     return (
       await this.paymentsData.getTransactions(
         loanIds,
-        activity === 'payment'
-          ? ['repayment']
-          : activity === 'disbursement'
-            ? ['disbursement']
-            : ['repayment', 'disbursement'],
+        this.transactionTypesFor(activity),
       )
     ).filter((transaction) =>
       isCollectedRepayment(transaction.type, transaction.status),
     );
+  }
+
+  private transactionTypesFor(activity: PaymentActivityFilter): string[] {
+    if (activity === 'payment') return ['repayment'];
+    if (activity === 'disbursement') return ['disbursement'];
+    return ['repayment', 'disbursement'];
   }
 
   private createEmptySummary(): PaymentsSummary {
