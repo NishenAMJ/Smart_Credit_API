@@ -32,9 +32,11 @@ type CreateLenderAdBody = {
   tenureMonths?: number | string;
   borrowerFocus?: string;
   processingTime?: string;
+  responseTimeHours?: number | string;
   repaymentStyle?: string;
   requirements?: string;
   supportNote?: string;
+  preferredPurposes?: string[];
 };
 
 type UpdateLenderAdBody = Partial<CreateLenderAdBody> & {
@@ -121,6 +123,15 @@ export class LenderAdsController {
         typeof body.processingTime === 'string'
           ? body.processingTime
           : undefined,
+      responseTimeHours: this.toOptionalBodyNumber(
+        body.responseTimeHours,
+        'responseTimeHours',
+      ),
+      preferredPurposes: Array.isArray(body.preferredPurposes)
+        ? body.preferredPurposes.filter(
+            (purpose): purpose is string => typeof purpose === 'string',
+          )
+        : undefined,
       repaymentStyle:
         typeof body.repaymentStyle === 'string'
           ? body.repaymentStyle
@@ -148,6 +159,15 @@ export class LenderAdsController {
         typeof body.borrowerFocus === 'string' ? body.borrowerFocus : '',
       processingTime:
         typeof body.processingTime === 'string' ? body.processingTime : '',
+      responseTimeHours: this.toOptionalBodyNumber(
+        body.responseTimeHours,
+        'responseTimeHours',
+      ),
+      preferredPurposes: Array.isArray(body.preferredPurposes)
+        ? body.preferredPurposes.filter(
+            (purpose): purpose is string => typeof purpose === 'string',
+          )
+        : undefined,
       repaymentStyle:
         typeof body.repaymentStyle === 'string' ? body.repaymentStyle : '',
       requirements:

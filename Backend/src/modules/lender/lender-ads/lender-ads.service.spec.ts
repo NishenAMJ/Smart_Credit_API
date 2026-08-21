@@ -57,6 +57,89 @@ describe('LenderAdsService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('stores canonical mobile fields and succeeds when notification delivery fails', async () => {
+    const setListing = jest.fn().mockResolvedValue(undefined);
+    const listingRef = { id: 'ad_new', set: setListing };
+    const db = {
+      collection: jest.fn((name: string) => {
+        if (name === 'users') {
+          return {
+            doc: jest.fn(() => ({
+              get: jest.fn().mockResolvedValue({
+                exists: true,
+                data: () => ({
+                  accountStatus: 'active',
+                  kycStatus: 'approved',
+                  fullName: 'Verified Lender',
+                }),
+              }),
+            })),
+          };
+        }
+
+        return { doc: jest.fn(() => listingRef) };
+      }),
+    };
+    const notificationWriter = {
+      create: jest
+        .fn()
+        .mockRejectedValue(new Error('notification unavailable')),
+    };
+    const service = new LenderAdsService(
+      { getDb: () => db } as any,
+      notificationWriter as any,
+      {} as any,
+    );
+
+    const result = await service.createAd('lender_1', {
+      headline: 'Responsible business lending',
+      minAmount: 100000,
+      maxAmount: 500000,
+      interestRate: 12,
+      minTenureMonths: 6,
+      tenureMonths: 12,
+      borrowerFocus: 'business, education',
+      preferredPurposes: ['business', 'education'],
+      processingTime: 'Reviewed within 36 hours',
+      responseTimeHours: 36,
+      repaymentStyle: 'Monthly installments',
+      requirements: 'Approved KYC and income documents',
+      supportNote: 'Clear monthly financing for established businesses.',
+    });
+
+    expect(result.adId).toBe('ad_new');
+    expect(result.status).toBe('pending_review');
+    expect(result.responseTimeHours).toBe(36);
+    expect(setListing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purposeCategories: ['business', 'education'],
+        responseTimeHours: 36,
+        status: 'pending_review',
+      }),
+    );
+    expect(notificationWriter.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an invalid response-time value before writing an ad', async () => {
+    const service = new LenderAdsService({} as any, {} as any, {} as any);
+
+    expect(() =>
+      (service as any).validateCreateInput({
+        headline: 'Responsible business lending',
+        minAmount: 100000,
+        maxAmount: 500000,
+        interestRate: 12,
+        tenureMonths: 12,
+        borrowerFocus: 'Verified business owners',
+        processingTime: 'Reviewed within 200 hours',
+        responseTimeHours: 200,
+        repaymentStyle: 'Monthly installments',
+        requirements: 'Approved KYC and income documents',
+        supportNote: 'Clear monthly financing for established businesses.',
+      }),
+    ).toThrow(BadRequestException);
+  });
+
   it('returns paginated ads from the canonical loan listings collection', async () => {
     const query = {
       limit: jest.fn().mockReturnValue({

@@ -75,10 +75,11 @@ export class LenderAdsService {
       'Verified lender';
     const location = readString(lenderData.city, lenderData.district) ?? '';
     const responseTimeHours =
-      typeof lenderData?.responseTimeHours === 'number' &&
+      input.responseTimeHours ??
+      (typeof lenderData?.responseTimeHours === 'number' &&
       Number.isFinite(lenderData.responseTimeHours)
         ? lenderData.responseTimeHours
-        : 24;
+        : 24);
     const document = {
       listingId: docRef.id,
       lenderId,
@@ -116,25 +117,34 @@ export class LenderAdsService {
     };
 
     await docRef.set(document);
-    await this.notificationWriter.create({
-      id: `ad-published-${docRef.id}`,
-      lenderId,
-      category: 'ad',
-      eventType: 'ad_published',
-      title: 'Advertisement submitted',
-      message: `${title} was submitted for admin review.`,
-      severity: 'info',
-      createdAt: now.toDate(),
-      relatedEntityType: 'ad',
-      relatedEntityId: docRef.id,
-      actionLabel: 'Open ad page',
-      actionTarget: 'create-ad',
-      metadata: {
-        adId: docRef.id,
-        amount: input.maxAmount,
-        status: document.status,
-      },
-    });
+    try {
+      await this.notificationWriter.create({
+        id: `ad-published-${docRef.id}`,
+        lenderId,
+        category: 'ad',
+        eventType: 'ad_published',
+        title: 'Advertisement submitted',
+        message: `${title} was submitted for admin review.`,
+        severity: 'info',
+        createdAt: now.toDate(),
+        relatedEntityType: 'ad',
+        relatedEntityId: docRef.id,
+        actionLabel: 'Open ad page',
+        actionTarget: 'create-ad',
+        metadata: {
+          adId: docRef.id,
+          amount: input.maxAmount,
+          status: document.status,
+        },
+      });
+    } catch (error) {
+      // The listing is already committed. A notification failure must not make
+      // the client retry and create a duplicate advertisement.
+      this.logger.error(
+        `Advertisement ${docRef.id} was created, but its notification could not be written.`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
 
     return {
       id: docRef.id,
@@ -432,6 +442,8 @@ export class LenderAdsService {
       update.borrowerFocus = input.borrowerFocus.trim();
     if (input.processingTime !== undefined)
       update.processingTime = input.processingTime.trim();
+    if (input.responseTimeHours !== undefined)
+      update.responseTimeHours = input.responseTimeHours;
     if (input.repaymentStyle !== undefined)
       update.repaymentStyle = input.repaymentStyle.trim();
     if (input.requirements !== undefined)
@@ -470,6 +482,13 @@ export class LenderAdsService {
           input.processingTime ??
           readString(current.processingTime) ??
           'Within 2 business days',
+        responseTimeHours:
+          input.responseTimeHours ??
+          (typeof current.responseTimeHours === 'number'
+            ? current.responseTimeHours
+            : undefined),
+        preferredPurposes:
+          input.preferredPurposes ?? readStringArray(current.purposeCategories),
         repaymentStyle:
           input.repaymentStyle ??
           readString(current.repaymentStyle) ??
@@ -603,6 +622,17 @@ export class LenderAdsService {
       );
     }
 
+    if (
+      input.responseTimeHours !== undefined &&
+      (!Number.isInteger(input.responseTimeHours) ||
+        input.responseTimeHours < 1 ||
+        input.responseTimeHours > 168)
+    ) {
+      throw new BadRequestException(
+        'responseTimeHours must be a whole number between 1 and 168.',
+      );
+    }
+
     if (input.repaymentStyle.trim().length < 6) {
       throw new BadRequestException(
         'repaymentStyle must be at least 6 characters.',
@@ -653,7 +683,11 @@ export class LenderAdsService {
   }
 
   private buildPreferredPurposes(input: CreateLenderAdInput): string[] {
-    const tokens = [input.borrowerFocus, input.repaymentStyle]
+    const source =
+      input.preferredPurposes && input.preferredPurposes.length > 0
+        ? input.preferredPurposes
+        : [input.borrowerFocus];
+    const tokens = source
       .flatMap((value) => value.split(/[,/]/))
       .map((value) => value.trim())
       .filter((value) => value.length > 0);

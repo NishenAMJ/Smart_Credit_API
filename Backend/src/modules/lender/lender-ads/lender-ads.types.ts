@@ -15,6 +15,7 @@ export interface CreateLenderAdInput {
   tenureMonths: number;
   borrowerFocus: string;
   processingTime: string;
+  responseTimeHours?: number;
   repaymentStyle: string;
   requirements: string;
   supportNote: string;
