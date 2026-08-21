@@ -92,6 +92,7 @@ export type FetchRecentTransactionsOptions = {
   includeSearchCount?: boolean
   search?: string | null
   date?: string | null
+  activity?: 'all' | 'payment' | 'disbursement'
 }
 
 export type ReceiptSubmission = {
@@ -153,6 +154,10 @@ export async function fetchRecentTransactions(
 
   if (options.date && options.date.trim().length > 0) {
     params.set('date', options.date.trim())
+  }
+
+  if (options.activity) {
+    params.set('activity', options.activity)
   }
 
   const response = await fetch(
