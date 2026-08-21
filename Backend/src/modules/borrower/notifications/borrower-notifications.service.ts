@@ -252,11 +252,15 @@ export class BorrowerNotificationsService {
     requestsSnapshot.docs.forEach((doc) => {
       const data = doc.data();
       const status = String(data.status ?? '').toLowerCase();
-      const requestId = readString(data.requestId, doc.id) ?? doc.id;
-      const amount = readNumber(data.amount);
+      const requestId =
+        readString(data.applicationId, data.requestId, doc.id) ?? doc.id;
+      const amount =
+        typeof data.requestedPrincipalMinor === 'number'
+          ? data.requestedPrincipalMinor / 100
+          : readNumber(data.amount);
       const createdAt = readDate(data.updatedAt, data.createdAt) ?? new Date();
 
-      if (status === 'approved') {
+      if (status === 'approved' || status === 'converted') {
         drafts.push(
           this.createDraft({
             id: `application-approved-${requestId}`,
@@ -283,8 +287,10 @@ export class BorrowerNotificationsService {
             severity: 'warning',
             title: 'Application rejected',
             message:
-              readString(data.rejectionReason) ??
-              'A lender rejected your loan application.',
+              readString(
+                data.lenderDecision?.decisionNote,
+                data.rejectionReason,
+              ) ?? 'A lender rejected your loan application.',
             relatedEntityType: 'loanRequest',
             relatedEntityId: requestId,
             actionTarget: 'applications',
@@ -292,7 +298,9 @@ export class BorrowerNotificationsService {
             metadata: { status, amount },
           }),
         );
-      } else if (['pending', 'under_review', 'open'].includes(status)) {
+      } else if (
+        ['pending', 'submitted', 'under_review', 'open'].includes(status)
+      ) {
         drafts.push(
           this.createDraft({
             id: `application-review-${requestId}`,

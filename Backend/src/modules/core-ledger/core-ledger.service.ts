@@ -62,7 +62,15 @@ export class CoreLedgerService {
 
       const application = applicationSnapshot.data() ?? {};
       if (
-        !['submitted', 'under_review', 'approved'].includes(application.status)
+        ![
+          'open',
+          'pending',
+          'submitted',
+          'under_review',
+          'matched',
+          'pending_kyc',
+          'approved',
+        ].includes(String(application.status).toLowerCase())
       ) {
         throw new ConflictException(
           `Application in ${String(application.status)} state cannot create a loan.`,

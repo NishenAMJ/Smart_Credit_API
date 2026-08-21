@@ -11,6 +11,7 @@ export interface CreateLenderAdInput {
   minAmount: number;
   maxAmount: number;
   interestRate: number;
+  minTenureMonths?: number;
   tenureMonths: number;
   borrowerFocus: string;
   processingTime: string;

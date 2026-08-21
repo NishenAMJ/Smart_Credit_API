@@ -176,12 +176,12 @@ describe('LoanRequestsService', () => {
     });
   });
 
-  it('allows the owning lender to approve an actionable ad request', async () => {
+  it('allows the owning lender to approve a legacy pending ad request', async () => {
     const application = {
       applicationId: 'req_1',
       listingId: 'ad_1',
       lenderId: 'lender_1',
-      status: 'submitted',
+      status: 'pending',
       requestedPrincipalMinor: 5000000,
       requestedTenureMonths: 12,
     };
@@ -268,5 +268,13 @@ describe('LoanRequestsService', () => {
       service.decideRequest('lender_1', 'req_1', 'reject'),
     ).rejects.toThrow('Loan request was not found.');
     expect(transaction.update).not.toHaveBeenCalled();
+  });
+
+  it('never exposes incomplete borrower drafts to a lender history query', () => {
+    const service = new LoanRequestsService({} as any, {} as any);
+
+    expect((service as any).isStatusIncluded('draft', true)).toBe(false);
+    expect((service as any).isStatusIncluded('submitted', false)).toBe(true);
+    expect((service as any).isStatusIncluded('converted', true)).toBe(true);
   });
 });

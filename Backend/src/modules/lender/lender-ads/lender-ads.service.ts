@@ -90,7 +90,7 @@ export class LenderAdsService {
       maxAmountMinor: Math.round(input.maxAmount * 100),
       minInterestRateAnnual: input.interestRate,
       maxInterestRateAnnual: input.interestRate,
-      minTenureMonths: Math.min(6, input.tenureMonths),
+      minTenureMonths: input.minTenureMonths ?? Math.min(6, input.tenureMonths),
       maxTenureMonths: input.tenureMonths,
       location,
       currency: 'LKR',
@@ -335,14 +335,26 @@ export class LenderAdsService {
 
     const update: Record<string, unknown> = { updatedAt: Timestamp.now() };
     if (input.minAmount !== undefined) {
-      if (!Number.isFinite(input.minAmount) || input.minAmount <= 0) {
-        throw new BadRequestException('minAmount must be greater than zero.');
+      if (
+        !Number.isFinite(input.minAmount) ||
+        input.minAmount < 10_000 ||
+        input.minAmount > 5_000_000
+      ) {
+        throw new BadRequestException(
+          'minAmount must be between LKR 10,000 and LKR 5,000,000.',
+        );
       }
       update.minAmountMinor = Math.round(input.minAmount * 100);
     }
     if (input.maxAmount !== undefined) {
-      if (!Number.isFinite(input.maxAmount) || input.maxAmount <= 0) {
-        throw new BadRequestException('maxAmount must be greater than zero.');
+      if (
+        !Number.isFinite(input.maxAmount) ||
+        input.maxAmount < 10_000 ||
+        input.maxAmount > 5_000_000
+      ) {
+        throw new BadRequestException(
+          'maxAmount must be between LKR 10,000 and LKR 5,000,000.',
+        );
       }
       update.maxAmountMinor = Math.round(input.maxAmount * 100);
       update.availableCapitalMinor = Math.round(input.maxAmount * 100);
@@ -357,10 +369,12 @@ export class LenderAdsService {
       update.maxInterestRateAnnual = input.interestRate;
     }
     if (input.tenureMonths !== undefined) {
-      if (!Number.isInteger(input.tenureMonths) || input.tenureMonths <= 0) {
-        throw new BadRequestException(
-          'tenureMonths must be a positive integer.',
-        );
+      if (
+        !Number.isInteger(input.tenureMonths) ||
+        input.tenureMonths < 3 ||
+        input.tenureMonths > 60
+      ) {
+        throw new BadRequestException('tenureMonths must be between 3 and 60.');
       }
       update.maxTenureMonths = input.tenureMonths;
     }
@@ -427,6 +441,8 @@ export class LenderAdsService {
     }
     if (input.tenureMonths !== undefined)
       update.maxTenureMonths = input.tenureMonths;
+    if (input.minTenureMonths !== undefined)
+      update.minTenureMonths = input.minTenureMonths;
 
     if (contentChanged) {
       const merged: CreateLenderAdInput = {
@@ -436,6 +452,8 @@ export class LenderAdsService {
         interestRate:
           input.interestRate ?? readNumber(current.minInterestRateAnnual),
         tenureMonths: input.tenureMonths ?? readNumber(current.maxTenureMonths),
+        minTenureMonths:
+          input.minTenureMonths ?? readNumber(current.minTenureMonths),
         borrowerFocus:
           input.borrowerFocus ??
           readString(current.borrowerFocus) ??
@@ -477,6 +495,25 @@ export class LenderAdsService {
         update.status = 'paused';
         update.adminStatus = 'closed';
       } else if (input.status === 'active' && currentStatus === 'paused') {
+        this.validateCreateInput({
+          headline: readString(current.title) ?? '',
+          minAmount: readNumber(current.minAmountMinor) / 100,
+          maxAmount: readNumber(current.maxAmountMinor) / 100,
+          interestRate: readNumber(current.minInterestRateAnnual),
+          minTenureMonths: readNumber(current.minTenureMonths),
+          tenureMonths: readNumber(current.maxTenureMonths),
+          borrowerFocus:
+            readString(current.borrowerFocus) ??
+            readStringArray(current.purposeCategories).join(', '),
+          processingTime:
+            readString(current.processingTime) ?? 'Within 2 business days',
+          repaymentStyle:
+            readString(current.repaymentStyle) ?? 'Monthly installments',
+          requirements:
+            readString(current.requirements) ??
+            'Approved KYC and supporting financial documents',
+          supportNote: readString(current.description) ?? '',
+        });
         update.status = 'active';
         update.adminStatus = 'active';
       } else {
@@ -499,11 +536,13 @@ export class LenderAdsService {
     if (
       !Number.isFinite(input.minAmount) ||
       !Number.isFinite(input.maxAmount) ||
-      input.minAmount <= 0 ||
-      input.maxAmount <= 0
+      input.minAmount < 10_000 ||
+      input.maxAmount < 10_000 ||
+      input.minAmount > 5_000_000 ||
+      input.maxAmount > 5_000_000
     ) {
       throw new BadRequestException(
-        'Loan amount range must be greater than zero.',
+        'Loan amounts must be between LKR 10,000 and LKR 5,000,000.',
       );
     }
 
@@ -525,11 +564,23 @@ export class LenderAdsService {
 
     if (
       !Number.isInteger(input.tenureMonths) ||
-      input.tenureMonths <= 0 ||
-      input.tenureMonths > 120
+      input.tenureMonths < 3 ||
+      input.tenureMonths > 60
     ) {
       throw new BadRequestException(
-        'tenureMonths must be a whole number between 1 and 120.',
+        'tenureMonths must be a whole number between 3 and 60.',
+      );
+    }
+
+    const minTenureMonths =
+      input.minTenureMonths ?? Math.min(6, input.tenureMonths);
+    if (
+      !Number.isInteger(minTenureMonths) ||
+      minTenureMonths < 3 ||
+      minTenureMonths > input.tenureMonths
+    ) {
+      throw new BadRequestException(
+        'minTenureMonths must be between 3 and the maximum tenure.',
       );
     }
 

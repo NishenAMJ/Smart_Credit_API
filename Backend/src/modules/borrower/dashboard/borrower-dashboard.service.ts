@@ -149,9 +149,7 @@ export class BorrowerDashboardService {
       .where('borrowerId', '==', borrowerId)
       .where('status', 'in', [
         LoanApplicationStatus.PENDING,
-        'PENDING',
-        LoanApplicationStatus.DRAFT,
-        'DRAFT',
+        LoanApplicationStatus.UNDER_REVIEW,
       ]);
 
     try {

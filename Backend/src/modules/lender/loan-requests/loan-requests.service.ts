@@ -66,6 +66,7 @@ type BorrowerProfile = {
 
 const PENDING_STATUSES = new Set([
   'open',
+  'pending',
   'submitted',
   'under_review',
   'matched',
@@ -75,9 +76,11 @@ const PENDING_STATUSES = new Set([
 
 const ACTIONABLE_STATUSES = new Set([
   'open',
+  'pending',
   'submitted',
   'under_review',
   'matched',
+  'approved',
   'pending_kyc',
 ]);
 
@@ -470,7 +473,11 @@ export class LoanRequestsService {
     status: string,
     includeAllStatuses: boolean,
   ): boolean {
-    return includeAllStatuses || PENDING_STATUSES.has(status);
+    // Drafts are incomplete borrower forms and must never enter a lender's
+    // review history, even when the client asks for all decided statuses.
+    return (
+      status !== 'draft' && (includeAllStatuses || PENDING_STATUSES.has(status))
+    );
   }
 
   private mapLoanRequest(
@@ -497,7 +504,10 @@ export class LoanRequestsService {
         typeof data.purposeCategory === 'string'
           ? data.purposeCategory
           : 'uncategorized',
-      status: typeof data.status === 'string' ? data.status : 'unknown',
+      status:
+        typeof data.status === 'string'
+          ? data.status.trim().toLowerCase()
+          : 'unknown',
       suggestedInterestRate: this.toNumber(data.suggestedInterestRate),
       urgency: typeof data.urgency === 'string' ? data.urgency : 'medium',
       monthlyIncome: this.toNumber(data.monthlyIncome),

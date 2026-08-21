@@ -9,16 +9,23 @@ import {
   Post,
   Put,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import {
   LoanApplicationStatus,
   LoanPurpose,
   RepaymentMethod,
 } from './dto/loan-application.dto';
-import { resolveBorrowerId } from '../shared/borrower-request.utils';
 import { BorrowerApplicationsService } from './borrower-applications.service';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 
 @Controller('borrower/applications')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('borrower')
 export class BorrowerApplicationsController {
   constructor(
     private readonly borrowerApplicationsService: BorrowerApplicationsService,
@@ -26,13 +33,13 @@ export class BorrowerApplicationsController {
 
   @Get()
   async getMyApplications(
-    @Query('borrowerId') borrowerId?: string,
+    @Req() request: AuthenticatedRequest,
     @Query('status') status?: LoanApplicationStatus,
   ) {
     return {
       success: true,
       data: await this.borrowerApplicationsService.getLoanApplications(
-        resolveBorrowerId(borrowerId),
+        request.user.sub,
         status,
       ),
     };
@@ -40,14 +47,14 @@ export class BorrowerApplicationsController {
 
   @Get(':requestId')
   async getApplicationDetails(
+    @Req() request: AuthenticatedRequest,
     @Param('requestId') requestId: string,
-    @Query('borrowerId') borrowerId?: string,
   ) {
     return {
       success: true,
       data: await this.borrowerApplicationsService.getLoanApplicationById(
         requestId,
-        resolveBorrowerId(borrowerId),
+        request.user.sub,
       ),
     };
   }
@@ -55,6 +62,7 @@ export class BorrowerApplicationsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async createApplication(
+    @Req() request: AuthenticatedRequest,
     @Body()
     payload: {
       amount?: number;
@@ -65,9 +73,8 @@ export class BorrowerApplicationsController {
       borrowerId?: string;
       adId?: string;
     },
-    @Query('borrowerId') borrowerId?: string,
   ) {
-    const id = resolveBorrowerId(payload.borrowerId ?? borrowerId);
+    const id = request.user.sub;
     const purpose = (payload.purpose ?? 'business').toLowerCase();
     const loanPurpose = (
       Object.values(LoanPurpose).includes(purpose as LoanPurpose)
@@ -77,31 +84,34 @@ export class BorrowerApplicationsController {
 
     return {
       success: true,
-      data: await this.borrowerApplicationsService.createLoanApplication({
-        borrowerId: id,
-        adId: payload.adId,
-        amount: Number(payload.amount),
-        loanPurpose,
-        purposeDescription: payload.description,
-        tenureMonths: Number(payload.tenureMonths),
-        preferredRepaymentMethod:
-          (payload.preferredRepaymentMethod as RepaymentMethod) ??
-          RepaymentMethod.QR_PAYMENT,
-      }),
+      data: await this.borrowerApplicationsService.createLoanApplication(
+        {
+          borrowerId: id,
+          adId: payload.adId,
+          amount: Number(payload.amount),
+          loanPurpose,
+          purposeDescription: payload.description,
+          tenureMonths: Number(payload.tenureMonths),
+          preferredRepaymentMethod:
+            (payload.preferredRepaymentMethod as RepaymentMethod) ??
+            RepaymentMethod.QR_PAYMENT,
+        },
+        { submitImmediately: true },
+      ),
     };
   }
 
   @Put(':requestId')
   async updateApplication(
+    @Req() request: AuthenticatedRequest,
     @Param('requestId') requestId: string,
     @Body() payload: Record<string, unknown>,
-    @Query('borrowerId') borrowerId?: string,
   ) {
     return {
       success: true,
       data: await this.borrowerApplicationsService.updateLoanApplication(
         requestId,
-        resolveBorrowerId(borrowerId),
+        request.user.sub,
         {
           amount: payload.amount as number | undefined,
           purposeDescription: payload.description as string | undefined,
@@ -113,30 +123,29 @@ export class BorrowerApplicationsController {
 
   @Post(':requestId/submit')
   async submitApplication(
+    @Req() request: AuthenticatedRequest,
     @Param('requestId') requestId: string,
-    @Query('borrowerId') borrowerId?: string,
   ) {
     return {
       success: true,
       data: await this.borrowerApplicationsService.submitLoanApplication(
         requestId,
-        resolveBorrowerId(borrowerId),
+        request.user.sub,
       ),
     };
   }
 
   @Delete(':requestId')
   async deleteApplication(
+    @Req() request: AuthenticatedRequest,
     @Param('requestId') requestId: string,
-    @Query('borrowerId') borrowerId?: string,
   ) {
     return {
       success: true,
       data: await this.borrowerApplicationsService.deleteLoanApplication(
         requestId,
-        resolveBorrowerId(borrowerId),
+        request.user.sub,
       ),
     };
   }
 }
-

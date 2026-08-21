@@ -122,6 +122,37 @@ describe('BorrowerService', () => {
 
       expect(mockDoc).toHaveBeenCalledWith('loan_1');
     });
+
+    it('maps canonical minor-unit loan fields to borrower-facing LKR values', async () => {
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          loanId: 'loan_canonical',
+          applicationId: 'application_1',
+          borrowerId: 'borrower_1',
+          lenderId: 'lender_1',
+          status: 'active',
+          principalMinor: 10_000_000,
+          annualInterestRate: 12,
+          interestAmountMinor: 1_200_000,
+          totalRepayableMinor: 11_200_000,
+          monthlyInstallmentMinor: 933_333,
+          remainingBalanceMinor: 8_400_000,
+          tenureMonths: 12,
+        }),
+      });
+
+      const result = await service.getLoanById('loan_canonical', 'borrower_1');
+
+      expect(result).toMatchObject({
+        requestId: 'application_1',
+        principalAmount: 100_000,
+        interestRate: 12,
+        totalInterest: 12_000,
+        monthlyInstallment: 9_333.33,
+        outstandingBalance: 84_000,
+      });
+    });
     it('should throw NotFoundException if the loan document does not exist', async () => {
       // Arrange: Database returns exists: false
       mockGet.mockResolvedValueOnce({
@@ -183,6 +214,43 @@ describe('BorrowerService', () => {
     });
   });
 
+  describe('getActiveLoanAds', () => {
+    it('maps canonical listing amounts, rates, and tenures for discovery', async () => {
+      mockGet.mockResolvedValueOnce({
+        docs: [
+          {
+            id: 'listing_1',
+            data: () => ({
+              listingId: 'listing_1',
+              lenderId: 'lender_1',
+              lenderName: 'Lender One',
+              status: 'active',
+              minAmountMinor: 5_000_000,
+              maxAmountMinor: 25_000_000,
+              minInterestRateAnnual: 11.5,
+              minTenureMonths: 6,
+              maxTenureMonths: 24,
+              purposeCategories: ['business'],
+            }),
+          },
+        ],
+      });
+
+      const result = await service.getActiveLoanAds();
+
+      expect(result[0]).toMatchObject({
+        adId: 'listing_1',
+        loanId: 'listing_1',
+        minAmount: 50_000,
+        maxAmount: 250_000,
+        interestRate: 11.5,
+        minTenureMonths: 6,
+        maxTenureMonths: 24,
+        preferredPurposes: ['business'],
+      });
+    });
+  });
+
   describe('getLenderNamesMap', () => {
     it('should return an empty map if no IDs are provided', async () => {
       const result = await service.getLenderNamesMap([]);
@@ -219,4 +287,3 @@ describe('BorrowerService', () => {
     });
   });
 });
-

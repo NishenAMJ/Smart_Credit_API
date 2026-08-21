@@ -56,6 +56,19 @@ function validateFixtures(fixtures) {
       record.minAmountMinor <= record.maxAmountMinor,
       `listing ${record.listingId} amount range is invalid`,
     );
+    assert(
+      record.minAmountMinor >= 10000 * 100 &&
+        record.maxAmountMinor <= 5000000 * 100,
+      `listing ${record.listingId} amount is outside platform limits`,
+    );
+    assert(
+      Number.isInteger(record.minTenureMonths) &&
+        Number.isInteger(record.maxTenureMonths) &&
+        record.minTenureMonths >= 3 &&
+        record.maxTenureMonths <= 60 &&
+        record.minTenureMonths <= record.maxTenureMonths,
+      `listing ${record.listingId} tenure range is invalid`,
+    );
   });
   fixtures.loanApplications.forEach((record) => {
     assert(
@@ -65,6 +78,23 @@ function validateFixtures(fixtures) {
     assert(
       userIds.has(record.lenderId) && userIds.has(record.borrowerId),
       `application ${record.applicationId} participant is missing`,
+    );
+    const listing = fixtures.loanListings.find(
+      (item) => item.listingId === record.listingId,
+    );
+    assert(
+      listing.lenderId === record.lenderId,
+      `application ${record.applicationId} lender differs from listing`,
+    );
+    assert(
+      record.requestedPrincipalMinor >= listing.minAmountMinor &&
+        record.requestedPrincipalMinor <= listing.maxAmountMinor,
+      `application ${record.applicationId} amount is outside listing terms`,
+    );
+    assert(
+      record.requestedTenureMonths >= listing.minTenureMonths &&
+        record.requestedTenureMonths <= listing.maxTenureMonths,
+      `application ${record.applicationId} tenure is outside listing terms`,
     );
     if (record.convertedLoanId)
       assert(

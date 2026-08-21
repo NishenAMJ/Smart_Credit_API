@@ -78,14 +78,24 @@ export class CreditScoreService {
       profile = profileDoc.data() ?? {};
     }
 
-    const score = this.clampScore(this.toNumber(profile.creditScore, 300));
+    const borrowerProfile = this.borrowerProfileOf(profile);
+    const score = this.clampScore(
+      this.toNumber(
+        borrowerProfile.creditScore,
+        this.toNumber(profile.creditScore, 300),
+      ),
+    );
 
     return {
       score,
       rating: this.getScoreRating(score),
-      kycVerified: profile.kycVerified === true,
-      profileComplete: profile.profileComplete === true,
-      canApplyForLoan: profile.kycVerified === true,
+      kycVerified:
+        profile.kycStatus === 'approved' || profile.kycVerified === true,
+      profileComplete:
+        profile.profileComplete === true ||
+        this.calculateProfileCompleteness(profile) === 100,
+      canApplyForLoan:
+        profile.kycStatus === 'approved' || profile.kycVerified === true,
       breakdown: this.normalizeBreakdown(profile.scoreBreakdown),
       calculatedAt: profile.scoreLastCalculated ?? null,
     };
@@ -248,6 +258,7 @@ export class CreditScoreService {
 
     batch.update(profileRef, {
       creditScore: score,
+      'borrowerProfile.creditScore': score,
       scoreBreakdown: breakdown,
       scoreLastCalculated: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -320,18 +331,17 @@ export class CreditScoreService {
   private calculateProfileCompleteness(
     profile: FirebaseFirestore.DocumentData,
   ) {
-    const requiredFields = [
-      'fullName',
-      'phone',
-      'dateOfBirth',
-      'nic',
-      'address',
-      'employmentStatus',
-      'monthlyIncome',
+    const borrowerProfile = this.borrowerProfileOf(profile);
+    const requiredValues = [
+      profile.fullName,
+      profile.phone,
+      borrowerProfile.dateOfBirth ?? profile.dateOfBirth,
+      profile.nic,
+      profile.address,
+      borrowerProfile.occupation ?? profile.employmentStatus,
+      borrowerProfile.monthlyIncomeMinor ?? profile.monthlyIncome,
     ];
-    const filled = requiredFields.filter((field) => {
-      const value = profile[field];
-
+    const filled = requiredValues.filter((value) => {
       if (value === undefined || value === null || value === '') {
         return false;
       }
@@ -339,7 +349,17 @@ export class CreditScoreService {
       return !(typeof value === 'object' && Object.keys(value).length === 0);
     }).length;
 
-    return (filled / requiredFields.length) * 100;
+    return (filled / requiredValues.length) * 100;
+  }
+
+  private borrowerProfileOf(
+    profile: FirebaseFirestore.DocumentData,
+  ): FirebaseFirestore.DocumentData {
+    return profile.borrowerProfile &&
+      typeof profile.borrowerProfile === 'object' &&
+      !Array.isArray(profile.borrowerProfile)
+      ? profile.borrowerProfile
+      : {};
   }
 
   /** Safely casts a raw breakdown value to the typed breakdown record, returning empty if invalid. */

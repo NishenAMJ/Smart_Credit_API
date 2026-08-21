@@ -28,6 +28,7 @@ type CreateLenderAdBody = {
   minAmount?: number | string;
   maxAmount?: number | string;
   interestRate?: number | string;
+  minTenureMonths?: number | string;
   tenureMonths?: number | string;
   borrowerFocus?: string;
   processingTime?: string;
@@ -99,22 +100,23 @@ export class LenderAdsController {
 
   private toUpdateInput(body: UpdateLenderAdBody) {
     return {
-      headline:
-        typeof body.headline === 'string' ? body.headline : undefined,
+      headline: typeof body.headline === 'string' ? body.headline : undefined,
       minAmount: this.toOptionalBodyNumber(body.minAmount, 'minAmount'),
       maxAmount: this.toOptionalBodyNumber(body.maxAmount, 'maxAmount'),
       interestRate: this.toOptionalBodyNumber(
         body.interestRate,
         'interestRate',
       ),
+      minTenureMonths: this.toOptionalBodyNumber(
+        body.minTenureMonths,
+        'minTenureMonths',
+      ),
       tenureMonths: this.toOptionalBodyNumber(
         body.tenureMonths,
         'tenureMonths',
       ),
       borrowerFocus:
-        typeof body.borrowerFocus === 'string'
-          ? body.borrowerFocus
-          : undefined,
+        typeof body.borrowerFocus === 'string' ? body.borrowerFocus : undefined,
       processingTime:
         typeof body.processingTime === 'string'
           ? body.processingTime
@@ -137,6 +139,10 @@ export class LenderAdsController {
       minAmount: this.toNumber(body.minAmount, 'minAmount'),
       maxAmount: this.toNumber(body.maxAmount, 'maxAmount'),
       interestRate: this.toNumber(body.interestRate, 'interestRate'),
+      minTenureMonths: this.toOptionalBodyNumber(
+        body.minTenureMonths,
+        'minTenureMonths',
+      ),
       tenureMonths: this.toNumber(body.tenureMonths, 'tenureMonths'),
       borrowerFocus:
         typeof body.borrowerFocus === 'string' ? body.borrowerFocus : '',
@@ -174,7 +180,6 @@ export class LenderAdsController {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
-
 
   private toOptionalBodyNumber(
     value: number | string | undefined,

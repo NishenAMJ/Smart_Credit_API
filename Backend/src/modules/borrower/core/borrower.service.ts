@@ -309,40 +309,65 @@ export class BorrowerService {
     const status = this.normalizeLoanStatus(data.status);
     const createdAt = this.toTimestamp(data.createdAt) ?? now;
     const updatedAt = this.toTimestamp(data.updatedAt) ?? createdAt;
-    const startDate = this.toTimestamp(data.startDate) ?? createdAt;
-    const nextDueDate = this.toTimestamp(data.nextDueDate) ?? startDate;
-    const endDate = this.toTimestamp(data.endDate) ?? nextDueDate;
+    const startDate =
+      this.toTimestamp(data.disbursedAt) ??
+      this.toTimestamp(data.approvedAt) ??
+      this.toTimestamp(data.startDate) ??
+      createdAt;
+    const nextDueDate =
+      this.toTimestamp(data.firstPaymentDueAt) ??
+      this.toTimestamp(data.nextDueDate) ??
+      startDate;
+    const endDate =
+      this.toTimestamp(data.maturityDate) ??
+      this.toTimestamp(data.endDate) ??
+      nextDueDate;
 
-    const principalAmount = this.toNumber(data.principalAmount);
+    const principalAmount =
+      typeof data.principalMinor === 'number'
+        ? data.principalMinor / 100
+        : this.toNumber(data.principalAmount);
     const tenureMonths = this.toNumber(data.tenureMonths);
-    const totalRepayable = this.toNumber(
-      data.totalRepayable,
-      principalAmount + this.toNumber(data.totalInterest),
-    );
-    const monthlyInstallment = this.toNumber(
-      data.monthlyInstallment,
-      tenureMonths > 0 ? Math.round(totalRepayable / tenureMonths) : 0,
-    );
-    const outstandingBalance = this.toNumber(
-      data.outstandingBalance,
-      status === LoanStatus.COMPLETED ? 0 : totalRepayable || principalAmount,
-    );
+    const totalInterest =
+      typeof data.interestAmountMinor === 'number'
+        ? data.interestAmountMinor / 100
+        : this.toNumber(data.totalInterest);
+    const totalRepayable =
+      typeof data.totalRepayableMinor === 'number'
+        ? data.totalRepayableMinor / 100
+        : this.toNumber(data.totalRepayable, principalAmount + totalInterest);
+    const monthlyInstallment =
+      typeof data.monthlyInstallmentMinor === 'number'
+        ? data.monthlyInstallmentMinor / 100
+        : this.toNumber(
+            data.monthlyInstallment,
+            tenureMonths > 0 ? Math.round(totalRepayable / tenureMonths) : 0,
+          );
+    const outstandingBalance =
+      typeof data.remainingBalanceMinor === 'number'
+        ? data.remainingBalanceMinor / 100
+        : this.toNumber(
+            data.outstandingBalance,
+            status === LoanStatus.COMPLETED
+              ? 0
+              : totalRepayable || principalAmount,
+          );
 
     return {
       loanId: String(data.loanId ?? documentId ?? ''),
-      requestId: String(data.requestId ?? ''),
+      requestId: String(data.applicationId ?? data.requestId ?? ''),
       borrowerId: String(data.borrowerId ?? ''),
       lenderId: String(data.lenderId ?? ''),
       lenderName: data.lenderName ? String(data.lenderName) : undefined,
       principalAmount,
-      interestRate: this.toNumber(data.interestRate),
+      interestRate: this.toNumber(
+        data.annualInterestRate,
+        this.toNumber(data.interestRate),
+      ),
       tenureMonths,
       monthlyInstallment,
       outstandingBalance,
-      totalInterest: this.toNumber(
-        data.totalInterest,
-        Math.max(0, totalRepayable - principalAmount),
-      ),
+      totalInterest,
       status,
       startDate,
       nextDueDate,
@@ -361,8 +386,15 @@ export class BorrowerService {
     data: FirebaseFirestore.DocumentData,
     documentId?: string,
   ): Partial<Loan> & Record<string, unknown> {
-    const adId = String(data.adId ?? documentId ?? '');
-    const maxAmount = this.toNumber(data.maxAmount);
+    const adId = String(data.listingId ?? data.adId ?? documentId ?? '');
+    const minAmount =
+      typeof data.minAmountMinor === 'number'
+        ? data.minAmountMinor / 100
+        : this.toNumber(data.minAmount);
+    const maxAmount =
+      typeof data.maxAmountMinor === 'number'
+        ? data.maxAmountMinor / 100
+        : this.toNumber(data.maxAmount);
     const durationMonths = this.toNumber(
       data.maxTenureMonths,
       this.toNumber(data.tenureMonths),
@@ -377,11 +409,19 @@ export class BorrowerService {
       lenderLocation: data.location,
       principalAmount: maxAmount,
       maxAmount,
-      minAmount: this.toNumber(data.minAmount),
+      minAmount,
       amount: maxAmount,
-      interestRate: this.toNumber(data.preferredInterestRate),
+      interestRate: this.toNumber(
+        data.minInterestRateAnnual,
+        this.toNumber(data.preferredInterestRate),
+      ),
       durationMonths,
       tenureMonths: durationMonths,
+      minTenureMonths: this.toNumber(data.minTenureMonths),
+      maxTenureMonths: durationMonths,
+      preferredPurposes: Array.isArray(data.purposeCategories)
+        ? data.purposeCategories
+        : data.preferredPurposes,
       isFeatured: data.status === 'active',
     };
   }
