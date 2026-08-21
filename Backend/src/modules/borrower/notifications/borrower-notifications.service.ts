@@ -351,20 +351,28 @@ export class BorrowerNotificationsService {
     });
 
     const profile = profileSnapshot.data();
-    if (profile && profile.kycVerified !== true) {
+    if (profile && profile.kycStatus !== 'approved') {
       drafts.push(
         this.createDraft({
           id: `profile-kyc-${borrowerId}`,
           borrowerId,
           category: 'profile',
           severity: 'info',
-          title: 'Complete KYC verification',
-          message: 'Complete KYC to unlock loan applications.',
+          title:
+            profile.kycStatus === 'rejected'
+              ? 'KYC needs new documents'
+              : 'Complete KYC verification',
+          message:
+            profile.kycStatus === 'rejected'
+              ? (readString(profile.rejectionReason) ??
+                'Upload corrected identity documents for another review.')
+              : 'Complete KYC to unlock loan applications.',
           relatedEntityType: 'profile',
           relatedEntityId: borrowerId,
-          actionTarget: 'profile',
+          actionTarget:
+            profile.kycStatus === 'rejected' ? 'kyc-resubmit' : 'profile',
           createdAt: readDate(profile.createdAt) ?? new Date(),
-          metadata: { kycVerified: false },
+          metadata: { kycStatus: profile.kycStatus ?? 'not_submitted' },
         }),
       );
     }
@@ -416,9 +424,7 @@ export class BorrowerNotificationsService {
       'dispute',
       'agreement',
       'system',
-    ].includes(
-      value as string,
-    )
+    ].includes(value as string)
       ? (value as BorrowerNotificationCategory)
       : 'system';
   }

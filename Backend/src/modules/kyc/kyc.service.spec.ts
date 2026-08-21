@@ -39,6 +39,8 @@ describe('KycService', () => {
   let documentSnapshots: Record<string, any>;
   let transactionGet: jest.Mock;
   let transactionUpdate: jest.Mock;
+  let transactionSet: jest.Mock;
+  let transactionDelete: jest.Mock;
   let runTransaction: jest.Mock;
 
   const buildDataUrl = (mimeType: string, label: string) =>
@@ -53,10 +55,14 @@ describe('KycService', () => {
       data: () => documentSnapshots[docRef.id],
     }));
     transactionUpdate = jest.fn().mockResolvedValue(undefined);
+    transactionSet = jest.fn().mockResolvedValue(undefined);
+    transactionDelete = jest.fn().mockResolvedValue(undefined);
     runTransaction = jest.fn(async (callback: any) =>
       callback({
         get: transactionGet,
         update: transactionUpdate,
+        set: transactionSet,
+        delete: transactionDelete,
       }),
     );
 
@@ -100,21 +106,33 @@ describe('KycService', () => {
         format: 'jpg',
         bytes: 1234,
       }),
-      decodeDataUrl: jest.fn().mockImplementation((dataUrl: string, label: string) => {
-        const mimeType = dataUrl.startsWith('data:application/pdf')
-          ? 'application/pdf'
-          : 'image/png';
-        return {
-          mimeType,
-          buffer: Buffer.from(label),
-          originalFilename: `${label}.${mimeType === 'application/pdf' ? 'pdf' : 'png'}`,
-          resourceType: mimeType === 'application/pdf' ? 'raw' : 'image',
-        };
-      }),
+      decodeDataUrl: jest
+        .fn()
+        .mockImplementation((dataUrl: string, label: string) => {
+          const mimeType = dataUrl.startsWith('data:application/pdf')
+            ? 'application/pdf'
+            : 'image/png';
+          return {
+            mimeType,
+            buffer: Buffer.from(label),
+            originalFilename: `${label}.${mimeType === 'application/pdf' ? 'pdf' : 'png'}`,
+            resourceType: mimeType === 'application/pdf' ? 'raw' : 'image',
+          };
+        }),
       validateSensitiveDocument: jest.fn(),
-      computeSha256: jest.fn((buffer: Buffer) => `hash-${buffer.toString('hex')}`),
+      computeSha256: jest.fn(
+        (buffer: Buffer) => `hash-${buffer.toString('hex')}`,
+      ),
       uploadBufferAsDocument: jest.fn().mockImplementation(
-        async (buffer: Buffer, options: { folder: string; publicId: string; resourceType: string; deliveryType: string; }) => ({
+        async (
+          buffer: Buffer,
+          options: {
+            folder: string;
+            publicId: string;
+            resourceType: string;
+            deliveryType: string;
+          },
+        ) => ({
           assetId: `asset-${options.publicId}`,
           publicId: `${options.folder}/${options.publicId}`,
           version: 1,
@@ -128,7 +146,9 @@ describe('KycService', () => {
       ),
       generateSignedDeliveryUrl: jest
         .fn()
-        .mockReturnValue('https://res.cloudinary.com/demo/raw/authenticated/s--sig--/v1/doc.pdf'),
+        .mockReturnValue(
+          'https://res.cloudinary.com/demo/raw/authenticated/s--sig--/v1/doc.pdf',
+        ),
       deleteAsset: jest.fn().mockResolvedValue({ result: 'ok' }),
     };
 
@@ -233,7 +253,9 @@ describe('KycService', () => {
   });
 
   it('rejects duplicate KYC uploads', async () => {
-    documentsService.findDuplicate.mockResolvedValueOnce({ id: 'existing-doc' });
+    documentsService.findDuplicate.mockResolvedValueOnce({
+      id: 'existing-doc',
+    });
 
     await expect(
       service.submitMobileKyc({
@@ -514,7 +536,11 @@ describe('KycService', () => {
       },
     ]);
 
-    const result = await service.approveDocument('doc-1', 'admin-1', 'looks good');
+    const result = await service.approveDocument(
+      'doc-1',
+      'admin-1',
+      'looks good',
+    );
 
     expect(runTransaction).toHaveBeenCalledTimes(1);
     expect(transactionUpdate).toHaveBeenCalled();

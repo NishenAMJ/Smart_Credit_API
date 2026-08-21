@@ -47,7 +47,7 @@ const EMPTY_EDITABLE_PROFILE = {
  * Displays borrower profile details and account-related actions.
  */
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
-  const { signOut } = useAuth();
+  const { signOut, sessionStatus } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [profile, setProfile] = useState<BorrowerProfile | null>(null);
   const [editableProfile, setEditableProfile] = useState(
@@ -504,15 +504,21 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                         paddingVertical: 4,
                         borderRadius: 4,
                       }}
-                      onPress={() =>
+                      onPress={() => {
+                        if (sessionStatus?.kycStatus === "rejected") {
+                          navigation.navigate("KycResubmission");
+                          return;
+                        }
                         Alert.alert(
-                          "Complete KYC",
-                          "Please log out and log in via the signup flow to complete your KYC submission, or contact support.",
-                        )
-                      }
+                          "KYC under review",
+                          "Your submitted documents are waiting for review.",
+                        );
+                      }}
                     >
                       <Text style={{ color: "#fff", fontSize: 12 }}>
-                        Complete KYC
+                        {sessionStatus?.kycStatus === "rejected"
+                          ? "Re-upload"
+                          : "View status"}
                       </Text>
                     </TouchableOpacity>
                   )}

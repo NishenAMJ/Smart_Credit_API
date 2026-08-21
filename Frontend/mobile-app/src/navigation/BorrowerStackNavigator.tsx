@@ -20,6 +20,7 @@ import AgreementsListScreen from "../screens/shared/AgreementsListScreen";
 import LegalAgreementScreen from "../screens/shared/LegalAgreementScreen";
 import AiAssistantScreen from "../screens/shared/AiAssistantScreen";
 import DisputesScreen from "../screens/shared/DisputesScreen";
+import KycResubmissionScreen from "../screens/borrower/KycResubmissionScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -44,6 +45,7 @@ export default function BorrowerStackNavigator() {
       <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
       <Stack.Screen name="ContactSupport" component={ContactSupportScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="KycResubmission" component={KycResubmissionScreen} />
       <Stack.Screen name="BorrowerChat" component={ChatNavigator} />
       <Stack.Screen
         name="NearbyLendersMap"

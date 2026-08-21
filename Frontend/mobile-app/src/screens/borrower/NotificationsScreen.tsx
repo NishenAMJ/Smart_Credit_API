@@ -35,7 +35,8 @@ function formatRelativeTime(value: string) {
   if (diffMinutes < 60) return `${diffMinutes} min ago`;
 
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  if (diffHours < 24)
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
 
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
@@ -130,6 +131,10 @@ export default function NotificationsScreen({
 
   const handleNotificationPress = async (item: BorrowerNotification) => {
     await markOneAsRead(item);
+    if (item.actionTarget === "kyc-resubmit") {
+      navigation.navigate("KycResubmission");
+      return;
+    }
     if (item.category === "agreement") {
       const loanId =
         typeof item.metadata.loanId === "string"

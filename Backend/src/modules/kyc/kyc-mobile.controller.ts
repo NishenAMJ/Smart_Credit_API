@@ -1,10 +1,19 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { KycService } from './kyc.service';
 import { SubmitKycDto } from './dto/submit-kyc.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
+import { ResubmitKycDto } from './dto/resubmit-kyc.dto';
 
 @Controller('kyc')
 export class KycMobileController {
@@ -15,10 +24,21 @@ export class KycMobileController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('borrower', 'lender')
   async submit(@Body() dto: SubmitKycDto, @Req() req: AuthenticatedRequest) {
-    return this.kycService.submitMobileKyc(
-      dto,
+    return this.kycService.submitMobileKyc(dto, req.user.sub, req.user.role);
+  }
+
+  // Allows a signed-in user to replace rejected files without creating a new account.
+  @Post('resubmit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower', 'lender')
+  async resubmit(
+    @Body() dto: ResubmitKycDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.kycService.resubmitRejectedKyc(
       req.user.sub,
       req.user.role,
+      dto,
     );
   }
 

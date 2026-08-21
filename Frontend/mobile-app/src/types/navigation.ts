@@ -37,6 +37,7 @@ export type BorrowerStackParamList = {
   HelpCenter: undefined;
   ContactSupport: { initialCategory?: string } | undefined;
   Notifications: undefined;
+  KycResubmission: undefined;
   BorrowerChat: NavigatorScreenParams<ChatStackParamList> | undefined;
   LoanAgreement: { initialLoanId?: string } | undefined;
   NearbyLendersMap: undefined;

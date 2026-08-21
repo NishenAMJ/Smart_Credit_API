@@ -62,6 +62,19 @@ export async function submitKyc(payload: SubmitKycPayload) {
   return response.data;
 }
 
+export async function resubmitKyc(payload: {
+  documentFrontUrl: string;
+  documentBackUrl: string;
+  selfieUrl?: string;
+}) {
+  const response = await apiClient.post<{
+    success: boolean;
+    kycStatus: string;
+    message: string;
+  }>("/kyc/resubmit", payload);
+  return response.data;
+}
+
 export async function getMyKycSubmission() {
   const response = await apiClient.get<MyKycSubmissionResponse>(
     ENDPOINTS.kyc.mySubmission,
