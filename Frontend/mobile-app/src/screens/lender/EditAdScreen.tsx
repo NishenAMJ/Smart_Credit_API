@@ -12,6 +12,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { AdService } from "../../services/advertisement.service";
+import { getApiErrorMessage } from "../../api/api-error";
 
 export default function EditAdScreen({ route, navigation }: any) {
   const { ad } = route.params;
@@ -47,8 +48,11 @@ export default function EditAdScreen({ route, navigation }: any) {
       Alert.alert("Success", "Ad updated successfully!", [
         { text: "OK", onPress: () => navigation.navigate("MyAds") },
       ]);
-    } catch (e: any) {
-      Alert.alert("Error", e?.response?.data?.message || "Failed to update ad");
+    } catch (error: unknown) {
+      Alert.alert(
+        "Could not update advertisement",
+        getApiErrorMessage(error, "Failed to update advertisement."),
+      );
     } finally {
       setLoading(false);
     }

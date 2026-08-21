@@ -11,6 +11,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { AdService } from "../../services/advertisement.service";
+import { getApiErrorMessage } from "../../api/api-error";
 
 // ── Status badge color config ─────────────────────
 const STATUS_STYLE: Record<
@@ -67,8 +68,11 @@ export default function MyAdsScreen({ navigation }: any) {
             ],
       );
       setNextCursor(data?.pageInfo?.nextCursor ?? null);
-    } catch (e: any) {
-      Alert.alert("Error", e?.response?.data?.message || "Failed to load ads");
+    } catch (error: unknown) {
+      Alert.alert(
+        "Could not load advertisements",
+        getApiErrorMessage(error, "Failed to load advertisements."),
+      );
     } finally {
       setLoading(false);
       loadingMoreRef.current = false;
@@ -80,8 +84,11 @@ export default function MyAdsScreen({ navigation }: any) {
     try {
       await AdService.pauseAd(adId);
       void loadAds(true);
-    } catch (e: any) {
-      Alert.alert("Error", e?.response?.data?.message || "Failed to pause ad");
+    } catch (error: unknown) {
+      Alert.alert(
+        "Could not pause advertisement",
+        getApiErrorMessage(error, "Failed to pause advertisement."),
+      );
     }
   };
 
@@ -89,10 +96,10 @@ export default function MyAdsScreen({ navigation }: any) {
     try {
       await AdService.activateAd(adId);
       void loadAds(true);
-    } catch (e: any) {
+    } catch (error: unknown) {
       Alert.alert(
-        "Error",
-        e?.response?.data?.message || "Failed to activate ad",
+        "Could not activate advertisement",
+        getApiErrorMessage(error, "Failed to activate advertisement."),
       );
     }
   };

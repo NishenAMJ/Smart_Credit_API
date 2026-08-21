@@ -9,6 +9,8 @@ export interface CreateAdvertisementInput {
   tenureMonths: number;
   borrowerFocus: string;
   processingTime: string;
+  responseTimeHours?: number;
+  preferredPurposes?: string[];
   repaymentStyle: string;
   requirements: string;
   supportNote: string;
