@@ -303,6 +303,26 @@ describe('AuthService', () => {
     );
   });
 
+  it('repairs a missing canonical roles array from a valid primary role during login', async () => {
+    const user = buildUser({
+      roles: [],
+      primaryRole: 'borrower',
+    });
+    queueQueryResult(user);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+    const response = await service.login({
+      identifier: 'nimal@example.com',
+      password: 'SmartPass123',
+    });
+
+    expect(existingDocRefs.get(user.userId)?.update).toHaveBeenCalledWith(
+      expect.objectContaining({ roles: ['borrower'] }),
+    );
+    expect(response.user.role).toBe('borrower');
+    expect(response.availableRoles).toEqual(['borrower']);
+  });
+
   it('updates the stored password hash after verifying the current password', async () => {
     const user = buildUser({
       userId: 'admin-1',

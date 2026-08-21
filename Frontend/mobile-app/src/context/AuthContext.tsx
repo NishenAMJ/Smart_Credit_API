@@ -17,6 +17,7 @@ import {
   submitKyc,
 } from "../api/services/auth.service";
 import { setAuthToken } from "../api/axios.config";
+import { getApiErrorMessage } from "../api/api-error";
 import {
   clearAuthStorage,
   getMobileSession,
@@ -170,18 +171,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   async function signIn(payload: LoginPayload) {
-  try {
-    setAuthLoading(true);
-    setError("");
-    console.log("[signIn] calling login API with:", payload.identifier);
-    const response = await login(payload);
-    console.log("[signIn] login success, uid:", response.user?.uid);
-    await hydrateWorkspace(response.accessToken, response.user);
-  } catch (nextError) {
-    console.error("[signIn] error:", nextError); 
-    
+    try {
+      setAuthLoading(true);
+      setError("");
+      const response = await login(payload);
+      await hydrateWorkspace(response.accessToken, response.user);
+    } catch (nextError) {
+      await clearAuthStorage();
+      resetWorkspaceState();
+      setError(getApiErrorMessage(nextError, "Could not sign in."));
+      throw nextError;
+    } finally {
+      setAuthLoading(false);
+    }
   }
-}
 
   async function signUp(payload: SignUpPayload) {
     try {

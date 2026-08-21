@@ -154,6 +154,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials.');
     }
 
+    await this.repairMissingCanonicalRoles(user);
+
     const activeRole = this.resolveLoginRole(user, loginDto.role);
 
     const accessToken = this.jwtService.sign({
@@ -490,6 +492,23 @@ export class AuthService {
     // Administrator accounts are intentionally exclusive. Only borrower and
     // lender roles may coexist on the same account.
     return uniqueRoles.includes('admin') ? ['admin'] : uniqueRoles;
+  }
+
+  private async repairMissingCanonicalRoles(user: UserDocument): Promise<void> {
+    if (this.getRoles(user.roles).length > 0) {
+      return;
+    }
+
+    const primaryRole = user.primaryRole;
+    if (!primaryRole || !USER_ROLES.includes(primaryRole)) {
+      return;
+    }
+
+    user.roles = [primaryRole];
+    await this.usersCollection.doc(user.userId).update({
+      roles: [primaryRole],
+      updatedAt: Timestamp.now(),
+    });
   }
 
   private hasRole(

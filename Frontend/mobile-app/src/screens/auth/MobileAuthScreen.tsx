@@ -225,10 +225,11 @@ export default function MobileAuthScreen() {
 
     if (
       !registerForm.kyc.documentFrontUrl?.trim() ||
+      !registerForm.kyc.documentBackUrl?.trim() ||
       !registerForm.kyc.selfieUrl?.trim()
     ) {
       setFieldError(
-        `${currentDocumentLabel} front file and selfie file are required for KYC.`,
+        `${currentDocumentLabel} front, back, and selfie files are required for KYC.`,
       );
       return false;
     }
