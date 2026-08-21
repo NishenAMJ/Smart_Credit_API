@@ -87,3 +87,21 @@ export interface RecordInstallmentPaymentInput {
   note?: string | null;
   paymentMethod?: 'bank_transfer' | 'qr' | 'cash' | 'card';
 }
+
+export interface ReceiptSubmissionListItem {
+  transactionId: string;
+  loanId: string;
+  installmentId: string;
+  borrowerId: string;
+  borrowerName: string;
+  amount: number;
+  currency: string;
+  receiptDocumentId: string;
+  submittedAt: string | null;
+  status: 'pending_verification';
+}
+
+export interface ReceiptVerificationDecisionInput {
+  decision: 'approve' | 'reject';
+  note?: string | null;
+}

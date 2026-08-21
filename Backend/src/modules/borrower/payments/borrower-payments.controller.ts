@@ -40,6 +40,7 @@ export class BorrowerPaymentsController {
       paymentMethod?: RepaymentMethod;
       transactionReference?: string;
       paymentProofUrl?: string;
+      receiptDocumentId?: string;
       borrowerId?: string;
     },
     @Query('borrowerId') borrowerId?: string,
@@ -114,14 +115,6 @@ export class BorrowerPaymentsController {
     return {
       success: true,
       data: await this.borrowerPaymentsService.verifyQrToken(payload.token),
-    };
-  }
-
-  @Post('payments/upload-receipt')
-  uploadReceipt(@Body() payload: Record<string, unknown>) {
-    return {
-      success: true,
-      data: this.borrowerPaymentsService.uploadReceipt(payload),
     };
   }
 

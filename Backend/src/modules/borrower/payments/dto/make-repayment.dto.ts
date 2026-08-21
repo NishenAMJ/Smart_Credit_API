@@ -34,4 +34,8 @@ export class MakeRepaymentDto {
   @IsString()
   @IsOptional()
   paymentProofUrl?: string; // Firebase Storage URL
+
+  @IsString()
+  @IsOptional()
+  receiptDocumentId?: string;
 }

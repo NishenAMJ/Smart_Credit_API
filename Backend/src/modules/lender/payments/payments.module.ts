@@ -8,6 +8,7 @@ import { PaymentsDataService } from './payments-data.service';
 import { PaymentsService } from './payments.service';
 import { PaymentsExportService } from './payments-export.service';
 import { LenderSmsModule } from '../sms/lender-sms.module';
+import { ReceiptVerificationService } from './receipt-verification.service';
 
 @Module({
   imports: [FirebaseModule, AuthModule, LenderSmsModule],
@@ -18,6 +19,7 @@ import { LenderSmsModule } from '../sms/lender-sms.module';
     PaymentLedgerDetailsService,
     PaymentsDataService,
     PaymentsExportService,
+    ReceiptVerificationService,
   ],
   exports: [PaymentsService, InstallmentPaymentService],
 })

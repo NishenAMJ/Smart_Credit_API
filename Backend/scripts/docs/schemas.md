@@ -123,7 +123,7 @@ fullName?: string
 email?: string
 phone?: string
 userKycStatus?: string
-category: 'kyc' | 'agreement'
+category: 'kyc' | 'agreement' | 'dispute_evidence' | 'payment_receipt'
 documentType: string
 originalFilename: string
 mimeType: string
@@ -295,7 +295,8 @@ updatedAt: Timestamp
 transactionId: string
 type: 'disbursement' | 'repayment' | 'platform_fee' | 'listing_boost' |
       'refund' | 'adjustment'
-status: 'pending' | 'completed' | 'failed' | 'reversed'
+status: 'pending' | 'pending_verification' | 'completed' | 'rejected' |
+        'failed' | 'reversed'
 currency: 'LKR'
 amountMinor: number
 lenderId: string | null
@@ -307,6 +308,12 @@ paymentMethod: 'bank_transfer' | 'qr' | 'cash' | 'card' | 'system' | null
 externalReference: string | null
 idempotencyKey: string
 receiptDocumentId: string | null
+requiresVerification: boolean
+verificationStatus: 'pending_verification' | 'approved' | 'rejected' | null
+verifiedByLender: boolean
+verifiedByLenderId: string | null
+reviewedAt: Timestamp | null
+rejectionReason: string | null
 note: string | null
 initiatedByUserId: string
 completedAt: Timestamp | null
@@ -315,6 +322,13 @@ createdAt: Timestamp
 
 Runtime/legacy readers also accept `amount`, `lenderName`, `lenderEmail`,
 `borrowerName`, and `borrowerEmail`.
+
+Bank-transfer receipts are private `payment_receipt` documents linked to the
+loan. The borrower submission remains `pending_verification` until the owning
+lender approves or rejects it. Approval atomically completes the transaction,
+marks the installment paid, and updates the canonical loan balance. Rejection
+keeps the installment unpaid and exposes only the lender's reason to the
+borrower.
 
 ### `disputes/{disputeId}`
 

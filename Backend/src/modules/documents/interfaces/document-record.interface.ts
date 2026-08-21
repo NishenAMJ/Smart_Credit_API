@@ -1,4 +1,8 @@
-export type DocumentCategory = 'kyc' | 'agreement' | 'dispute_evidence';
+export type DocumentCategory =
+  | 'kyc'
+  | 'agreement'
+  | 'dispute_evidence'
+  | 'payment_receipt';
 export type DocumentStatus =
   | 'pending_review'
   | 'approved'

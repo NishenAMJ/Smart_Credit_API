@@ -947,6 +947,45 @@ export class BorrowerService {
       installmentNumber,
     );
     const installmentId = installmentRecord?.ref.id;
+    if (dto.paymentMethod === RepaymentMethod.BANK_TRANSFER) {
+      if (!dto.receiptDocumentId?.trim()) {
+        throw new BadRequestException(
+          'A receipt document is required for bank transfers.',
+        );
+      }
+      if (!installmentId) {
+        throw new BadRequestException(
+          'No unpaid installment is available for this receipt.',
+        );
+      }
+      const receipt = await this.db
+        .collection('documents')
+        .doc(dto.receiptDocumentId.trim())
+        .get();
+      if (
+        !receipt.exists ||
+        receipt.get('userId') !== dto.borrowerId ||
+        receipt.get('category') !== 'payment_receipt' ||
+        receipt.get('relatedEntityType') !== 'loan' ||
+        receipt.get('relatedEntityId') !== dto.loanId
+      ) {
+        throw new BadRequestException(
+          'The receipt document does not match this borrower and loan.',
+        );
+      }
+      const duplicate = await this.db
+        .collection(this.TRANSACTIONS_COL)
+        .where('loanId', '==', dto.loanId)
+        .where('installmentId', '==', installmentId)
+        .where('status', '==', RepaymentStatus.PENDING_VERIFICATION)
+        .limit(1)
+        .get();
+      if (!duplicate.empty) {
+        throw new BadRequestException(
+          'A receipt for this installment is already waiting for lender review.',
+        );
+      }
+    }
     const rawOutstanding = Math.max(0, loan.outstandingBalance - dto.amount);
     const newOutstanding =
       rawOutstanding <= BORROWER_MONEY.ROUNDING_DUST_THRESHOLD
@@ -965,7 +1004,7 @@ export class BorrowerService {
     const verificationStatus = verifiedByLender
       ? 'approved'
       : requiresVerification
-        ? 'pending'
+        ? 'pending_verification'
         : 'awaiting_lender_scan';
 
     const repaymentData = {
@@ -981,6 +1020,7 @@ export class BorrowerService {
       paymentMethod: dto.paymentMethod,
       transactionReference: dto.transactionReference ?? null,
       paymentProofUrl: dto.paymentProofUrl ?? null,
+      receiptDocumentId: dto.receiptDocumentId?.trim() || null,
       status: status,
       dueDate: loan.nextDueDate,
       paidAt: status === RepaymentStatus.COMPLETED ? now : null,
@@ -1008,6 +1048,7 @@ export class BorrowerService {
       paymentType: dto.paymentMethod,
       transactionReference: dto.transactionReference ?? null,
       paymentProofUrl: dto.paymentProofUrl ?? null,
+      receiptDocumentId: dto.receiptDocumentId?.trim() || null,
       requiresVerification,
       verificationStatus,
       verifiedByLender,

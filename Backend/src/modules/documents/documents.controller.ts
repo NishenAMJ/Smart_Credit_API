@@ -52,10 +52,12 @@ export class DocumentsController {
     const userId = req.user.sub;
     const category = body.category;
 
-    if (!['kyc', 'agreement', 'dispute_evidence'].includes(category)) {
-      throw new BadRequestException(
-        'category must be "kyc", "agreement", or "dispute_evidence".',
-      );
+    if (
+      !['kyc', 'agreement', 'dispute_evidence', 'payment_receipt'].includes(
+        category,
+      )
+    ) {
+      throw new BadRequestException('Unsupported document category.');
     }
 
     // Derive a stable publicId from the fileName (strip extension, sanitise).
@@ -194,6 +196,7 @@ export class DocumentsController {
 
     // Ownership check – admins bypass.
     let hasDisputeAccess = false;
+    let hasPaymentReceiptAccess = false;
     if (
       role !== 'admin' &&
       document.category === 'dispute_evidence' &&
@@ -205,11 +208,24 @@ export class DocumentsController {
         requesterId,
       );
     }
+    if (
+      role === 'lender' &&
+      document.category === 'payment_receipt' &&
+      document.relatedEntityType === 'loan' &&
+      document.relatedEntityId
+    ) {
+      hasPaymentReceiptAccess =
+        await this.documentsService.canLenderAccessLoanDocument(
+          document.relatedEntityId,
+          requesterId,
+        );
+    }
 
     if (
       role !== 'admin' &&
       document.userId !== requesterId &&
-      !hasDisputeAccess
+      !hasDisputeAccess &&
+      !hasPaymentReceiptAccess
     ) {
       throw new ForbiddenException('You do not have access to this document.');
     }

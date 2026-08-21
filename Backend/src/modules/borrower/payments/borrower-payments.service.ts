@@ -17,6 +17,7 @@ import { LoanStatus, Repayment } from '../types/borrower.types';
 
 type PaymentRecord = Record<string, unknown> & {
   loanId?: string;
+  installmentId?: string;
   lenderId?: string;
   paymentId?: string;
   repaymentId?: string;
@@ -27,6 +28,8 @@ type PaymentRecord = Record<string, unknown> & {
   createdAt?: unknown;
   paymentMethod?: unknown;
   paymentProofUrl?: unknown;
+  receiptDocumentId?: unknown;
+  rejectionReason?: unknown;
 };
 
 type PayHereOrder = {
@@ -117,6 +120,7 @@ export class BorrowerPaymentsService {
           this.toOptionalString(transaction.repaymentId) ||
           this.toOptionalString(transaction.paymentId),
         loanId: this.toOptionalString(transaction.loanId),
+        installmentId: this.toOptionalString(transaction.installmentId),
         lenderId: this.toOptionalString(transaction.lenderId),
         amount: transaction.amount,
         status: transaction.status,
@@ -124,6 +128,8 @@ export class BorrowerPaymentsService {
         createdAt: transaction.createdAt,
         paymentMethod: transaction.paymentMethod ?? transaction.paymentType,
         paymentProofUrl: transaction.paymentProofUrl,
+        receiptDocumentId: transaction.receiptDocumentId,
+        rejectionReason: transaction.rejectionReason,
         requiresVerification: transaction.requiresVerification,
         verifiedByLender: transaction.verifiedByLender,
         verificationStatus: transaction.verificationStatus,
@@ -196,8 +202,26 @@ export class BorrowerPaymentsService {
         };
       },
     );
+    const installmentsAwaitingReview = new Set(
+      enrichedRepayments
+        .filter(
+          (repayment) =>
+            this.toOptionalString(repayment.status).toLowerCase() ===
+            'pending_verification',
+        )
+        .map(
+          (repayment) =>
+            `${this.toOptionalString(repayment.loanId)}:${this.toOptionalString(repayment.installmentId)}`,
+        ),
+    );
+    const payableUpcomingPayments = upcomingPayments.filter(
+      (payment) =>
+        !installmentsAwaitingReview.has(
+          `${payment.loanId}:${payment.installmentId ?? ''}`,
+        ),
+    );
 
-    upcomingPayments.sort((first, second) => {
+    payableUpcomingPayments.sort((first, second) => {
       const firstTime = first.dueDate
         ? new Date(first.dueDate).getTime()
         : Infinity;
@@ -208,7 +232,7 @@ export class BorrowerPaymentsService {
       return firstTime - secondTime;
     });
 
-    return [...upcomingPayments, ...enrichedRepayments];
+    return [...payableUpcomingPayments, ...enrichedRepayments];
   }
 
   makePayment(payload: {
@@ -217,6 +241,7 @@ export class BorrowerPaymentsService {
     paymentMethod?: RepaymentMethod;
     transactionReference?: string;
     paymentProofUrl?: string;
+    receiptDocumentId?: string;
     borrowerId: string;
   }) {
     return this.borrowerService.makeRepayment({
@@ -226,6 +251,7 @@ export class BorrowerPaymentsService {
       paymentMethod: payload.paymentMethod ?? RepaymentMethod.QR_PAYMENT,
       transactionReference: payload.transactionReference,
       paymentProofUrl: payload.paymentProofUrl,
+      receiptDocumentId: payload.receiptDocumentId,
     });
   }
 
@@ -487,13 +513,6 @@ export class BorrowerPaymentsService {
     return this.borrowerService.verifyQrToken(token);
   }
 
-  uploadReceipt(payload: Record<string, unknown>) {
-    return {
-      uploaded: true,
-      ...payload,
-    };
-  }
-
   async getTransactions(borrowerId: string) {
     const loans = await this.borrowerService.getLoans(borrowerId);
     const loanById = new Map(loans.map((loan) => [loan.loanId, loan]));
@@ -552,6 +571,8 @@ export class BorrowerPaymentsService {
           createdAt: transaction.createdAt,
           paymentMethod: transaction.paymentMethod ?? transaction.paymentType,
           paymentProofUrl: transaction.paymentProofUrl,
+          receiptDocumentId: transaction.receiptDocumentId,
+          rejectionReason: transaction.rejectionReason,
           requiresVerification: transaction.requiresVerification,
           verifiedByLender: transaction.verifiedByLender,
           verificationStatus: transaction.verificationStatus,
@@ -605,14 +626,18 @@ export class BorrowerPaymentsService {
     status?: unknown;
     paymentMethod?: unknown;
     paymentProofUrl?: unknown;
+    receiptDocumentId?: unknown;
+    rejectionReason?: unknown;
   }) {
     const status = this.toOptionalString(payment.status).toLowerCase();
     const paymentMethod = this.toOptionalString(
       payment.paymentMethod,
     ).toLowerCase();
     const hasReceipt =
-      typeof payment.paymentProofUrl === 'string' &&
-      payment.paymentProofUrl.trim().length > 0;
+      (typeof payment.receiptDocumentId === 'string' &&
+        payment.receiptDocumentId.trim().length > 0) ||
+      (typeof payment.paymentProofUrl === 'string' &&
+        payment.paymentProofUrl.trim().length > 0);
 
     if (['paid', 'completed', 'success', 'successful'].includes(status)) {
       return {
@@ -626,8 +651,9 @@ export class BorrowerPaymentsService {
       return {
         verificationStatus: 'rejected',
         statusLabel: 'Rejected',
-        statusDetail:
-          'Payment was not approved. Please retry or contact support.',
+        statusDetail: this.toOptionalString(payment.rejectionReason)
+          ? `Lender response: ${this.toOptionalString(payment.rejectionReason)}`
+          : 'Payment was not approved. Please retry or contact support.',
       };
     }
 

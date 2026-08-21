@@ -41,10 +41,19 @@ describe('BorrowerPaymentsService', () => {
     );
   });
 
-  it('should return uploaded receipt payload', () => {
-    expect(service.uploadReceipt({ receiptId: 'receipt-1' })).toEqual({
-      uploaded: true,
-      receiptId: 'receipt-1',
+  it('delegates the private receipt document reference for bank transfers', () => {
+    borrowerService.makeRepayment.mockReturnValueOnce({ repaymentId: 'r2' });
+
+    service.makePayment({
+      loanId: 'loan-1',
+      borrowerId: 'borrower-1',
+      amount: 1000,
+      paymentMethod: RepaymentMethod.BANK_TRANSFER,
+      receiptDocumentId: 'receipt-1',
     });
+
+    expect(borrowerService.makeRepayment).toHaveBeenCalledWith(
+      expect.objectContaining({ receiptDocumentId: 'receipt-1' }),
+    );
   });
 });

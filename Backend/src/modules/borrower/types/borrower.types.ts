@@ -145,6 +145,7 @@ export interface Repayment {
   paymentMethod: RepaymentMethod;
   transactionReference?: string;
   paymentProofUrl?: string;
+  receiptDocumentId?: string;
   status: RepaymentStatus;
   dueDate: FirebaseFirestore.Timestamp;
   paidAt?: FirebaseFirestore.Timestamp;

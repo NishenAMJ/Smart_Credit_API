@@ -57,6 +57,14 @@ export class DocumentsService {
     ].includes(userId);
   }
 
+  async canLenderAccessLoanDocument(loanId: string, lenderId: string) {
+    const snapshot = await this.firebaseService.db
+      .collection('loans')
+      .doc(loanId)
+      .get();
+    return snapshot.exists && snapshot.get('lenderId') === lenderId;
+  }
+
   // Fetches one stored document metadata record by id.
   async getById(documentId: string) {
     try {

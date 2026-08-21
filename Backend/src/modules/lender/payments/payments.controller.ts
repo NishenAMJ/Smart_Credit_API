@@ -20,11 +20,13 @@ import { PaymentsResponse } from './payments.types';
 import type {
   LoanLedgerDetailsResponse,
   RecordInstallmentPaymentInput,
+  ReceiptVerificationDecisionInput,
 } from './payments.types';
 import { InstallmentPaymentService } from './installment-payment.service';
 import { PaymentLedgerDetailsService } from './payment-ledger-details.service';
 import { PaymentsService } from './payments.service';
 import { PaymentsExportService } from './payments-export.service';
+import { ReceiptVerificationService } from './receipt-verification.service';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -35,7 +37,26 @@ export class PaymentsController {
     private readonly installmentPaymentService: InstallmentPaymentService,
     private readonly ledgerDetailsService: PaymentLedgerDetailsService,
     private readonly paymentsExportService: PaymentsExportService,
+    private readonly receiptVerificationService: ReceiptVerificationService,
   ) {}
+
+  @Get('receipt-submissions')
+  getReceiptSubmissions(@Req() req: AuthenticatedRequest) {
+    return this.receiptVerificationService.listPending(req.user.sub);
+  }
+
+  @Post('receipt-submissions/:transactionId/decision')
+  decideReceiptSubmission(
+    @Req() req: AuthenticatedRequest,
+    @Param('transactionId') transactionId: string,
+    @Body() body: ReceiptVerificationDecisionInput,
+  ) {
+    return this.receiptVerificationService.decide(
+      req.user.sub,
+      transactionId,
+      body,
+    );
+  }
 
   @Get()
   getPayments(
