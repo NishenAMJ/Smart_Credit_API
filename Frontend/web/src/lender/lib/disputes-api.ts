@@ -15,6 +15,7 @@ export type DisputeCategory =
   | "conduct"
   | "other";
 export type TimestampValue = { _seconds?: number };
+export type DisputeListScope = "active" | "history";
 export type Dispute = {
   id: string;
   disputeCode: string;
@@ -38,7 +39,10 @@ export type Dispute = {
   };
   acknowledgements: Record<string, TimestampValue>;
   reopenCount: number;
+  createdAt: TimestampValue;
   updatedAt: TimestampValue;
+  resolvedAt?: TimestampValue | null;
+  closedAt?: TimestampValue | null;
 };
 export type DisputeEvent = {
   id: string;
@@ -54,6 +58,15 @@ export type EligibleLoan = {
   status: string;
   borrowerName?: string;
   lenderName?: string;
+  principalAmountMinor?: number | null;
+  currency?: string;
+};
+
+export type DisputeListResponse = {
+  disputes: Dispute[];
+  count: number;
+  hasMore: boolean;
+  nextCursor?: string;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -72,12 +85,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const disputeApi = {
   loans: () => request<{ loans: EligibleLoan[] }>("/disputes/eligible-loans"),
-  list: (status?: DisputeStatus) => {
+  list: (scope: DisputeListScope, cursor?: string | null) => {
     const params = new URLSearchParams({ limit: "50" });
-    if (status) params.set("status", status);
-    return request<{ disputes: Dispute[] }>(
-      `/disputes/mine?${params.toString()}`,
-    );
+    params.set("scope", scope);
+    if (cursor) params.set("cursor", cursor);
+    return request<DisputeListResponse>(`/disputes/mine?${params.toString()}`);
   },
   events: (id: string) =>
     request<{ events: DisputeEvent[] }>(`/disputes/${id}/events`),
@@ -92,9 +104,11 @@ export const disputeApi = {
       body: JSON.stringify({ message, documentIds }),
     }),
   acknowledge: (id: string) =>
-    request(`/disputes/${id}/acknowledge`, { method: "POST" }),
+    request<{ dispute: Dispute }>(`/disputes/${id}/acknowledge`, {
+      method: "POST",
+    }),
   reopen: (id: string, reason: string) =>
-    request(`/disputes/${id}/reopen`, {
+    request<{ dispute: Dispute }>(`/disputes/${id}/reopen`, {
       method: "POST",
       body: JSON.stringify({ reason }),
     }),
