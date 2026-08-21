@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { join } from 'node:path';
 import { CoreLedgerModule } from './modules/core-ledger/core-ledger.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { AppController } from './app.controller';
@@ -35,7 +36,10 @@ import { AdminQueryCacheModule } from './common/cache/admin-query-cache.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: [
+        join(process.cwd(), 'Backend', '.env'),
+        join(process.cwd(), '.env'),
+      ],
     }),
     AdminQueryCacheModule,
     CoreLedgerModule,

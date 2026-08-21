@@ -176,10 +176,12 @@ export class LenderAdsService {
   ): Promise<LenderAdsListResponse> {
     const safePageSize = Math.min(Math.max(pageSize, 1), 12);
     const collection = this.firebaseService.getDb().collection('loanListings');
-    const normalizedStatus = this.normalizeStatusFilter(status);
+    const normalizedStatuses = this.normalizeStatusFilter(status);
     const lenderQuery = collection.where('lenderId', '==', lenderId);
-    const scopedQuery = normalizedStatus
-      ? lenderQuery.where('status', '==', normalizedStatus)
+    const scopedQuery = normalizedStatuses
+      ? normalizedStatuses.length === 1
+        ? lenderQuery.where('status', '==', normalizedStatuses[0])
+        : lenderQuery.where('status', 'in', normalizedStatuses)
       : lenderQuery;
 
     try {
@@ -211,7 +213,8 @@ export class LenderAdsService {
       const orderedDocs = snapshot.docs
         .filter(
           (doc) =>
-            !normalizedStatus || getAdStatus(doc.data()) === normalizedStatus,
+            !normalizedStatuses ||
+            normalizedStatuses.includes(getAdStatus(doc.data())),
         )
         .sort((left, right) => {
           const leftTime = readDate(left.get('createdAt'))?.getTime() ?? 0;
@@ -292,8 +295,12 @@ export class LenderAdsService {
     );
   }
 
-  private normalizeStatusFilter(status?: string | null): string | null {
+  private normalizeStatusFilter(status?: string | null): string[] | null {
     if (!status) return null;
+
+    if (status === 'inactive') {
+      return ['draft', 'paused', 'rejected', 'expired', 'closed'];
+    }
 
     const supportedStatuses = new Set([
       'draft',
@@ -308,7 +315,7 @@ export class LenderAdsService {
       throw new BadRequestException('Unsupported advertisement status.');
     }
 
-    return status;
+    return [status];
   }
 
   async updateAdFromMobile(
