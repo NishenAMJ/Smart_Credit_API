@@ -45,22 +45,37 @@ export default function DisputesScreen({ navigation }: any) {
   const [evidence, setEvidence] = useState<
     DocumentPicker.DocumentPickerAsset[]
   >([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
-    try {
-      const [cases, eligible] = await Promise.all([
-        disputesService.list(),
-        disputesService.eligibleLoans(),
-      ]);
+    const [casesResult, loansResult] = await Promise.allSettled([
+      disputesService.list(),
+      disputesService.eligibleLoans(),
+    ]);
+    if (casesResult.status === "fulfilled") {
+      const cases = casesResult.value;
       setItems(cases);
-      setLoans(eligible);
       setSelected((current) =>
         current
           ? (cases.find((item) => item.id === current.id) ?? current)
           : null,
       );
-    } catch (error: any) {
-      Alert.alert("Disputes", error?.message ?? "Failed to load disputes.");
+    }
+    if (loansResult.status === "fulfilled") {
+      const eligible = loansResult.value;
+      setLoans(eligible);
+      setLoanId((current) =>
+        eligible.some((loan) => loan.id === current)
+          ? current
+          : (eligible[0]?.id ?? ""),
+      );
+    }
+    const failure = [casesResult, loansResult].find(
+      (result) => result.status === "rejected",
+    );
+    if (failure?.status === "rejected") {
+      const reason = failure.reason as { message?: string };
+      Alert.alert("Disputes", reason?.message ?? "Failed to load disputes.");
     }
   }, []);
 
@@ -81,19 +96,20 @@ export default function DisputesScreen({ navigation }: any) {
   }, [selected?.id]);
 
   async function submit() {
-    if (
-      !loanId ||
-      subject.trim().length < 3 ||
-      description.trim().length < 10 ||
-      desiredOutcome.trim().length < 3
-    ) {
-      Alert.alert(
-        "Missing details",
-        "Select a loan and complete all dispute fields.",
-      );
+    const problems: string[] = [];
+    if (!loanId) problems.push("Select an eligible loan.");
+    if (subject.trim().length < 3)
+      problems.push("Subject must contain at least 3 characters.");
+    if (description.trim().length < 10)
+      problems.push("Description must contain at least 10 characters.");
+    if (desiredOutcome.trim().length < 3)
+      problems.push("Desired outcome must contain at least 3 characters.");
+    if (problems.length) {
+      Alert.alert("Check dispute details", problems.join("\n"));
       return;
     }
     try {
+      setSubmitting(true);
       const evidenceDocumentIds = await Promise.all(
         evidence
           .slice(0, 5)
@@ -124,6 +140,8 @@ export default function DisputesScreen({ navigation }: any) {
       await load();
     } catch (error: any) {
       Alert.alert("Unable to submit", error?.message ?? "Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -191,6 +209,15 @@ export default function DisputesScreen({ navigation }: any) {
           </View>
           <ScrollView contentContainerStyle={styles.content}>
             <Text style={styles.label}>Loan</Text>
+            {loans.length === 0 ? (
+              <View style={styles.emptyLoanState}>
+                <Text style={styles.title}>No eligible loans</Text>
+                <Text style={styles.muted}>
+                  A dispute must be linked to one of your loans. No matching
+                  loan was found for this account.
+                </Text>
+              </View>
+            ) : null}
             {loans.map((loan) => (
               <TouchableOpacity
                 key={loan.id}
@@ -278,10 +305,16 @@ export default function DisputesScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.primary}
+              style={[
+                styles.primary,
+                (!loans.length || submitting) && styles.disabled,
+              ]}
+              disabled={!loans.length || submitting}
               onPress={() => void submit()}
             >
-              <Text style={styles.primaryText}>Submit dispute</Text>
+              <Text style={styles.primaryText}>
+                {submitting ? "Submitting..." : "Submit dispute"}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -470,6 +503,14 @@ const styles = StyleSheet.create({
     padding: 11,
   },
   choiceActive: { borderColor: COLORS.primary, backgroundColor: "#EFF6FF" },
+  emptyLoanState: {
+    backgroundColor: "#FFF7ED",
+    borderColor: "#FDBA74",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    gap: 5,
+  },
   input: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -485,6 +526,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryText: { color: "#fff", fontWeight: "700" },
+  disabled: { opacity: 0.5 },
   secondary: {
     backgroundColor: "#E5E7EB",
     padding: 13,

@@ -68,18 +68,22 @@ function mapDispute(dispute: AdminDispute): DisputeRow {
     id: dispute.id,
     disputeCode:
       dispute.disputeCode || `DSP-${dispute.id.slice(0, 6).toUpperCase()}`,
-    title: dispute.title || `${dispute.category} dispute`,
+    title: dispute.subject || dispute.title || `${dispute.category} dispute`,
     transactionId: dispute.transactionId || "N/A",
     loanId: dispute.loanId || "N/A",
     raisedBy:
       dispute.raisedBy ||
-      dispute.borrowerName ||
-      dispute.borrowerId ||
+      (dispute.complainantId === dispute.lenderId
+        ? dispute.lenderName || dispute.lenderId
+        : dispute.borrowerName || dispute.borrowerId) ||
+      dispute.complainantId ||
       "Unknown",
     againstUser:
       dispute.againstUser ||
-      dispute.lenderName ||
-      dispute.lenderId ||
+      (dispute.respondentId === dispute.borrowerId
+        ? dispute.borrowerName || dispute.borrowerId
+        : dispute.lenderName || dispute.lenderId) ||
+      dispute.respondentId ||
       "Unknown",
     description:
       dispute.description || dispute.title || "No description provided",
@@ -274,8 +278,13 @@ export default function Disputes() {
       globalCounts.open ??
       disputes.filter((dispute) => dispute.status === "open").length,
     inProgress:
-      globalCounts.under_review ??
-      disputes.filter((dispute) => dispute.status === "under_review").length,
+      globalCounts.under_review != null ||
+      globalCounts.awaiting_response != null
+        ? (globalCounts.under_review ?? 0) +
+          (globalCounts.awaiting_response ?? 0)
+        : disputes.filter((dispute) =>
+            ["under_review", "awaiting_response"].includes(dispute.status),
+          ).length,
     escalated:
       globalCounts.escalated ??
       disputes.filter((dispute) => dispute.status === "escalated").length,
