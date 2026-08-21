@@ -5133,6 +5133,14 @@
   gap: var(--spacing-5);
 }
 
+.payment-activity-card {
+  order: 1;
+}
+
+.receipt-review-card {
+  order: 2;
+}
+
 .pending-requests-toolbar {
   display: flex;
   align-items: flex-start;

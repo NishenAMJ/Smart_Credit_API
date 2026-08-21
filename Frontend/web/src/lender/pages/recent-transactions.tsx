@@ -75,7 +75,7 @@ export default function RecentTransactionsPage({
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [activity, setActivity] = useState<'all' | 'payment' | 'disbursement'>(
-    'all',
+    'payment',
   )
   const [reloadVersion, setReloadVersion] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
@@ -102,7 +102,7 @@ export default function RecentTransactionsPage({
     setResponse(null)
     setSearchQuery('')
     setDebouncedSearchQuery('')
-    setActivity('all')
+    setActivity('payment')
   }, [session.lenderId])
 
   useEffect(() => {
@@ -372,7 +372,7 @@ export default function RecentTransactionsPage({
           )}
         </section>
 
-        <section className="card pending-requests-card">
+        <section className="card pending-requests-card payment-activity-card">
           <div className="borrowers-toolbar">
             <div>
               <h2 className="section-title">Payment activity</h2>
