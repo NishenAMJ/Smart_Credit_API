@@ -28,15 +28,20 @@ import type {
   DisputePriority,
   DisputeRole,
   DisputeStatus,
+  ParticipantDisputeScope,
 } from './interfaces/dispute.interface';
 
-const ACTIVE_STATUSES: DisputeStatus[] = [
+const OPEN_CASE_STATUSES: DisputeStatus[] = [
   'open',
   'under_review',
   'awaiting_response',
   'escalated',
+];
+const DUPLICATE_BLOCKING_STATUSES: DisputeStatus[] = [
+  ...OPEN_CASE_STATUSES,
   'resolved',
 ];
+const HISTORY_STATUSES: DisputeStatus[] = ['resolved', 'closed'];
 const CATEGORIES: DisputeCategory[] = [
   'payment',
   'loan_terms',
@@ -45,7 +50,7 @@ const CATEGORIES: DisputeCategory[] = [
   'other',
 ];
 const PRIORITIES: DisputePriority[] = ['low', 'medium', 'high', 'critical'];
-const STATUSES: DisputeStatus[] = [...ACTIVE_STATUSES, 'closed'];
+const STATUSES: DisputeStatus[] = [...OPEN_CASE_STATUSES, ...HISTORY_STATUSES];
 const REOPEN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 @Injectable()
@@ -397,17 +402,25 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       .collection('loans')
       .where(field, '==', userId)
       .get();
+    const participantIds = snapshot.docs.flatMap((doc) => {
+      const data = doc.data();
+      return [String(data.borrowerId ?? ''), String(data.lenderId ?? '')];
+    });
+    const names = await this.getUserDisplayNames(participantIds);
     const loans = snapshot.docs.map((doc) => {
       const data = doc.data();
+      const borrowerId = String(data.borrowerId ?? '');
+      const lenderId = String(data.lenderId ?? '');
       return {
         id: doc.id,
         loanId: data.loanId ?? doc.id,
         status: data.status,
-        borrowerId: data.borrowerId,
-        lenderId: data.lenderId,
-        borrowerName: data.borrowerName,
-        lenderName: data.lenderName,
+        borrowerId,
+        lenderId,
+        borrowerName: data.borrowerName ?? names.get(borrowerId) ?? null,
+        lenderName: data.lenderName ?? names.get(lenderId) ?? null,
         principalAmountMinor:
+          data.principalMinor ??
           data.principalAmountMinor ??
           (typeof data.principalAmount === 'number'
             ? Math.round(data.principalAmount * 100)
@@ -416,6 +429,22 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       };
     });
     return { success: true, loans };
+  }
+
+  private async getUserDisplayNames(userIds: string[]) {
+    const ids = [...new Set(userIds.filter(Boolean))];
+    const names = new Map<string, string>();
+    if (!ids.length) return names;
+
+    const snapshots = await this.db.getAll(
+      ...ids.map((id) => this.db.collection('users').doc(id)),
+    );
+    snapshots.forEach((snapshot) => {
+      const data = snapshot.data() ?? {};
+      const name = String(data.fullName ?? data.name ?? '').trim();
+      if (snapshot.exists && name) names.set(snapshot.id, name);
+    });
+    return names;
   }
 
   private async validateEvidence(userId: string | null, ids: string[]) {
@@ -536,6 +565,10 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     const ref = this.db.collection('disputes').doc();
     const now = Timestamp.now();
     const respondentId = role === 'borrower' ? lenderId : borrowerId;
+    const participantNames = await this.getUserDisplayNames([
+      borrowerId,
+      lenderId,
+    ]);
     const document: Omit<Dispute, 'id'> = {
       disputeId: ref.id,
       disputeCode: `DSP-${ref.id.slice(0, 8).toUpperCase()}`,
@@ -548,8 +581,8 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       respondentRole: role === 'borrower' ? 'lender' : 'borrower',
       borrowerId,
       lenderId,
-      borrowerName: loan.borrowerName ?? '',
-      lenderName: loan.lenderName ?? '',
+      borrowerName: loan.borrowerName ?? participantNames.get(borrowerId) ?? '',
+      lenderName: loan.lenderName ?? participantNames.get(lenderId) ?? '',
       category,
       subject,
       description,
@@ -585,7 +618,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           .where('loanId', '==', loanId)
           .where('category', '==', category)
           .where('transactionId', '==', input.transactionId ?? null)
-          .where('status', 'in', ACTIVE_STATUSES)
+          .where('status', 'in', DUPLICATE_BLOCKING_STATUSES)
           .limit(1),
       );
       if (!duplicates.empty)
@@ -627,12 +660,29 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     limit?: string,
     cursor?: string,
     role: UserRole = 'borrower',
+    scope?: ParticipantDisputeScope,
   ) {
+    if (status && !STATUSES.includes(status)) {
+      throw new BadRequestException('Invalid dispute status filter.');
+    }
+    if (scope && !['active', 'history'].includes(scope)) {
+      throw new BadRequestException('Invalid dispute scope filter.');
+    }
+    if (status && scope) {
+      throw new BadRequestException(
+        'Use either a status filter or a scope filter, not both.',
+      );
+    }
     const participantField = role === 'lender' ? 'lenderId' : 'borrowerId';
     let query: FirebaseFirestore.Query = this.db
       .collection('disputes')
       .where(participantField, '==', userId);
     if (status) query = query.where('status', '==', status);
+    if (scope === 'active') {
+      query = query.where('status', 'in', OPEN_CASE_STATUSES);
+    } else if (scope === 'history') {
+      query = query.where('status', 'in', HISTORY_STATUSES);
+    }
     query = query.orderBy('updatedAt', 'desc');
     if (cursor) {
       const cursorDoc = await this.db.collection('disputes').doc(cursor).get();
@@ -778,6 +828,9 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Closed disputes cannot receive comments.');
     const visibility =
       role === 'admin' && body.visibility === 'admin' ? 'admin' : 'shared';
+    const returnsToReview =
+      role !== 'admin' && dispute.status === 'awaiting_response';
+    const nextStatus = returnsToReview ? 'under_review' : dispute.status;
     const now = Timestamp.now();
     const eventRef = ref.collection('events').doc();
     await this.db.runTransaction(async (transaction) => {
@@ -790,10 +843,15 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           visibility === 'admin' ? 'internal_note' : 'comment',
           message,
           now,
-          { documentIds, visibility },
+          {
+            documentIds,
+            visibility,
+            previousStatus: returnsToReview ? dispute.status : null,
+            nextStatus: returnsToReview ? nextStatus : null,
+          },
         ),
       });
-      transaction.update(ref, { updatedAt: now });
+      transaction.update(ref, { status: nextStatus, updatedAt: now });
       for (const id of documentIds)
         transaction.update(this.db.collection('documents').doc(id), {
           relatedEntityType: 'dispute',
@@ -801,7 +859,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           updatedAt: now,
         });
     });
-    const updated = { ...dispute, updatedAt: now };
+    const updated = { ...dispute, status: nextStatus, updatedAt: now };
     this.emit(updated, 'commented');
     if (role === 'admin')
       await this.auditAdminAction(
@@ -906,6 +964,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Invalid priority.');
     const note = this.text(reason, 'reason', 3, 500);
     const { ref, dispute } = await this.getRequired(disputeId);
+    if (dispute.status === 'closed') {
+      throw new BadRequestException(
+        'Closed disputes cannot have their priority changed.',
+      );
+    }
     const now = Timestamp.now();
     const eventRef = ref.collection('events').doc();
     await this.db.runTransaction(async (transaction) => {
@@ -1064,6 +1127,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     const eventRef = ref.collection('events').doc();
     let updated!: Dispute;
     let both = false;
+    let alreadyAcknowledged = false;
     await this.db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists) throw new NotFoundException('Dispute not found.');
@@ -1073,6 +1137,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         throw new BadRequestException(
           'Only resolved disputes can be acknowledged.',
         );
+      if (dispute.acknowledgements[userId]) {
+        alreadyAcknowledged = true;
+        updated = dispute;
+        return;
+      }
       const acknowledgements = { ...dispute.acknowledgements, [userId]: now };
       both = Boolean(
         acknowledgements[dispute.borrowerId] &&
@@ -1107,6 +1176,9 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         updatedAt: now,
       } as Dispute;
     });
+    if (alreadyAcknowledged) {
+      return { success: true, dispute: updated };
+    }
     this.emit(updated, both ? 'closed' : 'acknowledged');
     if (both)
       await this.notify(
@@ -1147,8 +1219,10 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       message,
       {
         reopenCount: dispute.reopenCount + 1,
+        resolution: null,
         acknowledgements: {},
         resolvedAt: null,
+        closedAt: null,
       },
     );
     await this.notify(

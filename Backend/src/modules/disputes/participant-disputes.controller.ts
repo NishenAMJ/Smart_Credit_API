@@ -18,7 +18,10 @@ import {
   ReopenDisputeDto,
 } from './dto/dispute.dto';
 import { DisputesService } from './disputes.service';
-import type { DisputeStatus } from './interfaces/dispute.interface';
+import type {
+  DisputeStatus,
+  ParticipantDisputeScope,
+} from './interfaces/dispute.interface';
 
 @Controller('disputes')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -46,6 +49,7 @@ export class ParticipantDisputesController {
     @Query('status') status?: DisputeStatus,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('scope') scope?: ParticipantDisputeScope,
   ) {
     return this.disputesService.getMyDisputes(
       req.user.sub,
@@ -53,6 +57,7 @@ export class ParticipantDisputesController {
       limit,
       cursor,
       req.user.role,
+      scope,
     );
   }
 

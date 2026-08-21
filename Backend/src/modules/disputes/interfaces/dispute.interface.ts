@@ -12,6 +12,7 @@ export type DisputeStatus =
   | 'escalated'
   | 'resolved'
   | 'closed';
+export type ParticipantDisputeScope = 'active' | 'history';
 export type DisputePriority = 'low' | 'medium' | 'high' | 'critical';
 export type DisputeEventVisibility = 'shared' | 'admin';
 
