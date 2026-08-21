@@ -178,7 +178,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   function redirectToLender(nextSession: SharedSession) {
     clearAdminSession();
     setLenderSession(nextSession.accessToken, nextSession.user);
-    navigate("/lender", { replace: true });
+    navigate("/lender/dashboard", { replace: true });
   }
 
   function handleSuccessfulSession(
