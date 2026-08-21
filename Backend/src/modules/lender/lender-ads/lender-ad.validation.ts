@@ -58,6 +58,17 @@ export function validateCreateLenderAdInput(input: CreateLenderAdInput): void {
     );
   }
 
+  if (
+    input.responseTimeHours !== undefined &&
+    (!Number.isInteger(input.responseTimeHours) ||
+      input.responseTimeHours < 1 ||
+      input.responseTimeHours > 168)
+  ) {
+    throw new BadRequestException(
+      'responseTimeHours must be a whole number between 1 and 168.',
+    );
+  }
+
   const requiredText: Array<[keyof CreateLenderAdInput, string, number]> = [
     ['borrowerFocus', input.borrowerFocus, 8],
     ['processingTime', input.processingTime, 6],
