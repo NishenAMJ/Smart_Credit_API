@@ -210,11 +210,11 @@ export default function LenderDashboardScreen({ navigation }: any) {
             onPress={() => navigation.navigate("ApplicationsReceived")}
           />
           <QuickAction
-            icon="trending-up"
-            backgroundColor="#FEF2F2"
-            iconColor={COLORS.danger}
-            label="Active Loans"
-            onPress={() => navigation.navigate("ActiveLoans")}
+            icon="message-circle"
+            backgroundColor="#F5F3FF"
+            iconColor="#8B5CF6"
+            label="AI Assistant"
+            onPress={() => navigation.navigate("AiAssistant")}
           />
           <QuickAction
             icon="radio"
