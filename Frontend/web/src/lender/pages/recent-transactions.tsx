@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Check, Eye, FileCheck2, RefreshCw, X } from 'lucide-react'
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Check,
+  Eye,
+  FileCheck2,
+  RefreshCw,
+  Search,
+  X,
+} from 'lucide-react'
 import BorrowerSidePanel from '../components/borrowers/BorrowerSidePanel'
 import PaymentCsvExport from '../components/payments/PaymentCsvExport'
 import type { LenderSession } from '../lib/lender-session'
@@ -373,32 +382,43 @@ export default function RecentTransactionsPage({
               </p>
             </div>
 
-            <div className="pending-requests-toolbar__controls">
-              <label className="search-field">
-                <span className="search-field__icon">Show</span>
-                <select
-                  className="input"
-                  aria-label="Filter payment activity"
-                  value={activity}
-                  onChange={(event) =>
-                    setActivity(
-                      event.target.value as 'all' | 'payment' | 'disbursement',
-                    )
-                  }
+            <div className="pending-requests-toolbar__controls payment-activity-toolbar">
+              <div
+                className="payment-activity-filter"
+                role="group"
+                aria-label="Filter payment activity"
+              >
+                <button
+                  type="button"
+                  className={activity === 'all' ? 'is-active' : ''}
+                  aria-pressed={activity === 'all'}
+                  onClick={() => setActivity('all')}
                 >
-                  <option value="all">All activity</option>
-                  <option value="payment">Payments</option>
-                  <option value="disbursement">Disbursements</option>
-                </select>
-              </label>
-              <label className="search-field">
-                <span className="search-field__icon" aria-hidden="true">
-                  Search
-                </span>
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={activity === 'payment' ? 'is-active' : ''}
+                  aria-pressed={activity === 'payment'}
+                  onClick={() => setActivity('payment')}
+                >
+                  <ArrowDownLeft size={14} /> Payments
+                </button>
+                <button
+                  type="button"
+                  className={activity === 'disbursement' ? 'is-active' : ''}
+                  aria-pressed={activity === 'disbursement'}
+                  onClick={() => setActivity('disbursement')}
+                >
+                  <ArrowUpRight size={14} /> Disbursements
+                </button>
+              </div>
+              <label className="payment-activity-search">
+                <Search size={16} aria-hidden="true" />
+                <span className="sr-only">Search payment activity</span>
                 <input
-                  className="input"
                   type="search"
-                  placeholder="Borrower, activity or installment"
+                  placeholder="Search activity"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   aria-describedby="payments-search-status"

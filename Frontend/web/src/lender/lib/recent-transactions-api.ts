@@ -83,6 +83,7 @@ export type RecordInstallmentPaymentInput = {
   amount: number
   paidAt?: string | null
   note?: string | null
+  paymentMethod?: 'bank_transfer' | 'qr' | 'cash' | 'card'
 }
 
 export type FetchRecentTransactionsOptions = {

@@ -5147,6 +5147,83 @@
   flex-wrap: wrap;
 }
 
+.payment-activity-toolbar {
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.payment-activity-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 40px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: #f1f5f9;
+}
+
+.payment-activity-filter button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.payment-activity-filter button:hover,
+.payment-activity-filter button:focus-visible {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.7);
+  transform: none;
+}
+
+.payment-activity-filter button.is-active {
+  background: #ffffff;
+  color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.payment-activity-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: min(260px, 100%);
+}
+
+.payment-activity-search > svg {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.payment-activity-search input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px 0 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: #ffffff;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-13);
+}
+
+.payment-activity-search input:focus {
+  outline: 2px solid rgba(0, 122, 255, 0.12);
+  border-color: var(--color-primary);
+}
+
 .pending-requests-select {
   display: grid;
   gap: 8px;
@@ -5663,6 +5740,11 @@
   gap: var(--spacing-4);
 }
 
+.loan-installment-record__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+}
+
 .loan-installment-record__header > div,
 .loan-installment-record__summary > div {
   display: grid;
@@ -6053,10 +6135,87 @@
   display: grid;
   gap: var(--spacing-4);
   margin-top: var(--spacing-4);
-  padding: var(--spacing-4);
+  padding: 18px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  background: rgba(248, 250, 252, 0.88);
+  background: #f8fafc;
+}
+
+.loan-payment-form__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.loan-payment-form__heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.loan-payment-form__heading strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+}
+
+.loan-payment-form__heading span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.loan-payment-form__heading > span {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: var(--radius-round);
+  background: #e2e8f0;
+  color: #475569;
+  font-weight: var(--font-weight-semibold);
+}
+
+.loan-payment-form__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.loan-payment-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.loan-payment-field--full {
+  grid-column: 1 / -1;
+}
+
+.loan-payment-field__label {
+  color: #334155;
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-semibold);
+}
+
+.loan-payment-field .input,
+.loan-payment-field .create-ad-textarea {
+  min-height: 42px;
+  border-radius: 9px;
+  border-color: #cbd5e1;
+  background: #ffffff;
+  font-size: var(--font-size-13);
+}
+
+.loan-payment-field .input[readonly] {
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: var(--font-weight-semibold);
+}
+
+.loan-payment-form__note {
+  margin: -2px 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
 }
 
 .loan-payment-form__actions {
@@ -7128,6 +7287,19 @@
     align-items: stretch;
   }
 
+  .payment-activity-toolbar {
+    justify-content: flex-start;
+  }
+
+  .payment-activity-filter,
+  .payment-activity-search {
+    width: 100%;
+  }
+
+  .payment-activity-filter button {
+    flex: 1;
+  }
+
   .notifications-toolbar__actions {
     align-items: stretch;
   }
@@ -7313,6 +7485,20 @@
 
   .loan-payment-form__actions {
     justify-content: stretch;
+  }
+
+  .loan-payment-form__heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .loan-payment-form__heading > span {
+    align-self: flex-start;
+  }
+
+  .loan-payment-form__grid,
+  .loan-installment-record__summary {
+    grid-template-columns: 1fr;
   }
 
   .loan-payment-form__actions .button {
