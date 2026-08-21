@@ -4,8 +4,11 @@ import {
   Archive,
   CheckCircle2,
   ChevronRight,
+  ExternalLink,
   FileText,
+  Maximize2,
   MessageSquareText,
+  Minimize2,
   Paperclip,
   Plus,
   RefreshCw,
@@ -116,6 +119,16 @@ export default function LenderDisputesPage({
   const [messageEvidence, setMessageEvidence] = useState<File[]>([]);
   const [reopenReason, setReopenReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [evidenceLoadingId, setEvidenceLoadingId] = useState<string | null>(
+    null,
+  );
+  const [evidencePreview, setEvidencePreview] = useState<{
+    documentId: string;
+    accessUrl: string;
+    fileName: string;
+    mimeType: string;
+  } | null>(null);
+  const [isEvidenceFullscreen, setIsEvidenceFullscreen] = useState(false);
 
   const loadCases = useCallback(
     async (append = false) => {
@@ -179,6 +192,25 @@ export default function LenderDisputesPage({
     () => subscribeToDisputes(session.accessToken, () => void loadCases(false)),
     [loadCases, session.accessToken],
   );
+
+  useEffect(() => {
+    if (!evidencePreview) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setEvidencePreview(null);
+        setIsEvidenceFullscreen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [evidencePreview]);
 
   const loadTimeline = useCallback(async (disputeId: string) => {
     try {
@@ -332,12 +364,16 @@ export default function LenderDisputesPage({
   async function openEvidence(documentId: string) {
     try {
       setActionError("");
+      setEvidenceLoadingId(documentId);
       const response = await disputeApi.evidenceAccess(documentId);
-      window.open(response.accessUrl, "_blank", "noopener,noreferrer");
+      setEvidencePreview(response);
+      setIsEvidenceFullscreen(false);
     } catch (reason) {
       setActionError(
         reason instanceof Error ? reason.message : "Evidence is unavailable.",
       );
+    } finally {
+      setEvidenceLoadingId(null);
     }
   }
 
@@ -568,9 +604,13 @@ export default function LenderDisputesPage({
                       <button
                         key={documentId}
                         type="button"
+                        disabled={evidenceLoadingId === documentId}
                         onClick={() => void openEvidence(documentId)}
                       >
-                        <FileText size={16} /> Evidence file {index + 1}
+                        <FileText size={16} />
+                        {evidenceLoadingId === documentId
+                          ? "Opening..."
+                          : `Evidence file ${index + 1}`}
                       </button>
                     ))}
                   </div>
@@ -662,9 +702,13 @@ export default function LenderDisputesPage({
                                 <button
                                   key={documentId}
                                   type="button"
+                                  disabled={evidenceLoadingId === documentId}
                                   onClick={() => void openEvidence(documentId)}
                                 >
-                                  <Paperclip size={14} /> Attachment {index + 1}
+                                  <Paperclip size={14} />
+                                  {evidenceLoadingId === documentId
+                                    ? "Opening..."
+                                    : `Attachment ${index + 1}`}
                                 </button>
                               ))}
                             </div>
@@ -868,6 +912,95 @@ export default function LenderDisputesPage({
               </button>
             </footer>
           </form>
+        </div>
+      ) : null}
+
+      {evidencePreview ? (
+        <div
+          className="dispute-evidence-preview-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setEvidencePreview(null);
+              setIsEvidenceFullscreen(false);
+            }
+          }}
+        >
+          <section
+            className={`dispute-evidence-preview${
+              isEvidenceFullscreen
+                ? " dispute-evidence-preview--fullscreen"
+                : ""
+            }`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dispute-evidence-preview-title"
+          >
+            <header className="dispute-evidence-preview__header">
+              <div>
+                <span>Dispute evidence</span>
+                <h2 id="dispute-evidence-preview-title">
+                  {evidencePreview.fileName || "Evidence file"}
+                </h2>
+              </div>
+              <div className="dispute-evidence-preview__actions">
+                <button
+                  type="button"
+                  className="dispute-icon-button"
+                  aria-label={
+                    isEvidenceFullscreen
+                      ? "Exit full-screen preview"
+                      : "Show full-screen preview"
+                  }
+                  title={
+                    isEvidenceFullscreen ? "Exit full screen" : "Full screen"
+                  }
+                  onClick={() => setIsEvidenceFullscreen((current) => !current)}
+                >
+                  {isEvidenceFullscreen ? (
+                    <Minimize2 size={18} />
+                  ) : (
+                    <Maximize2 size={18} />
+                  )}
+                </button>
+                <a
+                  className="dispute-icon-button"
+                  href={evidencePreview.accessUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Open evidence in a new tab"
+                  title="Open original"
+                >
+                  <ExternalLink size={18} />
+                </a>
+                <button
+                  type="button"
+                  className="dispute-icon-button"
+                  aria-label="Close evidence preview"
+                  onClick={() => {
+                    setEvidencePreview(null);
+                    setIsEvidenceFullscreen(false);
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </header>
+            <div className="dispute-evidence-preview__body">
+              {evidencePreview.mimeType.toLowerCase().includes("pdf") ||
+              evidencePreview.fileName.toLowerCase().endsWith(".pdf") ? (
+                <iframe
+                  src={evidencePreview.accessUrl}
+                  title={evidencePreview.fileName || "Dispute evidence PDF"}
+                />
+              ) : (
+                <img
+                  src={evidencePreview.accessUrl}
+                  alt={evidencePreview.fileName || "Dispute evidence"}
+                />
+              )}
+            </div>
+          </section>
         </div>
       ) : null}
     </section>

@@ -113,7 +113,13 @@ export const disputeApi = {
       body: JSON.stringify({ reason }),
     }),
   evidenceAccess: (id: string) =>
-    request<{ accessUrl: string }>(`/documents/${id}/access`),
+    request<{
+      documentId: string;
+      accessUrl: string;
+      expiresAt: string;
+      fileName: string;
+      mimeType: string;
+    }>(`/documents/${id}/access`),
 };
 
 export async function uploadDisputeEvidence(file: File, loanId: string) {

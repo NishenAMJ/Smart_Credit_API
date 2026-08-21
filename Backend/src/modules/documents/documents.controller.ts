@@ -242,6 +242,19 @@ export class DocumentsController {
       format: document.format,
     });
 
-    return { documentId, accessUrl, expiresAt };
+    return {
+      documentId,
+      accessUrl,
+      expiresAt,
+      fileName:
+        document.displayName ||
+        document.originalFilename ||
+        `document-${documentId}`,
+      mimeType:
+        document.mimeType ||
+        (document.format?.toLowerCase() === 'pdf'
+          ? 'application/pdf'
+          : 'application/octet-stream'),
+    };
   }
 }
