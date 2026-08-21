@@ -98,7 +98,7 @@ export default function PaymentsScreen({
   const pickReceiptImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         allowsEditing: true,
         quality: 0.8,
       });
@@ -417,6 +417,12 @@ export default function PaymentsScreen({
         paymentProof,
         loanId,
       );
+
+      if (!receiptDocumentId?.trim()) {
+        throw new Error(
+          "The receipt was uploaded, but its document record was not created. Please try again.",
+        );
+      }
 
       await paymentService.makeRepayment({
         loanId: loanId,

@@ -109,7 +109,14 @@ export const paymentService = {
         displayName: "Bank transfer receipt",
       },
     );
-    return completed.data.documentId;
+    const documentId = completed.data?.documentId?.trim();
+    if (!documentId) {
+      throw new Error(
+        "The receipt upload completed without a document ID. Please try again.",
+      );
+    }
+
+    return documentId;
   },
 
   makeRepayment: async (data: MakeRepaymentPayload) => {
