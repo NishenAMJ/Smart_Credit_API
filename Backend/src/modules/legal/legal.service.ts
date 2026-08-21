@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
   ServiceUnavailableException,
@@ -51,6 +52,7 @@ type CanonicalLoanRecord = {
 
 @Injectable()
 export class LegalService {
+  private readonly logger = new Logger(LegalService.name);
   private readonly agreements: CollectionReference<LoanAgreementDocument>;
   private readonly acceptances: CollectionReference<LoanAgreementAcceptanceDocument>;
 
@@ -569,23 +571,29 @@ export class LegalService {
         agreement.signedPdfDocumentId,
       );
       if (documentRecord && documentRecord.status !== 'deleted') {
-        const url = this.mediaService.generateSignedDeliveryUrl({
-          publicId: documentRecord.cloudinaryPublicId,
-          resourceType: documentRecord.cloudinaryResourceType,
-          deliveryType: documentRecord.cloudinaryDeliveryType,
-          version: documentRecord.cloudinaryVersion,
-          format: documentRecord.format,
-        });
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new ServiceUnavailableException(
-            'The signed agreement PDF is temporarily unavailable.',
+        try {
+          const url = this.mediaService.generateSignedDeliveryUrl({
+            publicId: documentRecord.cloudinaryPublicId,
+            resourceType: documentRecord.cloudinaryResourceType,
+            deliveryType: documentRecord.cloudinaryDeliveryType,
+            version: documentRecord.cloudinaryVersion,
+            format: documentRecord.format,
+          });
+          const response = await fetch(url);
+          if (response.ok) {
+            return {
+              buffer: Buffer.from(await response.arrayBuffer()),
+              fileName: this.buildPdfFileName(agreement),
+            };
+          }
+          this.logger.warn(
+            `Stored agreement PDF ${agreement.signedPdfDocumentId} returned HTTP ${response.status}; generating a secure fallback.`,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Stored agreement PDF ${agreement.signedPdfDocumentId} could not be retrieved; generating a secure fallback. ${error instanceof Error ? error.message : ''}`.trim(),
           );
         }
-        return {
-          buffer: Buffer.from(await response.arrayBuffer()),
-          fileName: this.buildPdfFileName(agreement),
-        };
       }
     }
 
