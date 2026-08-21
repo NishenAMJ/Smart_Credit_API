@@ -87,11 +87,13 @@ export interface LoanApplication {
  * Loan repayment lifecycle states stored in Firestore.
  */
 export enum LoanStatus {
+  PENDING_DISBURSEMENT = 'pending_disbursement',
   ACTIVE = 'active',
   COMPLETED = 'completed',
   DEFAULTED = 'defaulted',
   OVERDUE = 'overdue',
   CANCELLED = 'cancelled',
+  UNKNOWN = 'unknown',
 }
 
 /**

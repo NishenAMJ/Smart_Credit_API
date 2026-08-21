@@ -153,6 +153,38 @@ describe('BorrowerService', () => {
         outstandingBalance: 84_000,
       });
     });
+
+    it('keeps a pending-disbursement loan pending without a payment due date', async () => {
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          loanId: 'loan_pending',
+          applicationId: 'application_pending',
+          borrowerId: 'borrower_1',
+          lenderId: 'lender_1',
+          status: 'pending_disbursement',
+          principalMinor: 10_000_000,
+          totalRepayableMinor: 11_200_000,
+          monthlyInstallmentMinor: 933_333,
+          remainingBalanceMinor: 11_200_000,
+          tenureMonths: 12,
+        }),
+      });
+
+      const result = await service.getLoanById('loan_pending', 'borrower_1');
+
+      expect(result.status).toBe(LoanStatus.PENDING_DISBURSEMENT);
+      expect(result.nextDueDate).toBeNull();
+    });
+
+    it('does not normalize an unknown loan status to active', () => {
+      jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      expect((service as any).normalizeLoanStatus('future_state')).toBe(
+        LoanStatus.UNKNOWN,
+      );
+    });
+
     it('should throw NotFoundException if the loan document does not exist', async () => {
       // Arrange: Database returns exists: false
       mockGet.mockResolvedValueOnce({

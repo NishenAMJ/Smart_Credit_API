@@ -1,11 +1,13 @@
 /** @format */
 
 export type LoanStatus =
+  | "pending_disbursement"
   | "active"
   | "completed"
   | "defaulted"
   | "overdue"
-  | "cancelled";
+  | "cancelled"
+  | "unknown";
 
 export type ApplicationStatus =
   | "draft"

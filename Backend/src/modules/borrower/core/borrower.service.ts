@@ -280,7 +280,8 @@ export class BorrowerService {
   }
 
   /**
-   * Maps any raw status string to a known LoanStatus enum value, defaulting to ACTIVE.
+   * Maps a raw status string to a known LoanStatus without treating unknown
+   * lifecycle states as active loans.
    * Logs a warning when an unrecognised status is encountered so it surfaces in monitoring.
    */
   private normalizeLoanStatus(value: unknown): LoanStatus {
@@ -291,10 +292,10 @@ export class BorrowerService {
     }
 
     console.warn(
-      `[BorrowerService] Unrecognised loan status "${status}" — defaulting to ACTIVE`,
+      `[BorrowerService] Unrecognised loan status "${status}" — defaulting to UNKNOWN`,
     );
 
-    return LoanStatus.ACTIVE;
+    return LoanStatus.UNKNOWN;
   }
 
   /**
@@ -314,14 +315,17 @@ export class BorrowerService {
       this.toTimestamp(data.approvedAt) ??
       this.toTimestamp(data.startDate) ??
       createdAt;
-    const nextDueDate =
+    const scheduledDueDate =
       this.toTimestamp(data.firstPaymentDueAt) ??
-      this.toTimestamp(data.nextDueDate) ??
-      startDate;
+      this.toTimestamp(data.nextDueDate);
+    const nextDueDate =
+      scheduledDueDate ??
+      (status === LoanStatus.PENDING_DISBURSEMENT ? null : startDate);
     const endDate =
       this.toTimestamp(data.maturityDate) ??
       this.toTimestamp(data.endDate) ??
-      nextDueDate;
+      nextDueDate ??
+      startDate;
 
     const principalAmount =
       typeof data.principalMinor === 'number'
@@ -815,6 +819,10 @@ export class BorrowerService {
   > {
     const loan = await this.getLoanById(loanId, borrowerId);
 
+    if (loan.status === LoanStatus.PENDING_DISBURSEMENT) {
+      return [];
+    }
+
     // Fetch already-made repayments to mark completed installments
     const repaymentSnapshot = await this.db
       .collection(this.REPAYMENTS_COL)
@@ -901,6 +909,16 @@ export class BorrowerService {
     }
     if (loan.status === LoanStatus.CANCELLED) {
       throw new BadRequestException('Cannot repay a cancelled loan.');
+    }
+    if (loan.status === LoanStatus.PENDING_DISBURSEMENT) {
+      throw new BadRequestException(
+        'Repayments are unavailable until the loan is active.',
+      );
+    }
+    if (loan.status === LoanStatus.UNKNOWN) {
+      throw new BadRequestException(
+        'Repayments are unavailable for this loan status.',
+      );
     }
     if (dto.amount <= 0) {
       throw new BadRequestException('Repayment amount must be greater than 0.');
@@ -1084,6 +1102,16 @@ export class BorrowerService {
 
     if (loan.status === LoanStatus.COMPLETED) {
       throw new BadRequestException('Cannot generate QR for a completed loan.');
+    }
+    if (loan.status === LoanStatus.PENDING_DISBURSEMENT) {
+      throw new BadRequestException(
+        'Payment QR is unavailable until the loan is active.',
+      );
+    }
+    if (loan.status === LoanStatus.UNKNOWN) {
+      throw new BadRequestException(
+        'Payment QR is unavailable for this loan status.',
+      );
     }
 
     // Guard against loans that are not yet marked completed but carry a zero balance,

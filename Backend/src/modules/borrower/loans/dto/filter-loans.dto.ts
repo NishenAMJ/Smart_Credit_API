@@ -8,10 +8,12 @@ import {
 } from 'class-validator';
 
 export enum LoanStatusFilter {
+  PENDING_DISBURSEMENT = 'pending_disbursement',
   ACTIVE = 'active',
-  PENDING = 'pending',
+  OVERDUE = 'overdue',
   COMPLETED = 'completed',
   DEFAULTED = 'defaulted',
+  CANCELLED = 'cancelled',
 }
 
 export class FilterLoansDto {

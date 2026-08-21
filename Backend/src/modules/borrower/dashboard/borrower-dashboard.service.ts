@@ -220,7 +220,7 @@ export class BorrowerDashboardService {
     return undefined;
   }
 
-  /** Maps any raw status string to a known LoanStatus enum value, defaulting to ACTIVE. */
+  /** Maps raw loan state without counting unknown lifecycle states as active. */
   private normalizeLoanStatus(value: unknown): LoanStatus {
     const status = String(value ?? '').toLowerCase();
 
@@ -228,7 +228,7 @@ export class BorrowerDashboardService {
       return status as LoanStatus;
     }
 
-    return LoanStatus.ACTIVE;
+    return LoanStatus.UNKNOWN;
   }
 
   /**
@@ -244,8 +244,15 @@ export class BorrowerDashboardService {
     const createdAt = this.toTimestamp(data.createdAt) ?? now;
     const updatedAt = this.toTimestamp(data.updatedAt) ?? createdAt;
     const startDate = this.toTimestamp(data.startDate) ?? createdAt;
-    const nextDueDate = this.toTimestamp(data.nextDueDate) ?? startDate;
-    const endDate = this.toTimestamp(data.endDate) ?? nextDueDate;
+    const nextDueDate =
+      this.toTimestamp(data.firstPaymentDueAt) ??
+      this.toTimestamp(data.nextDueDate) ??
+      (status === LoanStatus.PENDING_DISBURSEMENT ? null : startDate);
+    const endDate =
+      this.toTimestamp(data.maturityDate) ??
+      this.toTimestamp(data.endDate) ??
+      nextDueDate ??
+      startDate;
 
     const principalAmount = this.toNumber(data.principalAmount);
     const tenureMonths = this.toNumber(data.tenureMonths);
