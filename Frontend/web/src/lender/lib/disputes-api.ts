@@ -72,7 +72,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const disputeApi = {
   loans: () => request<{ loans: EligibleLoan[] }>("/disputes/eligible-loans"),
-  list: () => request<{ disputes: Dispute[] }>("/disputes/mine?limit=50"),
+  list: (status?: DisputeStatus) => {
+    const params = new URLSearchParams({ limit: "50" });
+    if (status) params.set("status", status);
+    return request<{ disputes: Dispute[] }>(
+      `/disputes/mine?${params.toString()}`,
+    );
+  },
   events: (id: string) =>
     request<{ events: DisputeEvent[] }>(`/disputes/${id}/events`),
   create: (body: Record<string, unknown>) =>

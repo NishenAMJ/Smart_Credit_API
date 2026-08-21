@@ -10,12 +10,33 @@ import {
   type EligibleLoan,
 } from "../lib/disputes-api";
 
+type DisputeListView = "active" | "history";
+
+const FINISHED_STATUSES = new Set(["resolved", "closed"]);
+
+function getUpdatedAt(dispute: Dispute): number {
+  return (dispute.updatedAt?._seconds ?? 0) * 1000;
+}
+
+function formatUpdatedAt(dispute: Dispute): string {
+  const timestamp = getUpdatedAt(dispute);
+  if (!timestamp) return "Update date unavailable";
+
+  return `Updated ${new Intl.DateTimeFormat("en-LK", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(timestamp))}`;
+}
+
 export default function LenderDisputesPage({
   session,
 }: {
   session: LenderSession;
 }) {
   const [items, setItems] = useState<Dispute[]>([]);
+  const [listView, setListView] = useState<DisputeListView>("active");
+  const [isLoading, setIsLoading] = useState(true);
   const [loans, setLoans] = useState<EligibleLoan[]>([]);
   const [selected, setSelected] = useState<Dispute | null>(null);
   const [events, setEvents] = useState<DisputeEvent[]>([]);
@@ -35,8 +56,22 @@ export default function LenderDisputesPage({
 
   const load = useCallback(async () => {
     try {
+      setIsLoading(true);
       const [cases, eligible] = await Promise.all([
-        disputeApi.list(),
+        listView === "history"
+          ? Promise.all([
+              disputeApi.list("resolved"),
+              disputeApi.list("closed"),
+            ]).then(([resolved, closed]) => ({
+              disputes: [...resolved.disputes, ...closed.disputes].sort(
+                (left, right) => getUpdatedAt(right) - getUpdatedAt(left),
+              ),
+            }))
+          : disputeApi.list().then((response) => ({
+              disputes: response.disputes.filter(
+                (dispute) => !FINISHED_STATUSES.has(dispute.status),
+              ),
+            })),
         disputeApi.loans(),
       ]);
       setItems(cases.disputes);
@@ -44,15 +79,17 @@ export default function LenderDisputesPage({
       setError("");
       setSelected((current) =>
         current
-          ? (cases.disputes.find((item) => item.id === current.id) ?? current)
+          ? (cases.disputes.find((item) => item.id === current.id) ?? null)
           : null,
       );
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Failed to load disputes.",
       );
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [listView]);
 
   useEffect(() => {
     void load();
@@ -127,12 +164,27 @@ export default function LenderDisputesPage({
             Raise and follow loan-related cases in real time.
           </p>
         </div>
-        <button
-          className="primary-button"
-          onClick={() => setShowCreate((value) => !value)}
-        >
-          New dispute
-        </button>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              setListView((current) =>
+                current === "active" ? "history" : "active",
+              );
+              setSelected(null);
+            }}
+          >
+            {listView === "active" ? "Previous disputes" : "Active disputes"}
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setShowCreate((value) => !value)}
+          >
+            New dispute
+          </button>
+        </div>
       </header>
       {error ? (
         <div className="card">
@@ -242,9 +294,13 @@ export default function LenderDisputesPage({
         }}
       >
         <div className="card">
-          <h2 className="section-title">My cases</h2>
+          <h2 className="section-title">
+            {listView === "active" ? "Active disputes" : "Previous disputes"}
+          </h2>
           <div style={{ display: "grid", gap: 10 }}>
-            {items.length ? (
+            {isLoading ? (
+              <p className="section-subtitle">Loading disputes...</p>
+            ) : items.length ? (
               items.map((item) => (
                 <button
                   key={item.id}
@@ -259,10 +315,17 @@ export default function LenderDisputesPage({
                   <span className="badge badge-gray">
                     {item.status.replace("_", " ")}
                   </span>
+                  <small style={{ display: "block", marginTop: 8 }}>
+                    {formatUpdatedAt(item)}
+                  </small>
                 </button>
               ))
             ) : (
-              <p className="section-subtitle">No disputes yet.</p>
+              <p className="section-subtitle">
+                {listView === "active"
+                  ? "No active disputes."
+                  : "No previous disputes yet."}
+              </p>
             )}
           </div>
         </div>
