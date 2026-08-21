@@ -32,7 +32,7 @@ type ActiveAdsRequestsPageProps = {
   onOpenAgreement: (loanId: string) => void;
 };
 
-type AdStatusGroup = "active" | "pending_review";
+type AdStatusGroup = "active" | "pending_review" | "inactive";
 
 const AD_PAGE_SIZE = 12;
 const REQUEST_LIMIT = 30;
@@ -166,7 +166,11 @@ function AdvertisementCard({
             View borrower requests
           </button>
         ) : (
-          <p>Waiting for admin approval</p>
+          <p>
+            {ad.status === "pending_review"
+              ? "Waiting for admin approval"
+              : "Not currently visible to borrowers"}
+          </p>
         )}
       </footer>
     </article>
@@ -355,6 +359,8 @@ export default function ActiveAdsRequestsPage({
     useState<LenderAdsListResponse | null>(null);
   const [pendingResponse, setPendingResponse] =
     useState<LenderAdsListResponse | null>(null);
+  const [inactiveResponse, setInactiveResponse] =
+    useState<LenderAdsListResponse | null>(null);
   const [isAdsLoading, setIsAdsLoading] = useState(true);
   const [loadingMoreGroup, setLoadingMoreGroup] =
     useState<AdStatusGroup | null>(null);
@@ -383,16 +389,18 @@ export default function ActiveAdsRequestsPage({
       try {
         setIsAdsLoading(true);
         setAdsError(null);
-        const [active, pending] = await Promise.all([
+        const [active, pending, inactive] = await Promise.all([
           fetchLenderAdsPage({ pageSize: AD_PAGE_SIZE, status: "active" }),
           fetchLenderAdsPage({
             pageSize: AD_PAGE_SIZE,
             status: "pending_review",
           }),
+          fetchLenderAdsPage({ pageSize: AD_PAGE_SIZE, status: "inactive" }),
         ]);
         if (!isMounted) return;
         setActiveResponse(active);
         setPendingResponse(pending);
+        setInactiveResponse(inactive);
       } catch (loadError) {
         if (isMounted) {
           setAdsError(
@@ -457,7 +465,12 @@ export default function ActiveAdsRequestsPage({
   }, [selectedAd]);
 
   const handleLoadMore = async (group: AdStatusGroup) => {
-    const current = group === "active" ? activeResponse : pendingResponse;
+    const current =
+      group === "active"
+        ? activeResponse
+        : group === "pending_review"
+          ? pendingResponse
+          : inactiveResponse;
     const cursor = current?.pageInfo.nextCursor;
     if (!cursor || loadingMoreGroup) return;
     try {
@@ -470,8 +483,10 @@ export default function ActiveAdsRequestsPage({
       });
       if (group === "active") {
         setActiveResponse((value) => mergeAdPage(value, next));
-      } else {
+      } else if (group === "pending_review") {
         setPendingResponse((value) => mergeAdPage(value, next));
+      } else {
+        setInactiveResponse((value) => mergeAdPage(value, next));
       }
     } catch (loadError) {
       setAdsError(
@@ -575,6 +590,18 @@ export default function ActiveAdsRequestsPage({
         onPreview={setPreviewAd}
         onReviewRequests={() => undefined}
         onLoadMore={() => void handleLoadMore("pending_review")}
+      />
+      <AdvertisementSection
+        title="Paused and previous advertisements"
+        description="Offers that are paused, rejected, expired, closed, or still saved as drafts."
+        response={inactiveResponse}
+        isLoading={isAdsLoading}
+        isLoadingMore={loadingMoreGroup === "inactive"}
+        emptyMessage="No paused or previous advertisements are available."
+        canReviewRequests={false}
+        onPreview={setPreviewAd}
+        onReviewRequests={() => undefined}
+        onLoadMore={() => void handleLoadMore("inactive")}
       />
 
       {previewAd ? (

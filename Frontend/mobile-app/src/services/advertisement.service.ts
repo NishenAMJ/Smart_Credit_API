@@ -38,11 +38,20 @@ export interface AdvertisementAnalytics {
   fundingRate: number;
 }
 
+export interface AdvertisementPage {
+  ads: any[];
+  pageInfo: {
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
+}
+
 export const AdService = {
-  getMyAds: async (status?: string) => {
+  getMyAds: async (status?: string, cursor?: string | null) => {
     const params = new URLSearchParams({ pageSize: "12" });
     if (status) params.append("status", status);
-    return api.get(`/lender-ads?${params.toString()}`);
+    if (cursor) params.append("cursor", cursor);
+    return api.get<AdvertisementPage>(`/lender-ads?${params.toString()}`);
   },
 
   getAdAnalytics: async (adId: string) =>
