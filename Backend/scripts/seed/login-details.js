@@ -15,6 +15,10 @@ function writeLoginDetails(fixtures, config) {
   );
   const mode = config.loginDetailsMode || 'overwrite';
 
+  if (mode === 'none') {
+    return null;
+  }
+
   if (mode === 'if-missing' && fs.existsSync(outputPath)) {
     console.log(
       `Login details file already exists; keeping existing file at ${outputPath}.`,

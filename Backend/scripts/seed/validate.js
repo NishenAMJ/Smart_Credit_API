@@ -26,6 +26,8 @@ function validateFixtures(fixtures) {
   assertUnique(fixtures.users, 'userId', 'users');
   assertUnique(fixtures.users, 'email', 'users');
   assertUnique(fixtures.users, 'phone', 'users');
+  assertUnique(fixtures.documents, 'documentId', 'documents');
+  assertUnique(fixtures.kycSubmissions, 'submissionId', 'KYC submissions');
   assertUnique(fixtures.loanListings, 'listingId', 'loan listings');
   assertUnique(fixtures.loanApplications, 'applicationId', 'loan applications');
   assertUnique(fixtures.loans, 'loanId', 'loans');
@@ -45,6 +47,22 @@ function validateFixtures(fixtures) {
     assert(
       record.passwordHash.startsWith('$2'),
       `credential ${record.userId} is not bcrypt hashed`,
+    );
+  });
+  fixtures.kycSubmissions.forEach((submission) => {
+    const user = fixtures.users.find(
+      (record) => record.userId === submission.userId,
+    );
+    assert(Boolean(user), `KYC user ${submission.userId} is missing`);
+    assert(
+      user.kycStatus === submission.status,
+      `KYC status for ${submission.userId} differs from canonical user status`,
+    );
+    submission.documentIds.forEach((documentId) =>
+      assert(
+        documentIds.has(documentId),
+        `KYC document ${documentId} is missing`,
+      ),
     );
   });
   fixtures.loanListings.forEach((record) => {

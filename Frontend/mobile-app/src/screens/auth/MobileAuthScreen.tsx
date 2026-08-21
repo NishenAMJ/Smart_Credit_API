@@ -399,6 +399,7 @@ export default function MobileAuthScreen() {
             <View style={styles.modeRow}>
               <Pressable
                 onPress={() => resetLocalState("login")}
+                testID="auth-mode-sign-in"
                 style={[
                   styles.modeButton,
                   mode === "login" && styles.modeButtonActive,
@@ -415,6 +416,7 @@ export default function MobileAuthScreen() {
               </Pressable>
               <Pressable
                 onPress={() => resetLocalState("register")}
+                testID="auth-mode-create-account"
                 style={[
                   styles.modeButton,
                   mode === "register" && styles.modeButtonActive,
@@ -452,6 +454,8 @@ export default function MobileAuthScreen() {
                 <View style={styles.formSectionCard}>
                   <FieldLabel label="Email or phone" />
                   <Input
+                    testID="auth-identifier"
+                    accessibilityLabel="Email or phone"
                     value={loginForm.identifier}
                     onChangeText={(value) =>
                       setLoginForm((current) => ({
@@ -465,6 +469,8 @@ export default function MobileAuthScreen() {
 
                   <FieldLabel label="Password" />
                   <Input
+                    testID="auth-password"
+                    accessibilityLabel="Password"
                     value={loginForm.password}
                     onChangeText={(value) =>
                       setLoginForm((current) => ({
@@ -480,6 +486,8 @@ export default function MobileAuthScreen() {
                 <Button
                   onPress={() => void handleSignIn()}
                   disabled={authLoading}
+                  testID="auth-sign-in"
+                  accessibilityLabel="Sign in"
                 >
                   {authLoading ? "Signing in..." : "Sign In"}
                 </Button>

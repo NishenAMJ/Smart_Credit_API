@@ -1,4 +1,4 @@
-import { ServiceAccount } from 'firebase-admin';
+import { ServiceAccount } from 'firebase-admin/app';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
@@ -76,7 +76,23 @@ function resolveServiceAccountPath(): string {
   );
 }
 
-function loadFirebaseConfig(): ServiceAccount {
+export function isFirebaseEmulatorEnabled(): boolean {
+  return Boolean(
+    process.env.FIRESTORE_EMULATOR_HOST ||
+    process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+    process.env.STORAGE_EMULATOR_HOST,
+  );
+}
+
+export function getFirebaseProjectId(): string {
+  return (
+    process.env.GCLOUD_PROJECT ||
+    process.env.FIREBASE_PROJECT_ID ||
+    'smart-credit-test'
+  );
+}
+
+export function loadFirebaseConfig(): ServiceAccount {
   const serviceAccountFromEnv = parseEnvServiceAccount();
 
   if (serviceAccountFromEnv) {
@@ -109,5 +125,3 @@ function loadFirebaseConfig(): ServiceAccount {
     };
   }
 }
-
-export const firebaseConfig = loadFirebaseConfig();

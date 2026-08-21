@@ -763,19 +763,6 @@ export function rejectAd(adId: string, reason = DEFAULT_AD_REJECTION_REASON) {
   });
 }
 
-// Allows admins to reopen or reverse moderation after borrower complaints.
-export function updateAdStatus(
-  adId: string,
-  status: Extract<AdStatus, "pending" | "approved" | "rejected">,
-  options: { reason?: string; notes?: string } = {},
-) {
-  return apiRequest(`/admin/ads/${adId}/status`, {
-    method: "PATCH",
-    auth: true,
-    body: JSON.stringify({ status, ...options }),
-  });
-}
-
 // Keeps audit pages isolated from raw request details.
 export function getAuditLogs(params?: CursorQueryParams) {
   const searchParams = new URLSearchParams();

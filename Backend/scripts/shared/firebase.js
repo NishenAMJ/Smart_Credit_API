@@ -118,6 +118,25 @@ function initializeFirebase() {
     return admin.app();
   }
 
+  const useEmulator = Boolean(
+    process.env.FIRESTORE_EMULATOR_HOST ||
+      process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+      process.env.STORAGE_EMULATOR_HOST,
+  );
+
+  if (useEmulator) {
+    const projectId =
+      process.env.GCLOUD_PROJECT ||
+      process.env.FIREBASE_PROJECT_ID ||
+      'smart-credit-test';
+
+    return admin.initializeApp({
+      projectId,
+      storageBucket:
+        process.env.FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`,
+    });
+  }
+
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   const projectIdFromEnv = process.env.FIREBASE_PROJECT_ID;
   const clientEmailFromEnv = process.env.FIREBASE_CLIENT_EMAIL;

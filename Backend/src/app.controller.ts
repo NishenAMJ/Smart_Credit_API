@@ -1,14 +1,14 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import { AppService } from './app.service';
 import { FirebaseService } from './firebase/firebase.service';
-import { app } from 'firebase-admin';
+import type { App } from 'firebase-admin/app';
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly firebaseService: FirebaseService,
-    @Inject('FIREBASE_APP') private firebaseApp: app.App,
+    @Inject('FIREBASE_APP') private firebaseApp: App,
   ) {}
 
   @Get()

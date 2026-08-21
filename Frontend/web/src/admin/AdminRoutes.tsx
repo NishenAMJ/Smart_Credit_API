@@ -1,19 +1,23 @@
+import { lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import "./index.css";
 
 import AdminLayout from "./components/layout/AdminLayout";
-import Dashboard from "./pages/dashboard/Dashboard";
-import KYCApprovals from "./pages/kyc/KYCApprovals";
-import LenderAds from "./pages/lenderAds/LenderAds";
-import ManageUsers from "./pages/manageUsers/ManageUsers";
-import Analytics from "./pages/analytics/Analytics";
-import AuditLogs from "./pages/auditLogs/AuditLogs";
-import SettingsPage from "./pages/settings/Settings";
-import Disputes from "./pages/disputes/Disputes";
-import Transactions from "./pages/transactions/Transactions";
-import LegalAgreements from "./pages/agreements/LegalAgreements";
 import SignIn from "./pages/auth/SignIn";
 import SignUp from "./pages/auth/SignUp";
+
+const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
+const KYCApprovals = lazy(() => import("./pages/kyc/KYCApprovals"));
+const LenderAds = lazy(() => import("./pages/lenderAds/LenderAds"));
+const ManageUsers = lazy(() => import("./pages/manageUsers/ManageUsers"));
+const Analytics = lazy(() => import("./pages/analytics/Analytics"));
+const AuditLogs = lazy(() => import("./pages/auditLogs/AuditLogs"));
+const SettingsPage = lazy(() => import("./pages/settings/Settings"));
+const Disputes = lazy(() => import("./pages/disputes/Disputes"));
+const Transactions = lazy(() => import("./pages/transactions/Transactions"));
+const LegalAgreements = lazy(
+  () => import("./pages/agreements/LegalAgreements"),
+);
 
 function ProtectedAdminLayout() {
   const token = localStorage.getItem("adminToken");

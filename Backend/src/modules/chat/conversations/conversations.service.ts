@@ -19,7 +19,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { COLLECTIONS, ConversationDoc, UserDoc } from '../common/types';
 import { UsersService } from '../users/users.service';
@@ -84,10 +84,14 @@ export class ConversationsService {
 
     // Sort client-side: conversations with most recent messages first
     const sorted = docs.sort((a, b) => {
-      const aMs = (a.lastMessage?.createdAt as any)?.toMillis?.()
-        ?? (a.createdAt as any)?.toMillis?.() ?? 0;
-      const bMs = (b.lastMessage?.createdAt as any)?.toMillis?.()
-        ?? (b.createdAt as any)?.toMillis?.() ?? 0;
+      const aMs =
+        (a.lastMessage?.createdAt as any)?.toMillis?.() ??
+        (a.createdAt as any)?.toMillis?.() ??
+        0;
+      const bMs =
+        (b.lastMessage?.createdAt as any)?.toMillis?.() ??
+        (b.createdAt as any)?.toMillis?.() ??
+        0;
       return bMs - aMs;
     });
 
@@ -98,7 +102,10 @@ export class ConversationsService {
    * findOne
    * Fetches one conversation and verifies the caller is a participant.
    */
-  async findOne(conversationId: string, userId: string): Promise<ConversationDoc> {
+  async findOne(
+    conversationId: string,
+    userId: string,
+  ): Promise<ConversationDoc> {
     const snap = await this.firebase
       .collection(COLLECTIONS.CONVERSATIONS)
       .doc(conversationId)
@@ -125,7 +132,11 @@ export class ConversationsService {
    * setMuted
    * Adds/removes userId from mutedBy array.
    */
-  async setMuted(conversationId: string, userId: string, muted: boolean): Promise<void> {
+  async setMuted(
+    conversationId: string,
+    userId: string,
+    muted: boolean,
+  ): Promise<void> {
     const conv = await this.findOne(conversationId, userId);
     const mutedBy = new Set(conv.mutedBy);
     muted ? mutedBy.add(userId) : mutedBy.delete(userId);
@@ -188,7 +199,7 @@ export class ConversationsService {
           senderId,
           createdAt: this.firebase.serverTimestamp(),
         },
-        [`unreadCounts.${recipientId}`]: admin.firestore.FieldValue.increment(1),
+        [`unreadCounts.${recipientId}`]: FieldValue.increment(1),
       });
   }
 

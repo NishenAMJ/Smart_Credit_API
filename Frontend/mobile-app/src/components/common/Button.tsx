@@ -8,6 +8,8 @@ type ButtonProps = PropsWithChildren<{
   onPress?: () => void;
   disabled?: boolean;
   style?: ViewStyle;
+  testID?: string;
+  accessibilityLabel?: string;
 }>;
 
 export default function Button({
@@ -15,6 +17,8 @@ export default function Button({
   onPress,
   disabled = false,
   style,
+  testID,
+  accessibilityLabel,
 }: ButtonProps) {
   return (
     <TouchableOpacity
@@ -22,6 +26,8 @@ export default function Button({
       onPress={onPress}
       disabled={disabled}
       activeOpacity={0.9}
+      testID={testID}
+      accessibilityLabel={accessibilityLabel}
     >
       <Text style={styles.text}>{children}</Text>
     </TouchableOpacity>
