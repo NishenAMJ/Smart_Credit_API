@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { LenderSession } from "../lib/lender-session";
 import { createLenderAd } from "../lib/lender-ads-api";
+import { fetchLenderProfile } from "../lib/lender-profile-api";
 
 type CreateAdPageProps = {
   session: LenderSession;
@@ -151,7 +152,22 @@ export default function CreateAdPage({
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [kycStatus, setKycStatus] = useState<string | null>(null);
   const errors = useMemo(() => validateDraft(draft), [draft]);
+
+  useEffect(() => {
+    let active = true;
+    void fetchLenderProfile(session.lenderId)
+      .then((profile) => {
+        if (active) setKycStatus(profile.kycStatus);
+      })
+      .catch(() => {
+        if (active) setKycStatus("unavailable");
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.lenderId]);
 
   useEffect(() => {
     if (!saveMessage && !publishMessage) return;
@@ -204,6 +220,13 @@ export default function CreateAdPage({
     setShowValidation(true);
     setPublishError(null);
     setPublishMessage(null);
+
+    if (kycStatus !== "approved") {
+      setPublishError(
+        "Your KYC must be approved by an administrator before you can submit an advertisement.",
+      );
+      return;
+    }
 
     if (Object.keys(errors).length > 0) {
       setPublishError("Review the highlighted fields before submitting.");
@@ -304,6 +327,12 @@ export default function CreateAdPage({
               role="alert"
             >
               {publishError}
+            </p>
+          ) : null}
+          {kycStatus && kycStatus !== "approved" ? (
+            <p className="create-ad-banner create-ad-banner--error" role="status">
+              Advertisement submission is locked until your lender KYC is approved.
+              Current status: {kycStatus.replace(/_/g, " ")}.
             </p>
           ) : null}
 
@@ -536,7 +565,7 @@ export default function CreateAdPage({
               <button
                 type="submit"
                 className="create-ad-button create-ad-button--primary"
-                disabled={isPublishing}
+                disabled={isPublishing || kycStatus !== "approved"}
               >
                 <Send size={16} />
                 {isPublishing ? "Submitting…" : "Submit for review"}
@@ -590,7 +619,10 @@ export default function CreateAdPage({
                       {session.displayName}
                     </p>
                     <p className="create-ad-preview__meta">
-                      <BadgeCheck size={14} /> Verified lender
+                      <BadgeCheck size={14} />
+                      {kycStatus === "approved"
+                        ? "Verified lender"
+                        : "KYC approval pending"}
                     </p>
                   </div>
                 </div>

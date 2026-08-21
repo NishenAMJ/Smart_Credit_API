@@ -1,4 +1,5 @@
 import * as firestoreQueryUtils from '../../../firebase/firestore-query.utils';
+import { ForbiddenException } from '@nestjs/common';
 import { LenderAdsService } from './lender-ads.service';
 
 function createDoc(id: string, data: Record<string, unknown>) {
@@ -12,6 +13,48 @@ function createDoc(id: string, data: Record<string, unknown>) {
 describe('LenderAdsService', () => {
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('rejects advertisement submission until lender KYC is approved', async () => {
+    const db = {
+      collection: jest.fn((name: string) => {
+        if (name === 'users') {
+          return {
+            doc: jest.fn(() => ({
+              get: jest.fn().mockResolvedValue({
+                exists: true,
+                data: () => ({
+                  accountStatus: 'active',
+                  kycStatus: 'pending',
+                  fullName: 'Pending Lender',
+                }),
+              }),
+            })),
+          };
+        }
+        return { doc: jest.fn() };
+      }),
+    };
+    const service = new LenderAdsService(
+      { getDb: () => db } as any,
+      { create: jest.fn() } as any,
+      { getCountsForAds: jest.fn() } as any,
+    );
+
+    await expect(
+      service.createAd('lender_1', {
+        headline: 'Responsible business lending',
+        minAmount: 100000,
+        maxAmount: 500000,
+        interestRate: 12,
+        tenureMonths: 12,
+        borrowerFocus: 'Verified small business owners',
+        processingTime: 'Within 2 business days',
+        repaymentStyle: 'Monthly installments',
+        requirements: 'Approved KYC and income documents',
+        supportNote: 'Clear monthly financing for established businesses.',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('returns paginated ads from the canonical loan listings collection', async () => {

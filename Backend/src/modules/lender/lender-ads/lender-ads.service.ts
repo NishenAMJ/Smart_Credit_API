@@ -60,6 +60,7 @@ export class LenderAdsService {
     }
 
     const lenderData = lenderSnapshot.data() ?? {};
+    this.assertLenderCanSubmitAdvertisement(lenderData);
     const lenderProfile =
       lenderData.lenderProfile && typeof lenderData.lenderProfile === 'object'
         ? (lenderData.lenderProfile as Record<string, unknown>)
@@ -395,6 +396,14 @@ export class LenderAdsService {
         key !== 'status' && input[key as keyof typeof input] !== undefined,
     );
 
+    if (contentChanged) {
+      const lenderSnapshot = await db.collection('users').doc(lenderId).get();
+      if (!lenderSnapshot.exists) {
+        throw new NotFoundException('The authenticated lender was not found.');
+      }
+      this.assertLenderCanSubmitAdvertisement(lenderSnapshot.data() ?? {});
+    }
+
     if (input.headline !== undefined) update.title = input.headline.trim();
     if (input.supportNote !== undefined)
       update.description = input.supportNote.trim();
@@ -551,6 +560,22 @@ export class LenderAdsService {
     if (input.supportNote.trim().length < 12) {
       throw new BadRequestException(
         'supportNote must be at least 12 characters.',
+      );
+    }
+  }
+
+  private assertLenderCanSubmitAdvertisement(
+    lender: Record<string, unknown>,
+  ): void {
+    if (lender.accountStatus !== 'active') {
+      throw new ForbiddenException(
+        'Your lender account must be active before submitting advertisements.',
+      );
+    }
+
+    if (lender.kycStatus !== 'approved') {
+      throw new ForbiddenException(
+        'KYC approval is required before submitting advertisements. Complete KYC and wait for an administrator to approve it.',
       );
     }
   }

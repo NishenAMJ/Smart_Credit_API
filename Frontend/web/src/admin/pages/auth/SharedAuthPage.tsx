@@ -266,6 +266,10 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
       nextErrors.documentFrontUrl = "Upload the front of the ID.";
     }
 
+    if (!registerForm.kyc.documentBackUrl?.trim()) {
+      nextErrors.documentBackUrl = "Upload the back of the ID.";
+    }
+
     if (!registerForm.kyc.selfieUrl?.trim()) {
       nextErrors.selfieUrl = "Upload the selfie with your ID.";
     }

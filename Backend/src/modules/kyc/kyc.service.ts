@@ -24,7 +24,12 @@ import { buildSearchTokens } from '../../common/firestore/search-tokens';
 import { writeAuditLog } from '../../common/audit/write-audit-log';
 
 type KycUploadField = {
-  documentType: 'nic_front' | 'nic_back' | 'address_proof' | 'bank_document';
+  documentType:
+    | 'nic_front'
+    | 'nic_back'
+    | 'selfie'
+    | 'address_proof'
+    | 'bank_document';
   label: string;
   dataUrl: string;
 };
@@ -82,11 +87,6 @@ export class KycService {
       originalFilename: document.originalFilename,
       mimeType: document.mimeType,
       fileHash: document.fileHash,
-      cloudinaryAssetId: document.cloudinaryAssetId,
-      cloudinaryPublicId: document.cloudinaryPublicId,
-      cloudinaryResourceType: document.cloudinaryResourceType,
-      cloudinaryDeliveryType: document.cloudinaryDeliveryType,
-      cloudinaryVersion: document.cloudinaryVersion,
       format: document.format,
       fileSize: document.fileSize,
       status,
@@ -198,6 +198,13 @@ export class KycService {
               'nicBackDataUrl',
               'documentBackUrl',
             ]) as string,
+          }
+        : null,
+      this.firstDefined(dto, ['selfieUrl'])
+        ? {
+            documentType: 'selfie',
+            label: 'selfie',
+            dataUrl: this.firstDefined(dto, ['selfieUrl']) as string,
           }
         : null,
       this.firstDefined(dto, ['addressProofDataUrl'])
@@ -403,7 +410,6 @@ export class KycService {
       const profilePhotoSource = this.firstDefined(dto, [
         'profilePhotoUrl',
         'profilePictureUrl',
-        'selfieUrl',
       ]);
       let profilePhotoUrl = profilePhotoSource ?? '';
       let profilePictureData: any = null;
@@ -576,6 +582,24 @@ export class KycService {
     try {
       const documentRef = this.db.collection('documents').doc(documentId);
       const reviewTimestamp = admin.firestore.FieldValue.serverTimestamp();
+      const selectedDocument = await this.documentsService.getById(documentId);
+      if (!selectedDocument || selectedDocument.category !== 'kyc') {
+        throw new NotFoundException('KYC document not found');
+      }
+      const submissionDocuments = (
+        await this.documentsService.listByUser(selectedDocument.userId, 'kyc')
+      ).filter((document) => document.status !== 'deleted');
+      const documentTypes = new Set(
+        submissionDocuments.map((document) => document.documentType),
+      );
+      if (!documentTypes.has('nic_front') || !documentTypes.has('nic_back')) {
+        throw new BadRequestException(
+          'The identity front and back documents must both be uploaded before KYC can be approved.',
+        );
+      }
+      const pendingDocuments = submissionDocuments.filter(
+        (document) => document.status === 'pending_review',
+      );
       const result = await this.db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(documentRef);
         if (!snapshot.exists) {
@@ -600,23 +624,28 @@ export class KycService {
         const reviewNotes = notes?.trim() ?? '';
         const userRef = this.db.collection('users').doc(document.userId);
 
-        transaction.update(documentRef, {
-          status: 'approved',
-          reviewerId: reviewedBy ?? null,
-          reviewTimestamp,
-          reviewNotes,
-          reviewedAt: reviewTimestamp,
-          reviewedBy: reviewedBy ?? null,
-          notes: reviewNotes,
-          rejectionReason: '',
-          updatedAt: reviewTimestamp,
-          review: {
-            reviewedAt: reviewTimestamp,
-            reviewedBy: reviewedBy ?? null,
-            notes: reviewNotes,
-            rejectionReason: '',
-          },
-        });
+        for (const pendingDocument of pendingDocuments) {
+          transaction.update(
+            this.db.collection('documents').doc(pendingDocument.id),
+            {
+              status: 'approved',
+              reviewerId: reviewedBy ?? null,
+              reviewTimestamp,
+              reviewNotes,
+              reviewedAt: reviewTimestamp,
+              reviewedBy: reviewedBy ?? null,
+              notes: reviewNotes,
+              rejectionReason: '',
+              updatedAt: reviewTimestamp,
+              review: {
+                reviewedAt: reviewTimestamp,
+                reviewedBy: reviewedBy ?? null,
+                notes: reviewNotes,
+                rejectionReason: '',
+              },
+            },
+          );
+        }
 
         transaction.update(userRef, {
           kycStatus: 'approved',
@@ -626,7 +655,10 @@ export class KycService {
           notes: reviewNotes,
           updatedAt: reviewTimestamp,
         });
-        return { userId: document.userId };
+        return {
+          userId: document.userId,
+          documentIds: pendingDocuments.map((item) => item.id),
+        };
       });
       await writeAuditLog(this.db, {
         actorUserId: reviewedBy ?? 'system',
@@ -642,6 +674,7 @@ export class KycService {
         success: true,
         message: 'KYC document approved successfully',
         documentId,
+        documentIds: result.documentIds,
         userId: result.userId,
         status: 'approved',
         userKycStatus: 'approved',
@@ -649,6 +682,7 @@ export class KycService {
     } catch (error) {
       if (
         error instanceof NotFoundException ||
+        error instanceof BadRequestException ||
         error instanceof ConflictException
       ) {
         throw error;
@@ -669,6 +703,13 @@ export class KycService {
       const documentRef = this.db.collection('documents').doc(documentId);
       const reviewTimestamp = admin.firestore.FieldValue.serverTimestamp();
       const rejectionReason = reason.trim();
+      const selectedDocument = await this.documentsService.getById(documentId);
+      if (!selectedDocument || selectedDocument.category !== 'kyc') {
+        throw new NotFoundException('KYC document not found');
+      }
+      const pendingDocuments = (
+        await this.documentsService.listByUser(selectedDocument.userId, 'kyc')
+      ).filter((document) => document.status === 'pending_review');
       const result = await this.db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(documentRef);
         if (!snapshot.exists) {
@@ -692,23 +733,28 @@ export class KycService {
 
         const userRef = this.db.collection('users').doc(document.userId);
 
-        transaction.update(documentRef, {
-          status: 'rejected',
-          reviewerId: reviewedBy ?? null,
-          reviewTimestamp,
-          reviewNotes: rejectionReason,
-          reviewedAt: reviewTimestamp,
-          reviewedBy: reviewedBy ?? null,
-          notes: rejectionReason,
-          rejectionReason,
-          updatedAt: reviewTimestamp,
-          review: {
-            reviewedAt: reviewTimestamp,
-            reviewedBy: reviewedBy ?? null,
-            notes: rejectionReason,
-            rejectionReason,
-          },
-        });
+        for (const pendingDocument of pendingDocuments) {
+          transaction.update(
+            this.db.collection('documents').doc(pendingDocument.id),
+            {
+              status: 'rejected',
+              reviewerId: reviewedBy ?? null,
+              reviewTimestamp,
+              reviewNotes: rejectionReason,
+              reviewedAt: reviewTimestamp,
+              reviewedBy: reviewedBy ?? null,
+              notes: rejectionReason,
+              rejectionReason,
+              updatedAt: reviewTimestamp,
+              review: {
+                reviewedAt: reviewTimestamp,
+                reviewedBy: reviewedBy ?? null,
+                notes: rejectionReason,
+                rejectionReason,
+              },
+            },
+          );
+        }
 
         transaction.update(userRef, {
           kycStatus: 'rejected',
@@ -718,7 +764,10 @@ export class KycService {
           notes: rejectionReason,
           updatedAt: reviewTimestamp,
         });
-        return { userId: document.userId };
+        return {
+          userId: document.userId,
+          documentIds: pendingDocuments.map((item) => item.id),
+        };
       });
       await writeAuditLog(this.db, {
         actorUserId: reviewedBy ?? 'system',
@@ -734,6 +783,7 @@ export class KycService {
         success: true,
         message: 'KYC document rejected successfully',
         documentId,
+        documentIds: result.documentIds,
         userId: result.userId,
         status: 'rejected',
         userKycStatus: 'rejected',

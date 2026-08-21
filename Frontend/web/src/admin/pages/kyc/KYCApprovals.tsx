@@ -160,7 +160,11 @@ export default function KYCApprovals() {
   }
 
   async function handleApprove(record: KycRow) {
-    if (!window.confirm(`Approve KYC document for ${record.fullName}?`)) {
+    if (
+      !window.confirm(
+        `Approve the complete KYC submission for ${record.fullName}? All pending documents in this submission will be approved.`,
+      )
+    ) {
       return;
     }
 
@@ -181,7 +185,11 @@ export default function KYCApprovals() {
       return;
     }
 
-    if (!window.confirm(`Reject KYC document for ${record.fullName}?`)) {
+    if (
+      !window.confirm(
+        `Reject the complete KYC submission for ${record.fullName}? All pending documents in this submission will be rejected.`,
+      )
+    ) {
       return;
     }
 
@@ -202,8 +210,8 @@ export default function KYCApprovals() {
         <div>
           <h1 className="page-title">KYC Reviews</h1>
           <p className="page-subtitle">
-            Review pending KYC documents, open secure Cloudinary previews, and
-            approve or reject submissions.
+            Inspect every pending document through secure Cloudinary previews,
+            then approve or reject the lender's complete KYC submission.
           </p>
         </div>
         <button className="btn btn-secondary" onClick={() => void loadKyc()}>

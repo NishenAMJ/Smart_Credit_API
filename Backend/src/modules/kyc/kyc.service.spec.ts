@@ -491,11 +491,34 @@ describe('KycService', () => {
       category: 'kyc',
       status: 'pending_review',
     };
+    documentsService.getById.mockResolvedValueOnce({
+      id: 'doc-1',
+      userId: 'user-1',
+      category: 'kyc',
+      status: 'pending_review',
+    });
+    documentsService.listByUser.mockResolvedValueOnce([
+      {
+        id: 'doc-1',
+        userId: 'user-1',
+        category: 'kyc',
+        documentType: 'nic_front',
+        status: 'pending_review',
+      },
+      {
+        id: 'doc-2',
+        userId: 'user-1',
+        category: 'kyc',
+        documentType: 'nic_back',
+        status: 'pending_review',
+      },
+    ]);
 
     const result = await service.approveDocument('doc-1', 'admin-1', 'looks good');
 
     expect(runTransaction).toHaveBeenCalledTimes(1);
     expect(transactionUpdate).toHaveBeenCalled();
+    expect(result.documentIds).toEqual(['doc-1', 'doc-2']);
     expect(result.success).toBe(true);
   });
 
@@ -505,6 +528,28 @@ describe('KycService', () => {
       category: 'kyc',
       status: 'pending_review',
     };
+    documentsService.getById.mockResolvedValueOnce({
+      id: 'doc-1',
+      userId: 'user-1',
+      category: 'kyc',
+      status: 'pending_review',
+    });
+    documentsService.listByUser.mockResolvedValueOnce([
+      {
+        id: 'doc-1',
+        userId: 'user-1',
+        category: 'kyc',
+        documentType: 'nic_front',
+        status: 'pending_review',
+      },
+      {
+        id: 'doc-2',
+        userId: 'user-1',
+        category: 'kyc',
+        documentType: 'nic_back',
+        status: 'pending_review',
+      },
+    ]);
 
     const result = await service.rejectDocument(
       'doc-1',
