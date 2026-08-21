@@ -4,8 +4,10 @@ import {
   Archive,
   CheckCircle2,
   ChevronRight,
+  Eye,
   ExternalLink,
   FileText,
+  LockKeyhole,
   Maximize2,
   MessageSquareText,
   Minimize2,
@@ -125,6 +127,7 @@ export default function LenderDisputesPage({
   const [evidencePreview, setEvidencePreview] = useState<{
     documentId: string;
     accessUrl: string;
+    expiresAt: string;
     fileName: string;
     mimeType: string;
   } | null>(null);
@@ -604,13 +607,23 @@ export default function LenderDisputesPage({
                       <button
                         key={documentId}
                         type="button"
+                        className="dispute-evidence-item"
                         disabled={evidenceLoadingId === documentId}
                         onClick={() => void openEvidence(documentId)}
                       >
-                        <FileText size={16} />
-                        {evidenceLoadingId === documentId
-                          ? "Opening..."
-                          : `Evidence file ${index + 1}`}
+                        <span className="dispute-evidence-item__icon">
+                          <FileText size={18} />
+                        </span>
+                        <span className="dispute-evidence-item__copy">
+                          <strong>Evidence {index + 1}</strong>
+                          <small>Secure attachment</small>
+                        </span>
+                        <span className="dispute-evidence-item__action">
+                          <Eye size={15} />
+                          {evidenceLoadingId === documentId
+                            ? "Opening"
+                            : "Preview"}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -702,13 +715,23 @@ export default function LenderDisputesPage({
                                 <button
                                   key={documentId}
                                   type="button"
+                                  className="dispute-evidence-item dispute-evidence-item--compact"
                                   disabled={evidenceLoadingId === documentId}
                                   onClick={() => void openEvidence(documentId)}
                                 >
-                                  <Paperclip size={14} />
-                                  {evidenceLoadingId === documentId
-                                    ? "Opening..."
-                                    : `Attachment ${index + 1}`}
+                                  <span className="dispute-evidence-item__icon">
+                                    <Paperclip size={15} />
+                                  </span>
+                                  <span className="dispute-evidence-item__copy">
+                                    <strong>Attachment {index + 1}</strong>
+                                    <small>Timeline evidence</small>
+                                  </span>
+                                  <span className="dispute-evidence-item__action">
+                                    <Eye size={14} />
+                                    {evidenceLoadingId === documentId
+                                      ? "Opening"
+                                      : "Preview"}
+                                  </span>
                                 </button>
                               ))}
                             </div>
@@ -937,16 +960,26 @@ export default function LenderDisputesPage({
             aria-labelledby="dispute-evidence-preview-title"
           >
             <header className="dispute-evidence-preview__header">
-              <div>
-                <span>Dispute evidence</span>
-                <h2 id="dispute-evidence-preview-title">
-                  {evidencePreview.fileName || "Evidence file"}
-                </h2>
+              <div className="dispute-evidence-preview__identity">
+                <span className="dispute-evidence-preview__file-icon">
+                  <FileText size={20} />
+                </span>
+                <div>
+                  <span>Secure evidence preview</span>
+                  <h2 id="dispute-evidence-preview-title">
+                    {evidencePreview.fileName || "Evidence file"}
+                  </h2>
+                  <small>
+                    {evidencePreview.mimeType.includes("pdf")
+                      ? "PDF document"
+                      : "Image attachment"}
+                  </small>
+                </div>
               </div>
               <div className="dispute-evidence-preview__actions">
                 <button
                   type="button"
-                  className="dispute-icon-button"
+                  className="dispute-evidence-toolbar-button"
                   aria-label={
                     isEvidenceFullscreen
                       ? "Exit full-screen preview"
@@ -962,9 +995,12 @@ export default function LenderDisputesPage({
                   ) : (
                     <Maximize2 size={18} />
                   )}
+                  <span>
+                    {isEvidenceFullscreen ? "Exit full screen" : "Full screen"}
+                  </span>
                 </button>
                 <a
-                  className="dispute-icon-button"
+                  className="dispute-evidence-toolbar-button"
                   href={evidencePreview.accessUrl}
                   target="_blank"
                   rel="noreferrer"
@@ -972,10 +1008,11 @@ export default function LenderDisputesPage({
                   title="Open original"
                 >
                   <ExternalLink size={18} />
+                  <span>Open original</span>
                 </a>
                 <button
                   type="button"
-                  className="dispute-icon-button"
+                  className="dispute-evidence-toolbar-button dispute-evidence-toolbar-button--close"
                   aria-label="Close evidence preview"
                   onClick={() => {
                     setEvidencePreview(null);
@@ -1000,6 +1037,12 @@ export default function LenderDisputesPage({
                 />
               )}
             </div>
+            <footer className="dispute-evidence-preview__footer">
+              <span>
+                <LockKeyhole size={14} /> Temporary authenticated preview
+              </span>
+              <span>Press Esc to close</span>
+            </footer>
           </section>
         </div>
       ) : null}
