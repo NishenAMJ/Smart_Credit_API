@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/comm
 import { KycService } from './kyc.service';
 import { SubmitKycDto } from './dto/submit-kyc.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
 
 @Controller('kyc')
@@ -10,9 +12,14 @@ export class KycMobileController {
 
   // Accepts the mobile app's profile photo and KYC document payloads for a new or existing user.
   @Post('submit')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower', 'lender')
   async submit(@Body() dto: SubmitKycDto, @Req() req: AuthenticatedRequest) {
-    return this.kycService.submitMobileKyc(dto, req.user.sub);
+    return this.kycService.submitMobileKyc(
+      dto,
+      req.user.sub,
+      req.user.role,
+    );
   }
 
   // Returns the authenticated user's own uploaded KYC documents.

@@ -330,7 +330,11 @@ export class KycService {
   }
 
   // Handles the mobile onboarding flow: uploads media, stores document metadata, and creates/updates the user profile.
-  async submitMobileKyc(dto: SubmitKycDto, authenticatedUserId?: string) {
+  async submitMobileKyc(
+    dto: SubmitKycDto,
+    authenticatedUserId?: string,
+    authenticatedRole?: UserRole,
+  ) {
     const createdDocuments: DocumentRecord[] = [];
     const userId =
       authenticatedUserId ?? dto.userId ?? this.db.collection('users').doc().id;
@@ -343,6 +347,18 @@ export class KycService {
       const existingUser = userSnapshot.exists
         ? (userSnapshot.data() as ExistingKycUser)
         : null;
+      const requestedRole =
+        authenticatedRole === 'borrower' || authenticatedRole === 'lender'
+          ? authenticatedRole
+          : dto.role === 'borrower' || dto.role === 'lender'
+            ? dto.role
+            : undefined;
+
+      if (!existingUser && !requestedRole) {
+        throw new BadRequestException(
+          'A borrower or lender role is required to create a KYC profile.',
+        );
+      }
       const fullName = this.resolveOptionalField(
         dto,
         'fullName',
@@ -412,9 +428,15 @@ export class KycService {
       await userRef.set(
         removeUndefinedDeep({
           uid: userId,
-          role: [dto.role],
-          roles: [dto.role],
-          primaryRole: dto.role,
+          // Authentication owns roles. KYC only initializes these fields for a
+          // genuinely new legacy profile and never overwrites an existing account.
+          ...(!existingUser && requestedRole
+            ? {
+                role: [requestedRole],
+                roles: [requestedRole],
+                primaryRole: requestedRole,
+              }
+            : {}),
           ...(fullName ? { fullName } : {}),
           ...(email
             ? {
@@ -445,7 +467,7 @@ export class KycService {
             fullName,
             email,
             phoneNumber,
-            dto.role,
+            requestedRole,
           ]),
           authProvider: 'local',
           notes: '',

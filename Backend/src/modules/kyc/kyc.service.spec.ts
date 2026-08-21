@@ -144,6 +144,8 @@ describe('KycService', () => {
             phone: '0712345678',
             passwordHash: 'hashed-password',
             role: ['borrower'],
+            roles: ['borrower'],
+            primaryRole: 'borrower',
           }),
         }),
         set: userSet,
@@ -312,6 +314,33 @@ describe('KycService', () => {
 
     expect(result.success).toBe(true);
     expect(userSet).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves authenticated account roles during KYC submission', async () => {
+    await service.submitMobileKyc(
+      {
+        role: 'lender',
+        fullName: '',
+        email: '',
+        phoneNumber: '',
+        nic: '',
+        birthDate: '',
+        passwordHash: '',
+        nicFrontDataUrl: buildDataUrl('application/pdf', 'nic-front'),
+        nicBackDataUrl: buildDataUrl('application/pdf', 'nic-back'),
+      },
+      'user-1',
+      'borrower',
+    );
+
+    expect(userSet).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        role: expect.anything(),
+        roles: expect.anything(),
+        primaryRole: expect.anything(),
+      }),
+      { merge: true },
+    );
   });
 
   it('rolls back already uploaded files when a later upload fails', async () => {
