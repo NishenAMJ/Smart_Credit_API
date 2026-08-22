@@ -12,7 +12,7 @@
     "quality:gate": "node scripts/quality/run-workflow-gate.js",
     "quality:gate:local": "node scripts/quality/run-workflow-gate.js --skip-integration",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "nest start",
+    "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/src/main.js",
