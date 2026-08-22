@@ -867,6 +867,8 @@ export function getDisputeEvidenceAccess(documentId: string) {
     documentId: string;
     accessUrl: string;
     expiresAt: string;
+    fileName: string;
+    mimeType: string;
   }>(`/documents/${documentId}/access`, { auth: true });
 }
 
