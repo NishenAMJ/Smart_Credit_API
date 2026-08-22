@@ -24,20 +24,31 @@ export type LenderNotificationDraft = {
   metadata: Record<string, string | number>;
 };
 
+export function lenderNotificationId(lenderId: string, eventId: string): string {
+  const prefix = `lender__${lenderId}__`;
+  return eventId.startsWith(prefix) ? eventId : `${prefix}${eventId}`;
+}
+
 @Injectable()
 export class LenderNotificationWriterService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
   async create(draft: LenderNotificationDraft): Promise<void> {
+    const notificationId = lenderNotificationId(draft.lenderId, draft.id);
     const notificationRef = this.firebaseService
       .getDb()
       .collection('notifications')
-      .doc(draft.id);
+      .doc(notificationId);
     const existing = (await notificationRef.get()).data();
 
+    if (existing && existing.userId !== draft.lenderId) {
+      throw new Error('Notification ID belongs to another lender.');
+    }
+
     await notificationRef.set({
-      notificationId: draft.id,
+      notificationId,
       userId: draft.lenderId,
+      audienceRole: 'lender',
       category: draft.category,
       eventType: draft.eventType,
       title: draft.title,

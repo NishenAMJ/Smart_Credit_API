@@ -24,6 +24,7 @@ import { buildSearchTokens } from '../../common/firestore/search-tokens';
 import { writeAuditLog } from '../../common/audit/write-audit-log';
 import { ResubmitKycDto } from './dto/resubmit-kyc.dto';
 import { hasRole } from '../../firebase/firestore-query.utils';
+import { RoleNotificationService } from '../../common/notifications/role-notification.service';
 
 type KycUploadField = {
   documentType:
@@ -84,6 +85,7 @@ export class KycService {
     private readonly documentsService: DocumentsService,
     private readonly mediaService: MediaService,
     @Optional() private readonly gateway?: ChatGateway,
+    @Optional() private readonly roleNotifications?: RoleNotificationService,
   ) {}
 
   private get db() {
@@ -489,6 +491,19 @@ export class KycService {
           .set({ kycVerified: false, updatedAt: now }, { merge: true });
       }
       this.emitAdminChange(userId, 'resubmitted');
+      await this.roleNotifications?.createAdmin({
+        eventType: 'kyc_resubmitted',
+        eventId: userId,
+        category: 'kyc',
+        title: 'KYC resubmission ready for review',
+        message: 'A user resubmitted identity documents for admin review.',
+        severity: 'warning',
+        entityType: 'user',
+        entityId: userId,
+        actionLabel: 'Review KYC',
+        actionTarget: '/admin/kyc',
+        metadata: { status: 'pending' },
+      }).catch(() => undefined);
 
       return {
         success: true,
@@ -670,6 +685,19 @@ export class KycService {
         { merge: true },
       );
       this.emitAdminChange(userId, 'submitted');
+      await this.roleNotifications?.createAdmin({
+        eventType: 'kyc_submitted',
+        eventId: userId,
+        category: 'kyc',
+        title: 'New KYC submission',
+        message: 'A user submitted identity documents for admin review.',
+        severity: 'info',
+        entityType: 'user',
+        entityId: userId,
+        actionLabel: 'Review KYC',
+        actionTarget: '/admin/kyc',
+        metadata: { status: 'pending' },
+      }).catch(() => undefined);
 
       const currentSubmission = await this.getMySubmission(userId);
 
@@ -1111,10 +1139,10 @@ export class KycService {
           .doc(document.userId);
         const borrowerNotificationRef = this.db
           .collection('borrowerNotifications')
-          .doc(`kyc-approved-${document.userId}`);
+          .doc(`borrower__${document.userId}__kyc-approved-${document.userId}`);
         const lenderNotificationRef = this.db
           .collection('notifications')
-          .doc(`kyc-approved-${document.userId}`);
+          .doc(`lender__${document.userId}__kyc-approved-${document.userId}`);
 
         for (const pendingDocument of pendingDocuments) {
           transaction.update(
@@ -1175,20 +1203,21 @@ export class KycService {
           transaction.delete(
             this.db
               .collection('borrowerNotifications')
-              .doc(`profile-kyc-${document.userId}`),
+              .doc(`borrower__${document.userId}__profile-kyc-${document.userId}`),
           );
           transaction.delete(
             this.db
               .collection('borrowerNotifications')
-              .doc(`kyc-rejected-${document.userId}`),
+              .doc(`borrower__${document.userId}__kyc-rejected-${document.userId}`),
           );
         }
         if (isLender) {
           transaction.set(
             lenderNotificationRef,
             {
-              notificationId: `kyc-approved-${document.userId}`,
+              notificationId: `lender__${document.userId}__kyc-approved-${document.userId}`,
               userId: document.userId,
+              audienceRole: 'lender',
               category: 'system',
               eventType: 'kyc_approved',
               title: 'KYC approved',
@@ -1208,7 +1237,7 @@ export class KycService {
           transaction.delete(
             this.db
               .collection('notifications')
-              .doc(`kyc-rejected-${document.userId}`),
+              .doc(`lender__${document.userId}__kyc-rejected-${document.userId}`),
           );
         }
         return {
@@ -1314,10 +1343,10 @@ export class KycService {
           .doc(document.userId);
         const borrowerNotificationRef = this.db
           .collection('borrowerNotifications')
-          .doc(`kyc-rejected-${document.userId}`);
+          .doc(`borrower__${document.userId}__kyc-rejected-${document.userId}`);
         const lenderNotificationRef = this.db
           .collection('notifications')
-          .doc(`kyc-rejected-${document.userId}`);
+          .doc(`lender__${document.userId}__kyc-rejected-${document.userId}`);
 
         for (const pendingDocument of pendingDocuments) {
           transaction.update(
@@ -1381,15 +1410,16 @@ export class KycService {
           transaction.delete(
             this.db
               .collection('borrowerNotifications')
-              .doc(`profile-kyc-${document.userId}`),
+              .doc(`borrower__${document.userId}__profile-kyc-${document.userId}`),
           );
         }
         if (isLender) {
           transaction.set(
             lenderNotificationRef,
             {
-              notificationId: `kyc-rejected-${document.userId}`,
+              notificationId: `lender__${document.userId}__kyc-rejected-${document.userId}`,
               userId: document.userId,
+              audienceRole: 'lender',
               category: 'system',
               eventType: 'kyc_rejected',
               title: 'KYC needs new documents',

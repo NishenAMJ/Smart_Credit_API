@@ -142,7 +142,9 @@ describe('CoreLedgerService agreement approval', () => {
     ).toHaveLength(1);
     expect(
       [...records.keys()].filter((path) =>
-        path.startsWith('borrowerNotifications/agreement-created-'),
+        path.startsWith(
+          'borrowerNotifications/borrower__borrower-1__agreement-created-',
+        ),
       ),
     ).toHaveLength(1);
   });

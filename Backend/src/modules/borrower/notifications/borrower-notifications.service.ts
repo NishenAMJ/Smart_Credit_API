@@ -199,7 +199,9 @@ export class BorrowerNotificationsService {
 
     const db = this.firebaseService.getDb();
     const refs = drafts.map((draft) =>
-      db.collection(this.collection).doc(draft.id),
+      db
+        .collection(this.collection)
+        .doc(this.borrowerNotificationId(draft.borrowerId, draft.id)),
     );
     const existingSnapshots = await db.getAll(...refs);
     const existingById = new Map(
@@ -211,7 +213,19 @@ export class BorrowerNotificationsService {
     const now = Timestamp.now();
 
     drafts.forEach((draft, index) => {
-      const existing = existingById.get(draft.id);
+      const existing = existingById.get(
+        this.borrowerNotificationId(draft.borrowerId, draft.id),
+      );
+      if (existing && existing.borrowerId !== draft.borrowerId) {
+        throw new BadRequestException(
+          'Notification ID belongs to another borrower.',
+        );
+      }
+      if (existing && existing.borrowerId !== draft.borrowerId) {
+        throw new BadRequestException(
+          'Notification ID belongs to another borrower.',
+        );
+      }
       batch.set(refs[index], {
         ...draft,
         createdAt: Timestamp.fromDate(draft.createdAt),
@@ -395,6 +409,11 @@ export class BorrowerNotificationsService {
       ...draft,
       isRead: false,
     };
+  }
+
+  private borrowerNotificationId(borrowerId: string, eventId: string): string {
+    const prefix = `borrower__${borrowerId}__`;
+    return eventId.startsWith(prefix) ? eventId : `${prefix}${eventId}`;
   }
 
   private mapNotification(

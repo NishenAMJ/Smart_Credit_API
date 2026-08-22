@@ -32,6 +32,7 @@ import { LocationModule } from './modules/location/location.module';
 import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
 import { AdminQueryCacheModule } from './common/cache/admin-query-cache.module';
 import { AdBoostsModule } from './modules/lender/ad-boosts/ad-boosts.module';
+import { RoleNotificationModule } from './common/notifications/role-notification.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { AdBoostsModule } from './modules/lender/ad-boosts/ad-boosts.module';
     AdminQueryCacheModule,
     CoreLedgerModule,
     FirebaseModule,
+    RoleNotificationModule,
     AuthModule,
     BorrowerModule,
     DashboardModule,

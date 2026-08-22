@@ -39,6 +39,7 @@ import type {
   LoanAgreementParty,
   LoanAgreementTerms,
 } from './legal.types';
+import { RoleNotificationService } from '../../common/notifications/role-notification.service';
 
 type CanonicalLoanRecord = {
   loanId: string;
@@ -63,6 +64,7 @@ export class LegalService {
     private readonly documentsService: DocumentsService,
     private readonly configService: ConfigService,
     @Optional() private readonly gateway?: ChatGateway,
+    @Optional() private readonly roleNotifications?: RoleNotificationService,
   ) {
     this.agreements = this.firebaseService.db.collection(
       'loanAgreements',
@@ -1054,6 +1056,35 @@ export class LegalService {
       payload,
     );
     this.gateway?.emitToUser(agreement.lenderId, 'agreement:changed', payload);
+    if (this.roleNotifications) {
+      const input = {
+        eventType: changeType,
+        eventId: `${agreement.agreementId}-${changeType}-${agreement.status}`,
+        category: 'agreement',
+        title,
+        message,
+        severity: (changeType === 'finalization_failed'
+          ? 'warning'
+          : 'info') as 'warning' | 'info',
+        entityType: 'loanAgreement',
+        entityId: agreement.agreementId,
+        actionTarget: 'agreements',
+        metadata: {
+          agreementId: agreement.agreementId,
+          loanId: agreement.loanId,
+          status: agreement.status,
+          changeType,
+        },
+      };
+      await Promise.all([
+        this.roleNotifications.createBorrower(agreement.borrowerId, input),
+        this.roleNotifications.createLender(agreement.lenderId, {
+          ...input,
+          actionLabel: 'Open agreement',
+        }),
+      ]);
+      return;
+    }
     const now = Timestamp.now();
     await Promise.all([
       this.firebaseService.db.collection('borrowerNotifications').add({

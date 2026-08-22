@@ -125,15 +125,11 @@ export const loanService = {
   },
 
   getAvailableLoans: async () => {
-    const borrowerId = await getUserId();
-    if (!borrowerId)
+    if (!(await getUserId()))
       throw new Error("User session expired. Please log in again.");
 
     const response = await apiClient.get<LoanListResponse>(
-      ENDPOINTS.loans.filter,
-      {
-        params: { borrowerId },
-      },
+      ENDPOINTS.loans.search,
     );
     return {
       ...response.data,

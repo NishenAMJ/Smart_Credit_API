@@ -738,7 +738,7 @@ export class BorrowerService {
   async getActiveLoanAds() {
     const snapshot = await this.db
       .collection(this.ADS_COL)
-      .where('status', '==', 'active')
+      .where('status', 'in', ['active', 'approved'])
       .get();
 
     const now = Date.now();

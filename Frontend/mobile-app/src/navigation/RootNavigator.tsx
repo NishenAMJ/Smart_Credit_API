@@ -27,11 +27,11 @@ export default function RootNavigator() {
   }
 
   if (session.user.role === "lender") {
-    return <LenderStackNavigator />;
+    return <LenderStackNavigator key={`lender-${session.user.uid}`} />;
   }
 
   if (session.user.role === "borrower") {
-    return <BorrowerStackNavigator />;
+    return <BorrowerStackNavigator key={`borrower-${session.user.uid}`} />;
   }
 
   return (

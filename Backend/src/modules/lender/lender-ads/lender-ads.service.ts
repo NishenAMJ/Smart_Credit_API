@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   DocumentData,
@@ -34,6 +35,7 @@ import {
   normalizeLenderAdStatusFilter,
   validateCreateLenderAdInput,
 } from './lender-ad.validation';
+import { RoleNotificationService } from '../../../common/notifications/role-notification.service';
 
 @Injectable()
 export class LenderAdsService {
@@ -44,6 +46,7 @@ export class LenderAdsService {
     private readonly firebaseService: FirebaseService,
     private readonly notificationWriter: LenderNotificationWriterService,
     private readonly analyticsService: LenderAdAnalyticsService,
+    @Optional() private readonly roleNotifications?: RoleNotificationService,
   ) {}
 
   async createAd(
@@ -121,6 +124,19 @@ export class LenderAdsService {
     };
 
     await docRef.set(document);
+    await this.roleNotifications?.createAdmin({
+      eventType: 'ad_submitted',
+      eventId: docRef.id,
+      category: 'ad',
+      title: 'Advertisement awaiting review',
+      message: 'A lender submitted a new advertisement for approval.',
+      severity: 'info',
+      entityType: 'ad',
+      entityId: docRef.id,
+      actionLabel: 'Review advertisement',
+      actionTarget: '/admin/lender-ads',
+      metadata: { status: 'pending_review' },
+    }).catch(() => undefined);
     try {
       await this.notificationWriter.create({
         id: `ad-published-${docRef.id}`,
