@@ -377,6 +377,7 @@ export default function ActiveAdsRequestsPage({
   );
   const [isCreateAdOpen, setIsCreateAdOpen] = useState(false);
   const [adsRefreshKey, setAdsRefreshKey] = useState(0);
+  const [adsNotice, setAdsNotice] = useState<string | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
     null,
   );
@@ -430,6 +431,12 @@ export default function ActiveAdsRequestsPage({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isCreateAdOpen, previewAd, selectedAd]);
+
+  useEffect(() => {
+    if (!adsNotice) return;
+    const timer = window.setTimeout(() => setAdsNotice(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [adsNotice]);
 
   useEffect(() => {
     if (!selectedAd) return;
@@ -564,6 +571,14 @@ export default function ActiveAdsRequestsPage({
       {adsError ? (
         <div className="sms-alert sms-alert--error" role="alert">
           {adsError}
+        </div>
+      ) : null}
+      {adsNotice ? (
+        <div
+          className="create-ad-banner create-ad-banner--primary"
+          role="status"
+        >
+          {adsNotice}
         </div>
       ) : null}
 
@@ -803,7 +818,13 @@ export default function ActiveAdsRequestsPage({
               <CreateAdPage
                 session={session}
                 embedded
-                onPublished={() => setAdsRefreshKey((value) => value + 1)}
+                onPublished={() => {
+                  setIsCreateAdOpen(false);
+                  setAdsNotice(
+                    "Advertisement submitted successfully and sent for admin review.",
+                  );
+                  setAdsRefreshKey((value) => value + 1);
+                }}
               />
             </div>
           </section>
