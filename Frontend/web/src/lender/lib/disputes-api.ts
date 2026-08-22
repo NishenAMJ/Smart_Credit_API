@@ -19,7 +19,7 @@ export type DisputeListScope = "active" | "history";
 export type Dispute = {
   id: string;
   disputeCode: string;
-  loanId: string;
+  loanId: string | null;
   transactionId: string | null;
   borrowerName: string;
   lenderName: string;
@@ -122,7 +122,10 @@ export const disputeApi = {
     }>(`/documents/${id}/access`),
 };
 
-export async function uploadDisputeEvidence(file: File, loanId: string) {
+export async function uploadDisputeEvidence(
+  file: File,
+  loanId?: string | null,
+) {
   if (file.size > 10 * 1024 * 1024)
     throw new Error(`${file.name} exceeds 10 MB.`);
   if (
@@ -147,8 +150,9 @@ export async function uploadDisputeEvidence(file: File, loanId: string) {
       documentType: "case_evidence",
       fileName: file.name,
       contentType: file.type,
-      relatedEntityType: "loan",
-      relatedEntityId: loanId,
+      ...(loanId
+        ? { relatedEntityType: "loan", relatedEntityId: loanId }
+        : {}),
     }),
   });
   const form = new FormData();
@@ -199,8 +203,9 @@ export async function uploadDisputeEvidence(file: File, loanId: string) {
         mimeType: file.type,
         category: "dispute_evidence",
         documentType: "case_evidence",
-        relatedEntityType: "loan",
-        relatedEntityId: loanId,
+        ...(loanId
+          ? { relatedEntityType: "loan", relatedEntityId: loanId }
+          : {}),
         displayName: file.name,
       }),
     },

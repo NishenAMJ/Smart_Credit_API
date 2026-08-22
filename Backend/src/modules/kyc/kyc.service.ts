@@ -410,10 +410,12 @@ export class KycService {
         },
         { merge: true },
       );
-      await this.db
-        .collection('borrowers')
-        .doc(userId)
-        .set({ kycVerified: false, updatedAt: now }, { merge: true });
+      if (role === 'borrower') {
+        await this.db
+          .collection('borrowers')
+          .doc(userId)
+          .set({ kycVerified: false, updatedAt: now }, { merge: true });
+      }
       this.emitAdminChange(userId, 'resubmitted');
 
       return {

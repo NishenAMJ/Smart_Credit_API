@@ -12,7 +12,7 @@ export type DisputeStatus =
 export type Dispute = {
   id: string;
   disputeCode: string;
-  loanId: string;
+  loanId: string | null;
   subject: string;
   description: string;
   desiredOutcome: string;
@@ -83,7 +83,7 @@ export const disputesService = {
 
 export async function uploadDisputeEvidence(
   asset: DocumentPickerAsset,
-  loanId: string,
+  loanId?: string | null,
 ) {
   const mimeType = asset.mimeType ?? "application/octet-stream";
   if ((asset.size ?? 0) > 10 * 1024 * 1024)
@@ -100,8 +100,9 @@ export async function uploadDisputeEvidence(
       documentType: "case_evidence",
       fileName: asset.name,
       contentType: mimeType,
-      relatedEntityType: "loan",
-      relatedEntityId: loanId,
+      ...(loanId
+        ? { relatedEntityType: "loan", relatedEntityId: loanId }
+        : {}),
     })
   ).data;
   const form = new FormData();
@@ -139,8 +140,9 @@ export async function uploadDisputeEvidence(
         mimeType,
         category: "dispute_evidence",
         documentType: "case_evidence",
-        relatedEntityType: "loan",
-        relatedEntityId: loanId,
+        ...(loanId
+          ? { relatedEntityType: "loan", relatedEntityId: loanId }
+          : {}),
         displayName: asset.name,
       },
     )

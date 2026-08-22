@@ -28,7 +28,7 @@ export interface Dispute {
   id: string;
   disputeId: string;
   disputeCode: string;
-  loanId: string;
+  loanId: string | null;
   transactionId: string | null;
   installmentId: string | null;
   complainantId: string;
@@ -75,7 +75,7 @@ export interface DisputeEvent {
 }
 
 export interface CreateDisputeInput {
-  loanId: string;
+  loanId?: string;
   transactionId?: string;
   installmentId?: string;
   category: DisputeCategory;

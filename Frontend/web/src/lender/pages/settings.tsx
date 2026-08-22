@@ -8,6 +8,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Smartphone,
+  UploadCloud,
   UserRound,
 } from "lucide-react";
 import type { LenderSession } from "../lib/lender-session";
@@ -21,6 +22,11 @@ import {
   type LenderSettings,
   type LenderSettingsNotifications,
 } from "../lib/lender-settings-api";
+import {
+  fetchMyKycSubmission,
+  resubmitLenderKyc,
+  type LenderKycSubmission,
+} from "../lib/lender-kyc-api";
 
 type SettingsPageProps = {
   session: LenderSession;
@@ -81,6 +87,34 @@ function allEnabled(
   return keys.every((key) => notifications[key]);
 }
 
+function fileToDataUrl(file: File, imagesOnly = false): Promise<string> {
+  const allowedTypes = imagesOnly
+    ? ["image/jpeg", "image/png", "image/webp"]
+    : ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error(
+      imagesOnly
+        ? "The selfie must be a JPG, PNG, or WEBP image."
+        : "KYC documents must be PDF, JPG, PNG, or WEBP files.",
+    );
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error("Each KYC file must be 10 MB or smaller.");
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("The selected file could not be read."));
+    reader.onerror = () =>
+      reject(new Error("The selected file could not be read."));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function SettingsPage({
   session,
   onLogout,
@@ -90,6 +124,13 @@ export default function SettingsPage({
   const [notifications, setNotifications] =
     useState<LenderSettingsNotifications | null>(null);
   const [profile, setProfile] = useState<LenderProfile | null>(null);
+  const [kycSubmission, setKycSubmission] =
+    useState<LenderKycSubmission | null>(null);
+  const [kycFront, setKycFront] = useState<File | null>(null);
+  const [kycBack, setKycBack] = useState<File | null>(null);
+  const [kycSelfie, setKycSelfie] = useState<File | null>(null);
+  const [isResubmittingKyc, setIsResubmittingKyc] = useState(false);
+  const [kycError, setKycError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,10 +142,13 @@ export default function SettingsPage({
     setError(null);
     setProfileWarning(null);
 
-    const [settingsResult, profileResult] = await Promise.allSettled([
-      fetchLenderSettings(session.lenderId),
-      fetchLenderProfile(session.lenderId),
-    ]);
+    const [settingsResult, profileResult, kycResult] = await Promise.allSettled(
+      [
+        fetchLenderSettings(session.lenderId),
+        fetchLenderProfile(session.lenderId),
+        fetchMyKycSubmission(),
+      ],
+    );
 
     if (settingsResult.status === "fulfilled") {
       setSettings(settingsResult.value);
@@ -121,6 +165,10 @@ export default function SettingsPage({
       setProfile(profileResult.value);
     } else {
       setProfileWarning("Profile details are temporarily unavailable.");
+    }
+
+    if (kycResult.status === "fulfilled") {
+      setKycSubmission(kycResult.value.submission);
     }
 
     setIsLoading(false);
@@ -185,6 +233,48 @@ export default function SettingsPage({
     }
   }
 
+  async function handleKycResubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setKycError(null);
+
+    if (!kycFront || !kycBack) {
+      setKycError("Select replacement files for both sides of your ID.");
+      return;
+    }
+
+    try {
+      setIsResubmittingKyc(true);
+      const [documentFrontUrl, documentBackUrl, selfieUrl] = await Promise.all([
+        fileToDataUrl(kycFront),
+        fileToDataUrl(kycBack),
+        kycSelfie ? fileToDataUrl(kycSelfie, true) : Promise.resolve(undefined),
+      ]);
+      const response = await resubmitLenderKyc({
+        documentFrontUrl,
+        documentBackUrl,
+        ...(selfieUrl ? { selfieUrl } : {}),
+      });
+      setProfile((current) =>
+        current ? { ...current, kycStatus: response.kycStatus } : current,
+      );
+      setKycSubmission((current) =>
+        current ? { ...current, status: response.kycStatus } : current,
+      );
+      setKycFront(null);
+      setKycBack(null);
+      setKycSelfie(null);
+      setSavedMessage("KYC documents resubmitted for admin review.");
+    } catch (resubmitError) {
+      setKycError(
+        resubmitError instanceof Error
+          ? resubmitError.message
+          : "KYC resubmission failed.",
+      );
+    } finally {
+      setIsResubmittingKyc(false);
+    }
+  }
+
   const displayName =
     profile?.businessName || profile?.fullName || session.displayName;
   const kycStatus = profile?.kycStatus || "unknown";
@@ -236,6 +326,103 @@ export default function SettingsPage({
       ) : (
         <div className="settings-workspace__grid">
           <main className="settings-workspace__main">
+            {kycStatus === "rejected" ? (
+              <form
+                className="settings-panel settings-kyc-resubmit"
+                onSubmit={handleKycResubmit}
+              >
+                <div className="settings-panel__header">
+                  <div>
+                    <span className="settings-panel__eyebrow">
+                      Verification required
+                    </span>
+                    <h2>Resubmit KYC</h2>
+                    <p>Replace the rejected identity files for a new review.</p>
+                  </div>
+                  <ShieldCheck size={21} aria-hidden="true" />
+                </div>
+
+                {kycSubmission?.reviewNotes ? (
+                  <div className="settings-kyc-review-note">
+                    <CircleAlert size={17} aria-hidden="true" />
+                    <div>
+                      <strong>Admin review note</strong>
+                      <p>{kycSubmission.reviewNotes}</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {kycError ? (
+                  <div
+                    className="settings-feedback settings-feedback--error settings-kyc-error"
+                    role="alert"
+                  >
+                    <CircleAlert size={17} />
+                    <span>{kycError}</span>
+                  </div>
+                ) : null}
+
+                <div className="settings-kyc-fields">
+                  <label>
+                    <span>ID front</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      required
+                      disabled={isResubmittingKyc}
+                      onChange={(event) =>
+                        setKycFront(event.target.files?.[0] ?? null)
+                      }
+                    />
+                    <small>
+                      {kycFront?.name || "PDF or image, up to 10 MB"}
+                    </small>
+                  </label>
+                  <label>
+                    <span>ID back</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      required
+                      disabled={isResubmittingKyc}
+                      onChange={(event) =>
+                        setKycBack(event.target.files?.[0] ?? null)
+                      }
+                    />
+                    <small>
+                      {kycBack?.name || "PDF or image, up to 10 MB"}
+                    </small>
+                  </label>
+                  <label>
+                    <span>New selfie with ID (optional)</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={isResubmittingKyc}
+                      onChange={(event) =>
+                        setKycSelfie(event.target.files?.[0] ?? null)
+                      }
+                    />
+                    <small>{kycSelfie?.name || "JPG, PNG, or WEBP"}</small>
+                  </label>
+                </div>
+
+                <div className="settings-kyc-actions">
+                  <span>
+                    New files are securely sent to the admin review queue.
+                  </span>
+                  <button
+                    type="submit"
+                    className="settings-primary-button"
+                    disabled={isResubmittingKyc}
+                  >
+                    <UploadCloud size={17} />
+                    {isResubmittingKyc ? "Submitting..." : "Resubmit KYC"}
+                  </button>
+                </div>
+              </form>
+            ) : null}
+
             <form className="settings-panel" onSubmit={handleSubmit}>
               <div className="settings-panel__header">
                 <div>

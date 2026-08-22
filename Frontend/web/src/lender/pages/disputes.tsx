@@ -275,7 +275,7 @@ export default function LenderDisputesPage({
         evidence.slice(0, 5).map((file) => uploadDisputeEvidence(file, loanId)),
       );
       const response = await disputeApi.create({
-        loanId,
+        ...(loanId ? { loanId } : {}),
         category,
         subject,
         description,
@@ -501,7 +501,9 @@ export default function LenderDisputesPage({
                   <strong>{item.subject}</strong>
                   <p>
                     <UserRound size={14} />
-                    {item.borrowerName || "Borrower"}
+                    {item.loanId
+                      ? item.borrowerName || "Borrower"
+                      : "General platform issue"}
                   </p>
                   <div className="dispute-case-card__footer">
                     <span>{item.disputeCode}</span>
@@ -550,7 +552,11 @@ export default function LenderDisputesPage({
                     {selected.disputeCode}
                   </div>
                   <h2>{selected.subject}</h2>
-                  <p>{selected.borrowerName || "Borrower case"}</p>
+                  <p>
+                    {selected.loanId
+                      ? selected.borrowerName || "Borrower case"
+                      : "General platform issue"}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -833,13 +839,12 @@ export default function LenderDisputesPage({
             ) : null}
             <div className="dispute-form-grid">
               <label className="dispute-field dispute-field--wide">
-                <span>Loan</span>
+                <span>Related loan (optional)</span>
                 <select
-                  required
                   value={loanId}
                   onChange={(event) => setLoanId(event.target.value)}
                 >
-                  <option value="">Select the related loan</option>
+                  <option value="">General platform issue</option>
                   {loans.map((loan) => (
                     <option key={loan.id} value={loan.id}>
                       {loanLabel(loan)}

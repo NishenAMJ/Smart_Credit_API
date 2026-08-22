@@ -88,6 +88,87 @@ describe('DisputesService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('creates a general dispute without a loan ID', async () => {
+    const create = jest.fn();
+    const disputeRef = {
+      id: 'general-dispute-1',
+      collection: jest.fn(() => ({
+        doc: jest.fn(() => ({ id: 'event-1' })),
+      })),
+    };
+    const duplicateQuery = {
+      where: jest.fn(),
+      limit: jest.fn(),
+    } as any;
+    duplicateQuery.where.mockReturnValue(duplicateQuery);
+    duplicateQuery.limit.mockReturnValue(duplicateQuery);
+    const firebase = {
+      db: {
+        collection: jest.fn((name: string) => {
+          if (name === 'disputes') {
+            return {
+              doc: jest.fn(() => disputeRef),
+              where: jest.fn(() => duplicateQuery),
+            };
+          }
+          return { doc: jest.fn(), add: jest.fn() };
+        }),
+        getAll: jest.fn().mockResolvedValue([
+          {
+            id: 'borrower-1',
+            exists: true,
+            data: () => ({ fullName: 'Borrower One' }),
+          },
+        ]),
+        runTransaction: jest.fn(async (handler) =>
+          handler({
+            get: jest.fn().mockResolvedValue({ empty: true }),
+            create,
+            update: jest.fn(),
+          }),
+        ),
+      },
+    } as unknown as FirebaseService;
+    const service = new DisputesService(firebase, gateway);
+
+    const response = await service.createDispute('borrower-1', 'borrower', {
+      category: 'other',
+      subject: 'Account access issue',
+      description: 'I cannot access one of the platform features.',
+      desiredOutcome: 'Please review my account.',
+    });
+
+    expect(response.dispute).toMatchObject({
+      loanId: null,
+      borrowerId: 'borrower-1',
+      lenderId: '',
+      respondentId: '',
+    });
+    expect(create).toHaveBeenCalledWith(
+      disputeRef,
+      expect.objectContaining({ loanId: null, complainantId: 'borrower-1' }),
+    );
+  });
+
+  it('requires a loan when a transaction ID is supplied', async () => {
+    const firebase = {
+      db: {
+        collection: jest.fn(),
+      },
+    } as unknown as FirebaseService;
+    const service = new DisputesService(firebase, gateway);
+
+    await expect(
+      service.createDispute('borrower-1', 'borrower', {
+        transactionId: 'transaction-1',
+        category: 'payment',
+        subject: 'Payment issue',
+        description: 'The payment does not appear in my account.',
+        desiredOutcome: 'Please review the payment.',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('hides private admin timeline notes from participants', async () => {
     const now = Timestamp.now();
     const eventsGet = jest.fn().mockResolvedValue({

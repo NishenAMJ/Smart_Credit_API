@@ -191,7 +191,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       id,
       disputeId: data.disputeId ?? id,
       disputeCode: data.disputeCode ?? `DSP-${id.slice(0, 8).toUpperCase()}`,
-      loanId: data.loanId ?? '',
+      loanId: data.loanId || null,
       transactionId: data.transactionId ?? null,
       installmentId: data.installmentId ?? null,
       complainantId,
@@ -313,8 +313,10 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       status: dispute.status,
       updatedAt: dispute.updatedAt.toDate().toISOString(),
     };
-    this.gateway.emitToUser(dispute.borrowerId, 'dispute:changed', payload);
-    this.gateway.emitToUser(dispute.lenderId, 'dispute:changed', payload);
+    if (dispute.borrowerId)
+      this.gateway.emitToUser(dispute.borrowerId, 'dispute:changed', payload);
+    if (dispute.lenderId)
+      this.gateway.emitToUser(dispute.lenderId, 'dispute:changed', payload);
     if (dispute.assignedAdminId)
       this.gateway.emitToUser(
         dispute.assignedAdminId,
@@ -489,7 +491,10 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException(
         'Only borrowers and lenders can create disputes.',
       );
-    const loanId = this.text(input.loanId, 'loanId', 1, 120);
+    const requestedLoanId = input.loanId?.trim();
+    const loanId = requestedLoanId
+      ? this.text(requestedLoanId, 'loanId', 1, 120)
+      : null;
     const category = this.category(input.category);
     if (!CATEGORIES.includes(input.category))
       throw new BadRequestException('Invalid dispute category.');
@@ -512,21 +517,40 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     const evidenceDocumentIds = [...new Set(input.evidenceDocumentIds ?? [])];
     await this.validateEvidence(userId, evidenceDocumentIds);
 
-    const loanRef = this.db.collection('loans').doc(loanId);
-    const loanSnapshot = await loanRef.get();
-    if (!loanSnapshot.exists) throw new NotFoundException('Loan not found.');
-    const loan = loanSnapshot.data() ?? {};
-    const borrowerId = String(loan.borrowerId ?? '');
-    const lenderId = String(loan.lenderId ?? '');
-    if (!borrowerId || !lenderId)
+    const loanRef = loanId
+      ? this.db.collection('loans').doc(loanId)
+      : null;
+    const loanSnapshot = loanRef ? await loanRef.get() : null;
+    if (loanId && !loanSnapshot?.exists)
+      throw new NotFoundException('Loan not found.');
+    const loan = loanSnapshot?.data() ?? {};
+    const borrowerId = loanId
+      ? String(loan.borrowerId ?? '')
+      : role === 'borrower'
+        ? userId
+        : '';
+    const lenderId = loanId
+      ? String(loan.lenderId ?? '')
+      : role === 'lender'
+        ? userId
+        : '';
+    if (loanId) {
+      if (!borrowerId || !lenderId)
+        throw new BadRequestException(
+          'The selected loan does not have valid borrower and lender participants.',
+        );
+      if (
+        (role === 'borrower' && borrowerId !== userId) ||
+        (role === 'lender' && lenderId !== userId)
+      ) {
+        throw new ForbiddenException(
+          'The selected loan does not belong to you.',
+        );
+      }
+    } else if (input.transactionId || input.installmentId) {
       throw new BadRequestException(
-        'The selected loan does not have valid borrower and lender participants.',
+        'Select a loan before adding a transaction or installment ID.',
       );
-    if (
-      (role === 'borrower' && borrowerId !== userId) ||
-      (role === 'lender' && lenderId !== userId)
-    ) {
-      throw new ForbiddenException('The selected loan does not belong to you.');
     }
 
     if (input.transactionId) {
@@ -539,7 +563,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           'The transaction does not belong to this loan.',
         );
     }
-    if (input.installmentId) {
+    if (input.installmentId && loanRef) {
       const installment = await loanRef
         .collection('installments')
         .doc(input.installmentId)
@@ -564,7 +588,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
 
     const ref = this.db.collection('disputes').doc();
     const now = Timestamp.now();
-    const respondentId = role === 'borrower' ? lenderId : borrowerId;
+    const respondentId = loanId
+      ? role === 'borrower'
+        ? lenderId
+        : borrowerId
+      : '';
     const participantNames = await this.getUserDisplayNames([
       borrowerId,
       lenderId,
@@ -623,7 +651,9 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       );
       if (!duplicates.empty)
         throw new ConflictException(
-          'An active dispute already exists for this loan and category.',
+          loanId
+            ? 'An active dispute already exists for this loan and category.'
+            : 'An active general dispute already exists for this category.',
         );
       transaction.create(ref, document);
       const eventRef = ref.collection('events').doc();
@@ -649,7 +679,9 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       userId,
       'dispute_created',
       'New dispute opened',
-      `${subject} was opened for loan ${loanId}.`,
+      loanId
+        ? `${subject} was opened for loan ${loanId}.`
+        : `${subject} was opened as a general platform dispute.`,
     );
     return { success: true, dispute };
   }
@@ -1143,10 +1175,10 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         return;
       }
       const acknowledgements = { ...dispute.acknowledgements, [userId]: now };
-      both = Boolean(
-        acknowledgements[dispute.borrowerId] &&
-        acknowledgements[dispute.lenderId],
+      const participantIds = [dispute.borrowerId, dispute.lenderId].filter(
+        Boolean,
       );
+      both = participantIds.every((id) => Boolean(acknowledgements[id]));
       transaction.update(ref, {
         acknowledgements,
         status: both ? 'closed' : 'resolved',
