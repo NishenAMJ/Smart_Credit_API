@@ -293,6 +293,11 @@ describe('KycService', () => {
           issuingCountry: 'Sri Lanka',
           expiryDate: '2030-12-31',
         }),
+        searchTokens: expect.arrayContaining([
+          '10 main street',
+          'colombo',
+          'western',
+        ]),
       }),
       { merge: true },
     );

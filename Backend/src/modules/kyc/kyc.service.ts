@@ -52,6 +52,9 @@ type KycPayloadFieldKey =
 type ExistingKycUser = Partial<UserDocument> & {
   nic?: string;
   dateOfBirth?: string;
+  city?: string;
+  district?: string;
+  province?: string;
 };
 
 type KycReviewContext = Pick<
@@ -572,6 +575,8 @@ export class KycService {
             email,
             phoneNumber,
             requestedRole,
+            ...this.getAddressSearchValues(existingUser),
+            ...(existingUser?.searchTokens ?? []),
           ]),
           authProvider: 'local',
           notes: '',
@@ -881,6 +886,26 @@ export class KycService {
     }
 
     return undefined;
+  }
+
+  private getAddressSearchValues(user?: ExistingKycUser | null): unknown[] {
+    if (!user) return [];
+
+    if (typeof user.address === 'string') {
+      return [user.address, user.city, user.district, user.province];
+    }
+
+    if (user.address && typeof user.address === 'object') {
+      return [
+        user.address.line1,
+        user.address.line2,
+        user.address.city,
+        user.address.district,
+        user.address.province,
+      ];
+    }
+
+    return [user.city, user.district, user.province];
   }
 
   private cleanReviewText(value: unknown): string | undefined {
