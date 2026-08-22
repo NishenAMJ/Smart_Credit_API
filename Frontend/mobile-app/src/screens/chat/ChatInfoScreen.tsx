@@ -138,14 +138,7 @@ export default function ChatInfoScreen({ navigation, route }: Props) {
               ]}
             />
             <Text style={styles.onlineText}>
-              {participant?.isOnline
-                ? "Online"
-                : participant?.lastSeen
-                ? `Last seen ${new Date(participant.lastSeen).toLocaleTimeString(
-                    [],
-                    { hour: "2-digit", minute: "2-digit" },
-                  )}`
-                : "Offline"}
+              {participant?.isOnline ? "Online" : "Offline"}
             </Text>
           </View>
         </View>
