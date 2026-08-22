@@ -231,7 +231,9 @@ export class LenderAdsService {
         .filter(
           (doc) =>
             !normalizedStatuses ||
-            normalizedStatuses.includes(getAdStatus(doc.data())),
+            normalizedStatuses.includes(
+              readString(doc.data().status) ?? 'unknown',
+            ),
         )
         .sort((left, right) => {
           const leftTime = readDate(left.get('createdAt'))?.getTime() ?? 0;

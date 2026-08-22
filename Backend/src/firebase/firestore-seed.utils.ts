@@ -64,7 +64,9 @@ export function getAdStatus(data: DocumentData): string {
     return 'unknown';
   }
 
-  return status === 'approved' ? 'active' : status;
+  if (status === 'approved') return 'active';
+  if (status === 'pending') return 'pending_review';
+  return status;
 }
 
 export function isActiveAd(data: DocumentData, now = new Date()): boolean {
