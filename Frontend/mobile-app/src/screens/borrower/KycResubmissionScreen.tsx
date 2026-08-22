@@ -39,7 +39,7 @@ async function pickAsDataUrl() {
 }
 
 export default function KycResubmissionScreen({ navigation }: Props) {
-  const { sessionStatus, refreshWorkspace } = useAuth();
+  const { sessionStatus, kycSubmission, refreshWorkspace } = useAuth();
   const [files, setFiles] = useState<Partial<Record<FileField, string>>>({});
   const [names, setNames] = useState<Partial<Record<FileField, string>>>({});
   const [busy, setBusy] = useState(false);
@@ -81,6 +81,13 @@ export default function KycResubmissionScreen({ navigation }: Props) {
     }
   }
 
+  const documentLabel =
+    kycSubmission?.documentType === "passport"
+      ? "Passport"
+      : kycSubmission?.documentType === "driving_license"
+        ? "Driving licence"
+        : "NIC";
+
   const options: Array<{
     field: FileField;
     label: string;
@@ -88,12 +95,12 @@ export default function KycResubmissionScreen({ navigation }: Props) {
   }> = [
     {
       field: "documentFrontUrl",
-      label: "Identity document front",
+      label: `${documentLabel} front`,
       required: true,
     },
     {
       field: "documentBackUrl",
-      label: "Identity document back",
+      label: `${documentLabel} back`,
       required: true,
     },
     { field: "selfieUrl", label: "New selfie with document" },

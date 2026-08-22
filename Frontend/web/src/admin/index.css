@@ -1,30 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 
 /* ── Design Tokens ────────────────────────────────────── */
 :root {
-  --color-primary:        #007AFF;
-  --color-background:     #F5F6FA;
-  --color-surface:        #FFFFFF;
-  --color-text-primary:   #1A1A1A;
-  --color-text-secondary: #6B7280;
-  --color-border:         #F3F4F6;
-  --color-success:        #10B981;
-  --color-warning:        #F59E0B;
-  --color-danger:         #EF4444;
+  --color-primary: #007aff;
+  --color-background: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #6b7280;
+  --color-border: #f3f4f6;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
 
-  --spacing-xs:  4px;
-  --spacing-sm:  8px;
-  --spacing-md:  12px;
-  --spacing-lg:  16px;
-  --spacing-xl:  20px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
   --spacing-xxl: 24px;
 
-  --radius-small:  8px;
+  --radius-small: 8px;
   --radius-medium: 10px;
-  --radius-large:  12px;
+  --radius-large: 12px;
 
   --shadow-light: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --shadow-card:  0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* ── Base Reset ───────────────────────────────────────── */
@@ -35,7 +35,7 @@
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   background-color: var(--color-background);
   color: var(--color-text-primary);
   font-size: 15px;
@@ -60,8 +60,40 @@ body {
   transition: opacity 0.15s;
   white-space: nowrap;
 }
-.btn-primary:hover  { opacity: 0.88; }
-.btn-primary:active { opacity: 0.75; }
+.btn-primary:hover {
+  opacity: 0.88;
+}
+.btn-primary:active {
+  opacity: 0.75;
+}
+
+.btn-success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 16px;
+  border-radius: var(--radius-medium);
+  background-color: var(--color-success);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.btn-success:hover {
+  opacity: 0.88;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-success:disabled,
+.btn-danger:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 
 .btn-secondary {
   display: inline-flex;
@@ -78,7 +110,9 @@ body {
   cursor: pointer;
   transition: background 0.15s;
 }
-.btn-secondary:hover { background: rgba(0, 122, 255, 0.06); }
+.btn-secondary:hover {
+  background: rgba(0, 122, 255, 0.06);
+}
 
 .btn-danger {
   display: inline-flex;
@@ -95,7 +129,9 @@ body {
   cursor: pointer;
   transition: opacity 0.15s;
 }
-.btn-danger:hover { opacity: 0.88; }
+.btn-danger:hover {
+  opacity: 0.88;
+}
 
 .btn-sm {
   padding: 7px 12px;
@@ -140,11 +176,62 @@ body {
   font-size: 12px;
   font-weight: 500;
 }
-.badge-success { background: #D1FAE5; color: #065F46; }
-.badge-warning { background: #FEF3C7; color: #92400E; }
-.badge-danger  { background: #FEE2E2; color: #991B1B; }
-.badge-info    { background: #DBEAFE; color: #1E40AF; }
-.badge-gray    { background: #F3F4F6; color: #374151; }
+.badge-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+.badge-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+.badge-danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.badge-info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.badge-gray {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.kyc-review-row {
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.kyc-review-row:hover td {
+  background-color: #f8fbff;
+}
+.kyc-review-row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.admin-new-row td {
+  background-color: #eff6ff;
+}
+.admin-new-row td:first-child {
+  box-shadow: inset 4px 0 0 #2563eb;
+}
+.admin-new-row:hover td {
+  background-color: #dbeafe;
+}
+.admin-new-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
 
 /* ── Form Inputs ──────────────────────────────────────── */
 .input {
@@ -153,14 +240,18 @@ body {
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-small);
   font-size: 15px;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   color: var(--color-text-primary);
   background: var(--color-surface);
   outline: none;
   transition: border-color 0.15s;
 }
-.input:focus       { border-color: var(--color-primary); }
-.input::placeholder { color: var(--color-text-secondary); }
+.input:focus {
+  border-color: var(--color-primary);
+}
+.input::placeholder {
+  color: var(--color-text-secondary);
+}
 
 .input-label {
   display: block;
@@ -203,8 +294,12 @@ tbody td {
   vertical-align: middle;
 }
 
-tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover { background: rgba(0, 0, 0, 0.015); }
+tbody tr:last-child td {
+  border-bottom: none;
+}
+tbody tr:hover {
+  background: rgba(0, 0, 0, 0.015);
+}
 
 /* ── Page Layout Helpers ──────────────────────────────── */
 .page-header {
@@ -273,6 +368,14 @@ tbody tr:hover { background: rgba(0, 0, 0, 0.015); }
 }
 
 /* ── Scrollbar ────────────────────────────────────────── */
-::-webkit-scrollbar       { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 10px; }
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 10px;
+}

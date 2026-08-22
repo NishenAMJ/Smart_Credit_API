@@ -12,6 +12,10 @@ import {
 import { subscribeToAdminChanges } from "../../lib/admin-realtime";
 import { formatFirestoreDate } from "../../lib/admin-format";
 import { useDebouncedValue } from "../../lib/use-debounced-value";
+import {
+  toEpochMillis,
+  useNewItemHighlights,
+} from "../../lib/use-new-item-highlights";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
@@ -38,6 +42,7 @@ type LenderAdRow = {
   preferredPurposes: string;
   status: AdStatus;
   postedDate: string;
+  createdAtMs: number;
 };
 
 // Converts backend ads into stable rows so the moderation table stays simple.
@@ -64,6 +69,7 @@ function mapAd(ad: AdminAd): LenderAdRow {
     preferredPurposes: (ad.preferredPurposes || []).join(", ") || "N/A",
     status: ad.status,
     postedDate: formatFirestoreDate(ad.createdAt),
+    createdAtMs: toEpochMillis(ad.createdAt),
   };
 }
 
@@ -171,6 +177,20 @@ export default function LenderAds() {
   }, [currentPage, cursorStack, loadAds, loadAdStats]);
 
   const filteredAds = useMemo(() => ads, [ads]);
+  const newItemCandidates = useMemo(
+    () =>
+      ads.map((ad) => ({
+        id: ad.id,
+        createdAtMs: ad.createdAtMs,
+        actionable: ad.status === "pending",
+      })),
+    [ads],
+  );
+  const newHighlights = useNewItemHighlights(
+    "lender-ads",
+    newItemCandidates,
+    !loading,
+  );
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;
@@ -209,6 +229,7 @@ export default function LenderAds() {
   // Mirrors an approval in local state to avoid an extra full reload.
   async function handleApprove(adId: string) {
     try {
+      newHighlights.markSeen(adId);
       await approveAd(adId);
       syncAdStatus(adId, "active");
       await loadAdStats();
@@ -220,6 +241,7 @@ export default function LenderAds() {
   // Mirrors a rejection in local state to avoid an extra full reload.
   async function handleReject(adId: string) {
     try {
+      newHighlights.markSeen(adId);
       await rejectAd(adId);
       syncAdStatus(adId, "rejected");
       await loadAdStats();
@@ -234,7 +256,10 @@ export default function LenderAds() {
       <>
         <button
           style={S.iconButton("#6B7280", "#F3F4F6")}
-          onClick={() => setSelectedAd(ad)}
+          onClick={() => {
+            newHighlights.markSeen(ad.id);
+            setSelectedAd(ad);
+          }}
           title="View"
           aria-label="View lender ad"
         >
@@ -321,23 +346,17 @@ export default function LenderAds() {
         </div>
 
         <div className="tabs">
-          {(
-            [
-              "all",
-              "active",
-              "pending",
-              "rejected",
-              "closed",
-            ] as const
-          ).map((status) => (
-            <button
-              key={status}
-              className={`tab ${filterStatus === status ? "active" : ""}`}
-              onClick={() => setFilterStatus(status)}
-            >
-              {status}
-            </button>
-          ))}
+          {(["all", "active", "pending", "rejected", "closed"] as const).map(
+            (status) => (
+              <button
+                key={status}
+                className={`tab ${filterStatus === status ? "active" : ""}`}
+                onClick={() => setFilterStatus(status)}
+              >
+                {status}
+              </button>
+            ),
+          )}
         </div>
       </div>
 
@@ -364,7 +383,10 @@ export default function LenderAds() {
               </tr>
             ) : (
               filteredAds.map((ad) => (
-                <tr key={ad.id}>
+                <tr
+                  key={ad.id}
+                  className={newHighlights.isNew(ad.id) ? "admin-new-row" : ""}
+                >
                   <td>
                     <div
                       style={{ display: "flex", alignItems: "center", gap: 10 }}
@@ -376,6 +398,9 @@ export default function LenderAds() {
                       />
                       <div>
                         <p style={{ fontWeight: 600 }}>{ad.lender}</p>
+                        {newHighlights.isNew(ad.id) && (
+                          <span className="admin-new-badge">New</span>
+                        )}
                         <p style={{ fontSize: 12, color: "#6B7280" }}>
                           Lender ad
                         </p>
