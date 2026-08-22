@@ -15,6 +15,10 @@ import {
 } from "../../lib/api";
 import { subscribeToAdminChanges } from "../../lib/admin-realtime";
 import { formatFirestoreDate } from "../../lib/admin-format";
+import {
+  toEpochMillis,
+  useNewItemHighlights,
+} from "../../lib/use-new-item-highlights";
 
 type KycRow = {
   id: string;
@@ -49,6 +53,7 @@ type KycRow = {
   originalFilename: string;
   status: "pending" | "approved" | "rejected";
   uploadedAt: string;
+  createdAtMs: number;
   userKycStatus: string;
   reviewedAt?: string;
   reviewerId?: string;
@@ -58,6 +63,7 @@ type KycRow = {
 };
 
 type KycSubmissionRow = {
+  id: string;
   userId: string;
   fullName: string;
   email: string;
@@ -67,6 +73,7 @@ type KycSubmissionRow = {
   identityDetails: KycRow["identityDetails"];
   location?: KycRow["location"];
   uploadedAt: string;
+  createdAtMs: number;
   status: KycRow["status"];
   userKycStatus: string;
   documents: KycRow[];
@@ -94,6 +101,7 @@ function mapDocument(document: KycDocument): KycRow {
     originalFilename: document.originalFilename || "Unknown file",
     status: document.status,
     uploadedAt: formatFirestoreDate(document.submittedAt),
+    createdAtMs: toEpochMillis(document.submittedAt),
     userKycStatus: document.userKycStatus || document.status,
     reviewedAt: formatFirestoreDate(
       document.reviewTimestamp || document.reviewedAt,
@@ -217,6 +225,7 @@ export default function KYCApprovals() {
     return [...grouped.entries()].map(([userId, documents]) => {
       const first = documents[0];
       return {
+        id: first.id,
         userId,
         fullName: first.fullName,
         email: first.email,
@@ -226,12 +235,28 @@ export default function KYCApprovals() {
         identityDetails: first.identityDetails,
         location: first.location,
         uploadedAt: first.uploadedAt,
+        createdAtMs: first.createdAtMs,
         status: first.status,
         userKycStatus: first.userKycStatus,
         documents,
       } satisfies KycSubmissionRow;
     });
   }, [records]);
+
+  const newItemCandidates = useMemo(
+    () =>
+      submissions.map((submission) => ({
+        id: submission.id,
+        createdAtMs: submission.createdAtMs,
+        actionable: submission.status === "pending",
+      })),
+    [submissions],
+  );
+  const newHighlights = useNewItemHighlights(
+    "kyc",
+    newItemCandidates,
+    !loading,
+  );
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -430,23 +455,34 @@ export default function KYCApprovals() {
             ) : (
               filtered.map((submission) => (
                 <tr
-                  key={submission.userId}
-                  className="kyc-review-row"
+                  key={submission.id}
+                  className={`kyc-review-row${
+                    newHighlights.isNew(submission.id) ? " admin-new-row" : ""
+                  }`}
                   style={S.clickableRow}
                   tabIndex={0}
                   role="button"
                   aria-label={`Open KYC submission for ${submission.fullName}`}
-                  onClick={() => setSelectedSubmission(submission)}
+                  onClick={() => {
+                    newHighlights.markSeen(submission.id);
+                    setSelectedSubmission(submission);
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
+                      newHighlights.markSeen(submission.id);
                       setSelectedSubmission(submission);
                     }
                   }}
                 >
                   <td>
                     <div style={S.cellStack}>
-                      <strong>{submission.fullName}</strong>
+                      <div style={S.nameRow}>
+                        <strong>{submission.fullName}</strong>
+                        {newHighlights.isNew(submission.id) && (
+                          <span className="admin-new-badge">New</span>
+                        )}
+                      </div>
                       <span style={S.mutedText}>{submission.userId}</span>
                       <span style={S.mutedText}>{submission.email}</span>
                       <span style={S.mutedText}>{submission.phone}</span>
@@ -823,6 +859,11 @@ const S: Record<string, CSSProperties> = {
     gap: 2,
     minWidth: 0,
     overflowWrap: "anywhere",
+  },
+  nameRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
   },
   statusStack: {
     display: "flex",

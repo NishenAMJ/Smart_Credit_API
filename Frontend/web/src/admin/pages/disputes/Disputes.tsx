@@ -40,6 +40,10 @@ import {
 import { subscribeToAdminDisputes } from "../../lib/dispute-realtime";
 import { formatFirestoreDate } from "../../lib/admin-format";
 import { useDebouncedValue } from "../../lib/use-debounced-value";
+import {
+  toEpochMillis,
+  useNewItemHighlights,
+} from "../../lib/use-new-item-highlights";
 import "./Disputes.css";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
@@ -77,6 +81,7 @@ type DisputeRow = {
   disputedAmount: string;
   evidenceUrls: string[];
   createdAt: string;
+  createdAtMs: number;
   updatedAt: string;
   assignedAdminId: string;
   desiredOutcome: string;
@@ -118,8 +123,10 @@ function mapDispute(dispute: AdminDispute): DisputeRow {
         : "N/A",
     evidenceUrls: dispute.evidenceDocumentIds || dispute.evidenceUrls || [],
     createdAt: formatFirestoreDate(dispute.createdAt),
+    createdAtMs: toEpochMillis(dispute.createdAt),
     updatedAt: formatFirestoreDate(dispute.updatedAt ?? dispute.createdAt),
-    assignedAdminId: dispute.assignedAdminId || dispute.assignedTo || "Unassigned",
+    assignedAdminId:
+      dispute.assignedAdminId || dispute.assignedTo || "Unassigned",
     desiredOutcome: dispute.desiredOutcome || "No requested outcome provided",
     resolution: dispute.resolution?.summary || "N/A",
     escalationReason: dispute.escalationReason || "N/A",
@@ -137,7 +144,9 @@ function StatusBadge({ status }: { status: DisputeStatus }) {
 
 function PriorityBadge({ priority }: { priority: DisputePriority }) {
   return (
-    <span className={`admin-dispute-priority admin-dispute-priority--${priority}`}>
+    <span
+      className={`admin-dispute-priority admin-dispute-priority--${priority}`}
+    >
       {formatLabel(priority)}
     </span>
   );
@@ -289,6 +298,20 @@ export default function Disputes() {
   }, [selectedDispute?.id]);
 
   const filteredDisputes = useMemo(() => disputes, [disputes]);
+  const newItemCandidates = useMemo(
+    () =>
+      disputes.map((dispute) => ({
+        id: dispute.id,
+        createdAtMs: dispute.createdAtMs,
+        actionable: dispute.status === "open",
+      })),
+    [disputes],
+  );
+  const newHighlights = useNewItemHighlights(
+    "disputes",
+    newItemCandidates,
+    !loading,
+  );
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;
@@ -487,9 +510,7 @@ export default function Disputes() {
       const response = await getDisputeEvidenceAccess(documentId);
       window.open(response.accessUrl, "_blank", "noopener,noreferrer");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Evidence is unavailable.",
-      );
+      setError(err instanceof Error ? err.message : "Evidence is unavailable.");
     } finally {
       setEvidenceLoadingId(null);
     }
@@ -512,7 +533,10 @@ export default function Disputes() {
           onClick={() => void loadDisputes()}
           disabled={loading}
         >
-          <RefreshCw className={loading ? "admin-dispute-spin" : ""} size={17} />
+          <RefreshCw
+            className={loading ? "admin-dispute-spin" : ""}
+            size={17}
+          />
           Refresh queue
         </button>
       </header>
@@ -608,11 +632,19 @@ export default function Disputes() {
                   type="button"
                   className={`admin-dispute-case${
                     selectedDispute?.id === dispute.id ? " is-selected" : ""
-                  }`}
-                  onClick={() => setSelectedDispute(dispute)}
+                  }${newHighlights.isNew(dispute.id) ? " is-new" : ""}`}
+                  onClick={() => {
+                    newHighlights.markSeen(dispute.id);
+                    setSelectedDispute(dispute);
+                  }}
                 >
                   <div className="admin-dispute-case__topline">
-                    <StatusBadge status={dispute.status} />
+                    <div className="admin-dispute-case__badges">
+                      <StatusBadge status={dispute.status} />
+                      {newHighlights.isNew(dispute.id) && (
+                        <span className="admin-new-badge">New</span>
+                      )}
+                    </div>
                     <PriorityBadge priority={dispute.priority} />
                   </div>
                   <strong>{dispute.title}</strong>
@@ -669,7 +701,8 @@ export default function Disputes() {
                   <p>{selectedDispute.disputeCode}</p>
                   <h2>{selectedDispute.title}</h2>
                   <span>
-                    Loan {selectedDispute.loanId} · Created {selectedDispute.createdAt}
+                    Loan {selectedDispute.loanId} · Created{" "}
+                    {selectedDispute.createdAt}
                   </span>
                 </div>
                 <button
@@ -827,7 +860,9 @@ export default function Disputes() {
                     ))}
                   </div>
                 ) : (
-                  <p className="admin-dispute-muted">No timeline entries yet.</p>
+                  <p className="admin-dispute-muted">
+                    No timeline entries yet.
+                  </p>
                 )}
               </section>
 
@@ -892,7 +927,9 @@ export default function Disputes() {
                     <div className="admin-dispute-section__title">
                       <div>
                         <h3>Case communication</h3>
-                        <p>Share an update or keep a private investigation note.</p>
+                        <p>
+                          Share an update or keep a private investigation note.
+                        </p>
                       </div>
                       <MessageSquareText size={18} />
                     </div>
@@ -913,7 +950,9 @@ export default function Disputes() {
                             )
                           }
                         >
-                          <option value="shared">Visible to both parties</option>
+                          <option value="shared">
+                            Visible to both parties
+                          </option>
                           <option value="admin">Private admin note</option>
                         </select>
                       </label>
@@ -940,7 +979,10 @@ export default function Disputes() {
                     <div className="admin-dispute-section__title">
                       <div>
                         <h3>Resolve case</h3>
-                        <p>Record the decision and any actions the parties must take.</p>
+                        <p>
+                          Record the decision and any actions the parties must
+                          take.
+                        </p>
                       </div>
                       <CheckCircle2 size={18} />
                     </div>
@@ -948,7 +990,9 @@ export default function Disputes() {
                       rows={3}
                       placeholder="Required resolution summary..."
                       value={resolutionSummary}
-                      onChange={(event) => setResolutionSummary(event.target.value)}
+                      onChange={(event) =>
+                        setResolutionSummary(event.target.value)
+                      }
                     />
                     <textarea
                       rows={3}

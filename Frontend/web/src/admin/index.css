@@ -210,6 +210,29 @@ body {
   outline-offset: -2px;
 }
 
+.admin-new-row td {
+  background-color: #eff6ff;
+}
+.admin-new-row td:first-child {
+  box-shadow: inset 4px 0 0 #2563eb;
+}
+.admin-new-row:hover td {
+  background-color: #dbeafe;
+}
+.admin-new-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
 /* ── Form Inputs ──────────────────────────────────────── */
 .input {
   width: 100%;
