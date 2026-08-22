@@ -1,6 +1,6 @@
 # Smart Credit Firestore Schemas
 
-Last audited: 2026-08-18
+Last audited: 2026-08-22
 
 This document inventories every Firestore collection path referenced by the
 backend or database seed scripts. The schema-v2 seed fields are the canonical
@@ -43,7 +43,7 @@ canonical model.
 | `lenderSettings`                          | Same as `lenderId`               | No                        |
 | `lenderNotificationSync`                  | Same as `lenderId`               | No (read only at present) |
 | `systemSettings`                          | Setting-specific ID              | No                        |
-| `smsDeliveries`                           | Deterministic event ID            | No                        |
+| `smsDeliveries`                           | Deterministic event ID           | No                        |
 
 ## Canonical collections
 
@@ -58,6 +58,21 @@ photoUrl: string | null
 roles: ('borrower' | 'lender' | 'admin')[]
 accountStatus: 'pending' | 'active' | 'suspended' | 'closed'
 kycStatus: 'not_submitted' | 'pending' | 'approved' | 'rejected'
+address: {
+  line1: string
+  line2?: string
+  city: string
+  district: string
+  province: string
+}
+kycDetails?: {
+  documentType: string
+  documentNumber: string
+  fullName: string
+  issuingCountry?: string
+  expiryDate?: string
+  submittedAt: Timestamp
+}
 borrowerProfile: {
   dateOfBirth: Timestamp | null
   occupation: string | null

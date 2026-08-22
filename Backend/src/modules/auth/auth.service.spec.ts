@@ -216,6 +216,12 @@ describe('AuthService', () => {
       fullName: '  Nimal Perera  ',
       email: 'Nimal@Example.com',
       phone: '077 123 4567',
+      address: {
+        line1: '10 Main Street',
+        city: 'Colombo',
+        district: 'Colombo',
+        province: 'Western',
+      },
       password: 'SmartPass123',
       role: 'borrower',
     });
@@ -229,6 +235,12 @@ describe('AuthService', () => {
         fullName: 'Nimal Perera',
         email: 'nimal@example.com',
         phone: '+94771234567',
+        address: {
+          line1: '10 Main Street',
+          city: 'Colombo',
+          district: 'Colombo',
+          province: 'Western',
+        },
         accountStatus: 'active',
       }),
     );
@@ -262,6 +274,12 @@ describe('AuthService', () => {
         fullName: 'Nimal Perera',
         email: 'nimal@example.com',
         phone: '0771234567',
+        address: {
+          line1: '10 Main Street',
+          city: 'Colombo',
+          district: 'Colombo',
+          province: 'Western',
+        },
         password: 'SmartPass123',
         role: 'borrower',
       }),

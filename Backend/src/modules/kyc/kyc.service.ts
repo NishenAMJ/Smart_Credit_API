@@ -13,7 +13,7 @@ import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
 import { removeUndefinedDeep } from '../../common/remove-undefined.deep';
 import { AuthService } from '../auth/auth.service';
-import type { UserDocument, UserRole } from '../auth/auth.types';
+import type { UserAddress, UserDocument, UserRole } from '../auth/auth.types';
 import { DocumentsService } from '../documents/documents.service';
 import type { DocumentRecord } from '../documents/interfaces/document-record.interface';
 import { MediaService } from '../media/media.service';
@@ -54,6 +54,11 @@ type ExistingKycUser = Partial<UserDocument> & {
   dateOfBirth?: string;
 };
 
+type KycReviewContext = Pick<
+  KycDocument,
+  'applicant' | 'identityDetails' | 'location'
+>;
+
 @Injectable()
 export class KycService {
   private static readonly DEFAULT_PAGE_SIZE = 20;
@@ -75,6 +80,7 @@ export class KycService {
   private mapDocumentToKycDocument(
     document: DocumentRecord,
     currentUserKycStatus?: string,
+    context?: KycReviewContext,
   ): KycDocument {
     const status =
       document.status === 'pending_review'
@@ -106,6 +112,7 @@ export class KycService {
       reviewNotes: document.reviewNotes,
       rejectionReason: document.review?.rejectionReason,
       notes: document.review?.notes,
+      ...context,
     };
   }
 
@@ -453,11 +460,8 @@ export class KycService {
           'A borrower or lender role is required to create a KYC profile.',
         );
       }
-      const fullName = this.resolveOptionalField(
-        dto,
-        'fullName',
-        existingUser?.fullName,
-      );
+      const fullName = existingUser?.fullName ?? dto.fullName?.trim();
+      const identityFullName = dto.fullName?.trim() ?? fullName;
       const email = this.resolveOptionalField(
         dto,
         'email',
@@ -541,6 +545,18 @@ export class KycService {
             : {}),
           ...(nic ? { nic } : {}),
           ...(birthDate ? { dateOfBirth: birthDate } : {}),
+          kycDetails: {
+            documentType: dto.documentType?.trim() || 'national_id',
+            documentNumber: nic ?? '',
+            fullName: identityFullName ?? '',
+            ...(dto.issuingCountry?.trim()
+              ? { issuingCountry: dto.issuingCountry.trim() }
+              : {}),
+            ...(dto.expiryDate?.trim()
+              ? { expiryDate: dto.expiryDate.trim() }
+              : {}),
+            submittedAt: FieldValue.serverTimestamp(),
+          },
           photoURL: profilePhotoUrl,
           profilePicture: profilePictureData,
           creditScore: 0,
@@ -627,14 +643,21 @@ export class KycService {
       const userSnapshots = await Promise.all(
         userIds.map((userId) => this.db.collection('users').doc(userId).get()),
       );
-      const currentStatuses = new Map(
+      const userDataById = new Map(
         userSnapshots.map((snapshot, index) => {
-          const status = snapshot.data()?.kycStatus;
-          return [
-            snapshot.id || userIds[index],
-            typeof status === 'string' ? status : 'not_submitted',
-          ];
+          return [snapshot.id || userIds[index], snapshot.data() ?? {}];
         }),
+      );
+      const locationSnapshots = await Promise.all(
+        userIds.map((userId) =>
+          this.db.collection('userLocations').doc(userId).get(),
+        ),
+      );
+      const locationsById = new Map(
+        locationSnapshots.map((snapshot, index) => [
+          snapshot.id || userIds[index],
+          snapshot.exists ? snapshot.data() : undefined,
+        ]),
       );
       const users = this.db.collection('users');
       const [pendingCount, approvedCount, rejectedCount] = await Promise.all(
@@ -656,9 +679,16 @@ export class KycService {
           approved: approvedCount,
           rejected: rejectedCount,
         },
-        documents: result.documents.map((doc) =>
-          this.mapDocumentToKycDocument(doc, currentStatuses.get(doc.userId)),
-        ),
+        documents: result.documents.map((doc) => {
+          const userData = userDataById.get(doc.userId) ?? {};
+          return this.mapDocumentToKycDocument(
+            doc,
+            typeof userData.kycStatus === 'string'
+              ? userData.kycStatus
+              : 'not_submitted',
+            this.buildReviewContext(userData, locationsById.get(doc.userId)),
+          );
+        }),
         hasMore: result.hasMore,
         nextCursor: result.nextCursor,
       };
@@ -699,6 +729,14 @@ export class KycService {
       const user = userSnapshot.data() as ExistingKycUser & {
         kycStatus?: string;
         kycFiles?: { submittedAt?: unknown };
+        kycDetails?: {
+          documentType?: string;
+          documentNumber?: string;
+          fullName?: string;
+          issuingCountry?: string;
+          expiryDate?: string;
+          submittedAt?: unknown;
+        };
         rejectionReason?: string;
         notes?: string;
         updatedAt?: unknown;
@@ -719,9 +757,12 @@ export class KycService {
           id: latestDocument?.id ?? userId,
           userId,
           status,
-          documentType: 'national_identity_card',
-          documentNumber: user.nic ?? '',
-          fullName: user.fullName ?? '',
+          documentType:
+            user.kycDetails?.documentType ?? 'national_identity_card',
+          documentNumber: user.kycDetails?.documentNumber ?? user.nic ?? '',
+          fullName: user.kycDetails?.fullName ?? user.fullName ?? '',
+          issuingCountry: user.kycDetails?.issuingCountry,
+          expiryDate: user.kycDetails?.expiryDate,
           reviewNotes:
             user.rejectionReason ||
             user.notes ||
@@ -730,7 +771,8 @@ export class KycService {
             latestReview?.review?.notes ||
             '',
           submittedAt: this.toIsoString(
-            user.kycFiles?.submittedAt ??
+            user.kycDetails?.submittedAt ??
+              user.kycFiles?.submittedAt ??
               latestDocument?.uploadedAt ??
               user.updatedAt,
           ),
@@ -749,6 +791,106 @@ export class KycService {
       console.error('Error fetching current KYC submission:', error);
       rethrowFirebaseError(error, 'Failed to fetch current KYC submission');
     }
+  }
+
+  private buildReviewContext(
+    userData: FirebaseFirestore.DocumentData,
+    locationData?: FirebaseFirestore.DocumentData,
+  ): KycReviewContext {
+    const address = this.normalizeAddress(userData.address, userData);
+    const kycDetails =
+      userData.kycDetails && typeof userData.kycDetails === 'object'
+        ? (userData.kycDetails as Record<string, unknown>)
+        : {};
+    const role = hasRole(userData.roles ?? userData.role, 'borrower')
+      ? 'borrower'
+      : hasRole(userData.roles ?? userData.role, 'lender')
+        ? 'lender'
+        : undefined;
+    const latitude = this.readFiniteNumber(locationData?.latitude);
+    const longitude = this.readFiniteNumber(locationData?.longitude);
+    const visibility = locationData?.visibility;
+
+    return {
+      applicant: {
+        fullName: this.cleanReviewText(userData.fullName) ?? 'Not provided',
+        email: this.cleanReviewText(userData.email) ?? 'Not provided',
+        phone: this.cleanReviewText(userData.phone) ?? 'Not provided',
+        role,
+        address,
+      },
+      identityDetails: {
+        documentType:
+          this.cleanReviewText(kycDetails.documentType) ?? 'Not provided',
+        documentNumber:
+          this.cleanReviewText(kycDetails.documentNumber) ??
+          this.cleanReviewText(userData.nic) ??
+          'Not provided',
+        fullName: this.cleanReviewText(kycDetails.fullName) ?? 'Not provided',
+        issuingCountry: this.cleanReviewText(kycDetails.issuingCountry),
+        expiryDate: this.cleanReviewText(kycDetails.expiryDate),
+      },
+      ...(latitude != null &&
+      longitude != null &&
+      (visibility === 'hidden' ||
+        visibility === 'approximate' ||
+        visibility === 'exact')
+        ? {
+            location: {
+              latitude,
+              longitude,
+              city: this.cleanReviewText(locationData?.city),
+              district: this.cleanReviewText(locationData?.district),
+              visibility,
+              updatedAt: locationData?.updatedAt,
+            },
+          }
+        : {}),
+    };
+  }
+
+  private normalizeAddress(
+    value: unknown,
+    fallback: FirebaseFirestore.DocumentData,
+  ): UserAddress | undefined {
+    if (value && typeof value === 'object') {
+      const address = value as Record<string, unknown>;
+      const line1 = this.cleanReviewText(address.line1);
+      const city = this.cleanReviewText(address.city);
+      const district = this.cleanReviewText(address.district);
+      const province = this.cleanReviewText(address.province);
+      if (line1 && city && district && province) {
+        return {
+          line1,
+          ...(this.cleanReviewText(address.line2)
+            ? { line2: this.cleanReviewText(address.line2) }
+            : {}),
+          city,
+          district,
+          province,
+        };
+      }
+    }
+
+    const legacyLine = this.cleanReviewText(value);
+    const city = this.cleanReviewText(fallback.city);
+    const district = this.cleanReviewText(fallback.district);
+    const province = this.cleanReviewText(fallback.province);
+    if (legacyLine && city && district && province) {
+      return { line1: legacyLine, city, district, province };
+    }
+
+    return undefined;
+  }
+
+  private cleanReviewText(value: unknown): string | undefined {
+    return typeof value === 'string' && value.trim().length > 0
+      ? value.trim()
+      : undefined;
+  }
+
+  private readFiniteNumber(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
   }
 
   private normalizeUserKycStatus(

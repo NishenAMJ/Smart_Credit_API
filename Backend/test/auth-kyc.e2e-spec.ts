@@ -10,6 +10,12 @@ import { configureApp } from '../src/bootstrap/configure-app';
 import { FirebaseService } from '../src/firebase/firebase.service';
 
 describe('Identity and KYC workflows (e2e)', () => {
+  const testAddress = {
+    line1: '10 Main Street',
+    city: 'Colombo',
+    district: 'Colombo',
+    province: 'Western',
+  };
   let app: INestApplication<App>;
   let firebase: FirebaseService;
 
@@ -113,6 +119,7 @@ describe('Identity and KYC workflows (e2e)', () => {
       fullName: 'Test Borrower',
       email: 'borrower@example.test',
       phone: '+94771234567',
+      address: testAddress,
       password: 'Password123!',
       role: 'borrower',
     };
@@ -206,6 +213,7 @@ describe('Identity and KYC workflows (e2e)', () => {
       fullName: 'KYC Borrower',
       email: 'kyc@example.test',
       phone: '+94770000001',
+      address: testAddress,
       password: 'Password123!',
       role: 'borrower',
     };
@@ -278,6 +286,7 @@ describe('Identity and KYC workflows (e2e)', () => {
       fullName: 'Approval Borrower',
       email: 'approval@example.test',
       phone: '+94770000011',
+      address: testAddress,
       password: 'Password123!',
       role: 'borrower',
     };
@@ -293,13 +302,27 @@ describe('Identity and KYC workflows (e2e)', () => {
     const borrowerToken = borrowerLogin.body.accessToken as string;
     const adminToken = await createAdminToken();
 
+    await request(app.getHttpServer())
+      .patch('/api/location/me')
+      .set('Authorization', `Bearer ${borrowerToken}`)
+      .send({
+        latitude: 6.9271,
+        longitude: 79.8612,
+        city: testAddress.city,
+        district: testAddress.district,
+        visibility: 'approximate',
+      })
+      .expect(200);
+
     const submission = await request(app.getHttpServer())
       .post('/api/kyc/submit')
       .set('Authorization', `Bearer ${borrowerToken}`)
       .send({
-        documentType: 'national_identity_card',
+        documentType: 'national_id',
         documentNumber: '200011111111',
-        fullName: account.fullName,
+        fullName: 'Approval Borrower Identity',
+        issuingCountry: 'Sri Lanka',
+        expiryDate: '2030-12-31',
         documentFrontUrl: imageData('approval-front'),
         documentBackUrl: imageData('approval-back'),
         selfieUrl: imageData('approval-selfie'),
@@ -320,6 +343,29 @@ describe('Identity and KYC workflows (e2e)', () => {
         ),
       ),
     ).toEqual(new Set([userId]));
+    expect(queue.body.documents[0]).toMatchObject({
+      applicant: {
+        fullName: account.fullName,
+        email: account.email,
+        phone: account.phone,
+        role: 'borrower',
+        address: testAddress,
+      },
+      identityDetails: {
+        documentType: 'national_id',
+        documentNumber: '200011111111',
+        fullName: 'Approval Borrower Identity',
+        issuingCountry: 'Sri Lanka',
+        expiryDate: '2030-12-31',
+      },
+      location: {
+        latitude: 6.9271,
+        longitude: 79.8612,
+        city: 'Colombo',
+        district: 'Colombo',
+        visibility: 'approximate',
+      },
+    });
 
     await request(app.getHttpServer())
       .post(`/api/admin/kyc/${submission.body.documentIds[0]}/approve`)
@@ -340,6 +386,11 @@ describe('Identity and KYC workflows (e2e)', () => {
         .expect(200),
     ]);
     expect(user.get('kycStatus')).toBe('approved');
+    expect(user.get('fullName')).toBe(account.fullName);
+    expect(user.get('kycDetails')).toMatchObject({
+      fullName: 'Approval Borrower Identity',
+      documentNumber: '200011111111',
+    });
     expect(documents.docs.map((document) => document.get('status'))).toEqual([
       'approved',
       'approved',
@@ -354,6 +405,7 @@ describe('Identity and KYC workflows (e2e)', () => {
       fullName: 'Resubmit Borrower',
       email: 'resubmit@example.test',
       phone: '+94770000012',
+      address: testAddress,
       password: 'Password123!',
       role: 'borrower',
     };
@@ -431,6 +483,7 @@ describe('Identity and KYC workflows (e2e)', () => {
       fullName: 'Lifecycle Borrower',
       email: 'lifecycle-borrower@example.test',
       phone: '+94770000021',
+      address: testAddress,
       password: 'Password123!',
       role: 'borrower',
     };
@@ -438,6 +491,7 @@ describe('Identity and KYC workflows (e2e)', () => {
       fullName: 'Lifecycle Lender',
       email: 'lifecycle-lender@example.test',
       phone: '+94770000022',
+      address: testAddress,
       password: 'Password123!',
       role: 'lender',
     };

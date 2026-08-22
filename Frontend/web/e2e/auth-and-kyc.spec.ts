@@ -11,6 +11,26 @@ test("shared sign-in validates required credentials", async ({ page }) => {
   await expect(page.getByText("Password is required.")).toBeVisible();
 });
 
+test("lender signup requires a structured address and can capture GPS", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 6.9271, longitude: 79.8612 });
+  await page.goto("/signup");
+
+  await page.getByRole("button", { name: "Use current location" }).click();
+  await expect(
+    page.getByText("Current location captured for map visibility."),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Continue to KYC" }).click();
+  await expect(page.getByText("Street address is required.")).toBeVisible();
+  await expect(page.getByText("City is required.")).toBeVisible();
+  await expect(page.getByText("District is required.")).toBeVisible();
+  await expect(page.getByText("Province is required.")).toBeVisible();
+});
+
 test("admin sign-in stores the session and opens the admin workspace", async ({
   page,
 }) => {
@@ -79,6 +99,33 @@ test("KYC review groups files by user and preserves all status counters", async 
       fullName: "Grouped Borrower",
       email: "borrower@example.test",
       phone: "+94770000001",
+      applicant: {
+        fullName: "Grouped Borrower",
+        email: "borrower@example.test",
+        phone: "+94770000001",
+        role: "borrower",
+        address: {
+          line1: "10 Main Street",
+          city: "Colombo",
+          district: "Colombo",
+          province: "Western",
+        },
+      },
+      identityDetails: {
+        documentType: "national_id",
+        documentNumber: "200012345678",
+        fullName: "Grouped Borrower Identity",
+        issuingCountry: "Sri Lanka",
+        expiryDate: "2030-12-31",
+      },
+      location: {
+        latitude: 6.9271,
+        longitude: 79.8612,
+        city: "Colombo",
+        district: "Colombo",
+        visibility: "approximate",
+        updatedAt: { _seconds: 1_700_000_100 },
+      },
       status: "pending",
       documentStatus: "pending_review",
       userKycStatus: "pending",
@@ -114,6 +161,16 @@ test("KYC review groups files by user and preserves all status counters", async 
       }),
     });
   });
+  await page.route("**/api/admin/kyc/front/access", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        accessUrl: "data:text/html,KYC%20preview",
+      }),
+    });
+  });
 
   await page.goto("/admin/kyc");
 
@@ -136,6 +193,22 @@ test("KYC review groups files by user and preserves all status counters", async 
       page.locator(".card").filter({ hasText: label }).getByText(value),
     ).toBeVisible();
   }
+
+  await page.getByRole("button", { name: "View" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Account information" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Identity details" }),
+  ).toBeVisible();
+  await expect(page.getByText("200012345678")).toBeVisible();
+  await expect(
+    page.getByText("10 Main Street, Colombo, Colombo, Western"),
+  ).toBeVisible();
+  await expect(page.getByText("Names require attention")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open location in Google Maps" }),
+  ).toHaveAttribute("href", "https://www.google.com/maps?q=6.9271,79.8612");
 });
 
 test("admin disputes use global counts for every active workflow status", async ({
@@ -145,7 +218,11 @@ test("admin disputes use global counts for every active workflow status", async 
     localStorage.setItem("adminToken", "admin-e2e-token");
     localStorage.setItem(
       "adminUser",
-      JSON.stringify({ uid: "admin-e2e", fullName: "Workflow Admin", role: "admin" }),
+      JSON.stringify({
+        uid: "admin-e2e",
+        fullName: "Workflow Admin",
+        role: "admin",
+      }),
     );
   });
   await page.route("**/api/admin/disputes/stats", (route) =>
@@ -197,20 +274,44 @@ test("admin disputes use global counts for every active workflow status", async 
       }),
     }),
   );
+  await page.route("**/api/admin/disputes/dispute-1/events", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, events: [] }),
+    }),
+  );
 
   await page.goto("/admin/disputes");
   await expect(page.getByRole("heading", { name: "Disputes" })).toBeVisible();
-  await expect(page.getByText("Payment was not reflected")).toBeVisible();
+  await expect(page.locator(".admin-dispute-workspace")).toBeVisible();
+  await expect(page.locator(".admin-dispute-case")).toHaveCount(1);
 
   for (const [label, value] of [
-    ["All Disputes", "11"],
+    ["All cases", "11"],
     ["Open", "2"],
-    ["In Progress", "4"],
+    ["In progress", "4"],
     ["Escalated", "2"],
     ["Resolved", "2"],
   ] as const) {
     await expect(
-      page.locator(".card").filter({ hasText: label }).getByText(value),
+      page
+        .locator(".admin-dispute-summary__card")
+        .filter({ hasText: label })
+        .getByText(value),
     ).toBeVisible();
   }
+
+  await page.locator(".admin-dispute-case").click();
+  await expect(
+    page.locator(".admin-dispute-detail").getByRole("heading", {
+      name: "Payment was not reflected",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Case controls" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Case timeline" }),
+  ).toBeVisible();
 });

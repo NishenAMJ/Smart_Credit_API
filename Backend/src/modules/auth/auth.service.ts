@@ -82,6 +82,15 @@ export class AuthService {
       photoUrl: null,
       phone: phoneNormalized,
       email: emailLower,
+      address: {
+        line1: registerDto.address.line1.trim(),
+        ...(registerDto.address.line2?.trim()
+          ? { line2: registerDto.address.line2.trim() }
+          : {}),
+        city: registerDto.address.city.trim(),
+        district: registerDto.address.district.trim(),
+        province: registerDto.address.province.trim(),
+      },
       borrowerProfile:
         registerDto.role === 'borrower'
           ? {
@@ -108,6 +117,11 @@ export class AuthService {
         emailLower,
         phoneNormalized,
         registerDto.role,
+        registerDto.address.line1,
+        registerDto.address.line2,
+        registerDto.address.city,
+        registerDto.address.district,
+        registerDto.address.province,
       ]),
       createdAt: now,
       updatedAt: now,

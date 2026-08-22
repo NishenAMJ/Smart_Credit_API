@@ -46,6 +46,12 @@ describe('AuthController', () => {
       fullName: 'Nimal Perera',
       email: 'nimal@example.com',
       phone: '0771234567',
+      address: {
+        line1: '10 Main Street',
+        city: 'Colombo',
+        district: 'Colombo',
+        province: 'Western',
+      },
       password: 'SmartPass123',
       role: 'borrower' as const,
     };

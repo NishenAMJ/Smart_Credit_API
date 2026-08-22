@@ -1,4 +1,10 @@
-import { IsEmail, IsIn, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class SubmitKycDto {
   @IsOptional()
@@ -35,7 +41,7 @@ export class SubmitKycDto {
   issuingCountry?: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
   expiryDate?: string;
 
   @IsOptional()
