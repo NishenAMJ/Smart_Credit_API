@@ -284,6 +284,17 @@ describe('LenderAdsService', () => {
     ]);
   });
 
+  it('includes legacy raw status aliases in lender advertisement queries', () => {
+    expect(normalizeLenderAdStatusFilter('active')).toEqual([
+      'active',
+      'approved',
+    ]);
+    expect(normalizeLenderAdStatusFilter('pending_review')).toEqual([
+      'pending_review',
+      'pending',
+    ]);
+  });
+
   it('rejects unsupported advertisement status filters', () => {
     expect(() => normalizeLenderAdStatusFilter('not-a-status')).toThrow(
       BadRequestException,
