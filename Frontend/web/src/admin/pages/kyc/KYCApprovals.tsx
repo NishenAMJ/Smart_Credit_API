@@ -114,6 +114,31 @@ function formatLabel(value: string) {
   return value.replace(/_/g, " ");
 }
 
+function formatDocumentLabel(
+  document: Pick<KycRow, "documentType" | "identityDetails">,
+) {
+  const storedType = document.documentType.toLowerCase();
+  const identityType = document.identityDetails.documentType
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  const side = storedType === "nic_front" ? "front" : "back";
+
+  // Older uploads were saved as nic_front/nic_back even when the applicant
+  // selected Passport or Driving Licence. Render those legacy records using
+  // the canonical identity type without changing the stored audit record.
+  if (storedType === "nic_front" || storedType === "nic_back") {
+    if (identityType === "passport") return `passport ${side}`;
+    if (
+      identityType === "driving_license" ||
+      identityType === "drivers_license"
+    ) {
+      return `driving licence ${side}`;
+    }
+  }
+
+  return formatLabel(document.documentType);
+}
+
 function formatAddress(address?: KycRow["address"]) {
   if (!address) return "Not provided";
   return [
@@ -222,6 +247,7 @@ export default function KYCApprovals() {
         submission.userKycStatus,
         ...submission.documents.flatMap((document) => [
           document.documentType,
+          formatDocumentLabel(document),
           document.originalFilename,
           document.id,
         ]),
@@ -232,8 +258,7 @@ export default function KYCApprovals() {
     );
   }, [search, submissions]);
 
-  async function openPreview(record: KycRow, submission?: KycSubmissionRow) {
-    if (submission) setSelectedSubmission(submission);
+  async function openPreview(record: KycRow) {
     setSelectedRecord(record);
     setPreviewUrl("");
     setPreviewError("");
@@ -251,13 +276,11 @@ export default function KYCApprovals() {
     }
   }
 
-  async function refreshAfterAction(documentId: string) {
+  async function refreshAfterAction() {
     await loadKyc();
-    if (selectedRecord?.id === documentId) {
-      setSelectedRecord(null);
-      setSelectedSubmission(null);
-      setPreviewUrl("");
-    }
+    setSelectedRecord(null);
+    setSelectedSubmission(null);
+    setPreviewUrl("");
   }
 
   async function handleApprove(submission: KycSubmissionRow) {
@@ -273,7 +296,7 @@ export default function KYCApprovals() {
     setBusyId(record.id);
     try {
       await approveKyc(record.id);
-      await refreshAfterAction(record.id);
+      await refreshAfterAction();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to approve KYC.");
     } finally {
@@ -299,7 +322,7 @@ export default function KYCApprovals() {
     setBusyId(record.id);
     try {
       await rejectKyc(record.id, reason.trim());
-      await refreshAfterAction(record.id);
+      await refreshAfterAction();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject KYC.");
     } finally {
@@ -359,20 +382,25 @@ export default function KYCApprovals() {
       </div>
 
       <div className="table-container">
-        <table>
+        <table style={S.reviewTable}>
+          <colgroup>
+            <col style={{ width: "32%" }} />
+            <col style={{ width: "28%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "22%" }} />
+          </colgroup>
           <thead>
             <tr>
               <th>User</th>
               <th>Submission</th>
               <th>Uploaded</th>
               <th>Current Status</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} style={S.emptyCell}>
+                <td colSpan={4} style={S.emptyCell}>
                   {loading
                     ? "Loading pending KYC documents..."
                     : "No documents found."}
@@ -380,7 +408,21 @@ export default function KYCApprovals() {
               </tr>
             ) : (
               filtered.map((submission) => (
-                <tr key={submission.userId}>
+                <tr
+                  key={submission.userId}
+                  className="kyc-review-row"
+                  style={S.clickableRow}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Open KYC submission for ${submission.fullName}`}
+                  onClick={() => setSelectedSubmission(submission)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedSubmission(submission);
+                    }
+                  }}
+                >
                   <td>
                     <div style={S.cellStack}>
                       <strong>{submission.fullName}</strong>
@@ -394,54 +436,20 @@ export default function KYCApprovals() {
                       <span>{submission.documents.length} documents</span>
                       <span style={S.mutedText}>
                         {submission.documents
-                          .map((document) => formatLabel(document.documentType))
+                          .map(formatDocumentLabel)
                           .join(", ")}
                       </span>
                     </div>
                   </td>
                   <td>{submission.uploadedAt}</td>
                   <td>
-                    <div style={S.cellStack}>
+                    <div style={S.statusStack}>
                       <span className={statusClass(submission.status)}>
                         {submission.status}
                       </span>
                       <span style={S.mutedText}>
                         User: {submission.userKycStatus}
                       </span>
-                    </div>
-                  </td>
-                  <td>
-                    <div style={S.actionRow}>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() =>
-                          void openPreview(submission.documents[0], submission)
-                        }
-                        disabled={busyId === submission.documents[0].id}
-                      >
-                        <Eye size={14} style={{ marginRight: 6 }} />
-                        View
-                      </button>
-                      {submission.status === "pending" && (
-                        <>
-                          <button
-                            className="btn btn-success"
-                            onClick={() => void handleApprove(submission)}
-                            disabled={busyId === submission.documents[0].id}
-                          >
-                            <Check size={14} style={{ marginRight: 6 }} />
-                            Approve
-                          </button>
-                          <button
-                            className="btn btn-danger"
-                            onClick={() => void handleReject(submission)}
-                            disabled={busyId === submission.documents[0].id}
-                          >
-                            <X size={14} style={{ marginRight: 6 }} />
-                            Reject
-                          </button>
-                        </>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -451,26 +459,25 @@ export default function KYCApprovals() {
         </table>
       </div>
 
-      {selectedRecord && (
+      {selectedSubmission && (
         <div
           style={S.modalOverlay}
           onClick={() => {
-            setSelectedRecord(null);
             setSelectedSubmission(null);
           }}
         >
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
             <div style={S.modalHeader}>
               <div>
-                <h3 style={S.modalTitle}>Secure KYC Preview</h3>
+                <h3 style={S.modalTitle}>KYC Submission</h3>
                 <p style={S.modalSubtitle}>
-                  {selectedRecord.fullName} • {selectedRecord.originalFilename}
+                  {selectedSubmission.fullName} •{" "}
+                  {selectedSubmission.documents.length} documents
                 </p>
               </div>
               <button
                 className="btn btn-secondary"
                 onClick={() => {
-                  setSelectedRecord(null);
                   setSelectedSubmission(null);
                 }}
               >
@@ -478,23 +485,27 @@ export default function KYCApprovals() {
               </button>
             </div>
 
-            {selectedSubmission && (
+            <section style={S.documentsSection}>
+              <div>
+                <h4 style={S.reviewSectionTitle}>Submitted documents</h4>
+                <p style={S.reviewSectionCopy}>
+                  Select a file to open it in a secure preview window.
+                </p>
+              </div>
               <div style={S.documentTabs}>
                 {selectedSubmission.documents.map((document) => (
                   <button
                     key={document.id}
-                    className={
-                      document.id === selectedRecord.id
-                        ? "btn btn-primary"
-                        : "btn btn-secondary"
-                    }
+                    className="btn btn-secondary btn-sm"
+                    style={S.documentButton}
                     onClick={() => void openPreview(document)}
                   >
-                    {formatLabel(document.documentType)}
+                    <Eye size={14} />
+                    {formatDocumentLabel(document)}
                   </button>
                 ))}
               </div>
-            )}
+            </section>
 
             {selectedSubmission && (
               <div style={S.reviewSections}>
@@ -643,56 +654,74 @@ export default function KYCApprovals() {
               </div>
             )}
 
-            <div style={S.detailGrid}>
-              <Detail label="User" value={selectedRecord.fullName} />
-              <Detail label="User ID" value={selectedRecord.userId} />
-              <Detail
-                label="Document Type"
-                value={formatLabel(selectedRecord.documentType)}
-              />
-              <Detail
-                label="File Name"
-                value={selectedRecord.originalFilename}
-              />
-              <Detail label="Uploaded" value={selectedRecord.uploadedAt} />
-              <Detail label="Current Status" value={selectedRecord.status} />
-              <Detail
-                label="User KYC Status"
-                value={selectedRecord.userKycStatus}
-              />
-              <Detail
-                label="Reviewer"
-                value={selectedRecord.reviewerId || "-"}
-              />
-              <Detail
-                label="Reviewed At"
-                value={selectedRecord.reviewedAt || "-"}
-              />
-              <Detail
-                label="Notes"
-                value={
-                  selectedRecord.reviewNotes ||
-                  selectedRecord.rejectionReason ||
-                  "-"
-                }
-              />
+            <div style={S.modalActions}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setSelectedSubmission(null)}
+              >
+                Close
+              </button>
+              {selectedSubmission.status === "pending" && (
+                <>
+                  <button
+                    className="btn btn-success"
+                    onClick={() => void handleApprove(selectedSubmission)}
+                    disabled={busyId === selectedSubmission.documents[0].id}
+                  >
+                    <Check size={16} />
+                    Approve submission
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => void handleReject(selectedSubmission)}
+                    disabled={busyId === selectedSubmission.documents[0].id}
+                  >
+                    <X size={16} />
+                    Reject submission
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedRecord && (
+        <div style={S.previewOverlay} onClick={() => setSelectedRecord(null)}>
+          <div
+            style={S.previewModal}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={S.modalHeader}>
+              <div>
+                <h3 style={S.modalTitle}>
+                  {formatDocumentLabel(selectedRecord)}
+                </h3>
+                <p style={S.modalSubtitle}>
+                  {selectedRecord.originalFilename} • {selectedRecord.fullName}
+                </p>
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setSelectedRecord(null)}
+              >
+                Close preview
+              </button>
             </div>
 
             <div style={S.previewBox}>
               {previewLoading ? (
-                <div style={S.previewState}>Loading secure URL...</div>
+                <div style={S.previewState}>Loading secure preview...</div>
               ) : previewError ? (
                 <div style={S.previewState}>{previewError}</div>
               ) : previewUrl ? (
                 <iframe
-                  title="KYC document preview"
+                  title={`${formatDocumentLabel(selectedRecord)} preview`}
                   src={previewUrl}
                   style={S.previewFrame}
                 />
               ) : (
-                <div style={S.previewState}>
-                  Click View to fetch a short-lived signed Cloudinary URL.
-                </div>
+                <div style={S.previewState}>Preview is unavailable.</div>
               )}
             </div>
           </div>
@@ -760,19 +789,29 @@ const S: Record<string, CSSProperties> = {
     padding: 40,
     color: "#6B7280",
   },
+  reviewTable: {
+    width: "100%",
+    tableLayout: "fixed",
+  },
+  clickableRow: {
+    cursor: "pointer",
+  },
   cellStack: {
     display: "flex",
     flexDirection: "column",
     gap: 2,
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+  statusStack: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
   },
   mutedText: {
     color: "#6B7280",
     fontSize: 12,
-  },
-  actionRow: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
   },
   modalOverlay: {
     position: "fixed",
@@ -814,7 +853,18 @@ const S: Record<string, CSSProperties> = {
     display: "flex",
     flexWrap: "wrap",
     gap: 8,
+    marginTop: 12,
+  },
+  documentsSection: {
+    border: "1px solid #BFDBFE",
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
+    background: "#F8FBFF",
+  },
+  documentButton: {
+    minWidth: 130,
+    justifyContent: "center",
   },
   reviewSections: {
     display: "grid",
@@ -909,7 +959,7 @@ const S: Record<string, CSSProperties> = {
   },
   previewFrame: {
     width: "100%",
-    height: 480,
+    height: "68vh",
     border: "none",
     background: "#FFFFFF",
   },
@@ -921,6 +971,37 @@ const S: Record<string, CSSProperties> = {
     color: "#E2E8F0",
     padding: 24,
     textAlign: "center",
+  },
+  modalActions: {
+    position: "sticky",
+    bottom: -24,
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    padding: "16px 24px",
+    margin: "0 -24px -24px",
+    borderTop: "1px solid #E2E8F0",
+    background: "rgba(255, 255, 255, 0.98)",
+    boxShadow: "0 -8px 20px rgba(15, 23, 42, 0.06)",
+  },
+  previewOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15, 23, 42, 0.72)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1100,
+    padding: 20,
+  },
+  previewModal: {
+    width: "min(1100px, 96vw)",
+    maxHeight: "94vh",
+    overflow: "hidden",
+    background: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    boxShadow: "0 28px 90px rgba(0, 0, 0, 0.45)",
   },
   refreshHint: {
     position: "fixed",
