@@ -308,11 +308,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           <View style={styles.headerInfo}>
             <Text style={styles.headerName}>{participant.displayName}</Text>
             <Text style={styles.headerStatus}>
-              {participant.isOnline
-                ? "Online"
-                : participant.lastSeen
-                ? `Last seen ${formatBubbleTime(participant.lastSeen)}`
-                : "Offline"}
+              {participant.isOnline ? "Online" : "Offline"}
             </Text>
           </View>
         </TouchableOpacity>
