@@ -149,7 +149,6 @@ function App() {
             session={session}
             onLogout={handleLogout}
             onOpenProfile={() => setIsProfileOpen(true)}
-            onNavigate={handleNavigate}
           />
         ) : activeView === "notifications" ? (
           <NotificationsPage session={session} onNavigate={handleNavigate} />
