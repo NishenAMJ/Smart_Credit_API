@@ -234,6 +234,8 @@ export default function LenderDisputesPage({
 
   useEffect(() => {
     setEvents([]);
+    setMessage("");
+    setMessageEvidence([]);
     setShowReopen(false);
     setReopenReason("");
     if (selected) void loadTimeline(selected.id);
@@ -382,6 +384,14 @@ export default function LenderDisputesPage({
 
   const lenderAcknowledged = Boolean(
     selected?.acknowledgements?.[session.lenderId],
+  );
+  const lenderParticipantSide =
+    selected?.complainantId === session.lenderId ? "complainant" : "respondent";
+  const canReply = Boolean(
+    selected?.status === "awaiting_response" &&
+    (!selected.responseRequestedFrom ||
+      selected.responseRequestedFrom === "both" ||
+      selected.responseRequestedFrom === lenderParticipantSide),
   );
 
   return (
@@ -751,9 +761,11 @@ export default function LenderDisputesPage({
                 )}
               </div>
 
-              {selected.status !== "closed" ? (
+              {canReply ? (
                 <div className="dispute-composer">
-                  <label htmlFor="dispute-message">Add a case message</label>
+                  <label htmlFor="dispute-message">
+                    Reply to the admin's information request
+                  </label>
                   <textarea
                     id="dispute-message"
                     rows={3}
@@ -787,6 +799,16 @@ export default function LenderDisputesPage({
                       <Send size={16} /> {submitting ? "Sending..." : "Send"}
                     </button>
                   </div>
+                </div>
+              ) : selected.status === "awaiting_response" ? (
+                <div className="dispute-reply-locked">
+                  The admin requested information from the other participant.
+                </div>
+              ) : selected.status !== "resolved" &&
+                selected.status !== "closed" ? (
+                <div className="dispute-reply-locked">
+                  Messaging and attachments become available when the admin
+                  requests more information.
                 </div>
               ) : null}
             </>

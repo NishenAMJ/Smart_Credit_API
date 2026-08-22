@@ -15,6 +15,10 @@ export type DisputeStatus =
 export type ParticipantDisputeScope = 'active' | 'history';
 export type DisputePriority = 'low' | 'medium' | 'high' | 'critical';
 export type DisputeEventVisibility = 'shared' | 'admin';
+export type DisputeResponseRequestedFrom =
+  | 'complainant'
+  | 'respondent'
+  | 'both';
 
 export interface DisputeResolution {
   summary: string;
@@ -53,6 +57,7 @@ export interface Dispute {
   resolution: DisputeResolution | null;
   acknowledgements: Record<string, FirebaseFirestore.Timestamp>;
   reopenCount: number;
+  responseRequestedFrom: DisputeResponseRequestedFrom | null;
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt: FirebaseFirestore.Timestamp;
   resolvedAt: FirebaseFirestore.Timestamp | null;

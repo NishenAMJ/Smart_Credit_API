@@ -27,6 +27,7 @@ export type Dispute = {
   };
   acknowledgements: Record<string, unknown>;
   reopenCount: number;
+  responseRequestedFrom?: "complainant" | "respondent" | "both" | null;
 };
 export type DisputeEvent = {
   id: string;

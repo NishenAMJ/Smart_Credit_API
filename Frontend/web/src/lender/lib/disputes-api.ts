@@ -39,6 +39,7 @@ export type Dispute = {
   };
   acknowledgements: Record<string, TimestampValue>;
   reopenCount: number;
+  responseRequestedFrom?: "complainant" | "respondent" | "both" | null;
   createdAt: TimestampValue;
   updatedAt: TimestampValue;
   resolvedAt?: TimestampValue | null;

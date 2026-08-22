@@ -230,6 +230,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           : legacyResolution,
       acknowledgements: data.acknowledgements ?? {},
       reopenCount: Number(data.reopenCount ?? 0),
+      responseRequestedFrom: ['complainant', 'respondent', 'both'].includes(
+        data.responseRequestedFrom,
+      )
+        ? data.responseRequestedFrom
+        : null,
       createdAt: this.timestamp(data.createdAt),
       updatedAt: this.timestamp(data.updatedAt, this.timestamp(data.createdAt)),
       resolvedAt,
@@ -264,6 +269,32 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     if (![dispute.complainantId, dispute.respondentId].includes(userId)) {
       throw new ForbiddenException(
         'You are not a participant in this dispute.',
+      );
+    }
+  }
+
+  private assertParticipantCanReply(dispute: Dispute, userId: string) {
+    if (dispute.status === 'closed') {
+      throw new BadRequestException('Closed disputes cannot receive comments.');
+    }
+    if (dispute.status === 'resolved') {
+      throw new BadRequestException(
+        'Reopen this dispute before sending another message.',
+      );
+    }
+    if (dispute.status !== 'awaiting_response') {
+      throw new BadRequestException(
+        'You can reply only after the admin requests information.',
+      );
+    }
+    const requestedFrom = dispute.responseRequestedFrom ?? 'both';
+    const isRequestedParticipant =
+      requestedFrom === 'both' ||
+      (requestedFrom === 'complainant' && userId === dispute.complainantId) ||
+      (requestedFrom === 'respondent' && userId === dispute.respondentId);
+    if (!isRequestedParticipant) {
+      throw new ForbiddenException(
+        'The admin requested information from the other participant.',
       );
     }
   }
@@ -675,6 +706,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       resolution: null,
       acknowledgements: {},
       reopenCount: 0,
+      responseRequestedFrom: null,
       createdAt: now,
       updatedAt: now,
       resolvedAt: null,
@@ -922,12 +954,13 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     body: AddDisputeCommentDto,
   ) {
     const message = this.text(body.message, 'message', 1, 2000);
-    const documentIds = [...new Set(body.documentIds ?? [])];
-    await this.validateEvidence(role === 'admin' ? null : actorId, documentIds);
     const { ref, dispute } = await this.getRequired(disputeId);
     this.assertParticipant(dispute, actorId, role);
     if (dispute.status === 'closed')
       throw new BadRequestException('Closed disputes cannot receive comments.');
+    if (role !== 'admin') this.assertParticipantCanReply(dispute, actorId);
+    const documentIds = [...new Set(body.documentIds ?? [])];
+    await this.validateEvidence(role === 'admin' ? null : actorId, documentIds);
     const visibility =
       role === 'admin' && body.visibility === 'admin' ? 'admin' : 'shared';
     const returnsToReview =
@@ -936,6 +969,17 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     const now = Timestamp.now();
     const eventRef = ref.collection('events').doc();
     await this.db.runTransaction(async (transaction) => {
+      if (role !== 'admin') {
+        const currentSnapshot = await transaction.get(ref);
+        if (!currentSnapshot.exists)
+          throw new NotFoundException('Dispute not found.');
+        const current = this.mapDispute(
+          currentSnapshot.id,
+          currentSnapshot.data() ?? {},
+        );
+        this.assertParticipant(current, actorId, role);
+        this.assertParticipantCanReply(current, actorId);
+      }
       transaction.create(eventRef, {
         eventId: eventRef.id,
         ...this.eventData(
@@ -953,7 +997,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           },
         ),
       });
-      transaction.update(ref, { status: nextStatus, updatedAt: now });
+      transaction.update(ref, {
+        status: nextStatus,
+        updatedAt: now,
+        ...(returnsToReview ? { responseRequestedFrom: null } : {}),
+      });
       for (const id of documentIds)
         transaction.update(this.db.collection('documents').doc(id), {
           relatedEntityType: 'dispute',
@@ -961,7 +1009,12 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           updatedAt: now,
         });
     });
-    const updated = { ...dispute, status: nextStatus, updatedAt: now };
+    const updated = {
+      ...dispute,
+      status: nextStatus,
+      updatedAt: now,
+      ...(returnsToReview ? { responseRequestedFrom: null } : {}),
+    };
     this.emit(updated, 'commented');
     if (role === 'admin')
       await this.auditAdminAction(
@@ -1133,6 +1186,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       'awaiting_response',
       'information_requested',
       `${requestedFrom}: ${note}`,
+      { responseRequestedFrom: requestedFrom },
     );
     await this.notify(
       updated,
@@ -1207,6 +1261,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         acknowledgements: {},
         reopenCount: 0,
         closedAt: null,
+        responseRequestedFrom: null,
       },
     );
     if (body.internalNotes?.trim())
@@ -1343,6 +1398,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         acknowledgements: {},
         resolvedAt: null,
         closedAt: null,
+        responseRequestedFrom: null,
       },
     );
     await this.notify(
@@ -1365,7 +1421,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       'closed',
       'closed',
       message,
-      { closedAt: now },
+      { closedAt: now, responseRequestedFrom: null },
     );
     await this.notify(
       updated,
