@@ -98,9 +98,26 @@ export interface AdminSignupRequest {
   fullName: string;
   email: string;
   phone: string;
+  address: RegistrationAddress;
   password: string;
   role: PublicSignupRole;
 }
+
+export type RegistrationAddress = {
+  line1: string;
+  line2?: string;
+  city: string;
+  district: string;
+  province: string;
+};
+
+export type RegistrationLocation = {
+  latitude: number;
+  longitude: number;
+  city?: string;
+  district?: string;
+  visibility?: "hidden" | "approximate" | "exact";
+};
 
 export interface AdminUser {
   id: string;
@@ -174,6 +191,24 @@ export interface KycDocument {
   rejectionReason?: string;
   notes?: string;
   userKycStatus?: string;
+  applicant?: {
+    fullName: string;
+    email: string;
+    phone: string;
+    role?: "borrower" | "lender";
+    address?: RegistrationAddress;
+  };
+  identityDetails?: {
+    documentType: string;
+    documentNumber: string;
+    fullName: string;
+    issuingCountry?: string;
+    expiryDate?: string;
+  };
+  location?: RegistrationLocation & {
+    visibility: "hidden" | "approximate" | "exact";
+    updatedAt?: FirestoreTimestamp;
+  };
 }
 
 export interface KycPendingResponse {
@@ -504,6 +539,17 @@ export function registerPublicUser(payload: AdminSignupRequest) {
     user: AdminAuthResponse["user"];
   }>("/auth/register", {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateRegistrationLocation(
+  accessToken: string,
+  payload: RegistrationLocation,
+) {
+  return apiRequest<{ success: boolean }>("/location/me", {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(payload),
   });
 }

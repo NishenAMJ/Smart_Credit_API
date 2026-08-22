@@ -21,6 +21,7 @@ import Input from "../../components/common/Input";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { useAuth } from "../../context/AuthContext";
+import { locationService } from "../../api/services/location.service";
 import type { AuthMode, MobileRole, SubmitKycPayload } from "../../types/auth";
 
 type LoginForm = {
@@ -32,6 +33,13 @@ type RegisterForm = {
   fullName: string;
   email: string;
   phone: string;
+  address: {
+    line1: string;
+    line2: string;
+    city: string;
+    district: string;
+    province: string;
+  };
   password: string;
   confirmPassword: string;
   kyc: SubmitKycPayload;
@@ -54,6 +62,13 @@ const initialRegisterForm: RegisterForm = {
   fullName: "",
   email: "",
   phone: "",
+  address: {
+    line1: "",
+    line2: "",
+    city: "",
+    district: "",
+    province: "",
+  },
   password: "",
   confirmPassword: "",
   acceptedTerms: false,
@@ -110,6 +125,12 @@ export default function MobileAuthScreen() {
   const [uploadingField, setUploadingField] = useState<UploadFieldKey | null>(
     null,
   );
+  const [capturedLocation, setCapturedLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationMessage, setLocationMessage] = useState("");
 
   const isBorrowerAccount = accountRole === "borrower";
   const accountRoleLabel = isBorrowerAccount ? "borrower" : "lender";
@@ -195,6 +216,16 @@ export default function MobileAuthScreen() {
       return false;
     }
 
+    if (
+      !registerForm.address.line1.trim() ||
+      !registerForm.address.city.trim() ||
+      !registerForm.address.district.trim() ||
+      !registerForm.address.province.trim()
+    ) {
+      setFieldError("Street, city, district, and province are required.");
+      return false;
+    }
+
     if (registerForm.password.length < 8) {
       setFieldError("Password must be at least 8 characters long.");
       return false;
@@ -256,6 +287,23 @@ export default function MobileAuthScreen() {
     setRegisterStep("kyc");
   }
 
+  async function handleCaptureLocation() {
+    try {
+      setLocationLoading(true);
+      setLocationMessage("");
+      const coordinates = await locationService.getCurrentCoordinates();
+      setCapturedLocation(coordinates);
+      setLocationMessage("Current location captured for map visibility.");
+    } catch {
+      setCapturedLocation(null);
+      setLocationMessage(
+        "Location permission was denied. You can continue and enable it later.",
+      );
+    } finally {
+      setLocationLoading(false);
+    }
+  }
+
   async function handlePickFile(
     field: UploadFieldKey,
     label: string,
@@ -307,11 +355,20 @@ export default function MobileAuthScreen() {
 
     try {
       setFieldError("");
-      await signUp({
+      const result = await signUp({
         account: {
           fullName: registerForm.fullName.trim(),
           email: registerForm.email.trim(),
           phone: registerForm.phone.trim(),
+          address: {
+            line1: registerForm.address.line1.trim(),
+            ...(registerForm.address.line2.trim()
+              ? { line2: registerForm.address.line2.trim() }
+              : {}),
+            city: registerForm.address.city.trim(),
+            district: registerForm.address.district.trim(),
+            province: registerForm.address.province.trim(),
+          },
           password: registerForm.password,
           role: accountRole,
         },
@@ -319,16 +376,29 @@ export default function MobileAuthScreen() {
           ...registerForm.kyc,
           documentNumber: registerForm.kyc.documentNumber.trim(),
           fullName: registerForm.kyc.fullName.trim(),
-          issuingCountry: registerForm.kyc.issuingCountry?.trim(),
+          issuingCountry: registerForm.kyc.issuingCountry?.trim() || undefined,
+          expiryDate: registerForm.kyc.expiryDate?.trim() || undefined,
           documentFrontUrl: registerForm.kyc.documentFrontUrl?.trim(),
           documentBackUrl: registerForm.kyc.documentBackUrl?.trim(),
           selfieUrl: registerForm.kyc.selfieUrl?.trim(),
         },
+        ...(capturedLocation
+          ? {
+              location: {
+                ...capturedLocation,
+                city: registerForm.address.city.trim(),
+                district: registerForm.address.district.trim(),
+                visibility: isBorrowerAccount ? "approximate" : "exact",
+              } as const,
+            }
+          : {}),
       });
 
       Alert.alert(
         "Account created",
-        "Your account was created and your KYC submission was sent for review.",
+        result.locationSaved
+          ? "Your account, KYC submission, and map location were saved."
+          : "Your account and KYC submission were saved. Enable location later to appear on maps.",
       );
       setRegisterForm(initialRegisterForm);
       setLoginForm({
@@ -338,6 +408,8 @@ export default function MobileAuthScreen() {
       setMode("login");
       setRegisterStep("account");
       setSelectedFiles({});
+      setCapturedLocation(null);
+      setLocationMessage("");
     } catch {
       return;
     }
@@ -589,6 +661,94 @@ export default function MobileAuthScreen() {
                         }
                         placeholder="+94 77 123 4567"
                       />
+
+                      <Text style={styles.sectionTitle}>
+                        Registered address
+                      </Text>
+                      <Text style={styles.sectionSubtitle}>
+                        This address is shown to the KYC reviewer. GPS sharing
+                        is optional and only controls map visibility.
+                      </Text>
+
+                      <FieldLabel label="Street address" />
+                      <Input
+                        value={registerForm.address.line1}
+                        onChangeText={(value) =>
+                          setRegisterForm((current) => ({
+                            ...current,
+                            address: { ...current.address, line1: value },
+                          }))
+                        }
+                        placeholder="10 Main Street"
+                      />
+
+                      <FieldLabel label="Address line 2 (optional)" />
+                      <Input
+                        value={registerForm.address.line2}
+                        onChangeText={(value) =>
+                          setRegisterForm((current) => ({
+                            ...current,
+                            address: { ...current.address, line2: value },
+                          }))
+                        }
+                        placeholder="Apartment, building, or landmark"
+                      />
+
+                      {(
+                        [
+                          ["City", "city", "Colombo"],
+                          ["District", "district", "Colombo"],
+                          ["Province", "province", "Western"],
+                        ] as const
+                      ).map(([label, key, placeholder]) => (
+                        <React.Fragment key={key}>
+                          <FieldLabel label={label} />
+                          <Input
+                            value={registerForm.address[key]}
+                            onChangeText={(value) =>
+                              setRegisterForm((current) => ({
+                                ...current,
+                                address: { ...current.address, [key]: value },
+                              }))
+                            }
+                            placeholder={placeholder}
+                          />
+                        </React.Fragment>
+                      ))}
+
+                      <Pressable
+                        onPress={() => void handleCaptureLocation()}
+                        disabled={locationLoading || authLoading}
+                        style={({ pressed }) => [
+                          styles.locationButton,
+                          pressed && styles.locationButtonPressed,
+                        ]}
+                      >
+                        {locationLoading ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={COLORS.primary}
+                          />
+                        ) : null}
+                        <Text style={styles.locationButtonText}>
+                          {locationLoading
+                            ? "Capturing location..."
+                            : capturedLocation
+                              ? "Refresh current location"
+                              : "Use current location"}
+                        </Text>
+                      </Pressable>
+                      {locationMessage ? (
+                        <Text
+                          style={
+                            capturedLocation
+                              ? styles.locationSuccess
+                              : styles.locationWarning
+                          }
+                        >
+                          {locationMessage}
+                        </Text>
+                      ) : null}
 
                       <FieldLabel label="Password" />
                       <Input
@@ -1239,6 +1399,36 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 12,
     lineHeight: 18,
+  },
+  locationButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    backgroundColor: "#EEF6FF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+  },
+  locationButtonPressed: {
+    opacity: 0.78,
+  },
+  locationButtonText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  locationSuccess: {
+    color: COLORS.success,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  locationWarning: {
+    color: COLORS.warning,
+    fontSize: 13,
+    lineHeight: 19,
   },
   uploadCard: {
     borderRadius: 14,
