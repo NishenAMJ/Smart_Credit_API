@@ -65,9 +65,7 @@ export default function DisputesScreen({ navigation }: any) {
       const eligible = loansResult.value;
       setLoans(eligible);
       setLoanId((current) =>
-        eligible.some((loan) => loan.id === current)
-          ? current
-          : (eligible[0]?.id ?? ""),
+        !current || eligible.some((loan) => loan.id === current) ? current : "",
       );
     }
     const failure = [casesResult, loansResult].find(
@@ -97,7 +95,6 @@ export default function DisputesScreen({ navigation }: any) {
 
   async function submit() {
     const problems: string[] = [];
-    if (!loanId) problems.push("Select an eligible loan.");
     if (subject.trim().length < 3)
       problems.push("Subject must contain at least 3 characters.");
     if (description.trim().length < 10)
@@ -116,15 +113,15 @@ export default function DisputesScreen({ navigation }: any) {
           .map((asset) => uploadDisputeEvidence(asset, loanId)),
       );
       const dispute = await disputesService.create({
-        loanId,
+        ...(loanId ? { loanId } : {}),
         category,
         subject,
         description,
         desiredOutcome,
-        ...(transactionId.trim()
+        ...(loanId && transactionId.trim()
           ? { transactionId: transactionId.trim() }
           : {}),
-        ...(installmentId.trim()
+        ...(loanId && installmentId.trim()
           ? { installmentId: installmentId.trim() }
           : {}),
         evidenceDocumentIds,
@@ -183,9 +180,15 @@ export default function DisputesScreen({ navigation }: any) {
                   {item.status.replace(/_/g, " ")}
                 </Text>
               </View>
-              <Text style={styles.muted}>
-                {item.disputeCode} · Loan {item.loanId}
-              </Text>
+              {item.loanId ? (
+                <Text style={styles.muted}>
+                  {item.disputeCode} · Loan {item.loanId}
+                </Text>
+              ) : (
+                <Text style={styles.muted}>
+                  {item.disputeCode} {" · General dispute"}
+                </Text>
+              )}
               <Text numberOfLines={2}>{item.description}</Text>
             </TouchableOpacity>
           ))
@@ -208,13 +211,22 @@ export default function DisputesScreen({ navigation }: any) {
             <View />
           </View>
           <ScrollView contentContainerStyle={styles.content}>
-            <Text style={styles.label}>Loan</Text>
+            <Text style={styles.label}>Related loan (optional)</Text>
+            <TouchableOpacity
+              style={[styles.choice, !loanId && styles.choiceActive]}
+              onPress={() => {
+                setLoanId("");
+                setTransactionId("");
+                setInstallmentId("");
+              }}
+            >
+              <Text>General platform issue</Text>
+            </TouchableOpacity>
             {loans.length === 0 ? (
               <View style={styles.emptyLoanState}>
-                <Text style={styles.title}>No eligible loans</Text>
+                <Text style={styles.title}>No linked loans found</Text>
                 <Text style={styles.muted}>
-                  A dispute must be linked to one of your loans. No matching
-                  loan was found for this account.
+                  You can still submit a general platform dispute.
                 </Text>
               </View>
             ) : null}
@@ -233,20 +245,24 @@ export default function DisputesScreen({ navigation }: any) {
                 </Text>
               </TouchableOpacity>
             ))}
-            <TextInput
-              style={styles.input}
-              placeholder="Optional transaction ID"
-              value={transactionId}
-              onChangeText={setTransactionId}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Optional installment ID"
-              value={installmentId}
-              onChangeText={setInstallmentId}
-              autoCapitalize="none"
-            />
+            {loanId ? (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Optional transaction ID"
+                  value={transactionId}
+                  onChangeText={setTransactionId}
+                  autoCapitalize="none"
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Optional installment ID"
+                  value={installmentId}
+                  onChangeText={setInstallmentId}
+                  autoCapitalize="none"
+                />
+              </>
+            ) : null}
             <Text style={styles.label}>Category</Text>
             <View style={styles.wrap}>
               {categories.map((value) => (
@@ -307,9 +323,9 @@ export default function DisputesScreen({ navigation }: any) {
             <TouchableOpacity
               style={[
                 styles.primary,
-                (!loans.length || submitting) && styles.disabled,
+                submitting && styles.disabled,
               ]}
-              disabled={!loans.length || submitting}
+              disabled={submitting}
               onPress={() => void submit()}
             >
               <Text style={styles.primaryText}>

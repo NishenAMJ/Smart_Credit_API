@@ -109,7 +109,7 @@ function mapDispute(dispute: AdminDispute): DisputeRow {
         ? dispute.borrowerName || dispute.borrowerId
         : dispute.lenderName || dispute.lenderId) ||
       dispute.respondentId ||
-      "Unknown",
+      (dispute.loanId ? "Unknown" : "Platform support"),
     description:
       dispute.description || dispute.title || "No description provided",
     category: dispute.category,
@@ -733,10 +733,10 @@ export default function Disputes() {
                   <p>{selectedDispute.disputeCode}</p>
                   <h2>{selectedDispute.title}</h2>
                   <span>
-                    {selectedDispute.loanId !== "N/A"
-                      ? `Loan ${selectedDispute.loanId} · `
-                      : ""}
-                    Created {selectedDispute.createdAt}
+                    {selectedDispute.loanId === "N/A"
+                      ? "General dispute"
+                      : `Loan ${selectedDispute.loanId}`} {" · Created "}
+                    {selectedDispute.createdAt}
                   </span>
                 </div>
                 <button

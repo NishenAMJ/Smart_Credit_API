@@ -19,8 +19,9 @@ import {
 
 export class CreateDisputeDto implements CreateDisputeInput {
   @IsString()
-  @IsNotEmpty()
-  loanId!: string;
+  @IsOptional()
+  @MaxLength(120)
+  loanId?: string;
 
   @IsString()
   @IsOptional()
