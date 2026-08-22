@@ -1,5 +1,5 @@
-import { io, type Socket } from "socket.io-client";
 import { API_BASE_URL, getAuthHeaders } from "./api-config";
+import { createLenderRealtimeConnection } from "./lender-realtime";
 
 export type DisputeStatus =
   | "open"
@@ -209,13 +209,9 @@ export async function uploadDisputeEvidence(file: File, loanId: string) {
 }
 
 export function subscribeToDisputes(token: string, onChange: () => void) {
-  const socket: Socket = io(API_BASE_URL.replace(/\/api\/?$/, ""), {
-    transports: ["websocket"],
-    auth: { token: `Bearer ${token}` },
-  });
+  const connection = createLenderRealtimeConnection(token);
+  const { socket } = connection;
   socket.on("dispute:changed", onChange);
   socket.io.on("reconnect", onChange);
-  return () => {
-    socket.disconnect();
-  };
+  return connection.disconnect;
 }
