@@ -1022,10 +1022,26 @@ export function closeDispute(disputeId: string, reason: string) {
 
 import type { AgreementsResponse } from "../../legal/types";
 
-export function getLegalAgreements() {
-  return apiRequest<AgreementsResponse>("/legal/documents", {
-    auth: true,
-  });
+export async function getLegalAgreements(): Promise<AgreementsResponse> {
+  const documents: AgreementsResponse["documents"] = [];
+  let cursor: string | null = null;
+
+  do {
+    const query = new URLSearchParams({ pageSize: "50" });
+    if (cursor) query.set("cursor", cursor);
+
+    const response = await apiRequest<AgreementsResponse>(
+      `/legal/documents?${query.toString()}`,
+      { auth: true },
+    );
+    documents.push(...response.documents);
+    cursor = response.pageInfo.hasMore ? response.pageInfo.nextCursor : null;
+  } while (cursor);
+
+  return {
+    documents,
+    pageInfo: { hasMore: false, nextCursor: null },
+  };
 }
 
 export async function downloadLegalAgreement(
