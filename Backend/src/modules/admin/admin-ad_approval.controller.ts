@@ -40,14 +40,14 @@ export class AdminAdApprovalController {
     return { count: response.stats.pending };
   }
 
-  // GET /admin/ads?status=pending|active|rejected|all
+  // GET /admin/ads?status=pending|active|rejected|closed|all
   // List ads filtered by status
   @Get()
   async getAds(
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
     @Query('status')
-    status?: 'pending' | 'approved' | 'active' | 'rejected' | 'closed',
+    status?: 'pending' | 'active' | 'rejected' | 'closed',
     @Query('search') search?: string,
   ) {
     return this.approvalService.getAds(limit, cursor, status, search);

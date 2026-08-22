@@ -560,7 +560,7 @@ export default function KYCApprovals() {
                       )}
                     />
                     <Detail
-                      label="Document number"
+                      label="Identity number"
                       value={selectedSubmission.identityDetails.documentNumber}
                     />
                     <Detail

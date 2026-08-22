@@ -71,7 +71,6 @@ function mapAd(ad: AdminAd): LenderAdRow {
 function StatusBadge({ status }: { status: AdStatus }) {
   const className = {
     active: "badge badge-success",
-    approved: "badge badge-success",
     pending: "badge badge-warning",
     closed: "badge badge-gray",
     rejected: "badge badge-danger",
@@ -84,15 +83,13 @@ function StatusBadge({ status }: { status: AdStatus }) {
 function buildAdSummaryCards(stats: {
   all: number;
   active: number;
-  approved: number;
   pending: number;
   rejected: number;
   closed: number;
 }): AdSummaryCard[] {
   return [
     { label: "All Lender Ads", count: stats.all, color: "#007AFF" },
-    { label: "Active", count: stats.active, color: "#10B981" },
-    { label: "Approved", count: stats.approved, color: "#10B981" },
+    { label: "Approved & Active", count: stats.active, color: "#10B981" },
     { label: "Pending", count: stats.pending, color: "#F59E0B" },
     { label: "Rejected", count: stats.rejected, color: "#EF4444" },
     { label: "Closed", count: stats.closed, color: "#6B7280" },
@@ -106,7 +103,6 @@ export default function LenderAds() {
   const [stats, setStats] = useState({
     all: 0,
     active: 0,
-    approved: 0,
     pending: 0,
     rejected: 0,
     closed: 0,
@@ -329,7 +325,6 @@ export default function LenderAds() {
             [
               "all",
               "active",
-              "approved",
               "pending",
               "rejected",
               "closed",

@@ -17,7 +17,6 @@ export type AuditSeverity = "info" | "warning" | "critical" | "success";
 export type AuditTargetType = "user" | "ad" | "system" | "report";
 export type AdStatus =
   | "pending"
-  | "approved"
   | "rejected"
   | "active"
   | "closed";
@@ -392,7 +391,6 @@ export interface AdStatsResponse {
   stats: {
     all: number;
     active: number;
-    approved: number;
     pending: number;
     rejected: number;
     closed: number;
