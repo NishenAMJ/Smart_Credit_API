@@ -709,7 +709,15 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     filters: AdminDisputeQuery = {},
   ) {
     let query: FirebaseFirestore.Query = this.db.collection('disputes');
-    if (filters.status) query = query.where('status', '==', filters.status);
+    if (filters.status === 'under_review') {
+      query = query.where('status', 'in', [
+        'under_review',
+        'in-progress',
+        'escalated',
+      ]);
+    } else if (filters.status) {
+      query = query.where('status', '==', filters.status);
+    }
     if (filters.priority)
       query = query.where('priority', '==', filters.priority);
     if (filters.assignedAdminId)
@@ -755,7 +763,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           count(disputes),
           count(disputes.where('status', '==', 'open')),
           count(
-            disputes.where('status', 'in', ['under_review', 'in-progress']),
+            disputes.where('status', 'in', [
+              'under_review',
+              'in-progress',
+              'escalated',
+            ]),
           ),
           count(disputes.where('status', '==', 'awaiting_response')),
           count(disputes.where('status', '==', 'escalated')),
@@ -995,6 +1007,24 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       `Priority changed to ${priority}: ${note}`,
     );
     return { success: true, dispute: updated };
+  }
+
+  async startReview(disputeId: string, adminId: string) {
+    const { dispute } = await this.getRequired(disputeId);
+    if (dispute.status !== 'open') {
+      return { success: true, dispute };
+    }
+    return {
+      success: true,
+      dispute: await this.transition(
+        disputeId,
+        adminId,
+        'admin',
+        'under_review',
+        'review_started',
+        'Admin started reviewing this dispute.',
+      ),
+    };
   }
 
   async requestInformation(

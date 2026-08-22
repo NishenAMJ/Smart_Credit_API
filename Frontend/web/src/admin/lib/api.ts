@@ -892,6 +892,13 @@ export function changeDisputePriority(
   });
 }
 
+export function startDisputeReview(disputeId: string) {
+  return apiRequest<{ success: boolean; dispute: AdminDispute }>(
+    `/admin/disputes/${disputeId}/review`,
+    { method: "PATCH", auth: true },
+  );
+}
+
 export type AdminAdBoost = {
   boostId: string;
   listingId: string;

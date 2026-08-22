@@ -100,6 +100,14 @@ export class DisputesController {
     );
   }
 
+  @Patch(':disputeId/review')
+  startReview(
+    @Req() req: AuthenticatedRequest,
+    @Param('disputeId') disputeId: string,
+  ) {
+    return this.disputesService.startReview(disputeId, req.user.sub);
+  }
+
   @Post(':disputeId/comments')
   comment(
     @Req() req: AuthenticatedRequest,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -32,6 +32,7 @@ import {
   getDisputes,
   requestDisputeInformation,
   resolveCanonicalDispute,
+  startDisputeReview,
   type AdminDispute,
   type DisputeEvent,
   type DisputePriority,
@@ -55,7 +56,6 @@ const DISPUTE_STATUS_FILTERS: Array<{
   { value: "open", label: "Open" },
   { value: "under_review", label: "In review" },
   { value: "awaiting_response", label: "Awaiting" },
-  { value: "escalated", label: "Escalated" },
   { value: "resolved", label: "Resolved" },
   { value: "closed", label: "Closed" },
 ];
@@ -63,7 +63,8 @@ const DISPUTE_STATUS_FILTERS: Array<{
 type DisputeSummaryCard = {
   label: string;
   count: number;
-  tone: "primary" | "warning" | "info" | "danger" | "success";
+  tone: "primary" | "warning" | "info" | "success";
+  filter: DisputeStatus | "all";
 };
 
 type DisputeRow = {
@@ -83,11 +84,8 @@ type DisputeRow = {
   createdAt: string;
   createdAtMs: number;
   updatedAt: string;
-  assignedAdminId: string;
   desiredOutcome: string;
   resolution: string;
-  escalationReason: string;
-  notes: string;
 };
 
 function mapDispute(dispute: AdminDispute): DisputeRow {
@@ -125,19 +123,18 @@ function mapDispute(dispute: AdminDispute): DisputeRow {
     createdAt: formatFirestoreDate(dispute.createdAt),
     createdAtMs: toEpochMillis(dispute.createdAt),
     updatedAt: formatFirestoreDate(dispute.updatedAt ?? dispute.createdAt),
-    assignedAdminId:
-      dispute.assignedAdminId || dispute.assignedTo || "Unassigned",
     desiredOutcome: dispute.desiredOutcome || "No requested outcome provided",
     resolution: dispute.resolution?.summary || "N/A",
-    escalationReason: dispute.escalationReason || "N/A",
-    notes: dispute.notes || "N/A",
   };
 }
 
 function StatusBadge({ status }: { status: DisputeStatus }) {
+  const displayStatus = status === "escalated" ? "under_review" : status;
   return (
-    <span className={`admin-dispute-status admin-dispute-status--${status}`}>
-      {formatLabel(status)}
+    <span
+      className={`admin-dispute-status admin-dispute-status--${displayStatus}`}
+    >
+      {formatLabel(displayStatus)}
     </span>
   );
 }
@@ -162,23 +159,44 @@ function formatLabel(value: string) {
 function buildDisputeSummaryCards(counts: {
   all: number;
   open: number;
-  inProgress: number;
-  escalated: number;
+  inReview: number;
+  awaitingResponse: number;
   resolved: number;
+  closed: number;
 }): DisputeSummaryCard[] {
   return [
-    { label: "All cases", count: counts.all, tone: "primary" },
-    { label: "Open", count: counts.open, tone: "warning" },
-    { label: "In progress", count: counts.inProgress, tone: "info" },
-    { label: "Escalated", count: counts.escalated, tone: "danger" },
-    { label: "Resolved", count: counts.resolved, tone: "success" },
+    { label: "All cases", count: counts.all, tone: "primary", filter: "all" },
+    { label: "Open", count: counts.open, tone: "warning", filter: "open" },
+    {
+      label: "In review",
+      count: counts.inReview,
+      tone: "info",
+      filter: "under_review",
+    },
+    {
+      label: "Awaiting response",
+      count: counts.awaitingResponse,
+      tone: "warning",
+      filter: "awaiting_response",
+    },
+    {
+      label: "Resolved",
+      count: counts.resolved,
+      tone: "success",
+      filter: "resolved",
+    },
+    {
+      label: "Closed",
+      count: counts.closed,
+      tone: "primary",
+      filter: "closed",
+    },
   ];
 }
 
 function SummaryIcon({ tone }: { tone: DisputeSummaryCard["tone"] }) {
   if (tone === "warning") return <Clock3 size={19} />;
   if (tone === "info") return <MessageSquareText size={19} />;
-  if (tone === "danger") return <ShieldAlert size={19} />;
   if (tone === "success") return <CheckCircle2 size={19} />;
   return <Inbox size={19} />;
 }
@@ -222,9 +240,11 @@ export default function Disputes() {
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [totalLoaded, setTotalLoaded] = useState(0);
+  const latestLoadRequest = useRef(0);
 
   const loadDisputes = useCallback(
     async (cursor?: string) => {
+      const requestId = ++latestLoadRequest.current;
       setLoading(true);
       try {
         const response = await getDisputes({
@@ -233,13 +253,13 @@ export default function Disputes() {
           status: filterStatus === "all" ? undefined : filterStatus,
           search: debouncedSearch.trim() || undefined,
         });
+        if (requestId !== latestLoadRequest.current) return;
         const mappedDisputes = response.disputes.map(mapDispute);
         setDisputes(mappedDisputes);
         setSelectedDispute((current) => {
           if (!current) return null;
           return (
-            mappedDisputes.find((dispute) => dispute.id === current.id) ??
-            current
+            mappedDisputes.find((dispute) => dispute.id === current.id) ?? null
           );
         });
         setHasMore(response.hasMore ?? false);
@@ -247,11 +267,12 @@ export default function Disputes() {
         setTotalLoaded(response.count);
         setError("");
       } catch (err) {
+        if (requestId !== latestLoadRequest.current) return;
         setError(
           err instanceof Error ? err.message : "Failed to load disputes.",
         );
       } finally {
-        setLoading(false);
+        if (requestId === latestLoadRequest.current) setLoading(false);
       }
     },
     [debouncedSearch, filterStatus, pageSize],
@@ -364,21 +385,45 @@ export default function Disputes() {
     open:
       globalCounts.open ??
       disputes.filter((dispute) => dispute.status === "open").length,
-    inProgress:
-      globalCounts.under_review != null ||
-      globalCounts.awaiting_response != null
-        ? (globalCounts.under_review ?? 0) +
-          (globalCounts.awaiting_response ?? 0)
-        : disputes.filter((dispute) =>
-            ["under_review", "awaiting_response"].includes(dispute.status),
-          ).length,
-    escalated:
-      globalCounts.escalated ??
-      disputes.filter((dispute) => dispute.status === "escalated").length,
+    inReview:
+      globalCounts.under_review ??
+      disputes.filter((dispute) => dispute.status === "under_review").length,
+    awaitingResponse:
+      globalCounts.awaiting_response ??
+      disputes.filter((dispute) => dispute.status === "awaiting_response")
+        .length,
     resolved:
       globalCounts.resolved ??
       disputes.filter((dispute) => dispute.status === "resolved").length,
+    closed:
+      globalCounts.closed ??
+      disputes.filter((dispute) => dispute.status === "closed").length,
   };
+
+  function handleFilterChange(status: DisputeStatus | "all") {
+    setSelectedDispute(null);
+    setFilterStatus(status);
+  }
+
+  async function handleSelectDispute(dispute: DisputeRow) {
+    newHighlights.markSeen(dispute.id);
+    setSelectedDispute(dispute);
+    if (dispute.status !== "open") return;
+
+    try {
+      const response = await startDisputeReview(dispute.id);
+      const updated = mapDispute(response.dispute);
+      setDisputes((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setSelectedDispute(updated);
+      if (filterStatus === "open") setFilterStatus("under_review");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to start case review.",
+      );
+    }
+  }
 
   function syncStatus(
     id: string,
@@ -538,9 +583,14 @@ export default function Disputes() {
 
       <div className="admin-dispute-summary" aria-label="Dispute totals">
         {buildDisputeSummaryCards(counts).map((item) => (
-          <article
+          <button
             key={item.label}
-            className={`admin-dispute-summary__card admin-dispute-summary__card--${item.tone}`}
+            type="button"
+            className={`admin-dispute-summary__card admin-dispute-summary__card--${item.tone}${
+              filterStatus === item.filter ? " is-active" : ""
+            }`}
+            aria-pressed={filterStatus === item.filter}
+            onClick={() => handleFilterChange(item.filter)}
           >
             <span className="admin-dispute-summary__icon">
               <SummaryIcon tone={item.tone} />
@@ -549,7 +599,7 @@ export default function Disputes() {
               <p>{item.label}</p>
               <strong>{loading ? "—" : item.count}</strong>
             </div>
-          </article>
+          </button>
         ))}
       </div>
 
@@ -561,7 +611,7 @@ export default function Disputes() {
               type="button"
               className={filterStatus === option.value ? "is-active" : ""}
               aria-pressed={filterStatus === option.value}
-              onClick={() => setFilterStatus(option.value)}
+              onClick={() => handleFilterChange(option.value)}
             >
               {option.label}
             </button>
@@ -618,10 +668,7 @@ export default function Disputes() {
                   className={`admin-dispute-case${
                     selectedDispute?.id === dispute.id ? " is-selected" : ""
                   }${newHighlights.isNew(dispute.id) ? " is-new" : ""}`}
-                  onClick={() => {
-                    newHighlights.markSeen(dispute.id);
-                    setSelectedDispute(dispute);
-                  }}
+                  onClick={() => void handleSelectDispute(dispute)}
                 >
                   <div className="admin-dispute-case__topline">
                     <div className="admin-dispute-case__badges">
@@ -686,8 +733,10 @@ export default function Disputes() {
                   <p>{selectedDispute.disputeCode}</p>
                   <h2>{selectedDispute.title}</h2>
                   <span>
-                    Loan {selectedDispute.loanId} · Created{" "}
-                    {selectedDispute.createdAt}
+                    {selectedDispute.loanId !== "N/A"
+                      ? `Loan ${selectedDispute.loanId} · `
+                      : ""}
+                    Created {selectedDispute.createdAt}
                   </span>
                 </div>
                 <button
@@ -719,16 +768,24 @@ export default function Disputes() {
                 </div>
                 <div>
                   <span>Against</span>
-                  <strong>{selectedDispute.againstUser}</strong>
+                  <strong>
+                    {selectedDispute.againstUser === "Unknown"
+                      ? "Not specified"
+                      : selectedDispute.againstUser}
+                  </strong>
                 </div>
-                <div>
-                  <span>Transaction</span>
-                  <strong>{selectedDispute.transactionId}</strong>
-                </div>
-                <div>
-                  <span>Disputed amount</span>
-                  <strong>{selectedDispute.disputedAmount}</strong>
-                </div>
+                {selectedDispute.transactionId !== "N/A" ? (
+                  <div>
+                    <span>Transaction</span>
+                    <strong>{selectedDispute.transactionId}</strong>
+                  </div>
+                ) : null}
+                {selectedDispute.disputedAmount !== "N/A" ? (
+                  <div>
+                    <span>Disputed amount</span>
+                    <strong>{selectedDispute.disputedAmount}</strong>
+                  </div>
+                ) : null}
               </div>
 
               <section className="admin-dispute-section">
@@ -769,83 +826,6 @@ export default function Disputes() {
                   </div>
                 </section>
               ) : null}
-
-              {selectedDispute.resolution !== "N/A" ? (
-                <section className="admin-dispute-resolution admin-dispute-resolution--complete">
-                  <div>
-                    <CheckCircle2 size={19} />
-                    <strong>Recorded resolution</strong>
-                  </div>
-                  <p>{selectedDispute.resolution}</p>
-                </section>
-              ) : null}
-
-              {selectedDispute.escalationReason !== "N/A" ? (
-                <section className="admin-dispute-resolution admin-dispute-resolution--escalated">
-                  <div>
-                    <ShieldAlert size={19} />
-                    <strong>Escalation reason</strong>
-                  </div>
-                  <p>{selectedDispute.escalationReason}</p>
-                </section>
-              ) : null}
-
-              <section className="admin-dispute-section">
-                <h3>Case timeline</h3>
-                {timelineLoading ? (
-                  <p className="admin-dispute-muted">Loading timeline...</p>
-                ) : events.length ? (
-                  <div className="admin-dispute-timeline">
-                    {events.map((event) => (
-                      <article key={event.id}>
-                        <span className="admin-dispute-timeline__marker" />
-                        <div>
-                          <div className="admin-dispute-timeline__heading">
-                            <strong>{formatLabel(event.type)}</strong>
-                            <time>{formatFirestoreDate(event.createdAt)}</time>
-                          </div>
-                          <p>{event.message}</p>
-                          <small>
-                            {formatLabel(event.actorRole)}
-                            {event.visibility === "admin" ? (
-                              <em>
-                                <LockKeyhole size={12} /> Private admin note
-                              </em>
-                            ) : null}
-                          </small>
-                          {event.documentIds.length ? (
-                            <div className="admin-dispute-evidence-list admin-dispute-evidence-list--compact">
-                              {event.documentIds.map((documentId, index) => (
-                                <button
-                                  key={documentId}
-                                  type="button"
-                                  disabled={evidenceLoadingId === documentId}
-                                  onClick={() => void openEvidence(documentId)}
-                                >
-                                  <span className="admin-dispute-evidence-list__icon">
-                                    <FileText size={15} />
-                                  </span>
-                                  <span>
-                                    <strong>Attachment {index + 1}</strong>
-                                    <small>Timeline evidence</small>
-                                  </span>
-                                  <em>
-                                    <Eye size={14} /> Open
-                                  </em>
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="admin-dispute-muted">
-                    No timeline entries yet.
-                  </p>
-                )}
-              </section>
 
               {canAct(selectedDispute) ? (
                 <>
@@ -932,53 +912,122 @@ export default function Disputes() {
                       </button>
                     </div>
                   </section>
-
-                  <section className="admin-dispute-composer admin-dispute-composer--resolution">
-                    <div className="admin-dispute-section__title">
-                      <div>
-                        <h3>Resolve case</h3>
-                        <p>
-                          Record the decision and any actions the parties must
-                          take.
-                        </p>
-                      </div>
-                      <CheckCircle2 size={18} />
-                    </div>
-                    <textarea
-                      rows={3}
-                      placeholder="Required resolution summary..."
-                      value={resolutionSummary}
-                      onChange={(event) =>
-                        setResolutionSummary(event.target.value)
-                      }
-                    />
-                    <textarea
-                      rows={3}
-                      placeholder="Recommended actions, one per line"
-                      value={recommendedActions}
-                      onChange={(event) =>
-                        setRecommendedActions(event.target.value)
-                      }
-                    />
-                    <div className="admin-dispute-composer__actions">
-                      <button
-                        type="button"
-                        className="admin-dispute-button admin-dispute-button--danger-ghost"
-                        onClick={() => void handleManualClose(selectedDispute)}
-                      >
-                        Manual close
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-dispute-button admin-dispute-button--success"
-                        disabled={!resolutionSummary.trim()}
-                        onClick={() => void handleResolve(selectedDispute)}
-                      >
-                        <CheckCircle2 size={16} /> Resolve dispute
-                      </button>
-                    </div>
-                  </section>
                 </>
+              ) : null}
+
+              <section className="admin-dispute-section">
+                <h3>Case timeline</h3>
+                {timelineLoading ? (
+                  <p className="admin-dispute-muted">Loading timeline...</p>
+                ) : events.length ? (
+                  <div className="admin-dispute-timeline">
+                    {events.map((event) => (
+                      <article key={event.id}>
+                        <span className="admin-dispute-timeline__marker" />
+                        <div>
+                          <div className="admin-dispute-timeline__heading">
+                            <strong>{formatLabel(event.type)}</strong>
+                            <time>{formatFirestoreDate(event.createdAt)}</time>
+                          </div>
+                          <p>{event.message}</p>
+                          <small>
+                            {formatLabel(event.actorRole)}
+                            {event.visibility === "admin" ? (
+                              <em>
+                                <LockKeyhole size={12} /> Private admin note
+                              </em>
+                            ) : null}
+                          </small>
+                          {event.documentIds.length ? (
+                            <div className="admin-dispute-evidence-list admin-dispute-evidence-list--compact">
+                              {event.documentIds.map((documentId, index) => (
+                                <button
+                                  key={documentId}
+                                  type="button"
+                                  disabled={evidenceLoadingId === documentId}
+                                  onClick={() => void openEvidence(documentId)}
+                                >
+                                  <span className="admin-dispute-evidence-list__icon">
+                                    <FileText size={15} />
+                                  </span>
+                                  <span>
+                                    <strong>Attachment {index + 1}</strong>
+                                    <small>Timeline evidence</small>
+                                  </span>
+                                  <em>
+                                    <Eye size={14} /> Open
+                                  </em>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="admin-dispute-muted">
+                    No timeline entries yet.
+                  </p>
+                )}
+              </section>
+
+              {selectedDispute.resolution !== "N/A" ? (
+                <section className="admin-dispute-resolution admin-dispute-resolution--complete">
+                  <div>
+                    <CheckCircle2 size={19} />
+                    <strong>Recorded resolution</strong>
+                  </div>
+                  <p>{selectedDispute.resolution}</p>
+                </section>
+              ) : null}
+
+              {canAct(selectedDispute) ? (
+                <section className="admin-dispute-composer admin-dispute-composer--resolution">
+                  <div className="admin-dispute-section__title">
+                    <div>
+                      <h3>Resolve case</h3>
+                      <p>
+                        Record the decision and any actions the parties must
+                        take.
+                      </p>
+                    </div>
+                    <CheckCircle2 size={18} />
+                  </div>
+                  <textarea
+                    rows={3}
+                    placeholder="Required resolution summary..."
+                    value={resolutionSummary}
+                    onChange={(event) =>
+                      setResolutionSummary(event.target.value)
+                    }
+                  />
+                  <textarea
+                    rows={3}
+                    placeholder="Recommended actions, one per line"
+                    value={recommendedActions}
+                    onChange={(event) =>
+                      setRecommendedActions(event.target.value)
+                    }
+                  />
+                  <div className="admin-dispute-composer__actions">
+                    <button
+                      type="button"
+                      className="admin-dispute-button admin-dispute-button--danger-ghost"
+                      onClick={() => void handleManualClose(selectedDispute)}
+                    >
+                      Manual close
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-dispute-button admin-dispute-button--success"
+                      disabled={!resolutionSummary.trim()}
+                      onClick={() => void handleResolve(selectedDispute)}
+                    >
+                      <CheckCircle2 size={16} /> Resolve dispute
+                    </button>
+                  </div>
+                </section>
               ) : null}
             </>
           ) : (

@@ -215,6 +215,73 @@ describe('DisputesService', () => {
     });
   });
 
+  it('moves an open dispute into review when the admin opens it', async () => {
+    const now = Timestamp.now();
+    const disputeData = {
+      disputeId: 'dispute-1',
+      loanId: 'loan-1',
+      complainantId: 'borrower-1',
+      complainantRole: 'borrower',
+      respondentId: 'lender-1',
+      respondentRole: 'lender',
+      borrowerId: 'borrower-1',
+      lenderId: 'lender-1',
+      category: 'payment',
+      status: 'open',
+      createdAt: now,
+      updatedAt: now,
+    };
+    const eventRef = { id: 'event-1' };
+    const disputeRef = {
+      get: jest.fn().mockResolvedValue({
+        exists: true,
+        id: 'dispute-1',
+        data: () => disputeData,
+      }),
+      collection: jest.fn(() => ({ doc: jest.fn(() => eventRef) })),
+    };
+    const update = jest.fn();
+    const create = jest.fn();
+    const setAudit = jest.fn().mockResolvedValue(undefined);
+    const firebase = {
+      db: {
+        collection: jest.fn((name: string) =>
+          name === 'disputes'
+            ? { doc: jest.fn(() => disputeRef) }
+            : { doc: jest.fn(() => ({ id: 'audit-1', set: setAudit })) },
+        ),
+        runTransaction: jest.fn(async (handler) =>
+          handler({
+            get: jest.fn().mockResolvedValue({
+              exists: true,
+              id: 'dispute-1',
+              data: () => disputeData,
+            }),
+            update,
+            create,
+          }),
+        ),
+      },
+    } as unknown as FirebaseService;
+    const service = new DisputesService(firebase, gateway);
+
+    const response = await service.startReview('dispute-1', 'admin-1');
+
+    expect(response.dispute.status).toBe('under_review');
+    expect(update).toHaveBeenCalledWith(
+      disputeRef,
+      expect.objectContaining({ status: 'under_review' }),
+    );
+    expect(create).toHaveBeenCalledWith(
+      eventRef,
+      expect.objectContaining({
+        type: 'review_started',
+        previousStatus: 'open',
+        nextStatus: 'under_review',
+      }),
+    );
+  });
+
   it('bounds participant dispute lists before reading documents', async () => {
     const get = jest.fn().mockResolvedValue({ size: 0, docs: [] });
     const query = {

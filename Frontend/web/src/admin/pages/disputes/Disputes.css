@@ -114,7 +114,7 @@
 
 .admin-dispute-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -127,7 +127,27 @@
   border: 1px solid #e8edf3;
   border-radius: 14px;
   background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   box-shadow: 0 5px 18px rgba(15, 23, 42, 0.045);
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.admin-dispute-summary__card:hover,
+.admin-dispute-summary__card:focus-visible {
+  border-color: #93c5fd;
+  box-shadow: 0 9px 24px rgba(37, 99, 235, 0.1);
+  transform: translateY(-1px);
+}
+
+.admin-dispute-summary__card.is-active {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
 }
 
 .admin-dispute-summary__icon {
