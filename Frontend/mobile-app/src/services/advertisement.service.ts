@@ -70,4 +70,9 @@ export const AdService = {
 
   activateAd: async (adId: string) =>
     api.patch(`/lender-ads/${adId}`, { status: "active" }),
+
+  requestBoost: async (
+    adId: string,
+    data: { amount?: number; paymentReference?: string; message?: string },
+  ) => api.post(`/lender-ads/${adId}/boost`, data),
 };

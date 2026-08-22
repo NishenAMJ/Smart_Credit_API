@@ -100,6 +100,29 @@ export class LenderAdsController {
     );
   }
 
+  @Post(':adId/boost')
+  requestBoost(
+    @Req() request: AuthenticatedRequest,
+    @Param('adId') adId: string,
+    @Body()
+    body: { amount?: number | string; paymentReference?: string; message?: string },
+  ) {
+    const amount = body.amount === undefined ? undefined : body.amount;
+    const paymentReference =
+      typeof body.paymentReference === 'string' ? body.paymentReference : '';
+    const message = typeof body.message === 'string' ? body.message : '';
+
+    return this.lenderAdsService.requestBoost(
+      request.user.sub,
+      adId,
+      {
+        amount,
+        paymentReference,
+        message,
+      },
+    );
+  }
+
   private toUpdateInput(body: UpdateLenderAdBody) {
     return {
       headline: typeof body.headline === 'string' ? body.headline : undefined,

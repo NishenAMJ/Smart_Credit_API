@@ -104,10 +104,18 @@ export default function MyAdsScreen({ navigation }: any) {
     }
   };
 
-  const FILTERS = ["all", "active", "pending_review", "paused", "rejected"];
+  const FILTERS = [
+    "all",
+    "active",
+    "pending_review",
+    "paused",
+    "rejected",
+    "boosted",
+  ];
 
   const filtered = ads.filter((ad: any) => {
     if (filter === "all") return true;
+    if (filter === "boosted") return ad.isBoosted === true;
     return ad.status === filter;
   });
 
@@ -345,6 +353,30 @@ export default function MyAdsScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
           )}
+
+          {/* Boost button */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate("BoostAd", { ad: item })}
+            style={{
+              flex: 1,
+              alignItems: "center",
+              paddingVertical: 8,
+              borderRadius: 8,
+              backgroundColor: COLORS.border,
+            }}
+          >
+            <Feather name="zap" size={16} color={COLORS.textPrimary} />
+            <Text
+              style={{
+                fontSize: 10,
+                color: COLORS.textPrimary,
+                marginTop: 3,
+                fontWeight: "600",
+              }}
+            >
+              Boost
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     );

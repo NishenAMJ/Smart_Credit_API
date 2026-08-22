@@ -554,6 +554,62 @@ export class LenderAdsService {
     return this.mapLenderAd(updated.id, lenderId, updated.data() ?? {});
   }
 
+  /**
+   * Request a boost for an advertisement. Stores a boost request on the
+   * advertisement document for admin review. Does not automatically enable
+   * boosting until an administrator approves the request.
+   */
+  async requestBoost(
+    lenderId: string,
+    adId: string,
+    input: { amount?: number | string; paymentReference?: string; message?: string },
+  ) {
+    const db = this.firebaseService.getDb();
+    const ref = db.collection('loanListings').doc(adId);
+    const snapshot = await ref.get();
+
+    if (!snapshot.exists) {
+      throw new NotFoundException(`Lender ad ${adId} was not found.`);
+    }
+    if (snapshot.get('lenderId') !== lenderId) {
+      throw new ForbiddenException('You can only request boosts for your own ads.');
+    }
+
+    const amountNum =
+      input.amount === undefined
+        ? undefined
+        : typeof input.amount === 'string'
+        ? Number(input.amount)
+        : input.amount;
+
+    if (amountNum !== undefined && (!Number.isFinite(amountNum) || amountNum <= 0)) {
+      throw new BadRequestException('amount must be a positive number.');
+    }
+
+    const now = Timestamp.now();
+
+    const boostRequest = {
+      amountMinor: amountNum === undefined ? null : Math.round(amountNum * 100),
+      paymentReference: typeof input.paymentReference === 'string' ? input.paymentReference : null,
+      message: typeof input.message === 'string' ? input.message : null,
+      status: 'pending',
+      requestedAt: now,
+      requestedBy: lenderId,
+    } as const;
+
+    // Store the latest boost request and mark updatedAt. Admin will review and
+    // set `isBoosted` to true when they approve and process payment.
+    await ref.update({
+      boostRequest,
+      isBoosted: false,
+      updatedAt: now,
+    });
+
+    // Return the updated ad
+    const updated = await ref.get();
+    return this.mapLenderAd(updated.id, lenderId, updated.data() ?? {});
+  }
+
   private validateCreateInput(input: CreateLenderAdInput): void {
     if (input.headline.trim().length < 12) {
       throw new BadRequestException('headline must be at least 12 characters.');

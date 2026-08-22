@@ -13,6 +13,7 @@ import MyAdsScreen from "../screens/lender/MyAdsScreen";
 import CreateAdScreen from "../screens/lender/CreateAdScreen";
 import EditAdScreen from "../screens/lender/EditAdScreen";
 import AdAnalyticsScreen from "../screens/lender/AdAnalyticsScreen";
+import BoostAdScreen from "../screens/lender/BoostAdScreen";
 import LenderKycScreen from "../screens/lender/LenderKycScreen";
 import BorrowerDetailScreen from "../screens/lender/BorrowerDetailScreen";
 import BorrowerMapScreen from "../screens/lender/BorrowerMapScreen";
@@ -79,6 +80,7 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="CreateAd" component={CreateAdScreen} />
       <Stack.Screen name="EditAd" component={EditAdScreen} />
       <Stack.Screen name="AdAnalytics" component={AdAnalyticsScreen} />
+      <Stack.Screen name="BoostAd" component={BoostAdScreen} />
       <Stack.Screen name="LenderKyc" component={LenderKycScreen} />
       <Stack.Screen name="AgreementsList" component={AgreementsListScreen} />
       <Stack.Screen name="LoanAgreement">

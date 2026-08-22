@@ -41,6 +41,7 @@
     "wa-sqlite": "^1.0.0"
   },
   "devDependencies": {
+    "@expo/cli": "^57.0.17",
     "@types/node": "^25.6.0",
     "@types/react": "~19.1.10",
     "expo-module-scripts": "^56.0.3",
