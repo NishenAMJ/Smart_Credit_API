@@ -84,7 +84,6 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="EditAd" component={EditAdScreen} />
       <Stack.Screen name="AdAnalytics" component={AdAnalyticsScreen} />
       <Stack.Screen name="BoostAd" component={BoostAdScreen} />
-      <Stack.Screen name="LenderKyc" component={LenderKycScreen} />
       <Stack.Screen name="AgreementsList" component={AgreementsListScreen} />
       <Stack.Screen name="LoanAgreement">
         {(props) => <LegalAgreementScreen {...props} role="lender" />}
