@@ -457,7 +457,17 @@ describe('DisputesService', () => {
             ? { doc: jest.fn(() => disputeRef) }
             : { add, doc: jest.fn() },
         ),
-        runTransaction: jest.fn(async (handler) => handler({ update, create })),
+        runTransaction: jest.fn(async (handler) =>
+          handler({
+            get: jest.fn().mockResolvedValue({
+              exists: true,
+              id: 'dispute-1',
+              data: () => disputeData,
+            }),
+            update,
+            create,
+          }),
+        ),
       },
     } as unknown as FirebaseService;
     const service = new DisputesService(firebase, gateway);
@@ -469,7 +479,10 @@ describe('DisputesService', () => {
 
     expect(update).toHaveBeenCalledWith(
       disputeRef,
-      expect.objectContaining({ status: 'under_review' }),
+      expect.objectContaining({
+        status: 'under_review',
+        responseRequestedFrom: null,
+      }),
     );
     expect(create).toHaveBeenCalledWith(
       eventRef,
@@ -477,6 +490,92 @@ describe('DisputesService', () => {
         previousStatus: 'awaiting_response',
         nextStatus: 'under_review',
       }),
+    );
+  });
+
+  it.each([
+    ['resolved', 'Reopen this dispute before sending another message.'],
+    [
+      'under_review',
+      'You can reply only after the admin requests information.',
+    ],
+  ])(
+    'rejects participant messages while a dispute is %s',
+    async (status, expectedMessage) => {
+      const now = Timestamp.now();
+      const disputeRef = {
+        get: jest.fn().mockResolvedValue({
+          exists: true,
+          id: 'dispute-1',
+          data: () => ({
+            disputeId: 'dispute-1',
+            complainantId: 'borrower-1',
+            complainantRole: 'borrower',
+            respondentId: 'lender-1',
+            respondentRole: 'lender',
+            borrowerId: 'borrower-1',
+            lenderId: 'lender-1',
+            category: 'payment',
+            status,
+            createdAt: now,
+            updatedAt: now,
+          }),
+        }),
+      };
+      const firebase = {
+        db: {
+          collection: jest.fn(() => ({
+            doc: jest.fn(() => disputeRef),
+          })),
+        },
+      } as unknown as FirebaseService;
+      const service = new DisputesService(firebase, gateway);
+
+      await expect(
+        service.addComment('dispute-1', 'borrower-1', 'borrower', {
+          message: 'Participant message',
+        }),
+      ).rejects.toThrow(expectedMessage);
+    },
+  );
+
+  it('allows only the participant named in an information request to reply', async () => {
+    const now = Timestamp.now();
+    const disputeRef = {
+      get: jest.fn().mockResolvedValue({
+        exists: true,
+        id: 'dispute-1',
+        data: () => ({
+          disputeId: 'dispute-1',
+          complainantId: 'borrower-1',
+          complainantRole: 'borrower',
+          respondentId: 'lender-1',
+          respondentRole: 'lender',
+          borrowerId: 'borrower-1',
+          lenderId: 'lender-1',
+          category: 'payment',
+          status: 'awaiting_response',
+          responseRequestedFrom: 'respondent',
+          createdAt: now,
+          updatedAt: now,
+        }),
+      }),
+    };
+    const firebase = {
+      db: {
+        collection: jest.fn(() => ({
+          doc: jest.fn(() => disputeRef),
+        })),
+      },
+    } as unknown as FirebaseService;
+    const service = new DisputesService(firebase, gateway);
+
+    await expect(
+      service.addComment('dispute-1', 'borrower-1', 'borrower', {
+        message: 'Borrower message',
+      }),
+    ).rejects.toThrow(
+      'The admin requested information from the other participant.',
     );
   });
 

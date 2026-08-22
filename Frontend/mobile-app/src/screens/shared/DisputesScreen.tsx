@@ -39,6 +39,7 @@ export default function DisputesScreen({ navigation }: any) {
   const [description, setDescription] = useState("");
   const [desiredOutcome, setDesiredOutcome] = useState("");
   const [message, setMessage] = useState("");
+  const [reopenReason, setReopenReason] = useState("");
   const [messageEvidence, setMessageEvidence] = useState<
     DocumentPicker.DocumentPickerAsset[]
   >([]);
@@ -90,6 +91,9 @@ export default function DisputesScreen({ navigation }: any) {
   }, [load]);
 
   useEffect(() => {
+    setMessage("");
+    setMessageEvidence([]);
+    setReopenReason("");
     if (selected) void disputesService.events(selected.id).then(setEvents);
   }, [selected?.id]);
 
@@ -143,16 +147,40 @@ export default function DisputesScreen({ navigation }: any) {
   }
 
   async function sendComment() {
-    if (!selected || !message.trim()) return;
-    const documentIds = await Promise.all(
-      messageEvidence
-        .slice(0, 5)
-        .map((asset) => uploadDisputeEvidence(asset, selected.loanId)),
-    );
-    await disputesService.comment(selected.id, message.trim(), documentIds);
-    setMessage("");
-    setMessageEvidence([]);
-    setEvents(await disputesService.events(selected.id));
+    if (!selected || selected.status !== "awaiting_response" || !message.trim())
+      return;
+    try {
+      setSubmitting(true);
+      const documentIds = await Promise.all(
+        messageEvidence
+          .slice(0, 5)
+          .map((asset) => uploadDisputeEvidence(asset, selected.loanId)),
+      );
+      await disputesService.comment(selected.id, message.trim(), documentIds);
+      setMessage("");
+      setMessageEvidence([]);
+      await load();
+      setEvents(await disputesService.events(selected.id));
+    } catch (error: any) {
+      Alert.alert("Unable to reply", error?.message ?? "Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function reopenCase() {
+    if (!selected || reopenReason.trim().length < 5) return;
+    try {
+      setSubmitting(true);
+      await disputesService.reopen(selected.id, reopenReason.trim());
+      setReopenReason("");
+      await load();
+      setEvents(await disputesService.events(selected.id));
+    } catch (error: any) {
+      Alert.alert("Unable to reopen", error?.message ?? "Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -377,6 +405,40 @@ export default function DisputesScreen({ navigation }: any) {
                     {selected.resolution.recommendedActions.map((action) => (
                       <Text key={action}>• {action}</Text>
                     ))}
+                    {selected.status === "resolved" ? (
+                      <>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Explain why this case should be reopened"
+                          value={reopenReason}
+                          onChangeText={setReopenReason}
+                        />
+                        <View style={styles.row}>
+                          <TouchableOpacity
+                            style={styles.primary}
+                            disabled={submitting}
+                            onPress={() =>
+                              void disputesService
+                                .acknowledge(selected.id)
+                                .then(load)
+                            }
+                          >
+                            <Text style={styles.primaryText}>Acknowledge</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.secondary}
+                            disabled={
+                              submitting ||
+                              selected.reopenCount >= 1 ||
+                              reopenReason.trim().length < 5
+                            }
+                            onPress={() => void reopenCase()}
+                          >
+                            <Text>Reopen</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    ) : null}
                   </View>
                 ) : null}
                 <Text style={styles.label}>Timeline</Text>
@@ -402,11 +464,11 @@ export default function DisputesScreen({ navigation }: any) {
                     ))}
                   </View>
                 ))}
-                {selected.status !== "closed" ? (
+                {selected.status === "awaiting_response" ? (
                   <>
                     <TextInput
                       style={styles.input}
-                      placeholder="Add a message or reopening reason"
+                      placeholder="Reply to the admin's information request"
                       value={message}
                       onChangeText={setMessage}
                     />
@@ -435,43 +497,20 @@ export default function DisputesScreen({ navigation }: any) {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.primary}
+                      disabled={submitting || !message.trim()}
                       onPress={() => void sendComment()}
                     >
-                      <Text style={styles.primaryText}>Send message</Text>
+                      <Text style={styles.primaryText}>
+                        {submitting ? "Sending..." : "Send response"}
+                      </Text>
                     </TouchableOpacity>
                   </>
-                ) : null}
-                {selected.status === "resolved" ? (
-                  <View style={styles.row}>
-                    <TouchableOpacity
-                      style={styles.primary}
-                      onPress={() =>
-                        void disputesService.acknowledge(selected.id).then(load)
-                      }
-                    >
-                      <Text style={styles.primaryText}>Acknowledge</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.secondary}
-                      onPress={() => {
-                        if (!message.trim()) {
-                          Alert.alert(
-                            "Reason required",
-                            "Enter the reopening reason in the message field first.",
-                          );
-                          return;
-                        }
-                        void disputesService
-                          .reopen(selected.id, message.trim())
-                          .then(() => {
-                            setMessage("");
-                            return load();
-                          });
-                      }}
-                    >
-                      <Text>Reopen</Text>
-                    </TouchableOpacity>
-                  </View>
+                ) : selected.status !== "resolved" &&
+                  selected.status !== "closed" ? (
+                  <Text style={styles.muted}>
+                    Messages and attachments are enabled when the admin requests
+                    more information.
+                  </Text>
                 ) : null}
               </ScrollView>
             </>

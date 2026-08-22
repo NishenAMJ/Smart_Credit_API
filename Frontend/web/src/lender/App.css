@@ -811,6 +811,17 @@
   background: #f8fafc;
 }
 
+.dispute-reply-locked {
+  margin-top: 19px;
+  padding: 13px 15px;
+  border: 1px solid #dbe5f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
 .dispute-composer__actions {
   margin-top: 0;
 }
