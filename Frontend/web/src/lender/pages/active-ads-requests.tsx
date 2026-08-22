@@ -388,6 +388,7 @@ function BoostAdDialog({
   const [bankAccount, setBankAccount] = useState<Record<string, string>>({});
   const [planId, setPlanId] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"card" | "bank_transfer">("card");
+  const [paymentMethods, setPaymentMethods] = useState({ card: false, bankTransfer: false });
   const [receipt, setReceipt] = useState<File | null>(null);
   const [bankReference, setBankReference] = useState("");
   const [busy, setBusy] = useState(false);
@@ -400,6 +401,10 @@ function BoostAdDialog({
         setPlans(result.plans);
         setPlanId(result.plans[0]?.id ?? "");
         setBankAccount(result.bankAccount);
+        setPaymentMethods(result.paymentMethods);
+        if (result.paymentMethods.card) setPaymentMethod("card");
+        else if (result.paymentMethods.bankTransfer) setPaymentMethod("bank_transfer");
+        else setError("Boost payments are not configured yet. Your advertisement remains active without a boost.");
       })
       .catch((failure) => setError(failure instanceof Error ? failure.message : "Failed to load boost plans."));
   }, []);
@@ -455,8 +460,8 @@ function BoostAdDialog({
             </label>
           </div>
           <div className="tabs">
-            <button type="button" className={`tab ${paymentMethod === "card" ? "active" : ""}`} onClick={() => setPaymentMethod("card")}><CreditCard size={16} /> Card</button>
-            <button type="button" className={`tab ${paymentMethod === "bank_transfer" ? "active" : ""}`} onClick={() => setPaymentMethod("bank_transfer")}><Landmark size={16} /> Bank transfer</button>
+            <button type="button" disabled={!paymentMethods.card} className={`tab ${paymentMethod === "card" ? "active" : ""}`} onClick={() => setPaymentMethod("card")}><CreditCard size={16} /> Card{paymentMethods.card ? "" : " unavailable"}</button>
+            <button type="button" disabled={!paymentMethods.bankTransfer} className={`tab ${paymentMethod === "bank_transfer" ? "active" : ""}`} onClick={() => setPaymentMethod("bank_transfer")}><Landmark size={16} /> Bank transfer{paymentMethods.bankTransfer ? "" : " unavailable"}</button>
           </div>
           {paymentMethod === "bank_transfer" ? (
             <div className="create-ad-form-grid">
@@ -470,7 +475,7 @@ function BoostAdDialog({
         </div>
         <footer className="borrower-modal__footer">
           <button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Not now</button>
-          <button type="button" className="button button-primary" onClick={() => void submit()} disabled={busy || !selectedPlan}>{busy ? "Processing..." : paymentMethod === "card" ? "Pay securely" : "Submit payment"}</button>
+          <button type="button" className="button button-primary" onClick={() => void submit()} disabled={busy || !selectedPlan || (!paymentMethods.card && !paymentMethods.bankTransfer)}>{busy ? "Processing..." : paymentMethod === "card" ? "Pay securely" : "Submit payment"}</button>
         </footer>
       </section>
     </div>

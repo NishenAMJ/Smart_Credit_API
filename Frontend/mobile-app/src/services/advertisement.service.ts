@@ -81,7 +81,7 @@ export const AdService = {
     api.patch(`/lender-ads/${adId}`, { status: "active" }),
 
   getBoostPlans: () =>
-    api.get<{ plans: AdBoostPlan[]; bankAccount: Record<string, string> }>(
+    api.get<{ plans: AdBoostPlan[]; bankAccount: Record<string, string>; paymentMethods: { card: boolean; bankTransfer: boolean } }>(
       "/lender-ad-boosts/plans",
     ),
 

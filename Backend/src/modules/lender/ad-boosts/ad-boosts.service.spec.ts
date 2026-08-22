@@ -1,6 +1,6 @@
 import {
   BadRequestException,
-  InternalServerErrorException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { AdBoostsService } from './ad-boosts.service';
 
@@ -39,6 +39,10 @@ describe('AdBoostsService', () => {
       currency: 'LKR',
     });
     expect(result.bankAccount.bankName).toBe('Test Bank');
+    expect(result.paymentMethods).toEqual({
+      card: false,
+      bankTransfer: false,
+    });
   });
 
   it('rejects unsupported payment methods before creating records', async () => {
@@ -61,8 +65,22 @@ describe('AdBoostsService', () => {
         paymentMethod: 'card',
         requestBaseUrl: 'http://localhost:3000',
       }),
-    ).rejects.toBeInstanceOf(InternalServerErrorException);
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(firebase.getDb).not.toHaveBeenCalled();
+  });
+
+  it('reports configured boost payment methods', () => {
+    values.PAYHERE_MERCHANT_ID = 'merchant';
+    values.PAYHERE_MERCHANT_SECRET = 'secret';
+    values.BOOST_BANK_NAME = 'Test Bank';
+    values.BOOST_BANK_ACCOUNT_NAME = 'Smart Credit';
+    values.BOOST_BANK_ACCOUNT_NUMBER = '123456';
+    values.BOOST_BANK_BRANCH = 'Colombo';
+
+    expect(service().getPlans().paymentMethods).toEqual({
+      card: true,
+      bankTransfer: true,
+    });
   });
 
   it('requires a reason when an admin rejects a bank payment', async () => {

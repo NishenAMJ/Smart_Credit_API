@@ -5,6 +5,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
   Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'crypto';
@@ -46,19 +47,28 @@ export class AdBoostsService {
   }
 
   getPlans() {
+    const bankAccount = {
+      bankName: this.configService.get<string>('BOOST_BANK_NAME') ?? '',
+      accountName:
+        this.configService.get<string>('BOOST_BANK_ACCOUNT_NAME') ?? '',
+      accountNumber:
+        this.configService.get<string>('BOOST_BANK_ACCOUNT_NUMBER') ?? '',
+      branch: this.configService.get<string>('BOOST_BANK_BRANCH') ?? '',
+    };
     return {
       plans: [
         this.plan('boost_7_days', '7 days', 7, 1500),
         this.plan('boost_14_days', '14 days', 14, 2500),
         this.plan('boost_30_days', '30 days', 30, 4500),
       ],
-      bankAccount: {
-        bankName: this.configService.get<string>('BOOST_BANK_NAME') ?? '',
-        accountName:
-          this.configService.get<string>('BOOST_BANK_ACCOUNT_NAME') ?? '',
-        accountNumber:
-          this.configService.get<string>('BOOST_BANK_ACCOUNT_NUMBER') ?? '',
-        branch: this.configService.get<string>('BOOST_BANK_BRANCH') ?? '',
+      bankAccount,
+      paymentMethods: {
+        card:
+          Boolean(this.configService.get<string>('PAYHERE_MERCHANT_ID')) &&
+          Boolean(this.configService.get<string>('PAYHERE_MERCHANT_SECRET')),
+        bankTransfer: Object.values(bankAccount).every(
+          (value) => value.trim().length > 0,
+        ),
       },
     };
   }
@@ -84,8 +94,16 @@ export class AdBoostsService {
       (!this.configService.get<string>('PAYHERE_MERCHANT_ID') ||
         !this.configService.get<string>('PAYHERE_MERCHANT_SECRET'))
     ) {
-      throw new InternalServerErrorException(
-        'PayHere is not configured on the server.',
+      throw new ServiceUnavailableException(
+        'Card boost payments are temporarily unavailable. Choose another configured payment method.',
+      );
+    }
+    if (
+      input.paymentMethod === 'bank_transfer' &&
+      !this.getPlans().paymentMethods.bankTransfer
+    ) {
+      throw new ServiceUnavailableException(
+        'Bank-transfer boost payments are temporarily unavailable because the platform bank account is not configured.',
       );
     }
 

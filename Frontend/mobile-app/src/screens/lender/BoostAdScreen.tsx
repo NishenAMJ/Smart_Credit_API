@@ -21,6 +21,7 @@ export default function BoostAdScreen({ navigation, route }: any) {
   const [plans, setPlans] = useState<AdBoostPlan[]>([]);
   const [planId, setPlanId] = useState("");
   const [method, setMethod] = useState<"card" | "bank_transfer">("card");
+  const [paymentMethods, setPaymentMethods] = useState({ card: false, bankTransfer: false });
   const [bank, setBank] = useState<Record<string, string>>({});
   const [reference, setReference] = useState("");
   const [receipt, setReceipt] = useState<ImagePicker.ImagePickerAsset | null>(null);
@@ -33,6 +34,10 @@ export default function BoostAdScreen({ navigation, route }: any) {
         setPlans(result.plans);
         setPlanId(result.plans[0]?.id ?? "");
         setBank(result.bankAccount);
+        setPaymentMethods(result.paymentMethods);
+        if (result.paymentMethods.card) setMethod("card");
+        else if (result.paymentMethods.bankTransfer) setMethod("bank_transfer");
+        else Alert.alert("Boost unavailable", "Boost payment methods are not configured yet. Your advertisement remains active.");
       })
       .catch((error) => Alert.alert("Boost unavailable", getApiErrorMessage(error)));
   }, []);
@@ -102,7 +107,7 @@ export default function BoostAdScreen({ navigation, route }: any) {
         <Text style={[commonStyles.textPrimary, { marginTop: 16, marginBottom: 8 }]}>Payment method</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           {(["card", "bank_transfer"] as const).map((value) => (
-            <TouchableOpacity key={value} onPress={() => setMethod(value)} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: method === value ? COLORS.primary : COLORS.border }}>
+            <TouchableOpacity key={value} disabled={value === "card" ? !paymentMethods.card : !paymentMethods.bankTransfer} onPress={() => setMethod(value)} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: method === value ? COLORS.primary : COLORS.border, opacity: (value === "card" ? paymentMethods.card : paymentMethods.bankTransfer) ? 1 : 0.5 }}>
               <Text style={{ textAlign: "center", fontWeight: "700", color: method === value ? "#fff" : COLORS.textPrimary }}>{value === "card" ? "Card" : "Bank transfer"}</Text>
             </TouchableOpacity>
           ))}
@@ -117,7 +122,7 @@ export default function BoostAdScreen({ navigation, route }: any) {
             </TouchableOpacity>
           </View>
         ) : null}
-        <TouchableOpacity disabled={busy || !selectedPlan} onPress={() => void submit()} style={{ marginTop: 20, padding: 14, borderRadius: 8, backgroundColor: COLORS.primary, opacity: busy ? 0.6 : 1 }}>
+        <TouchableOpacity disabled={busy || !selectedPlan || (!paymentMethods.card && !paymentMethods.bankTransfer)} onPress={() => void submit()} style={{ marginTop: 20, padding: 14, borderRadius: 8, backgroundColor: COLORS.primary, opacity: busy || (!paymentMethods.card && !paymentMethods.bankTransfer) ? 0.6 : 1 }}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", textAlign: "center", fontWeight: "700" }}>{method === "card" ? "Pay securely" : "Submit payment"}</Text>}
         </TouchableOpacity>
       </ScrollView>
