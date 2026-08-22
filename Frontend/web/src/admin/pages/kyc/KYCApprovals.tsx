@@ -72,6 +72,8 @@ type KycSubmissionRow = {
   documents: KycRow[];
 };
 
+type KycStatusFilter = "all" | KycRow["status"];
+
 function mapDocument(document: KycDocument): KycRow {
   return {
     id: document.id,
@@ -159,6 +161,7 @@ function normalizeComparableName(value: string) {
 export default function KYCApprovals() {
   const [records, setRecords] = useState<KycRow[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<KycStatusFilter>("all");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -232,8 +235,12 @@ export default function KYCApprovals() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return submissions.filter((submission) =>
-      [
+    return submissions.filter((submission) => {
+      if (statusFilter !== "all" && submission.status !== statusFilter) {
+        return false;
+      }
+
+      return [
         submission.fullName,
         submission.userId,
         submission.email,
@@ -254,9 +261,9 @@ export default function KYCApprovals() {
       ]
         .join(" ")
         .toLowerCase()
-        .includes(q),
-    );
-  }, [search, submissions]);
+        .includes(q);
+    });
+  }, [search, statusFilter, submissions]);
 
   async function openPreview(record: KycRow) {
     setSelectedRecord(record);
@@ -378,6 +385,20 @@ export default function KYCApprovals() {
             onChange={(e) => setSearch(e.target.value)}
             style={S.searchInput}
           />
+        </div>
+        <div className="tabs" aria-label="Filter KYC submissions by status">
+          {(["all", "pending", "approved", "rejected"] as const).map(
+            (status) => (
+              <button
+                key={status}
+                className={`tab ${statusFilter === status ? "active" : ""}`}
+                aria-pressed={statusFilter === status}
+                onClick={() => setStatusFilter(status)}
+              >
+                {status}
+              </button>
+            ),
+          )}
         </div>
       </div>
 
