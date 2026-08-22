@@ -29,6 +29,16 @@ describe('BorrowerLoansService', () => {
     ]);
   });
 
+  it('should return boosted and ordinary active ads when discovery has no keyword', async () => {
+    const ads = [
+      { adId: 'boosted-ad', isFeatured: true },
+      { adId: 'ordinary-ad', isFeatured: false },
+    ];
+    borrowerService.getActiveLoanAds.mockResolvedValueOnce(ads);
+
+    await expect(service.searchLoans()).resolves.toEqual(ads);
+  });
+
   it('should delegate borrower loan lookup', () => {
     borrowerService.getLoans.mockReturnValueOnce([]);
 

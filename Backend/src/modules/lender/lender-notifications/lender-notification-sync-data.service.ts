@@ -139,6 +139,10 @@ export class LenderNotificationSyncDataService {
       snapshots.flatMap((snapshot) =>
         snapshot.docs.map((doc) => this.mapRequest(doc)),
       ),
+    ).filter(
+      (request) =>
+        request.targetLenderId === lenderId ||
+        (request.adId ? adIds.has(request.adId) : false),
     );
   }
 
@@ -162,7 +166,11 @@ export class LenderNotificationSyncDataService {
         : lenderScopedQuery.get());
 
       if (snapshot.size > 0) {
-        return snapshot.docs.map((doc) => this.mapTransaction(doc));
+        return snapshot.docs
+          .map((doc) => this.mapTransaction(doc))
+          .filter((transaction) =>
+            transaction.loanId ? loanIds.has(transaction.loanId) : false,
+          );
       }
     } catch {
       // Fall back to loan-scoped transaction queries below.
@@ -205,10 +213,6 @@ export class LenderNotificationSyncDataService {
     loanIds: Set<string>,
     lastSyncedAt: Date | null,
   ): Promise<DisputeRecord[]> {
-    if (loanIds.size === 0) {
-      return [];
-    }
-
     const lenderScopedQuery = db
       .collection('disputes')
       .where('lenderId', '==', lenderId);
@@ -219,10 +223,19 @@ export class LenderNotificationSyncDataService {
         : lenderScopedQuery.get());
 
       if (snapshot.size > 0) {
-        return snapshot.docs.map((doc) => this.mapDispute(doc));
+        return snapshot.docs
+          .map((doc) => this.mapDispute(doc))
+          .filter(
+            (dispute) =>
+              !dispute.loanId || loanIds.has(dispute.loanId),
+          );
       }
     } catch {
       // Fall back to loan-scoped dispute queries below.
+    }
+
+    if (loanIds.size === 0) {
+      return [];
     }
 
     const snapshots = await Promise.all(
@@ -490,9 +503,18 @@ export class LenderNotificationSyncDataService {
           ? data.requestId
           : doc.id,
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
-      adId: typeof data.adId === 'string' ? data.adId : null,
+      adId:
+        typeof data.adId === 'string'
+          ? data.adId
+          : typeof data.listingId === 'string'
+            ? data.listingId
+            : null,
       targetLenderId:
-        typeof data.targetLenderId === 'string' ? data.targetLenderId : null,
+        typeof data.targetLenderId === 'string'
+          ? data.targetLenderId
+          : typeof data.lenderId === 'string'
+            ? data.lenderId
+            : null,
       amount: this.toNumber(data.amount),
       status: typeof data.status === 'string' ? data.status : 'unknown',
       urgency: typeof data.urgency === 'string' ? data.urgency : 'medium',

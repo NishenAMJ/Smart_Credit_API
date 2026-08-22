@@ -12,11 +12,13 @@ import {
   LogOut,
   FileText,
   Rocket,
+  Bell,
 } from "lucide-react";
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { to: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/admin/notifications", icon: Bell, label: "Notifications" },
   { to: "/admin/kyc", icon: ShieldCheck, label: "KYC Approvals" },
   { to: "/admin/lender-ads", icon: Megaphone, label: "Lender Ads" },
   { to: "/admin/manage-users", icon: Users, label: "Manage Users" },

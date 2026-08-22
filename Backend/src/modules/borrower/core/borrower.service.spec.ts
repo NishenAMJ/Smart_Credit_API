@@ -270,6 +270,10 @@ describe('BorrowerService', () => {
 
       const result = await service.getActiveLoanAds();
 
+      expect(mockWhere).toHaveBeenCalledWith('status', 'in', [
+        'active',
+        'approved',
+      ]);
       expect(result[0]).toMatchObject({
         adId: 'listing_1',
         loanId: 'listing_1',

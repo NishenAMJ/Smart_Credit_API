@@ -92,13 +92,11 @@ async function parseError(response: Response, fallback: string): Promise<never> 
 }
 
 export async function fetchLenderNotifications(
-  lenderId: string,
   category: string,
   state: NotificationStateFilter,
   limit = 80,
 ): Promise<LenderNotificationsListResponse> {
   const searchParams = new URLSearchParams({
-    lenderId,
     state,
     limit: String(limit),
   })
@@ -119,11 +117,9 @@ export async function fetchLenderNotifications(
   return response.json()
 }
 
-export async function fetchLenderNotificationSummary(
-  lenderId: string,
-): Promise<LenderNotificationsSummaryResponse> {
+export async function fetchLenderNotificationSummary(): Promise<LenderNotificationsSummaryResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/lender-notifications/summary?lenderId=${encodeURIComponent(lenderId)}`,
+    `${API_BASE_URL}/lender-notifications/summary`,
     { headers: getAuthHeaders() },
   )
 
@@ -135,17 +131,13 @@ export async function fetchLenderNotificationSummary(
 }
 
 export async function markNotificationAsRead(
-  lenderId: string,
   notificationId: string,
 ): Promise<LenderNotification> {
   const response = await fetch(
     `${API_BASE_URL}/lender-notifications/${encodeURIComponent(notificationId)}/read`,
     {
       method: 'PATCH',
-      headers: getAuthHeaders({
-        'Content-Type': 'application/json',
-      }),
-      body: JSON.stringify({ lenderId }),
+      headers: getAuthHeaders(),
     },
   )
 
@@ -157,12 +149,10 @@ export async function markNotificationAsRead(
 }
 
 export async function markAllNotificationsAsRead(
-  lenderId: string,
   category: string,
   state: NotificationStateFilter,
 ): Promise<void> {
   const searchParams = new URLSearchParams({
-    lenderId,
     state,
   })
 

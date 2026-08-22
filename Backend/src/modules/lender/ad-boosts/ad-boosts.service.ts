@@ -4,6 +4,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'crypto';
@@ -16,6 +17,7 @@ import {
   AdBoostPlan,
   AdBoostResponse,
 } from './ad-boosts.types';
+import { RoleNotificationService } from '../../../common/notifications/role-notification.service';
 
 type PayHereNotification = {
   merchant_id?: string;
@@ -36,6 +38,7 @@ export class AdBoostsService {
     private readonly firebaseService: FirebaseService,
     private readonly configService: ConfigService,
     private readonly notificationWriter: LenderNotificationWriterService,
+    @Optional() private readonly roleNotifications?: RoleNotificationService,
   ) {}
 
   private get db() {
@@ -275,6 +278,19 @@ export class AdBoostsService {
         { boostStatus: 'pending_verification', updatedAt: submittedAt },
       );
     });
+    await this.roleNotifications?.createAdmin({
+      eventType: 'boost_payment_submitted',
+      eventId: boostId,
+      category: 'boost_payment',
+      title: 'Boost payment awaiting verification',
+      message: 'A lender submitted a bank receipt for an advertisement boost.',
+      severity: 'warning',
+      entityType: 'adBoost',
+      entityId: boostId,
+      actionLabel: 'Verify payment',
+      actionTarget: '/admin/boost-payments',
+      metadata: { status: 'pending_verification' },
+    }).catch(() => undefined);
     return this.getBoost(lenderId, boostId);
   }
 

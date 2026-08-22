@@ -13,6 +13,7 @@ const ManageUsers = lazy(() => import("./pages/manageUsers/ManageUsers"));
 const Analytics = lazy(() => import("./pages/analytics/Analytics"));
 const AuditLogs = lazy(() => import("./pages/auditLogs/AuditLogs"));
 const SettingsPage = lazy(() => import("./pages/settings/Settings"));
+const Notifications = lazy(() => import("./pages/notifications/Notifications"));
 const Disputes = lazy(() => import("./pages/disputes/Disputes"));
 const Transactions = lazy(() => import("./pages/transactions/Transactions"));
 const AdBoosts = lazy(() => import("./pages/adBoosts/AdBoosts"));
@@ -47,6 +48,7 @@ export default function AdminRoutes() {
         <Route path="agreements" element={<LegalAgreements />} />
         <Route path="audit-logs" element={<AuditLogs />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="notifications" element={<Notifications />} />
       </Route>
       <Route path="*" element={<Navigate to="signin" replace />} />
     </Routes>

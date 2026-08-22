@@ -7,6 +7,7 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { DocumentData, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
@@ -15,6 +16,7 @@ import { AdminQueryCacheService } from '../../common/cache/admin-query-cache.ser
 import { buildSearchTokens } from '../../common/firestore/search-tokens';
 import { writeAuditLog } from '../../common/audit/write-audit-log';
 import type { UserRole } from '../auth/auth.types';
+import { RoleNotificationService } from '../../common/notifications/role-notification.service';
 import type {
   AddDisputeCommentDto,
   AdminDisputeQuery,
@@ -64,6 +66,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     private readonly firebaseService: FirebaseService,
     private readonly gateway: ChatGateway,
     private readonly cache: AdminQueryCacheService = new AdminQueryCacheService(),
+    @Optional() private readonly roleNotifications?: RoleNotificationService,
   ) {}
 
   onModuleInit() {
@@ -354,6 +357,46 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     title: string,
     body: string,
   ) {
+    if (this.roleNotifications) {
+      const eventId = `${dispute.id}-${dispute.status}`;
+      const writes: Promise<unknown>[] = [];
+      if (dispute.borrowerId && dispute.borrowerId !== excludedUserId) {
+        writes.push(
+          this.roleNotifications.createBorrower(dispute.borrowerId, {
+            eventType,
+            eventId,
+            category: 'dispute',
+            severity: 'info',
+            title,
+            message: body,
+            entityType: 'dispute',
+            entityId: dispute.id,
+            actionTarget: 'DisputeDetail',
+            metadata: { disputeId: dispute.id, status: dispute.status },
+          }),
+        );
+      }
+      if (dispute.lenderId && dispute.lenderId !== excludedUserId) {
+        writes.push(
+          this.roleNotifications.createLender(dispute.lenderId, {
+            eventType,
+            eventId,
+            category: 'dispute',
+            severity: 'info',
+            title,
+            message: body,
+            entityType: 'dispute',
+            entityId: dispute.id,
+            actionLabel: 'Open dispute',
+            actionTarget: 'disputes',
+            metadata: { disputeId: dispute.id, status: dispute.status },
+          }),
+        );
+      }
+      await Promise.all(writes);
+      return;
+    }
+
     const now = Timestamp.now();
     const writes: Promise<unknown>[] = [];
     if (dispute.borrowerId && dispute.borrowerId !== excludedUserId) {
@@ -683,6 +726,21 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         ? `${subject} was opened for loan ${loanId}.`
         : `${subject} was opened as a general platform dispute.`,
     );
+    await this.roleNotifications?.createAdmin({
+      eventType: 'dispute_created',
+      eventId: ref.id,
+      category: 'dispute',
+      title: 'New dispute requires review',
+      message: loanId
+        ? 'A loan participant opened a dispute for admin review.'
+        : 'A user opened a general platform dispute for admin review.',
+      severity: document.priority === 'critical' ? 'critical' : 'warning',
+      entityType: 'dispute',
+      entityId: ref.id,
+      actionLabel: 'Review dispute',
+      actionTarget: '/admin/disputes',
+      metadata: { status: 'open', priority: document.priority },
+    }).catch(() => undefined);
     return { success: true, dispute };
   }
 

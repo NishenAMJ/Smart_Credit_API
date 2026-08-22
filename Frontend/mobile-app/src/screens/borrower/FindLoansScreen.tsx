@@ -153,13 +153,13 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
   ];
 
   useEffect(() => {
-    void fetchFeaturedLoans();
+    void fetchAvailableLoans();
   }, []);
 
-  const fetchFeaturedLoans = async () => {
+  const fetchAvailableLoans = async () => {
     try {
       setErrorMessage("");
-      const response = await loanService.getFeaturedLoans();
+      const response = await loanService.getAvailableLoans();
       const loans = response.data ?? [];
 
       if (loans.length === 0) {
@@ -183,12 +183,12 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    void fetchFeaturedLoans();
+    void fetchAvailableLoans();
   }, []);
 
   const handleSearch = async () => {
     if (searchQuery.trim() === "") {
-      void fetchFeaturedLoans();
+      void fetchAvailableLoans();
       return;
     }
 
@@ -353,7 +353,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
           onChangeText={(text) => {
             setSearchQuery(text);
             if (text.trim() === "") {
-              void fetchFeaturedLoans();
+              void fetchAvailableLoans();
             }
           }}
           onSubmitEditing={handleSearch}
@@ -365,7 +365,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
             style={styles.filterIcon}
             onPress={() => {
               setSearchQuery("");
-              void fetchFeaturedLoans();
+              void fetchAvailableLoans();
             }}
           >
             <Feather name="x-circle" size={20} color="#9CA3AF" />
