@@ -54,9 +54,6 @@ export const ENDPOINTS = {
     borrower: (borrowerId: string) => `/borrower/dashboard/${borrowerId}`,
     get: (borrowerId: string) => `/borrower/dashboard/${borrowerId}`,
   },
-  support: {
-    status: "/borrower/support/status",
-  },
   profile: {
     get: (userId: string) => `/borrower/profile/${userId}`,
     update: (userId: string) => `/borrower/profile/${userId}`,
