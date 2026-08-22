@@ -191,8 +191,11 @@ export default function AgreementsPage({
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setSelected(null);
-        setShowPreview(false);
+        if (showPreview) {
+          setShowPreview(false);
+        } else {
+          setSelected(null);
+        }
       }
     };
     document.body.style.overflow = "hidden";
@@ -201,7 +204,7 @@ export default function AgreementsPage({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [selected]);
+  }, [selected, showPreview]);
 
   const stats = useMemo(
     () => ({
@@ -549,6 +552,7 @@ export default function AgreementsPage({
             role="dialog"
             aria-modal="true"
             aria-labelledby="agreement-modal-title"
+            aria-hidden={showPreview}
           >
             <header className="agreement-modal__header">
               <div>
@@ -583,12 +587,9 @@ export default function AgreementsPage({
                   {selected.legacyReadOnly ? <em>Legacy read-only</em> : null}
                 </div>
                 <div className="agreement-detail-actions">
-                  <button
-                    type="button"
-                    onClick={() => setShowPreview((current) => !current)}
-                  >
+                  <button type="button" onClick={() => setShowPreview(true)}>
                     <Eye size={16} />
-                    {showPreview ? "Hide preview" : "Preview agreement"}
+                    Preview agreement
                   </button>
                   <button
                     type="button"
@@ -608,16 +609,6 @@ export default function AgreementsPage({
                   </button>
                 </div>
               </section>
-
-              {showPreview ? (
-                <section className="agreement-document-preview">
-                  <iframe
-                    sandbox=""
-                    srcDoc={selected.htmlContent}
-                    title={`Preview of ${selected.title}`}
-                  />
-                </section>
-              ) : null}
 
               <section className="agreement-detail-section">
                 <h3>References</h3>
@@ -816,6 +807,71 @@ export default function AgreementsPage({
               </section>
             </div>
           </section>
+
+          {showPreview ? (
+            <div
+              className="agreement-preview-backdrop"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  setShowPreview(false);
+                }
+              }}
+            >
+              <section
+                className="agreement-preview-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="agreement-preview-title"
+              >
+                <header>
+                  <div>
+                    <span>Document preview</span>
+                    <h2 id="agreement-preview-title">{selected.title}</h2>
+                    <p>
+                      Version {selected.version} · Agreement{" "}
+                      {shortId(selected.id)}
+                    </p>
+                  </div>
+                  <div>
+                    {selected.pdfAvailable ? (
+                      <button
+                        type="button"
+                        className="is-download"
+                        onClick={() =>
+                          onDownload(selected.id, selected.pdfDownloadPath)
+                        }
+                      >
+                        <Download size={16} /> Download PDF
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      aria-label="Close agreement preview"
+                      onClick={() => setShowPreview(false)}
+                    >
+                      <X size={19} />
+                    </button>
+                  </div>
+                </header>
+                <div className="agreement-preview-document">
+                  {selected.htmlContent?.trim() ? (
+                    <iframe
+                      sandbox=""
+                      srcDoc={selected.htmlContent}
+                      title={"Preview of " + selected.title}
+                    />
+                  ) : (
+                    <div className="agreement-preview-empty">
+                      <AlertTriangle size={24} />
+                      <strong>Preview is not available</strong>
+                      <span>This agreement has no document content.</span>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
