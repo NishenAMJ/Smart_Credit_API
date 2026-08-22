@@ -25,6 +25,26 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Advertisement boost configuration
+
+Advertisement boosting is optional and only applies to active, admin-approved
+ads. Bank transfers require admin verification; card payments use the existing
+PayHere merchant configuration and activate after a verified callback.
+
+```text
+BOOST_PLAN_7_DAYS_FEE_LKR=1500
+BOOST_PLAN_14_DAYS_FEE_LKR=2500
+BOOST_PLAN_30_DAYS_FEE_LKR=4500
+BOOST_BANK_NAME=
+BOOST_BANK_ACCOUNT_NAME=
+BOOST_BANK_ACCOUNT_NUMBER=
+BOOST_BANK_BRANCH=
+PAYHERE_MERCHANT_ID=
+PAYHERE_MERCHANT_SECRET=
+PAYHERE_SANDBOX=true
+PAYHERE_PUBLIC_BASE_URL=https://api.example.com
+```
+
 ## Project setup
 
 ```bash

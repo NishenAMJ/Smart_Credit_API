@@ -423,7 +423,9 @@ export class BorrowerService {
       preferredPurposes: Array.isArray(data.purposeCategories)
         ? data.purposeCategories
         : data.preferredPurposes,
-      isFeatured: data.status === 'active',
+      isFeatured:
+        data.isBoosted === true &&
+        (this.toDate(data.boostEndsAt)?.getTime() ?? 0) > Date.now(),
     };
   }
 
@@ -739,15 +741,46 @@ export class BorrowerService {
       .where('status', '==', 'active')
       .get();
 
+    const now = Date.now();
+    const expiredBoosts = snapshot.docs.filter((doc) => {
+      const data = doc.data();
+      return (
+        data.isBoosted === true &&
+        (this.toDate(data.boostEndsAt)?.getTime() ?? 0) <= now
+      );
+    });
+    if (expiredBoosts.length > 0) {
+      const batch = this.db.batch();
+      expiredBoosts.forEach((doc) => {
+        const activeBoostId = doc.get('activeBoostId');
+        batch.update(doc.ref, {
+          isBoosted: false,
+          boostStatus: 'expired',
+          activeBoostId: null,
+          updatedAt: Timestamp.now(),
+        });
+        if (typeof activeBoostId === 'string' && activeBoostId) {
+          batch.update(this.db.collection('adBoostRequests').doc(activeBoostId), {
+            status: 'expired',
+            updatedAt: Timestamp.now(),
+          });
+        }
+      });
+      await batch.commit();
+    }
+
     const ads = snapshot.docs.map((doc) =>
       this.normalizeAdDocument(doc.data(), doc.id),
     );
 
-    return ads.sort(
-      (a, b) =>
+    return ads.sort((a, b) => {
+      const featuredDifference = Number(b.isFeatured) - Number(a.isFeatured);
+      return (
+        featuredDifference ||
         this.timestampToMillis(b.createdAt as TimestampLike) -
-        this.timestampToMillis(a.createdAt as TimestampLike),
-    );
+          this.timestampToMillis(a.createdAt as TimestampLike)
+      );
+    });
   }
 
   /**

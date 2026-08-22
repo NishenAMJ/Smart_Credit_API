@@ -31,6 +31,7 @@ import { QrScannerModule } from './modules/qrScanner/qr-scanner.module';
 import { LocationModule } from './modules/location/location.module';
 import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
 import { AdminQueryCacheModule } from './common/cache/admin-query-cache.module';
+import { AdBoostsModule } from './modules/lender/ad-boosts/ad-boosts.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AdminQueryCacheModule } from './common/cache/admin-query-cache.module';
     DashboardModule,
     AnalyticsModule,
     LenderAdsModule,
+    AdBoostsModule,
     LenderNotificationsModule,
     LenderProfileModule,
     LenderSettingsModule,

@@ -168,6 +168,9 @@ export class LenderAdsService {
       preferredPurposes: document.purposeCategories,
       status: document.status,
       isBoosted: false,
+      boostStatus: null,
+      boostStartsAt: null,
+      boostEndsAt: null,
       availableCapital: document.availableCapitalMinor / 100,
       applicationCount: 0,
       fundedLoansCount: 0,
@@ -619,7 +622,13 @@ export class LenderAdsService {
       location: typeof data.location === 'string' ? data.location : '',
       preferredPurposes: readStringArray(data.purposeCategories),
       status: getAdStatus(data),
-      isBoosted: data.isBoosted === true,
+      isBoosted:
+        data.isBoosted === true &&
+        (readDate(data.boostEndsAt)?.getTime() ?? 0) > Date.now(),
+      boostStatus:
+        typeof data.boostStatus === 'string' ? data.boostStatus : null,
+      boostStartsAt: this.toIsoString(data.boostStartsAt),
+      boostEndsAt: this.toIsoString(data.boostEndsAt),
       availableCapital: this.toNumber(data.availableCapitalMinor) / 100,
       applicationCount: 0,
       fundedLoansCount: 0,

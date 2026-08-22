@@ -345,6 +345,18 @@ export default function MyAdsScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
           )}
+          {isActive && (
+            <TouchableOpacity
+              onPress={() => navigation.navigate("BoostAd", { ad: item })}
+              disabled={item.isBoosted || ["payment_pending", "pending_verification"].includes(item.boostStatus)}
+              style={{ flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.border, opacity: item.isBoosted ? 0.6 : 1 }}
+            >
+              <Feather name="trending-up" size={16} color={COLORS.textPrimary} />
+              <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>
+                {item.isBoosted ? "Boosted" : item.boostStatus === "pending_verification" ? "Pending" : "Boost"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );

@@ -7,7 +7,6 @@ import { getUserId } from "../../utils/auth.storage";
 import type { BorrowerLoan, LoanStatus } from "../../types/borrower";
 
 const FALLBACK_LENDER_NAME = "Lender";
-const ACTIVE_LOAN_STATUS: LoanStatus = "active";
 
 type LoanListResponse = {
   success?: boolean;
@@ -43,7 +42,7 @@ function normalizeLoan(loan: Partial<BorrowerLoan>): BorrowerLoan {
         ? 0
         : (loan.totalRepayable ?? principalAmount)),
     nextDueDate: loan.nextDueDate,
-    isFeatured: loan.isFeatured ?? loan.status === ACTIVE_LOAN_STATUS,
+    isFeatured: loan.isFeatured === true,
   };
 }
 

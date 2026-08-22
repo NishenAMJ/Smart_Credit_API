@@ -15,6 +15,7 @@ const AuditLogs = lazy(() => import("./pages/auditLogs/AuditLogs"));
 const SettingsPage = lazy(() => import("./pages/settings/Settings"));
 const Disputes = lazy(() => import("./pages/disputes/Disputes"));
 const Transactions = lazy(() => import("./pages/transactions/Transactions"));
+const AdBoosts = lazy(() => import("./pages/adBoosts/AdBoosts"));
 const LegalAgreements = lazy(
   () => import("./pages/agreements/LegalAgreements"),
 );
@@ -42,6 +43,7 @@ export default function AdminRoutes() {
         <Route path="disputes" element={<Disputes />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="transactions" element={<Transactions />} />
+        <Route path="boost-payments" element={<AdBoosts />} />
         <Route path="agreements" element={<LegalAgreements />} />
         <Route path="audit-logs" element={<AuditLogs />} />
         <Route path="settings" element={<SettingsPage />} />

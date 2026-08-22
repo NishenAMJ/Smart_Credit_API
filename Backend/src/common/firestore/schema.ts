@@ -91,6 +91,18 @@ export interface LoanListingDocument {
   currency: Currency;
   repaymentFrequency: 'monthly';
   status: ListingStatus;
+  isBoosted?: boolean;
+  boostStatus?:
+    | 'payment_pending'
+    | 'pending_verification'
+    | 'active'
+    | 'rejected'
+    | 'cancelled'
+    | 'expired';
+  activeBoostId?: string | null;
+  boostStartsAt?: Timestamp | null;
+  boostEndsAt?: Timestamp | null;
+  boostPaymentExpiresAt?: Timestamp | null;
   adminReview: {
     reviewedBy: string | null;
     reviewedAt: Timestamp | null;
@@ -205,7 +217,13 @@ export type TransactionType =
 export interface TransactionDocument {
   transactionId: string;
   type: TransactionType;
-  status: 'pending' | 'completed' | 'failed' | 'reversed';
+  status:
+    | 'pending'
+    | 'pending_verification'
+    | 'completed'
+    | 'rejected'
+    | 'failed'
+    | 'reversed';
   currency: Currency;
   amountMinor: number;
   platformFeeMinor: number;

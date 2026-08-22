@@ -21,7 +21,8 @@ export type MediaUploadCategory =
   | 'profile_picture'
   | 'kyc'
   | 'agreement'
-  | 'dispute_evidence';
+  | 'dispute_evidence'
+  | 'payment_receipt';
 export type MediaResourceType = 'image' | 'raw' | 'auto';
 
 export type UploadedMedia = {

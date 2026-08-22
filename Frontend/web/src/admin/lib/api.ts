@@ -892,6 +892,58 @@ export function changeDisputePriority(
   });
 }
 
+export type AdminAdBoost = {
+  boostId: string;
+  listingId: string;
+  lenderId: string;
+  status: string;
+  paymentMethod: "bank_transfer" | "card";
+  transactionId: string;
+  receiptDocumentId: string | null;
+  bankReference: string | null;
+  rejectionReason: string | null;
+  createdAt: string | null;
+  submittedAt: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  plan: {
+    id: string;
+    name: string;
+    durationDays: number;
+    amountMinor: number;
+    currency: "LKR";
+  };
+};
+
+export function getAdBoosts(status = "all") {
+  return apiRequest<AdminAdBoost[]>(
+    `/admin/ad-boosts?status=${encodeURIComponent(status)}`,
+    { auth: true },
+  );
+}
+
+export function decideAdBoostPayment(
+  boostId: string,
+  approved: boolean,
+  reason?: string,
+) {
+  return apiRequest<AdminAdBoost>(
+    `/admin/ad-boosts/${encodeURIComponent(boostId)}/decision`,
+    {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ approved, reason }),
+    },
+  );
+}
+
+export function getAdBoostReceiptAccess(documentId: string) {
+  return apiRequest<{ documentId: string; accessUrl: string; expiresAt: string }>(
+    `/documents/${encodeURIComponent(documentId)}/access`,
+    { auth: true },
+  );
+}
+
 export function addAdminDisputeComment(
   disputeId: string,
   message: string,

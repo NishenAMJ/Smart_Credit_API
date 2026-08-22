@@ -42,6 +42,9 @@ export interface LenderAdResponse {
   preferredPurposes: string[];
   status: string;
   isBoosted: boolean;
+  boostStatus: string | null;
+  boostStartsAt: string | null;
+  boostEndsAt: string | null;
   availableCapital: number;
   applicationCount: number;
   fundedLoansCount: number;
