@@ -233,7 +233,7 @@ export default function AuditLogs() {
         <div>
           <h1 className="page-title">Audit Logs</h1>
           <p className="page-subtitle">
-            Activity feed generated from real admin-side Firebase records
+            Review administrative actions and platform activity
           </p>
         </div>
         <button

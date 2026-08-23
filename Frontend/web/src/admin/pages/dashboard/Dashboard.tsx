@@ -112,8 +112,7 @@ export default function Dashboard() {
         <div>
           <h1 className="page-title">Admin Dashboard</h1>
           <p className="page-subtitle">
-            Live metrics from Firestore users, loans, requests, transactions,
-            and disputes
+            Overview of users, loans, requests, transactions, and disputes
           </p>
         </div>
         <div style={{ fontSize: 13, color: "#6B7280" }}>

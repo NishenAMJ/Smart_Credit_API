@@ -145,7 +145,7 @@ export default function Analytics() {
         <div>
           <h1 className="page-title">Analytics</h1>
           <p className="page-subtitle">
-            Reports powered by the live NestJS admin endpoints
+            Platform performance and financial insights
           </p>
         </div>
       </div>
@@ -190,7 +190,7 @@ export default function Analytics() {
         <div className="card">
           <div style={S.chartHeader}>
             <p style={S.chartTitle}>Revenue Trend</p>
-            <p style={S.chartSub}>Monthly revenue from the backend report</p>
+            <p style={S.chartSub}>Monthly revenue over the last 12 months</p>
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={revenueTrend}>
@@ -282,7 +282,7 @@ export default function Analytics() {
         </div>
         {!revenueBreakdownAvailable && revenueReport && (
           <p style={S.revenueIndexNotice}>
-            Revenue-source totals will appear when the Firestore index is ready.
+            Revenue details are temporarily unavailable. Please refresh shortly.
           </p>
         )}
         <div style={S.revenueTotalRow}>
@@ -297,7 +297,7 @@ export default function Analytics() {
         <div className="card">
           <div style={S.chartHeader}>
             <p style={S.chartTitle}>Loan Status Breakdown</p>
-            <p style={S.chartSub}>Aggregated loan report from the backend</p>
+            <p style={S.chartSub}>Loans grouped by their current status</p>
           </div>
           <div
             className="table-container"
