@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   AggregateField,
   DocumentData,
@@ -24,6 +24,9 @@ type LoanWithCursor = LenderLoanItem & {
 
 @Injectable()
 export class LenderLoansService {
+  private readonly logger = new Logger(LenderLoansService.name);
+  private hasWarnedAboutMissingIndex = false;
+
   constructor(private readonly firebaseService: FirebaseService) {}
 
   async getLoans(
@@ -72,8 +75,24 @@ export class LenderLoansService {
       );
     }
 
-    const snapshot = await query.limit(safePageSize + 1).get();
-    const visibleDocs = snapshot.docs.slice(0, safePageSize);
+    let pageDocs: QueryDocumentSnapshot<DocumentData>[];
+    let hasMore: boolean;
+    try {
+      const snapshot = await query.limit(safePageSize + 1).get();
+      pageDocs = snapshot.docs;
+      hasMore = snapshot.docs.length > safePageSize;
+    } catch (error) {
+      if (!this.isMissingIndexError(error)) throw error;
+      this.warnAboutMissingIndex();
+      pageDocs = await this.getFallbackPageDocs(
+        lenderId,
+        safePageSize,
+        decodedCursor,
+        normalizedStatus,
+      );
+      hasMore = pageDocs.length > safePageSize;
+    }
+    const visibleDocs = pageDocs.slice(0, safePageSize);
     const borrowers = await this.loadBorrowers(visibleDocs);
     const loans = visibleDocs.map((doc) =>
       this.mapLoan(
@@ -90,9 +109,9 @@ export class LenderLoansService {
       ),
       pageInfo: {
         pageSize: safePageSize,
-        hasMore: snapshot.docs.length > safePageSize,
+        hasMore,
         nextCursor:
-          snapshot.docs.length > safePageSize && nextItem?.cursorDate
+          hasMore && nextItem?.cursorDate
             ? encodeCursor(nextItem.cursorDate, nextItem.cursorId)
             : null,
       },
@@ -171,6 +190,48 @@ export class LenderLoansService {
     };
   }
 
+  private async getFallbackPageDocs(
+    lenderId: string,
+    safePageSize: number,
+    cursor: ReturnType<typeof decodeCursor>,
+    normalizedStatus: string | null,
+  ): Promise<QueryDocumentSnapshot<DocumentData>[]> {
+    const snapshot = await this.firebaseService
+      .getDb()
+      .collection('loans')
+      .where('lenderId', '==', lenderId)
+      .get();
+
+    return snapshot.docs
+      .filter((doc) =>
+        normalizedStatus
+          ? readString(doc.data().status)?.toLowerCase() === normalizedStatus
+          : true,
+      )
+      .sort((left, right) => {
+        const dateDifference =
+          (readDate(right.data().createdAt, right.data().approvedAt)?.getTime() ??
+            0) -
+          (readDate(left.data().createdAt, left.data().approvedAt)?.getTime() ??
+            0);
+        return dateDifference || right.id.localeCompare(left.id);
+      })
+      .filter((doc) => {
+        if (!cursor) return true;
+        const createdAt = readDate(
+          doc.data().createdAt,
+          doc.data().approvedAt,
+        );
+        if (!createdAt) return false;
+        return (
+          createdAt.getTime() < cursor.date.getTime() ||
+          (createdAt.getTime() === cursor.date.getTime() &&
+            doc.id.localeCompare(cursor.id) < 0)
+        );
+      })
+      .slice(0, safePageSize + 1);
+  }
+
   private async loadBorrowers(
     loanDocs: QueryDocumentSnapshot<DocumentData>[],
   ): Promise<Map<string, DocumentData | undefined>> {
@@ -243,30 +304,63 @@ export class LenderLoansService {
       .getDb()
       .collection('loans')
       .where('lenderId', '==', lenderId);
-    const [portfolio, active, overdue, completed] = await Promise.all([
-      loans
-        .aggregate({
-          totalLoans: AggregateField.count(),
-          totalPrincipalMinor: AggregateField.sum('principalMinor'),
-          outstandingBalanceMinor: AggregateField.sum(
-            'remainingBalanceMinor',
-          ),
-        })
-        .get(),
-      loans.where('status', '==', 'active').count().get(),
-      loans.where('status', '==', 'overdue').count().get(),
-      loans.where('status', '==', 'completed').count().get(),
-    ]);
-    const totals = portfolio.data();
+    try {
+      const [portfolio, active, overdue, completed] = await Promise.all([
+        loans
+          .aggregate({
+            totalLoans: AggregateField.count(),
+            totalPrincipalMinor: AggregateField.sum('principalMinor'),
+            outstandingBalanceMinor: AggregateField.sum(
+              'remainingBalanceMinor',
+            ),
+          })
+          .get(),
+        loans.where('status', '==', 'active').count().get(),
+        loans.where('status', '==', 'overdue').count().get(),
+        loans.where('status', '==', 'completed').count().get(),
+      ]);
+      const totals = portfolio.data();
 
-    return {
-      totalLoans: totals.totalLoans,
-      activeLoans: active.data().count,
-      overdueLoans: overdue.data().count,
-      completedLoans: completed.data().count,
-      totalPrincipal: Number(totals.totalPrincipalMinor ?? 0) / 100,
-      outstandingBalance: Number(totals.outstandingBalanceMinor ?? 0) / 100,
-    };
+      return {
+        totalLoans: totals.totalLoans,
+        activeLoans: active.data().count,
+        overdueLoans: overdue.data().count,
+        completedLoans: completed.data().count,
+        totalPrincipal: Number(totals.totalPrincipalMinor ?? 0) / 100,
+        outstandingBalance: Number(totals.outstandingBalanceMinor ?? 0) / 100,
+      };
+    } catch (error) {
+      if (!this.isMissingIndexError(error)) throw error;
+      this.warnAboutMissingIndex();
+      const snapshot = await loans.get();
+      const items = snapshot.docs.map((doc) => doc.data());
+      return {
+        totalLoans: items.length,
+        activeLoans: items.filter(
+          (item) => readString(item.status) === 'active',
+        ).length,
+        overdueLoans: items.filter(
+          (item) => readString(item.status) === 'overdue',
+        ).length,
+        completedLoans: items.filter(
+          (item) => readString(item.status) === 'completed',
+        ).length,
+        totalPrincipal: items.reduce(
+          (sum, item) =>
+            sum + this.minorToMajor(item.principalMinor, item.principalAmount),
+          0,
+        ),
+        outstandingBalance: items.reduce(
+          (sum, item) =>
+            sum +
+            this.minorToMajor(
+              item.remainingBalanceMinor,
+              item.remainingAmount,
+            ),
+          0,
+        ),
+      };
+    }
   }
 
   private minorToMajor(minorValue: unknown, legacyValue: unknown): number {
@@ -277,6 +371,26 @@ export class LenderLoansService {
 
   private toIsoString(value: unknown): string | null {
     return readDate(value)?.toISOString() ?? null;
+  }
+
+  private isMissingIndexError(error: unknown): boolean {
+    const candidate = error as { code?: unknown; message?: unknown };
+    const code = String(candidate?.code ?? '').toLowerCase();
+    const message = String(candidate?.message ?? '').toLowerCase();
+    return (
+      code === '9' ||
+      code === 'failed-precondition' ||
+      message.includes('requires an index') ||
+      message.includes('index is currently building')
+    );
+  }
+
+  private warnAboutMissingIndex(): void {
+    if (this.hasWarnedAboutMissingIndex) return;
+    this.logger.warn(
+      'The lender loans composite index is unavailable. Using temporary in-memory pagination; deploy firestore.indexes.json to restore optimized reads.',
+    );
+    this.hasWarnedAboutMissingIndex = true;
   }
 
   private isAfterCursor(
