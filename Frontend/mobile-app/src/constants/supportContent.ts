@@ -3,14 +3,13 @@
 export type SupportQuickActionId =
   | "help-center"
   | "contact-support"
-  | "request-call"
   | "raise-dispute";
 
 export type SupportQuickAction = {
   id: SupportQuickActionId;
   title: string;
   subtitle: string;
-  icon: "help-circle" | "message-square" | "phone-call" | "alert-circle";
+  icon: "help-circle" | "message-square" | "alert-circle";
 };
 
 export type HelpCategory = "Loans" | "Payments" | "Account" | "Technical";
@@ -34,12 +33,6 @@ export const supportQuickActions: SupportQuickAction[] = [
     title: "Contact Support",
     subtitle: "Send a support request",
     icon: "message-square",
-  },
-  {
-    id: "request-call",
-    title: "Request a Call",
-    subtitle: "Ask the team to call you",
-    icon: "phone-call",
   },
   {
     id: "raise-dispute",
