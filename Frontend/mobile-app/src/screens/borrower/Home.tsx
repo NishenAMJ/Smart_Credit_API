@@ -112,14 +112,13 @@ export default function Home({ navigation }: MyLoansScreenProps) {
         transactionResponse,
         creditResponse,
         agreementResponse,
-      ] =
-        await Promise.all([
-          dashboardService.getDashboard(),
-          getMyLoans("active"),
-          transactionService.getMyTransactions(),
-          creditScoreService.getMyCreditScore().catch(() => null),
-          listLegalDocuments().catch(() => null),
-        ]);
+      ] = await Promise.all([
+        dashboardService.getDashboard(),
+        getMyLoans("active"),
+        transactionService.getMyTransactions(),
+        creditScoreService.getMyCreditScore().catch(() => null),
+        listLegalDocuments().catch(() => null),
+      ]);
 
       let dashData = dashboardResponse;
       // Unwrap nested data if the service returned the response wrapper instead of the metrics directly
@@ -158,23 +157,6 @@ export default function Home({ navigation }: MyLoansScreenProps) {
           ...dashData,
           creditScore: creditResponse.data?.creditScore ?? dashData.creditScore,
         };
-      }
-
-      // Derive total outstanding from active loans when the dashboard field is zero or missing
-      if (
-        dashData &&
-        (!dashData.totalOutstanding || dashData.totalOutstanding === 0) &&
-        loanData?.length > 0
-      ) {
-        const totalOutstanding = loanData.reduce((sum, loan) => {
-          return sum + (loan.outstandingBalance ?? 0);
-        }, 0);
-        if (totalOutstanding > 0) {
-          dashData = {
-            ...dashData,
-            totalOutstanding,
-          };
-        }
       }
 
       setDashboard(dashData);
@@ -245,7 +227,8 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
   const totalPaid = useMemo(() => {
     return transactions.reduce((sum, transaction) => {
-      return String(transaction.status ?? "").toLowerCase() === "completed"
+      return transaction.type === "repayment" &&
+        String(transaction.status ?? "").toLowerCase() === "completed"
         ? sum + Number(transaction.amount ?? 0)
         : sum;
     }, 0);
@@ -601,9 +584,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Loans</Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("MyLoans")}
-            >
+            <TouchableOpacity onPress={() => navigation.navigate("MyLoans")}>
               <Text style={styles.sectionLink}>View All</Text>
             </TouchableOpacity>
           </View>
