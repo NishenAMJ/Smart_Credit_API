@@ -58,6 +58,77 @@ describe('BorrowerPaymentsService', () => {
     );
   });
 
+  it('marks the payable installment for retry after a receipt rejection', async () => {
+    const borrowerPayments = {
+      getLoans: jest.fn().mockResolvedValue([
+        {
+          loanId: 'loan-1',
+          lenderId: 'lender-1',
+          lenderName: 'Example Lender',
+          status: 'active',
+          outstandingBalance: 5000,
+          monthlyInstallment: 5000,
+          nextDueDate: new Date('2026-09-01T00:00:00.000Z'),
+        },
+      ]),
+      getBorrowerLoanInstallments: jest.fn().mockResolvedValue([
+        {
+          installmentId: 'month_001',
+          installmentNumber: 1,
+          amount: 5000,
+          paidAmount: 0,
+          remainingAmount: 5000,
+          status: 'scheduled',
+          dueDate: new Date('2026-09-01T00:00:00.000Z'),
+        },
+      ]),
+      getRepaymentHistory: jest.fn().mockResolvedValue([
+        {
+          repaymentId: 'repayment-1',
+          loanId: 'loan-1',
+          installmentId: 'month_001',
+          lenderId: 'lender-1',
+          amount: 5000,
+          status: 'rejected',
+          paymentMethod: 'bank_transfer',
+          rejectionReason: 'The transferred amount is not visible',
+          createdAt: new Date('2026-08-23T00:00:00.000Z'),
+        },
+      ]),
+      getBorrowerRepaymentTransactions: jest.fn().mockResolvedValue([]),
+      getLenderNamesMap: jest
+        .fn()
+        .mockResolvedValue(new Map([['lender-1', 'Example Lender']])),
+    };
+    const retryService = new BorrowerPaymentsService(
+      borrowerPayments as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const result = await retryService.getPayments('borrower-1');
+
+    expect(result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          paymentId: 'upcoming-loan-1',
+          installmentId: 'month_001',
+          status: 'RETRY_REQUIRED',
+          verificationStatus: 'rejected',
+          statusLabel: 'Receipt rejected',
+          statusDetail: expect.stringContaining(
+            'The transferred amount is not visible',
+          ),
+        }),
+        expect.objectContaining({
+          repaymentId: 'repayment-1',
+          status: 'rejected',
+        }),
+      ]),
+    );
+  });
+
   it('settles a successful PayHere callback through the idempotent installment ledger', async () => {
     const secret = 'payhere-secret';
     const order: Record<string, any> = {
