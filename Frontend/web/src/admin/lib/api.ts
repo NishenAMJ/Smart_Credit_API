@@ -349,6 +349,12 @@ export interface RevenueReportResponse {
     platformFees: number;
     interestRevenue: number;
     revenueGrowth: number;
+    revenueBySource?: {
+      disbursementFees: number;
+      adBoostCharges: number;
+      otherPlatformFees: number;
+      repaymentFees: number;
+    } | null;
     revenueByMonth: Array<{
       month: string;
       revenue: number;

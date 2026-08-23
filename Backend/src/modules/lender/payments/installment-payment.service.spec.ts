@@ -92,6 +92,7 @@ describe('InstallmentPaymentService', () => {
     });
     expect(records.get('transactions/repayment_loan-1_month-1')).toMatchObject({
       amountMinor: 450_000,
+      platformFeeMinor: 0,
       paymentMethod: 'qr',
     });
 

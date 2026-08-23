@@ -102,6 +102,19 @@ export default function Analytics() {
   ];
 
   const revenueTrend = revenueReport?.revenueByMonth ?? [];
+  const revenueSources = [
+    {
+      label: "Loan disbursement fees",
+      detail: "2% charged once when a loan is disbursed",
+      value: revenueReport?.revenueBySource?.disbursementFees ?? 0,
+    },
+    {
+      label: "Listing / ad boost charges",
+      detail: "Optional promotion charges paid by lenders",
+      value: revenueReport?.revenueBySource?.adBoostCharges ?? 0,
+    },
+  ];
+  const revenueBreakdownAvailable = Boolean(revenueReport?.revenueBySource);
 
   const userBreakdown = useMemo(() => {
     if (!usersReport) {
@@ -245,6 +258,41 @@ export default function Analytics() {
         </div>
       </div>
 
+      <div className="card" style={S.revenueBreakdownCard}>
+        <div style={S.chartHeader}>
+          <p style={S.chartTitle}>How Revenue Is Earned</p>
+          <p style={S.chartSub}>
+            Platform fees by source. Loan interest is not included.
+          </p>
+        </div>
+        <div style={S.revenueSourceGrid}>
+          {revenueSources.map((source) => (
+            <div key={source.label} style={S.revenueSourceItem}>
+              <div>
+                <p style={S.revenueSourceLabel}>{source.label}</p>
+                <p style={S.revenueSourceDetail}>{source.detail}</p>
+              </div>
+              <p style={S.revenueSourceValue}>
+                {revenueBreakdownAvailable
+                  ? `LKR ${source.value.toLocaleString()}`
+                  : "Building…"}
+              </p>
+            </div>
+          ))}
+        </div>
+        {!revenueBreakdownAvailable && revenueReport && (
+          <p style={S.revenueIndexNotice}>
+            Revenue-source totals will appear when the Firestore index is ready.
+          </p>
+        )}
+        <div style={S.revenueTotalRow}>
+          <span>Total admin revenue</span>
+          <strong>
+            LKR {(revenueReport?.totalRevenue ?? 0).toLocaleString()}
+          </strong>
+        </div>
+      </div>
+
       <div style={{ marginTop: 16 }}>
         <div className="card">
           <div style={S.chartHeader}>
@@ -355,5 +403,53 @@ const S: Record<string, React.CSSProperties> = {
     marginTop: 4,
     fontSize: 12,
     color: "#6B7280",
+  },
+  revenueBreakdownCard: {
+    marginTop: 16,
+  },
+  revenueSourceGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+  },
+  revenueSourceItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    padding: 16,
+    border: "1px solid #E5E7EB",
+    borderRadius: 10,
+    background: "#F9FAFB",
+  },
+  revenueSourceLabel: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#111827",
+  },
+  revenueSourceDetail: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  revenueSourceValue: {
+    flexShrink: 0,
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#047857",
+  },
+  revenueTotalRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: 14,
+    paddingTop: 14,
+    borderTop: "1px solid #E5E7EB",
+    fontSize: 14,
+    color: "#111827",
+  },
+  revenueIndexNotice: {
+    marginTop: 12,
+    fontSize: 12,
+    color: "#92400E",
   },
 };
