@@ -1,11 +1,12 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
+import { corsOriginDelegate } from './cors-origins';
 
 export function configureApp(app: INestApplication): void {
   app.use(json({ limit: '60mb' }));
   app.use(urlencoded({ limit: '60mb', extended: true }));
   app.enableCors({
-    origin: true,
+    origin: corsOriginDelegate,
     credentials: true,
   });
   app.useGlobalPipes(
