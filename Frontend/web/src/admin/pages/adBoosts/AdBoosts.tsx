@@ -25,7 +25,7 @@ export default function AdBoosts() {
     try {
       setLoading(true); setError(""); setItems(await getAdBoosts("all"));
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Failed to load boost payments.");
+      setError(failure instanceof Error ? failure.message : "Failed to load ad boosts.");
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -69,10 +69,10 @@ export default function AdBoosts() {
       setBusyId(decision.item.boostId); setError(""); setMessage("");
       await decideAdBoostPayment(decision.item.boostId, decision.approved,
         decision.approved ? undefined : rejectionReason.trim());
-      setMessage(`Boost payment ${decision.approved ? "approved" : "rejected"} successfully.`);
+      setMessage(`Ad boost ${decision.approved ? "approved" : "rejected"} successfully.`);
       setDecision(null); setRejectionReason(""); setSelected(null); await load();
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Failed to review boost payment.");
+      setError(failure instanceof Error ? failure.message : "Failed to review ad boost.");
     } finally { setBusyId(null); }
   }
 
@@ -86,13 +86,13 @@ export default function AdBoosts() {
       .map((row) => row.map(csvCell).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const link = document.createElement("a"); link.href = url;
-    link.download = `boost-payments-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `ad-boosts-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click(); URL.revokeObjectURL(url);
   }
 
   return <div>
-    <div className="page-header"><div><h1 className="page-title">Boost Payments</h1>
-      <p className="page-subtitle">Review payments for sponsored advertisement placement.</p></div>
+    <div className="page-header"><div><h1 className="page-title">Ad Boosts</h1>
+      <p className="page-subtitle">Review and verify payments for boosted advertisements.</p></div>
       <div style={S.actions}><button className="btn-secondary btn-sm" onClick={exportCsv} disabled={!filtered.length}>
         <Download size={16} /> Export CSV</button>
         <button className="btn-secondary btn-sm" onClick={() => void load()} title="Refresh"><RefreshCw size={16} /></button></div>
@@ -101,7 +101,7 @@ export default function AdBoosts() {
     {message && <div className="card" style={S.success}>{message}</div>}
     <div style={S.statsGrid}><Summary label="Pending" value={String(stats.pending)} />
       <Summary label="Approved" value={String(stats.approved)} /><Summary label="Rejected" value={String(stats.rejected)} />
-      <Summary label="Boost Revenue" value={money(stats.revenue)} /></div>
+      <Summary label="Ad Boost Revenue" value={money(stats.revenue)} /></div>
     <div className="card" style={S.toolbar}><div className="tabs">{FILTERS.map((value) =>
       <button key={value} className={`tab ${filter === value ? "active" : ""}`} onClick={() => setFilter(value)}>{label(value)}</button>)}</div>
       <select className="input" style={S.planSelect} value={planFilter} onChange={(event) => setPlanFilter(event.target.value)} aria-label="Boost plan">
@@ -109,9 +109,9 @@ export default function AdBoosts() {
       <input className="input" style={S.dateInput} type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} title="From date" />
       <input className="input" style={S.dateInput} type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} title="To date" />
       <div className="search-wrap" style={S.searchWrap}><Search className="search-icon" size={16} />
-        <input className="input" placeholder="Search boosts..." value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+        <input className="input" placeholder="Search ad boosts..." value={search} onChange={(event) => setSearch(event.target.value)} /></div>
     </div>
-    <div className="table-container"><table><thead><tr><th>Boost</th><th>Lender / Advertisement</th><th>Plan</th><th>Payment</th>
+    <div className="table-container"><table><thead><tr><th>Boosted Ad</th><th>Lender / Advertisement</th><th>Plan</th><th>Payment</th>
       <th>Status</th><th>Reviewed</th><th>Actions</th></tr></thead><tbody>
       {pageItems.map((item) => <tr key={item.boostId} style={S.row} onClick={() => setSelected(item)}>
         <td><div style={S.boostCell}><Rocket size={16} /><div><strong>{shortReference(item.boostId)}</strong><div style={S.muted}>{formatDate(item.submittedAt ?? item.createdAt)}</div></div></div></td>
@@ -125,7 +125,7 @@ export default function AdBoosts() {
           {item.status === "pending_verification" && <><button className="btn-primary" style={S.tableActionButton} disabled={busyId === item.boostId} onClick={() => setDecision({ item, approved: true })} title="Approve payment" aria-label="Approve payment"><Check size={16} /></button>
             <button className="btn-secondary" style={S.tableActionButton} disabled={busyId === item.boostId} onClick={() => setDecision({ item, approved: false })} title="Reject payment" aria-label="Reject payment"><X size={16} /></button></>}</div></td>
       </tr>)}
-      {!pageItems.length && <tr><td colSpan={7} style={S.empty}>{loading ? "Loading boost payments..." : `No ${filter === "all" ? "" : label(filter).toLowerCase() + " "}boost payments found.`}</td></tr>}
+      {!pageItems.length && <tr><td colSpan={7} style={S.empty}>{loading ? "Loading ad boosts..." : filter === "pending_verification" ? "No ad boosts awaiting verification." : `No ${filter === "all" ? "" : label(filter).toLowerCase() + " "}ad boosts found.`}</td></tr>}
     </tbody></table><div style={S.pagination}><span>Showing {filtered.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
       <div style={S.actions}><button className="btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage((value) => value - 1)}><ChevronLeft size={16} /> Previous</button>
         <span>Page {page} of {pages}</span><button className="btn-secondary btn-sm" disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>Next <ChevronRight size={16} /></button></div></div></div>
@@ -150,7 +150,7 @@ function Details({ item, onClose, onReceipt, onApprove, onReject, busy }: {
     ["Reviewed by", item.reviewedByAdminName ?? "Not reviewed"], ["Reviewed at", formatDate(item.reviewedAt)],
     ["Boost starts", formatDate(item.startsAt)], ["Boost ends", formatDate(item.endsAt)]];
   return <div style={S.overlay} onClick={onClose}><div style={S.modal} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-    <div style={S.modalHeader}><div><h2 style={S.modalTitle}>Boost Payment Details</h2><p style={S.muted}>{shortReference(item.boostId)}</p></div>
+    <div style={S.modalHeader}><div><h2 style={S.modalTitle}>Ad Boost Details</h2><p style={S.muted}>{shortReference(item.boostId)}</p></div>
       <button className="btn-secondary btn-sm" onClick={onClose}><X size={18} /></button></div>
     <div style={S.details}>{rows.map(([name, value]) => <div key={name} style={S.detail}><span style={S.detailLabel}>{name}</span><strong>{value}</strong></div>)}</div>
     {item.rejectionReason && <div style={S.rejectionBox}><strong>Rejection reason</strong><div>{item.rejectionReason}</div></div>}
@@ -165,7 +165,7 @@ function DecisionDialog({ decision, reason, setReason, busy, onCancel, onConfirm
   busy: boolean; onCancel: () => void; onConfirm: () => void;
 }) {
   return <div style={{ ...S.overlay, zIndex: 1100 }}><div style={{ ...S.modal, width: "min(480px, 94vw)" }} role="alertdialog">
-    <h2 style={S.modalTitle}>{decision.approved ? "Approve Boost Payment?" : "Reject Boost Payment?"}</h2>
+    <h2 style={S.modalTitle}>{decision.approved ? "Approve Ad Boost?" : "Reject Ad Boost?"}</h2>
     <p style={S.confirmText}>Confirm {decision.approved ? "approval" : "rejection"} of {shortReference(decision.item.boostId)} for {money(decision.item.plan.amountMinor / 100)}.</p>
     {!decision.approved && <textarea className="input" rows={4} placeholder="Enter rejection reason (required)" value={reason} onChange={(event) => setReason(event.target.value)} autoFocus />}
     <div style={S.modalActions}><button className="btn-secondary btn-sm" disabled={busy} onClick={onCancel}>Cancel</button>
