@@ -2,14 +2,11 @@ import { useEffect, useState } from "react";
 import {
   BadgeCheck,
   Ban,
-  CalendarDays,
   CreditCard,
   Eye,
   Landmark,
-  Percent,
   Plus,
   Rocket,
-  Timer,
   X,
 } from "lucide-react";
 import BorrowerSidePanel from "../components/borrowers/BorrowerSidePanel";
@@ -120,42 +117,32 @@ function AdvertisementCard({
   return (
     <article className="lender-ad-card">
       <header className="lender-ad-card__header">
+        <div className="lender-ad-card__identity">
+          <p className="lender-ad-card__audience">{ad.borrowerFocus}</p>
+          <h3>{ad.title}</h3>
+        </div>
         <span
           className={`lender-ad-status lender-ad-status--${ad.status.replaceAll("_", "-")}`}
         >
           {formatLabel(ad.status)}
         </span>
-        <span className="lender-ad-card__date">
-          <CalendarDays size={14} /> {formatDate(ad.createdAt)}
-        </span>
       </header>
 
-      <div className="lender-ad-card__content">
-        <p className="lender-ad-card__audience">{ad.borrowerFocus}</p>
-        <h3>{ad.title}</h3>
-        <p className="lender-ad-card__description">
-          {ad.description || "No description was provided."}
-        </p>
+      <div className="lender-ad-card__amount">
+        <span>Available amount</span>
+        <strong>
+          {formatCurrency(ad.minAmount)} – {formatCurrency(ad.maxAmount)}
+        </strong>
       </div>
 
       <dl className="lender-ad-card__terms">
         <div>
-          <dt>Amount range</dt>
-          <dd>
-            {formatCurrency(ad.minAmount)} – {formatCurrency(ad.maxAmount)}
-          </dd>
+          <dt>Applications</dt>
+          <dd>{ad.applicationCount}</dd>
         </div>
         <div>
-          <dt>
-            <Percent size={14} /> Annual rate
-          </dt>
-          <dd>{ad.preferredInterestRate}%</dd>
-        </div>
-        <div>
-          <dt>
-            <Timer size={14} /> Maximum term
-          </dt>
-          <dd>{ad.maxTenureMonths} months</dd>
+          <dt>Funded loans</dt>
+          <dd>{ad.fundedLoansCount}</dd>
         </div>
       </dl>
 
@@ -174,7 +161,7 @@ function AdvertisementCard({
               className="button button-primary"
               onClick={onReviewRequests}
             >
-              View borrower requests
+              Requests
             </button>
             <button
               type="button"
@@ -187,7 +174,7 @@ function AdvertisementCard({
             </button>
           </>
         ) : (
-          <p>
+          <p className="lender-ad-card__next-state">
             {ad.status === "pending_review"
               ? "Waiting for admin approval"
               : "Not currently visible to borrowers"}

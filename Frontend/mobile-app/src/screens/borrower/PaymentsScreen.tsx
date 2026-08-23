@@ -279,7 +279,7 @@ export default function PaymentsScreen({
         return ["paid", "completed", "rejected", "failed"].includes(s);
       })
       .map((t) => ({
-        paymentId: t.transactionId ?? t.repaymentId,
+        paymentId: t.repaymentId ?? t.transactionId,
         transactionId: t.transactionId,
         repaymentId: t.repaymentId,
         loanId: t.loanId,

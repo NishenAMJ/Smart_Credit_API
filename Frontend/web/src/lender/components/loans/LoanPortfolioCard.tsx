@@ -1,22 +1,13 @@
-import { CalendarDays, ChevronRight, CircleDollarSign } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 type LoanPortfolioCardProps = {
   borrowerName?: string;
   status: string;
   principal: number;
   remaining: number;
-  interestRate: number;
-  tenureMonths: number;
-  createdAt: string | null;
   monthlyInstallment?: number;
-  installmentProgress?: {
-    paid: number;
-    total: number;
-    nextDueAt: string | null;
-  };
   onOpen: () => void;
   onOpenBorrower?: () => void;
-  onOpenPayments?: () => void;
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-LK", {
@@ -35,31 +26,14 @@ function formatLabel(value: string): string {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return "Not available";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime())
-    ? "Not available"
-    : new Intl.DateTimeFormat("en-LK", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      }).format(parsed);
-}
-
 export default function LoanPortfolioCard({
   borrowerName,
   status,
   principal,
   remaining,
-  interestRate,
-  tenureMonths,
-  createdAt,
   monthlyInstallment,
-  installmentProgress,
   onOpen,
   onOpenBorrower,
-  onOpenPayments,
 }: LoanPortfolioCardProps) {
   return (
     <article
@@ -103,50 +77,16 @@ export default function LoanPortfolioCard({
           <dt>Remaining</dt>
           <dd>{formatCurrency(remaining)}</dd>
         </div>
-        <div>
-          <dt>Interest</dt>
-          <dd>{interestRate.toFixed(1)}%</dd>
-        </div>
-        <div>
-          <dt>Tenure</dt>
-          <dd>{tenureMonths} months</dd>
-        </div>
         {monthlyInstallment !== undefined ? (
           <div>
             <dt>Monthly</dt>
             <dd>{formatCurrency(monthlyInstallment)}</dd>
           </div>
-        ) : (
-          <div>
-            <dt>Started</dt>
-            <dd>{formatDate(createdAt)}</dd>
-          </div>
-        )}
+        ) : null}
       </dl>
 
       <footer className="portfolio-loan-card__footer">
-        {installmentProgress && onOpenPayments ? (
-          <button
-            type="button"
-            className="portfolio-loan-card__payments"
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpenPayments();
-            }}
-          >
-            <CircleDollarSign size={17} />
-            <span>
-              <strong>
-                {installmentProgress.paid}/{installmentProgress.total} paid
-              </strong>
-              <small>Next: {formatDate(installmentProgress.nextDueAt)}</small>
-            </span>
-          </button>
-        ) : (
-          <span className="portfolio-loan-card__date">
-            <CalendarDays size={16} /> Started {formatDate(createdAt)}
-          </span>
-        )}
+        <span className="portfolio-loan-card__hint">Open for terms and payments</span>
         <span className="portfolio-loan-card__open">
           View loan <ChevronRight size={16} />
         </span>
