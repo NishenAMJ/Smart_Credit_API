@@ -325,6 +325,8 @@ export interface AdminTransaction {
   amount: number;
   platformFee: number;
   paymentType: string;
+  paymentMethod?: string;
+  externalReference?: string;
   status: string;
   verifiedByLender: boolean;
   createdAt?: string;
@@ -349,6 +351,12 @@ export interface RevenueReportResponse {
     platformFees: number;
     interestRevenue: number;
     revenueGrowth: number;
+    revenueBySource?: {
+      disbursementFees: number;
+      adBoostCharges: number;
+      otherPlatformFees: number;
+      repaymentFees: number;
+    } | null;
     revenueByMonth: Array<{
       month: string;
       revenue: number;
@@ -399,6 +407,7 @@ export interface AdStatsResponse {
 
 export interface AuditLogEntry {
   id: string;
+  action: string;
   actionType:
     | "kyc_approved"
     | "kyc_rejected"
@@ -410,10 +419,17 @@ export interface AuditLogEntry {
     | "system_event";
   description: string;
   performedBy: string;
+  actorId: string;
   targetName: string;
-  targetType: AuditTargetType;
+  targetId: string;
+  targetType: AuditTargetType | "boost";
   dateTime: string;
   severity: AuditSeverity;
+  before: unknown;
+  after: unknown;
+  metadata: Record<string, unknown>;
+  ipAddress?: string;
+  sessionId?: string;
 }
 
 export interface AuditLogsResponse {
@@ -903,6 +919,7 @@ export type AdminAdBoost = {
   boostId: string;
   listingId: string;
   lenderId: string;
+  lenderName?: string;
   status: string;
   paymentMethod: "bank_transfer" | "card";
   transactionId: string;
@@ -911,6 +928,10 @@ export type AdminAdBoost = {
   rejectionReason: string | null;
   createdAt: string | null;
   submittedAt: string | null;
+  reviewedAt: string | null;
+  reviewedByAdminId: string | null;
+  reviewedByAdminName?: string;
+  listingTitle?: string;
   startsAt: string | null;
   endsAt: string | null;
   plan: {

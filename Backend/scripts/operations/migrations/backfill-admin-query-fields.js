@@ -148,7 +148,9 @@ async function main() {
         ? Math.round(data.platformFee * 100)
         : Number.isFinite(data.fee)
           ? Math.round(data.fee * 100)
-          : Math.round(amountMinor * 0.02);
+          : data.type === 'repayment'
+            ? 0
+            : Math.round(amountMinor * 0.02);
     return { amountMinor, platformFeeMinor };
   });
   console.log(
