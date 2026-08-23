@@ -1,18 +1,20 @@
 /** @format */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { getApiErrorMessage } from "../../api/api-error";
 import { creditScoreService } from "../../api/services/creditScore.service";
 import type { BorrowerNavigation } from "../../types/navigation";
+import { COLORS } from "../../constants/colors";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
 
 type CreditHistoryScreenProps = {
   navigation: BorrowerNavigation;
@@ -32,40 +34,56 @@ export default function CreditHistoryScreen({
 }: CreditHistoryScreenProps) {
   const [history, setHistory] = useState<CreditHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        setErrorMessage("");
-        const response = await creditScoreService.getCreditHistory();
-        setHistory(response?.data ?? []);
-      } catch (error) {
-        const message = getApiErrorMessage(
-          error,
-          "Failed to load credit history.",
-        );
-        console.error("Error fetching credit history:", message);
-        setErrorMessage(message);
-        setHistory([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const fetchHistory = useCallback(async () => {
+    try {
+      setErrorMessage("");
+      const response = await creditScoreService.getCreditHistory();
+      setHistory(response?.data ?? []);
+    } catch (error) {
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load credit history.",
+      );
+      console.error("Error fetching credit history:", message);
+      setErrorMessage(message);
+      setHistory([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void fetchHistory();
+  }, [fetchHistory]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void fetchHistory();
+  }, [fetchHistory]);
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name="arrow-left" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Credit History</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <BorrowerPageHeader
+        title="Credit History"
+        onBack={() => navigation.goBack()}
+      />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {loading ? <ActivityIndicator size="large" color="#007AFF" /> : null}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <BorrowerRefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
+        }
+      >
+        {loading ? (
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        ) : null}
 
         {!loading && history.length === 0 ? (
           <Text style={styles.emptyText}>
@@ -90,24 +108,7 @@ export default function CreditHistoryScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F6FA",
-  },
-  header: {
-    backgroundColor: "#007AFF",
-    paddingTop: 50,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  headerSpacer: {
-    width: 24,
+    backgroundColor: COLORS.background,
   },
   content: {
     padding: 16,
@@ -115,12 +116,12 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     textAlign: "center",
     marginTop: 20,
   },
   historyCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
@@ -144,10 +145,10 @@ const styles = StyleSheet.create({
   score: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#007AFF",
+    color: COLORS.primary,
   },
   note: {
     fontSize: 12,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
 });

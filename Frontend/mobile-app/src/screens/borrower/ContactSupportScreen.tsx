@@ -20,6 +20,7 @@ import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { BORDER_RADIUS } from "../../constants/borderRadius";
 import type { BorrowerNavigation } from "../../types/navigation";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
 
 type ContactSupportScreenProps = {
   navigation: BorrowerNavigation;
@@ -109,17 +110,10 @@ export default function ContactSupportScreen({
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Feather name="arrow-left" size={22} color={COLORS.surface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Contact Support</Text>
-      </View>
+      <BorrowerPageHeader
+        title="Contact Support"
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         style={styles.content}

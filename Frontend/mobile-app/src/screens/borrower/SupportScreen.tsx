@@ -20,6 +20,7 @@ import { TYPOGRAPHY } from "../../constants/typography";
 import { BORDER_RADIUS } from "../../constants/borderRadius";
 import { SHADOWS } from "../../constants/shadows";
 import type { BorrowerNavigation } from "../../types/navigation";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
 
 type SupportScreenProps = {
   navigation: BorrowerNavigation;
@@ -44,38 +45,22 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => setSidebarVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Open navigation menu"
-          >
-            <Feather name="menu" size={23} color={COLORS.surface} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Support</Text>
-        </View>
-
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate("NearbyLendersMap")}
-            accessibilityRole="button"
-            accessibilityLabel="Open nearby lenders map"
-          >
-            <Feather name="map-pin" size={20} color={COLORS.surface} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate("Notifications")}
-            accessibilityRole="button"
-            accessibilityLabel="Open notifications"
-          >
-            <Feather name="bell" size={20} color={COLORS.surface} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <BorrowerPageHeader
+        title="Support"
+        onMenu={() => setSidebarVisible(true)}
+        actions={[
+          {
+            icon: "map-pin",
+            label: "Open nearby lenders map",
+            onPress: () => navigation.navigate("NearbyLendersMap"),
+          },
+          {
+            icon: "bell",
+            label: "Open notifications",
+            onPress: () => navigation.navigate("Notifications"),
+          },
+        ]}
+      />
 
       <ScrollView
         style={styles.content}

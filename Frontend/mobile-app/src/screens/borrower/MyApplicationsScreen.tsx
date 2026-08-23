@@ -9,12 +9,14 @@ import {
   Text,
   TouchableOpacity,
   View,
-  RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { getApiErrorMessage } from "../../api/api-error";
 import { applicationService } from "../../api/services/application.service";
 import ApplicationCard from "../../components/borrower/ApplicationCard";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
+import { COLORS } from "../../constants/colors";
 import { chatSocket } from "../../services/socketService";
 import type { BorrowerApplication } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
@@ -120,22 +122,24 @@ export default function MyApplicationsScreen({
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name="arrow-left" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Applications</Text>
-        <TouchableOpacity onPress={() => navigation.navigate("Notifications")}>
-          <Feather name="bell" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+      <BorrowerPageHeader
+        title="My Applications"
+        onBack={() => navigation.goBack()}
+        actions={[
+          {
+            icon: "bell",
+            label: "Open notifications",
+            onPress: () => navigation.navigate("Notifications"),
+          },
+        ]}
+      />
 
       <View style={styles.filterContainer}>
         {(["all", "pending", "approved", "rejected"] as const).map((filter) => (
@@ -167,15 +171,14 @@ export default function MyApplicationsScreen({
         }
         contentContainerStyle={styles.listContainer}
         refreshControl={
-          <RefreshControl
+          <BorrowerRefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#007AFF"
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Feather name="inbox" size={48} color="#9CA3AF" />
+            <Feather name="inbox" size={48} color={COLORS.textMuted} />
             <Text style={styles.emptyText}>
               {errorMessage || "No applications found"}
             </Text>
@@ -189,16 +192,16 @@ export default function MyApplicationsScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     paddingTop: 50,
     paddingBottom: 15,
     paddingHorizontal: 20,
@@ -209,13 +212,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
   },
   filterContainer: {
     flexDirection: "row",
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
   },
@@ -224,18 +227,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     marginRight: 10,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: COLORS.border,
   },
   filterButtonActive: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
   },
   filterText: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   filterTextActive: {
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
   },
   listContainer: {
     padding: 20,
@@ -248,7 +251,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginTop: 12,
   },
 });

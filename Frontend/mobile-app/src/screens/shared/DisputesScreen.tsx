@@ -4,6 +4,7 @@ import {
   Alert,
   Linking,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -98,6 +99,7 @@ export default function DisputesScreen({ navigation }: any) {
     DocumentPicker.DocumentPickerAsset[]
   >([]);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const [casesResult, loansResult] = await Promise.allSettled([
@@ -147,6 +149,18 @@ export default function DisputesScreen({ navigation }: any) {
       );
     }
   }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+      if (selected) {
+        await openDispute(selected);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load, openDispute, selected]);
 
   useEffect(() => {
     void load();
@@ -280,7 +294,18 @@ export default function DisputesScreen({ navigation }: any) {
           <Feather name="plus" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void onRefresh()}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+            progressBackgroundColor={COLORS.surface}
+          />
+        }
+      >
         {items.length ? (
           items.map((item) => (
             <TouchableOpacity

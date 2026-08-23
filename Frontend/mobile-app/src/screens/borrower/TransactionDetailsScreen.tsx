@@ -15,6 +15,7 @@ import { formatCurrency } from "../../utils/formatters";
 import type { BorrowerTransaction } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
 import { formatPaymentMethod } from "../../utils/formatPaymentMethods";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
 
 type TransactionDetailsScreenProps = {
   route: {
@@ -63,16 +64,10 @@ export default function TransactionDetailsScreen({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Feather name="arrow-left" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Transaction Details</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BorrowerPageHeader
+        title="Transaction Details"
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -184,10 +179,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   backButton: { width: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: "#FFFFFF" },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: COLORS.onPrimary },
   scrollContent: { padding: SPACING.lg, paddingBottom: 60 },
   amountCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: SPACING.xl,
     alignItems: "center",
@@ -220,7 +215,7 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 13, fontWeight: "600" },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
@@ -251,7 +246,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   monoText: { fontFamily: "monospace", fontSize: 12 },
-  divider: { height: 1, backgroundColor: "#F3F4F6" },
+  divider: { height: 1, backgroundColor: COLORS.border },
   infoBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
