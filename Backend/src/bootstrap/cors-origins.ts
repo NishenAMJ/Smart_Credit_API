@@ -1,7 +1,14 @@
-const LOCAL_WEB_ORIGINS = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-];
+function isLocalDevelopmentOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
 
 function configuredOrigins(): string[] {
   return (process.env.CORS_ORIGINS ?? '')
@@ -16,9 +23,11 @@ export function isCorsOriginAllowed(origin?: string): boolean {
 
   const normalizedOrigin = origin.replace(/\/$/, '');
   const allowed = configuredOrigins();
-  if (process.env.NODE_ENV !== 'production') {
-    allowed.push(...LOCAL_WEB_ORIGINS);
-  }
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    isLocalDevelopmentOrigin(normalizedOrigin)
+  )
+    return true;
 
   return allowed.includes(normalizedOrigin);
 }
