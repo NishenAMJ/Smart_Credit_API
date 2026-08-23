@@ -1,6 +1,6 @@
-import * as admin from 'firebase-admin';
+import type { Timestamp } from 'firebase-admin/firestore';
 
-//  Firestore document shapes 
+//  Firestore document shapes
 
 export interface UserDoc {
   id: string;
@@ -9,8 +9,8 @@ export interface UserDoc {
   avatarUrl: string | null;
   fcmToken: string | null;
   isOnline: boolean;
-  lastSeen: admin.firestore.Timestamp | null;
-  createdAt: admin.firestore.Timestamp;
+  lastSeen: Timestamp | null;
+  createdAt: Timestamp;
   [key: string]: any;
 }
 
@@ -21,11 +21,11 @@ export interface ConversationDoc {
   lastMessage: {
     text: string;
     senderId: string;
-    createdAt: admin.firestore.Timestamp;
+    createdAt: Timestamp;
   } | null;
   unreadCounts: Record<string, number>;
   mutedBy: string[];
-  createdAt: admin.firestore.Timestamp;
+  createdAt: Timestamp;
 }
 
 export interface MessageDoc {
@@ -36,19 +36,19 @@ export interface MessageDoc {
   mediaUrl: string | null;
   mediaType: 'image' | 'video' | 'file' | null;
   fileName: string | null;
-  readAt: admin.firestore.Timestamp | null;
+  readAt: Timestamp | null;
   status: 'sent' | 'delivered' | 'read';
-  createdAt: admin.firestore.Timestamp;
+  createdAt: Timestamp;
 }
 
 export interface BlockDoc {
   id: string;
   blockerId: string;
   blockedId: string;
-  createdAt: admin.firestore.Timestamp;
+  createdAt: Timestamp;
 }
 
-//  Firestore collection paths 
+//  Firestore collection paths
 
 export const COLLECTIONS = {
   USERS: 'users',

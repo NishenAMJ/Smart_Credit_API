@@ -1,31 +1,36 @@
 import {
   BadRequestException,
-  ForbiddenException,
+  ConflictException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
   DocumentData,
   Firestore,
   QueryDocumentSnapshot,
+  QuerySnapshot,
+  Timestamp,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
+import { LoanRequestDecisionResponse } from './loan-requests.dto';
+import {
+  CoreLedgerService,
+  type ApproveApplicationInput,
+} from '../../core-ledger/core-ledger.service';
 import {
   applyDateCursor,
   buildPageInfo,
-  chunkValues,
   orderByDateAndId,
   readDate,
   readNumber,
   readString,
   readStringArray,
+  scanQueryPage,
 } from '../../../firebase/firestore-query.utils';
 import {
   PendingRequestListItem,
   PendingRequestsResponse,
 } from './loan-requests.types';
-import { LoanRequestDecisionResponse } from './loan-requests.dto';
 
 type RawLoanRequest = {
   requestId: string;
@@ -59,8 +64,20 @@ type BorrowerProfile = {
   kycStatus: string;
 };
 
-const PENDING_STATUSES = new Set<string>([
+const PENDING_STATUSES = new Set([
   'open',
+  'pending',
+  'submitted',
+  'under_review',
+  'matched',
+  'approved',
+  'pending_kyc',
+]);
+
+const ACTIONABLE_STATUSES = new Set([
+  'open',
+  'pending',
+  'submitted',
   'under_review',
   'matched',
   'approved',
@@ -69,9 +86,170 @@ const PENDING_STATUSES = new Set<string>([
 
 @Injectable()
 export class LoanRequestsService {
-  private readonly logger = new Logger(LoanRequestsService.name);
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly coreLedgerService: CoreLedgerService,
+  ) {}
 
-  constructor(private readonly firebaseService: FirebaseService) {}
+  async decideRequest(
+    lenderId: string,
+    requestId: string,
+    decision: 'approve' | 'reject' | undefined,
+    note?: string,
+    approvalOverrides: Partial<ApproveApplicationInput> = {},
+  ): Promise<LoanRequestDecisionResponse> {
+    const normalizedRequestId = requestId?.trim();
+    if (!normalizedRequestId) {
+      throw new BadRequestException('requestId is required.');
+    }
+    if (decision !== 'approve' && decision !== 'reject') {
+      throw new BadRequestException(
+        'decision must be either approve or reject.',
+      );
+    }
+
+    const db = this.firebaseService.getDb();
+    const applicationRef = db
+      .collection('loanApplications')
+      .doc(normalizedRequestId);
+
+    if (decision === 'approve') {
+      const approval = await this.resolveApprovalInput(
+        db,
+        normalizedRequestId,
+        lenderId,
+        note,
+        approvalOverrides,
+      );
+      const converted = await this.coreLedgerService.approveApplication(
+        normalizedRequestId,
+        lenderId,
+        approval,
+      );
+      return {
+        requestId: normalizedRequestId,
+        status: 'converted',
+        updatedAt: new Date().toISOString(),
+        loanId: converted.loanId,
+        agreementId: converted.agreementId,
+      };
+    }
+
+    return db.runTransaction(async (transaction) => {
+      const applicationSnapshot = await transaction.get(applicationRef);
+      if (!applicationSnapshot.exists) {
+        throw new NotFoundException('Loan request was not found.');
+      }
+
+      const application = (applicationSnapshot.data() ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const listingId = readString(application.listingId);
+      const targetLenderId = readString(application.lenderId);
+      const matchedLenderIds = readStringArray(application.matchedLenderIds);
+      let isVisibleToLender =
+        targetLenderId === lenderId || matchedLenderIds.includes(lenderId);
+
+      let listing: Record<string, unknown> | undefined;
+      if (listingId) {
+        const listingSnapshot = await transaction.get(
+          db.collection('loanListings').doc(listingId),
+        );
+        listing = listingSnapshot.data() as Record<string, unknown> | undefined;
+        isVisibleToLender ||= readString(listing?.lenderId) === lenderId;
+      }
+
+      if (!isVisibleToLender) {
+        throw new NotFoundException('Loan request was not found.');
+      }
+
+      const currentStatus = readString(application.status) || 'unknown';
+      if (!ACTIONABLE_STATUSES.has(currentStatus)) {
+        throw new ConflictException(
+          `A request with status ${currentStatus} cannot be changed.`,
+        );
+      }
+
+      const now = Timestamp.now();
+      const status = 'rejected';
+      const decisionNote = note?.trim() || null;
+      const existingDecision = (
+        application.lenderDecision &&
+        typeof application.lenderDecision === 'object'
+          ? application.lenderDecision
+          : {}
+      ) as Record<string, unknown>;
+
+      transaction.update(applicationRef, {
+        status,
+        lenderDecision: {
+          approvedPrincipalMinor: null,
+          annualInterestRate: null,
+          approvedTenureMonths: null,
+          decisionNote,
+          decidedAt: now,
+        },
+        updatedAt: now,
+      });
+
+      return {
+        requestId: normalizedRequestId,
+        status,
+        updatedAt: now.toDate().toISOString(),
+      };
+    });
+  }
+
+  private async resolveApprovalInput(
+    db: Firestore,
+    applicationId: string,
+    lenderId: string,
+    note: string | undefined,
+    overrides: Partial<ApproveApplicationInput>,
+  ): Promise<ApproveApplicationInput> {
+    const applicationSnapshot = await db
+      .collection('loanApplications')
+      .doc(applicationId)
+      .get();
+    if (!applicationSnapshot.exists) {
+      throw new NotFoundException('Loan request was not found.');
+    }
+    const application = applicationSnapshot.data() ?? {};
+    const listingId = readString(application.listingId);
+    const listingSnapshot = listingId
+      ? await db.collection('loanListings').doc(listingId).get()
+      : null;
+    const listing = listingSnapshot?.data() ?? {};
+    const matchedLenders = readStringArray(application.matchedLenderIds);
+    if (
+      readString(application.lenderId) !== lenderId &&
+      readString(listing.lenderId) !== lenderId &&
+      !matchedLenders.includes(lenderId)
+    ) {
+      throw new NotFoundException('Loan request was not found.');
+    }
+
+    return {
+      approvedPrincipalMinor:
+        overrides.approvedPrincipalMinor ??
+        readNumber(application.requestedPrincipalMinor),
+      annualInterestRate:
+        overrides.annualInterestRate ??
+        readNumber(
+          application.suggestedInterestRate,
+          readNumber(
+            (application.lenderDecision as Record<string, unknown> | undefined)
+              ?.annualInterestRate,
+            readNumber(listing.minInterestRateAnnual),
+          ),
+        ),
+      approvedTenureMonths:
+        overrides.approvedTenureMonths ??
+        readNumber(application.requestedTenureMonths),
+      decisionNote: note?.trim() || null,
+    };
+  }
 
   async getPendingRequests(
     lenderId: string,
@@ -84,35 +262,22 @@ export class LoanRequestsService {
     const safePageSize = Math.min(Math.max(pageSize, 8), 60);
     const db = this.firebaseService.getDb();
 
-    let adTitleMap = new Map<string, string>();
-
-    try {
-      const adsSnapshot = await db
-        .collection('ads')
-        .where('lenderId', '==', lenderId)
-        .get();
-
-      adTitleMap = new Map<string, string>(
-        adsSnapshot.docs.map((doc) => {
-          const data = doc.data();
-
-          return [
-            doc.id,
-            typeof data.title === 'string' && data.title.trim().length > 0
-              ? data.title
-              : `Ad ${doc.id}`,
-          ] as const;
-        }),
-      );
-    } catch (error) {
-      this.logFallback(
-        'pending-requests:ads',
-        'Falling back from lender ad lookup while loading pending requests.',
-        error,
-      );
-    }
-
-    const adIds = new Set<string>(adTitleMap.keys());
+    const adsSnapshot = await db
+      .collection('loanListings')
+      .where('lenderId', '==', lenderId)
+      .get();
+    const adTitleMap = new Map(
+      adsSnapshot.docs.map((doc) => {
+        const data = doc.data();
+        return [
+          doc.id,
+          typeof data.title === 'string' && data.title.trim().length > 0
+            ? data.title
+            : `Ad ${doc.id}`,
+        ] as const;
+      }),
+    );
+    const adIds = new Set(adTitleMap.keys());
     const pagedRequests = await this.getRequestsPage(
       db,
       lenderId,
@@ -124,8 +289,8 @@ export class LoanRequestsService {
     );
     const prioritizedRequests = pagedRequests.items.slice(0, safePageSize);
 
-    const borrowerIds: string[] = Array.from(
-      new Set<string>(
+    const borrowerIds = Array.from(
+      new Set(
         prioritizedRequests
           .map((request) => request.borrowerId)
           .filter((borrowerId): borrowerId is string => Boolean(borrowerId)),
@@ -187,107 +352,6 @@ export class LoanRequestsService {
     };
   }
 
-  async approveRequest(
-    lenderId: string,
-    requestId: string,
-    notes?: string,
-  ): Promise<LoanRequestDecisionResponse> {
-    const { ref, request } = await this.getAuthorizedRequestRef(
-      lenderId,
-      requestId,
-    );
-
-    if (request.status === 'approved') {
-      throw new BadRequestException('This request is already approved.');
-    }
-
-    if (request.status === 'rejected') {
-      throw new BadRequestException('Rejected requests cannot be approved.');
-    }
-
-    const updatedAt = new Date().toISOString();
-    await ref.update({
-      status: 'approved',
-      approvedByLenderId: lenderId,
-      approvedAt: updatedAt,
-      updatedAt,
-      ...(notes && notes.trim().length > 0
-        ? { lenderDecisionNotes: notes.trim() }
-        : {}),
-    });
-
-    return { requestId: ref.id, status: 'approved', updatedAt };
-  }
-
-  async rejectRequest(
-    lenderId: string,
-    requestId: string,
-    reason: string,
-  ): Promise<LoanRequestDecisionResponse> {
-    const { ref, request } = await this.getAuthorizedRequestRef(
-      lenderId,
-      requestId,
-    );
-
-    if (request.status === 'rejected') {
-      throw new BadRequestException('This request is already rejected.');
-    }
-
-    if (request.status === 'approved') {
-      throw new BadRequestException('Approved requests cannot be rejected.');
-    }
-
-    const normalizedReason = reason.trim();
-    if (normalizedReason.length === 0) {
-      throw new BadRequestException('A rejection reason is required.');
-    }
-
-    const updatedAt = new Date().toISOString();
-    await ref.update({
-      status: 'rejected',
-      rejectedByLenderId: lenderId,
-      rejectionReason: normalizedReason,
-      rejectedAt: updatedAt,
-      updatedAt,
-    });
-
-    return { requestId: ref.id, status: 'rejected', updatedAt };
-  }
-
-  async markUnderReview(
-    lenderId: string,
-    requestId: string,
-    notes?: string,
-  ): Promise<LoanRequestDecisionResponse> {
-    const { ref, request } = await this.getAuthorizedRequestRef(
-      lenderId,
-      requestId,
-    );
-
-    if (request.status === 'approved' || request.status === 'rejected') {
-      throw new BadRequestException(
-        'Only open requests can be moved into review.',
-      );
-    }
-
-    if (request.status === 'under_review') {
-      throw new BadRequestException('This request is already under review.');
-    }
-
-    const updatedAt = new Date().toISOString();
-    await ref.update({
-      status: 'under_review',
-      reviewStartedByLenderId: lenderId,
-      reviewStartedAt: updatedAt,
-      updatedAt,
-      ...(notes && notes.trim().length > 0
-        ? { lenderDecisionNotes: notes.trim() }
-        : {}),
-    });
-
-    return { requestId: ref.id, status: 'under_review', updatedAt };
-  }
-
   private async getRequestsPage(
     db: Firestore,
     lenderId: string,
@@ -297,23 +361,34 @@ export class LoanRequestsService {
     adId?: string | null,
     includeAllStatuses = false,
   ): Promise<{ items: RawLoanRequest[] }> {
-    const requestDocs = await this.fetchMatchingRequestDocs(
-      db,
-      lenderId,
-      adIds,
-      pageSize + 1,
+    return scanQueryPage({
+      pageSize,
       cursor,
-      adId,
-    );
-    const items = requestDocs
-      .map((doc) => this.mapLoanRequest(doc))
-      .filter((request) =>
-        this.isStatusIncluded(request.status, includeAllStatuses),
-      );
+      batchSize: Math.max(pageSize * 2, 40),
+      fetchChunk: async (nextCursor, batchSize) => {
+        const snapshot = await applyDateCursor(
+          orderByDateAndId(db.collection('loanApplications'), 'createdAt'),
+          nextCursor,
+        )
+          .limit(batchSize)
+          .get();
 
-    return {
-      items: items.slice(0, pageSize + 1),
-    };
+        return snapshot.docs;
+      },
+      mapDoc: (doc) => {
+        const request = this.mapLoanRequest(doc);
+
+        if (!this.isRequestVisibleToLender(request, lenderId, adIds, adId)) {
+          return null;
+        }
+
+        if (!this.isStatusIncluded(request.status, includeAllStatuses)) {
+          return null;
+        }
+
+        return request;
+      },
+    });
   }
 
   private async buildSummary(
@@ -323,17 +398,44 @@ export class LoanRequestsService {
     adId?: string | null,
     includeAllStatuses = false,
   ) {
-    const requestDocs = await this.fetchAllMatchingRequestDocs(
-      db,
-      lenderId,
-      adIds,
-      adId,
-    );
-    const requests = requestDocs
-      .map((doc) => this.mapLoanRequest(doc))
-      .filter((request) =>
-        this.isStatusIncluded(request.status, includeAllStatuses),
-      );
+    const requests: RawLoanRequest[] = [];
+    let cursor: string | null = null;
+    let hasMore = true;
+
+    while (hasMore) {
+      const snapshot: QuerySnapshot<DocumentData> = await applyDateCursor(
+        orderByDateAndId(db.collection('loanApplications'), 'createdAt'),
+        cursor,
+      )
+        .limit(80)
+        .get();
+
+      snapshot.docs.forEach((doc) => {
+        const request = this.mapLoanRequest(doc);
+
+        if (
+          this.isRequestVisibleToLender(request, lenderId, adIds, adId) &&
+          this.isStatusIncluded(request.status, includeAllStatuses)
+        ) {
+          requests.push(request);
+        }
+      });
+
+      hasMore = snapshot.docs.length === 80;
+      const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      cursor =
+        lastDoc && hasMore
+          ? Buffer.from(
+              JSON.stringify({
+                timestamp:
+                  readDate(lastDoc.get('createdAt'))?.toISOString() ??
+                  new Date(0).toISOString(),
+                id: lastDoc.id,
+              }),
+              'utf8',
+            ).toString('base64url')
+          : null;
+    }
 
     return this.buildSummaryFromRequests(requests);
   }
@@ -367,200 +469,15 @@ export class LoanRequestsService {
     );
   }
 
-  private async getAuthorizedRequestRef(lenderId: string, requestId: string) {
-    if (!requestId || requestId.trim().length === 0) {
-      throw new BadRequestException('requestId is required.');
-    }
-
-    const db = this.firebaseService.getDb();
-    const ref = db.collection('loanRequests').doc(requestId.trim());
-    const snapshot = await ref.get();
-
-    if (!snapshot.exists) {
-      throw new NotFoundException(`Loan request ${requestId} was not found.`);
-    }
-
-    const request = this.mapLoanRequest(
-      snapshot as QueryDocumentSnapshot<DocumentData>,
-    );
-    const adIds = await this.getLenderAdIds(db, lenderId);
-
-    if (!this.isRequestVisibleToLender(request, lenderId, adIds)) {
-      throw new ForbiddenException(
-        `Loan request ${requestId} is not available for this lender.`,
-      );
-    }
-
-    return { ref, request };
-  }
-
   private isStatusIncluded(
     status: string,
     includeAllStatuses: boolean,
   ): boolean {
-    return includeAllStatuses || PENDING_STATUSES.has(status);
-  }
-
-  private async fetchMatchingRequestDocs(
-    db: Firestore,
-    lenderId: string,
-    adIds: Set<string>,
-    limit: number,
-    cursor?: string | null,
-    adId?: string | null,
-  ): Promise<QueryDocumentSnapshot<DocumentData>[]> {
-    const snapshots = await Promise.allSettled(
-      this.buildRequestQueries(db, lenderId, adIds, cursor, adId).map((query) =>
-        query.limit(limit).get(),
-      ),
+    // Drafts are incomplete borrower forms and must never enter a lender's
+    // review history, even when the client asks for all decided statuses.
+    return (
+      status !== 'draft' && (includeAllStatuses || PENDING_STATUSES.has(status))
     );
-
-    snapshots.forEach((snapshot, index) => {
-      if (snapshot.status === 'rejected') {
-        this.logFallback(
-          `pending-requests:page-query-${index}`,
-          'Falling back from one pending requests page query branch.',
-          snapshot.reason,
-        );
-      }
-    });
-
-    return this.mergeRequestDocs(
-      snapshots.flatMap((snapshot) =>
-        snapshot.status === 'fulfilled' ? snapshot.value.docs : [],
-      ),
-      limit,
-    );
-  }
-
-  private async fetchAllMatchingRequestDocs(
-    db: Firestore,
-    lenderId: string,
-    adIds: Set<string>,
-    adId?: string | null,
-  ): Promise<QueryDocumentSnapshot<DocumentData>[]> {
-    const docsById = new Map<string, QueryDocumentSnapshot<DocumentData>>();
-
-    for (const query of this.buildRequestQueries(
-      db,
-      lenderId,
-      adIds,
-      null,
-      adId,
-    )) {
-      let nextCursor: string | null = null;
-      let hasMore = true;
-
-      while (hasMore) {
-        let snapshot;
-
-        try {
-          snapshot = await applyDateCursor(query, nextCursor).limit(80).get();
-        } catch (error) {
-          this.logFallback(
-            'pending-requests:summary-query',
-            'Falling back from one pending requests summary query branch.',
-            error,
-          );
-          break;
-        }
-
-        snapshot.docs.forEach((doc) => {
-          docsById.set(doc.id, doc);
-        });
-
-        hasMore = snapshot.docs.length === 80;
-        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-        nextCursor =
-          hasMore && lastDoc
-            ? Buffer.from(
-                JSON.stringify({
-                  timestamp:
-                    readDate(lastDoc.get('createdAt'))?.toISOString() ??
-                    new Date(0).toISOString(),
-                  id: lastDoc.id,
-                }),
-                'utf8',
-              ).toString('base64url')
-            : null;
-      }
-    }
-
-    return this.mergeRequestDocs(Array.from(docsById.values()));
-  }
-
-  private buildRequestQueries(
-    db: Firestore,
-    lenderId: string,
-    adIds: Set<string>,
-    cursor?: string | null,
-    adId?: string | null,
-  ) {
-    const queries = [
-      applyDateCursor(
-        orderByDateAndId(
-          db.collection('loanRequests').where('targetLenderId', '==', lenderId),
-          'createdAt',
-        ),
-        cursor,
-      ),
-      applyDateCursor(
-        orderByDateAndId(
-          db
-            .collection('loanRequests')
-            .where('matchedLenderIds', 'array-contains', lenderId),
-          'createdAt',
-        ),
-        cursor,
-      ),
-    ];
-    const relevantAdIds = adId
-      ? adIds.has(adId)
-        ? [adId]
-        : []
-      : Array.from(adIds);
-
-    chunkValues(relevantAdIds, 10).forEach((adIdChunk) => {
-      if (adIdChunk.length === 0) {
-        return;
-      }
-
-      queries.push(
-        applyDateCursor(
-          orderByDateAndId(
-            db.collection('loanRequests').where('adId', 'in', adIdChunk),
-            'createdAt',
-          ),
-          cursor,
-        ),
-      );
-    });
-
-    return queries;
-  }
-
-  private mergeRequestDocs(
-    docs: QueryDocumentSnapshot<DocumentData>[],
-    limit?: number,
-  ): QueryDocumentSnapshot<DocumentData>[] {
-    const docsById = new Map<string, QueryDocumentSnapshot<DocumentData>>();
-
-    docs.forEach((doc) => {
-      docsById.set(doc.id, doc);
-    });
-
-    const merged = Array.from(docsById.values()).sort((left, right) => {
-      const leftTime = readDate(left.get('createdAt'))?.getTime() ?? 0;
-      const rightTime = readDate(right.get('createdAt'))?.getTime() ?? 0;
-
-      if (leftTime !== rightTime) {
-        return rightTime - leftTime;
-      }
-
-      return right.id.localeCompare(left.id);
-    });
-
-    return typeof limit === 'number' ? merged.slice(0, limit) : merged;
   }
 
   private mapLoanRequest(
@@ -570,22 +487,27 @@ export class LoanRequestsService {
 
     return {
       requestId:
-        typeof data.requestId === 'string' && data.requestId.trim().length > 0
-          ? data.requestId
+        typeof data.applicationId === 'string' &&
+        data.applicationId.trim().length > 0
+          ? data.applicationId
           : doc.id,
       borrowerId: typeof data.borrowerId === 'string' ? data.borrowerId : null,
-      adId: typeof data.adId === 'string' ? data.adId : null,
-      targetLenderId:
-        typeof data.targetLenderId === 'string' ? data.targetLenderId : null,
-      amount: this.toNumber(data.amount),
-      tenureMonths: this.toNumber(data.tenureMonths),
+      adId: typeof data.listingId === 'string' ? data.listingId : null,
+      targetLenderId: typeof data.lenderId === 'string' ? data.lenderId : null,
+      amount: this.toNumber(data.requestedPrincipalMinor) / 100,
+      tenureMonths: this.toNumber(data.requestedTenureMonths),
       purpose:
-        typeof data.purpose === 'string' ? data.purpose : 'Unknown purpose',
+        typeof data.requestedPurpose === 'string'
+          ? data.requestedPurpose
+          : 'Unknown purpose',
       purposeCategory:
         typeof data.purposeCategory === 'string'
           ? data.purposeCategory
           : 'uncategorized',
-      status: typeof data.status === 'string' ? data.status : 'unknown',
+      status:
+        typeof data.status === 'string'
+          ? data.status.trim().toLowerCase()
+          : 'unknown',
       suggestedInterestRate: this.toNumber(data.suggestedInterestRate),
       urgency: typeof data.urgency === 'string' ? data.urgency : 'medium',
       monthlyIncome: this.toNumber(data.monthlyIncome),
@@ -619,9 +541,13 @@ export class LoanRequestsService {
       ),
     );
 
-    return new Map<string, BorrowerProfile>(
+    return new Map(
       snapshots.map((snapshot) => {
-        const data = snapshot.data();
+        const data = snapshot.data() as Record<string, unknown> | undefined;
+        const borrowerProfile =
+          data?.borrowerProfile && typeof data.borrowerProfile === 'object'
+            ? (data.borrowerProfile as Record<string, unknown>)
+            : null;
 
         return [
           snapshot.id,
@@ -636,10 +562,8 @@ export class LoanRequestsService {
               data && typeof data.email === 'string' ? data.email : 'No email',
             phone: data && typeof data.phone === 'string' ? data.phone : null,
             creditScore:
-              data &&
-              typeof data.creditScore === 'number' &&
-              Number.isFinite(data.creditScore)
-                ? data.creditScore
+              borrowerProfile && typeof borrowerProfile.creditScore === 'number'
+                ? borrowerProfile.creditScore
                 : null,
             kycStatus:
               data && typeof data.kycStatus === 'string'
@@ -649,17 +573,6 @@ export class LoanRequestsService {
         ] as const;
       }),
     );
-  }
-
-  private async getLenderAdIds(
-    db: Firestore,
-    lenderId: string,
-  ): Promise<Set<string>> {
-    const adsSnapshot = await db
-      .collection('ads')
-      .where('lenderId', '==', lenderId)
-      .get();
-    return new Set<string>(adsSnapshot.docs.map((doc) => doc.id));
   }
 
   private getUrgencyScore(value: string): number {
@@ -683,11 +596,5 @@ export class LoanRequestsService {
 
   private toDate(value: unknown): Date | null {
     return readDate(value);
-  }
-
-  private logFallback(label: string, message: string, error: unknown): void {
-    const detail =
-      error instanceof Error ? error.message : 'Unknown Firestore query error';
-    this.logger.warn(`${message} [${label}] ${detail}`);
   }
 }

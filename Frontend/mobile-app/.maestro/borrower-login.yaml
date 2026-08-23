@@ -1,0 +1,17 @@
+appId: com.vibecodex.smartcredit
+name: Borrower login smoke test
+tags:
+  - authenticated
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: auth-identifier
+- inputText: ${BORROWER_EMAIL}
+- tapOn:
+    id: auth-password
+- inputText: ${BORROWER_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-sign-in
+- assertVisible: "Find Loans"

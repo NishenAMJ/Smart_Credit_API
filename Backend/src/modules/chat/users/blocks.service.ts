@@ -1,7 +1,9 @@
 /**
  * blocks.service.ts
- * Handles blocking/unblocking users.
- * The gateway uses isBlocked() before routing messages.
+ *
+ * FIX: getBlockedUsers() now enriches each block with the blocked user's
+ * profile (fullName, email, photoURL) fetched from the users collection.
+ * Previously it only returned { blockerId, blockedId } with no name info.
  */
 import {
   Injectable,
@@ -15,7 +17,6 @@ import { COLLECTIONS, BlockDoc } from '../common/types';
 export class BlocksService {
   constructor(private firebase: FirebaseService) {}
 
-  /** Block a user. Throws 409 if already blocked. */
   async blockUser(blockerId: string, blockedId: string): Promise<void> {
     const existing = await this.firebase
       .collection(COLLECTIONS.BLOCKS)
@@ -33,7 +34,6 @@ export class BlocksService {
     });
   }
 
-  /** Unblock a user. Throws 404 if no block exists. */
   async unblockUser(blockerId: string, blockedId: string): Promise<void> {
     const snap = await this.firebase
       .collection(COLLECTIONS.BLOCKS)
@@ -46,22 +46,71 @@ export class BlocksService {
     await snap.docs[0].ref.delete();
   }
 
-  /** Returns all users blocked by blockerId, newest first. */
-  async getBlockedUsers(blockerId: string): Promise<BlockDoc[]> {
+  /**
+   * getBlockedUsers
+   * Enriches each block with the blocked user's profile so the
+   * frontend can display their name and avatar.
+   * No orderBy — avoids Firestore composite index requirement.
+   */
+  async getBlockedUsers(blockerId: string): Promise<any[]> {
     const snap = await this.firebase
       .collection(COLLECTIONS.BLOCKS)
       .where('blockerId', '==', blockerId)
-      .orderBy('createdAt', 'desc')
       .get();
 
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BlockDoc);
+    if (snap.empty) return [];
+
+    const blocks = snap.docs.map((d) => ({ id: d.id, ...d.data() } as BlockDoc));
+
+    // Sort newest first client-side
+    blocks.sort((a, b) => {
+      const aMs = (a.createdAt as any)?.toMillis?.() ?? 0;
+      const bMs = (b.createdAt as any)?.toMillis?.() ?? 0;
+      return bMs - aMs;
+    });
+
+    // Enrich with user profile
+    const enriched = await Promise.all(
+      blocks.map(async (block) => {
+        try {
+          const userSnap = await this.firebase
+            .collection(COLLECTIONS.USERS)
+            .doc(block.blockedId)
+            .get();
+
+          const u = userSnap.exists ? (userSnap.data() as any) : null;
+
+          const displayName = u?.displayName ?? u?.fullName ?? u?.name ?? block.blockedId;
+          const username    = u?.username ?? u?.email ?? block.blockedId;
+          const avatarUrl   = u?.avatarUrl ?? u?.photoURL ?? null;
+
+          const createdAtMs = (block.createdAt as any)?.toMillis?.();
+          const blockedAt   = createdAtMs
+            ? new Date(createdAtMs).toISOString()
+            : new Date().toISOString();
+
+          return {
+            id: block.blockedId,   // user ID — used by unblockUser()
+            displayName,
+            username,
+            avatarUrl,
+            blockedAt,             // matches BlockedUser.blockedAt in frontend types
+          };
+        } catch {
+          return {
+            id: block.blockedId,
+            displayName: block.blockedId,
+            username: block.blockedId,
+            avatarUrl: null,
+            blockedAt: new Date().toISOString(),
+          };
+        }
+      }),
+    );
+
+    return enriched;
   }
 
-  /**
-   * isBlocked
-   * Checks if recipientId has blocked senderId.
-   * Called by ChatGateway before routing every message.
-   */
   async isBlocked(senderId: string, recipientId: string): Promise<boolean> {
     const snap = await this.firebase
       .collection(COLLECTIONS.BLOCKS)

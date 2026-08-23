@@ -91,7 +91,6 @@ export const BADGE_STYLES = {
   pending: "badge badge-warning",
   rejected: "badge badge-danger",
   active: "badge badge-info",
-  inactive: "badge badge-gray",
   flagged: "badge badge-danger",
 } as const;
 

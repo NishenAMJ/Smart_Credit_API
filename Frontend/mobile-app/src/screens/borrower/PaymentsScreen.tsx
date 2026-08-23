@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   FlatList,
   Alert,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -97,7 +98,7 @@ export default function PaymentsScreen({
   const pickReceiptImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         allowsEditing: true,
         quality: 0.8,
       });
@@ -173,7 +174,7 @@ export default function PaymentsScreen({
     if (activeTab === "Upcoming") {
       let upcoming = payments.filter((p) => {
         const s = String(p.status || "").toLowerCase();
-        return s !== "paid" && s !== "completed";
+        return !["paid", "completed", "rejected", "failed"].includes(s);
       });
 
       // If the backend returned no upcoming stubs but the dashboard shows a next
@@ -211,13 +212,13 @@ export default function PaymentsScreen({
     // Merge paid repayments from `payments` + all `transactions`, deduplicate by ID
     const paidRepayments = payments.filter((p) => {
       const s = String(p.status || "").toLowerCase();
-      return s === "paid" || s === "completed";
+      return ["paid", "completed", "rejected", "failed"].includes(s);
     });
 
     const txAsRepayments: BorrowerRepayment[] = transactions
       .filter((t) => {
         const s = String(t.status || "").toLowerCase();
-        return s === "paid" || s === "completed";
+        return ["paid", "completed", "rejected", "failed"].includes(s);
       })
       .map((t) => ({
         paymentId: t.transactionId ?? t.repaymentId,
@@ -231,6 +232,9 @@ export default function PaymentsScreen({
         type: t.type,
         paymentMethod: t.paymentMethod,
         lenderName: t.lenderName,
+        verificationStatus: t.verificationStatus,
+        statusLabel: t.statusLabel,
+        statusDetail: t.statusDetail,
       }));
 
     // Merge and deduplicate by ID
@@ -320,13 +324,6 @@ export default function PaymentsScreen({
       currency: "LKR",
     }).format(payment.amount ?? 0);
 
-    const paymentMethodApi =
-      selectedPaymentMethod === "Card"
-        ? "card"
-        : selectedPaymentMethod === "QR Payment"
-          ? "qr_payment"
-          : "bank_transfer";
-
     if (selectedPaymentMethod === "QR Payment") {
       if (!payment.loanId) {
         Alert.alert(
@@ -347,8 +344,6 @@ export default function PaymentsScreen({
       return;
     }
 
-    const successMessage = "Payment completed successfully.";
-
     Alert.alert(
       "Confirm Payment",
       `Proceeding with ${selectedPaymentMethod} for ${formattedAmount}.`,
@@ -357,7 +352,7 @@ export default function PaymentsScreen({
         {
           text: "Pay Now",
           onPress: async () => {
-            const { amount, loanId, paymentId } = payment;
+            const { amount, loanId } = payment;
 
             if (!amount || amount <= 0 || !loanId) {
               Alert.alert(
@@ -369,21 +364,24 @@ export default function PaymentsScreen({
             try {
               setProcessingPaymentId(payment.paymentId || null);
 
-              await paymentService.makeRepayment({
-                loanId: loanId,
-                amount: amount,
-                paymentMethod: paymentMethodApi,
-                transactionReference: `TXN-${Date.now()}`,
+              const checkout = await paymentService.initiatePayHerePayment({
+                loanId,
+                amount,
               });
 
-              Alert.alert("Success", successMessage);
+              await Linking.openURL(checkout.paymentPageUrl);
+
+              Alert.alert(
+                "PayHere checkout opened",
+                "Complete the payment in PayHere, then return here and refresh your payments.",
+              );
               void fetchPayments();
             } catch (err) {
               const message = getApiErrorMessage(
                 err,
                 "Failed to process payment. Please try again.",
               );
-              console.error("Payment error:", message);
+              console.error("PayHere payment error:", message);
               Alert.alert("Payment failed", message);
             } finally {
               setProcessingPaymentId(null);
@@ -415,16 +413,23 @@ export default function PaymentsScreen({
       setProcessingPaymentId(selectedBankTransferPayment.paymentId || null);
       setUploadingReceipt(true);
 
-      const proofUrl = await paymentService.uploadPaymentReceipt(
-        paymentProof.uri,
+      const receiptDocumentId = await paymentService.uploadPaymentReceipt(
+        paymentProof,
+        loanId,
       );
+
+      if (!receiptDocumentId?.trim()) {
+        throw new Error(
+          "The receipt was uploaded, but its document record was not created. Please try again.",
+        );
+      }
 
       await paymentService.makeRepayment({
         loanId: loanId,
         amount: amount,
         paymentMethod: "bank_transfer",
         transactionReference: `TXN-${Date.now()}`,
-        paymentProofUrl: proofUrl,
+        receiptDocumentId,
       });
 
       Alert.alert(
@@ -485,7 +490,7 @@ export default function PaymentsScreen({
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => setSidebarVisible(true)}>
             <Feather
-              name='menu'
+              name="menu"
               size={24}
               color={COLORS.surface || "#FFFFFF"}
             />
@@ -498,7 +503,7 @@ export default function PaymentsScreen({
             onPress={() => navigation.navigate("Notifications")}
           >
             <Feather
-              name='bell'
+              name="bell"
               size={20}
               color={COLORS.surface || "#FFFFFF"}
             />
@@ -590,9 +595,13 @@ export default function PaymentsScreen({
       )}
 
       {activeTab === "Upcoming" &&
-        payments.some((p) => p.status === "PENDING") && (
+        payments.some((p) =>
+          ["pending", "pending_verification"].includes(
+            String(p.status ?? "").toLowerCase(),
+          ),
+        ) && (
           <View style={styles.pendingBanner}>
-            <Feather name='clock' size={16} color='#B45309' />
+            <Feather name="clock" size={16} color="#B45309" />
             <Text style={styles.pendingBannerText}>
               You have payments pending verification.
             </Text>
@@ -620,7 +629,7 @@ export default function PaymentsScreen({
           ) : error ? (
             <View style={styles.errorContainer}>
               <Feather
-                name='alert-circle'
+                name="alert-circle"
                 size={48}
                 color={COLORS.error || "#EF4444"}
               />
@@ -650,7 +659,7 @@ export default function PaymentsScreen({
       <Modal
         visible={qrModalVisible}
         transparent
-        animationType='fade'
+        animationType="fade"
         onRequestClose={() => setQrModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -666,7 +675,7 @@ export default function PaymentsScreen({
                 style={styles.modalCloseBtn}
               >
                 <Feather
-                  name='x'
+                  name="x"
                   size={24}
                   color={COLORS.textSecondary || "#6B7280"}
                 />
@@ -694,14 +703,14 @@ export default function PaymentsScreen({
                 <QRCode
                   value={qrToken}
                   size={200}
-                  backgroundColor='#F3F4F6'
+                  backgroundColor="#F3F4F6"
                   color={COLORS.primary}
                 />
               </View>
             ) : (
               <View style={styles.qrPlaceholderBox}>
                 <MaterialCommunityIcons
-                  name='qrcode-scan'
+                  name="qrcode-scan"
                   size={64}
                   color={COLORS.primary || "#007AFF"}
                 />
@@ -713,7 +722,7 @@ export default function PaymentsScreen({
 
             <View style={styles.qrInfoBox}>
               <Feather
-                name='info'
+                name="info"
                 size={16}
                 color={COLORS.primary || "#007AFF"}
               />
@@ -730,7 +739,7 @@ export default function PaymentsScreen({
       <Modal
         visible={bankTransferModalVisible}
         transparent
-        animationType='slide'
+        animationType="slide"
         onRequestClose={() => setBankTransferModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -742,7 +751,7 @@ export default function PaymentsScreen({
                 style={styles.modalCloseBtn}
               >
                 <Feather
-                  name='x'
+                  name="x"
                   size={24}
                   color={COLORS.textSecondary || "#6B7280"}
                 />

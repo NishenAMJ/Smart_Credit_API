@@ -8,162 +8,153 @@ import {
   Req,
   Res,
   UseGuards,
-  UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import type { Response, Request } from 'express';
+import type { Response } from 'express';
 
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
-import type { AuthenticatedUser } from '../../common/types/authenticated-request';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { LegalService } from './legal.service';
 import type {
-  AcceptLegalDocumentResponseDto,
   AcceptLegalDocumentDto,
+  AcceptLegalDocumentResponseDto,
+  ConfirmAgreementDisbursementDto,
   GenerateLegalDocumentResponseDto,
   GetLegalDocumentResponseDto,
   ListLegalDocumentsResponseDto,
 } from './dto/legal-document.dto';
+import { LegalService } from './legal.service';
 
 @Controller('legal')
+@UseGuards(JwtAuthGuard)
 export class LegalController {
-  constructor(
-    private readonly legalService: LegalService,
-    private readonly jwtService: JwtService,
-  ) {}
+  constructor(private readonly legalService: LegalService) {}
 
   @Post('documents/generate/:loanId')
-  @UseGuards(JwtAuthGuard)
   async generateLoanAgreement(
     @Param('loanId') loanId: string,
-    @Req() req: AuthenticatedRequest,
+    @Req() request: AuthenticatedRequest,
   ): Promise<GenerateLegalDocumentResponseDto> {
     const document = await this.legalService.generateLoanAgreement(
       loanId,
-      req.user.sub,
-      req.user.role,
+      request.user.sub,
+      request.user.role,
     );
-
-    return {
-      message: 'Loan agreement generated successfully.',
-      document,
-    };
+    return { message: 'Loan agreement is ready.', document };
   }
 
   @Get('documents')
-  @UseGuards(JwtAuthGuard)
   async listDocuments(
-    @Req() req: AuthenticatedRequest,
+    @Req() request: AuthenticatedRequest,
+    @Query('pageSize') pageSize?: string,
+    @Query('cursor') cursor?: string,
+    @Query('status') status?: string,
   ): Promise<ListLegalDocumentsResponseDto> {
-    const documents = await this.legalService.listDocuments(
-      req.user.sub,
-      req.user.role,
-    );
-
-    return { documents };
-  }
-
-  @Get('documents/:documentId')
-  @UseGuards(JwtAuthGuard)
-  async getDocumentById(
-    @Param('documentId') documentId: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<GetLegalDocumentResponseDto> {
-    const document = await this.legalService.getDocumentById(
-      documentId,
-      req.user.sub,
-      req.user.role,
-    );
-
-    return { document };
-  }
-
-  @Get('documents/loan/:loanId/latest')
-  @UseGuards(JwtAuthGuard)
-  async getLatestLoanDocument(
-    @Param('loanId') loanId: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<GetLegalDocumentResponseDto> {
-    const document = await this.legalService.getLatestLoanDocument(
-      loanId,
-      req.user.sub,
-      req.user.role,
-    );
-
-    return { document };
-  }
-
-  @Post('documents/:documentId/accept')
-  @UseGuards(JwtAuthGuard)
-  async acceptDocument(
-    @Param('documentId') documentId: string,
-    @Req() req: AuthenticatedRequest,
-    @Body() body: AcceptLegalDocumentDto,
-  ): Promise<AcceptLegalDocumentResponseDto> {
-    return this.legalService.acceptDocument(
-      documentId,
-      req.user.sub,
-      req.user.role,
+    return this.legalService.listDocuments(
+      request.user.sub,
+      request.user.role,
       {
-        signedName: body.signedName,
-        ipAddress: req.ip,
-        userAgent: req.headers?.['user-agent'],
+        pageSize: pageSize ? Number(pageSize) : undefined,
+        cursor: cursor?.trim() || undefined,
+        status: status?.trim() || undefined,
       },
     );
   }
 
-  @Get('documents/:documentId/pdf-access')
-  @UseGuards(JwtAuthGuard)
-  async getSignedPdfAccessUrl(
+  @Get('documents/loan/:loanId/latest')
+  async getLatestLoanDocument(
+    @Param('loanId') loanId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<GetLegalDocumentResponseDto> {
+    const document = await this.legalService.getLatestLoanDocument(
+      loanId,
+      request.user.sub,
+      request.user.role,
+    );
+    return { document };
+  }
+
+  @Get('documents/:documentId')
+  async getDocumentById(
     @Param('documentId') documentId: string,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    return this.legalService.getSignedPdfAccessUrl(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<GetLegalDocumentResponseDto> {
+    const document = await this.legalService.getDocumentById(
       documentId,
-      req.user.sub,
-      req.user.role,
+      request.user.sub,
+      request.user.role,
+    );
+    return { document };
+  }
+
+  @Post('documents/:documentId/accept')
+  acceptDocument(
+    @Param('documentId') documentId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() body: AcceptLegalDocumentDto,
+  ): Promise<AcceptLegalDocumentResponseDto> {
+    return this.legalService.acceptDocument(
+      documentId,
+      request.user.sub,
+      request.user.role,
+      {
+        signedName: body.signedName,
+        consentAccepted: body.consentAccepted,
+        agreementVersion: body.agreementVersion,
+        termsHash: body.termsHash,
+        fundsReceivedConfirmed: body.fundsReceivedConfirmed,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      },
+    );
+  }
+
+  @Post('documents/:documentId/disbursement-confirmation')
+  confirmDisbursement(
+    @Param('documentId') documentId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() body: ConfirmAgreementDisbursementDto,
+  ): Promise<AcceptLegalDocumentResponseDto> {
+    return this.legalService.confirmDisbursement(
+      documentId,
+      request.user.sub,
+      request.user.role,
+      {
+        confirmationAccepted: body.confirmationAccepted,
+        externalReference: body.externalReference,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      },
+    );
+  }
+
+  @Post('documents/:documentId/finalize')
+  retryFinalization(
+    @Param('documentId') documentId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<AcceptLegalDocumentResponseDto> {
+    return this.legalService.retryFinalization(
+      documentId,
+      request.user.sub,
+      request.user.role,
     );
   }
 
   @Get('documents/:documentId/download')
   async downloadDocumentPdf(
     @Param('documentId') documentId: string,
-    @Req() req: Request,
-    @Res() res: Response,
-    @Query('token') token?: string,
+    @Req() request: AuthenticatedRequest,
+    @Res() response: Response,
   ): Promise<void> {
-    const user = await this.resolveAuthenticatedUser(req, token);
-    const { buffer, fileName } = await this.legalService.downloadDocumentPdf(
+    const pdf = await this.legalService.downloadDocumentPdf(
       documentId,
-      user.sub,
-      user.role,
+      request.user.sub,
+      request.user.role,
     );
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.setHeader('Content-Length', buffer.length.toString());
-    res.send(buffer);
-  }
-
-  private async resolveAuthenticatedUser(
-    req: Request,
-    token?: string,
-  ): Promise<AuthenticatedUser> {
-    const bearerToken = req.headers.authorization?.startsWith('Bearer ')
-      ? req.headers.authorization.slice('Bearer '.length)
-      : '';
-    const accessToken = token || bearerToken;
-
-    if (!accessToken) {
-      throw new UnauthorizedException('Authentication token is required.');
-    }
-
-    try {
-      return await this.jwtService.verifyAsync<AuthenticatedUser>(accessToken);
-    } catch {
-      throw new UnauthorizedException(
-        'Invalid or expired authentication token.',
-      );
-    }
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${pdf.fileName}"`,
+    );
+    response.setHeader('Content-Length', String(pdf.buffer.length));
+    response.send(pdf.buffer);
   }
 }

@@ -1,16 +1,18 @@
 /** @format */
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { supportQuickActions } from "../../constants/supportContent";
+import {
+  supportQuickActions,
+  type SupportQuickActionId,
+} from "../../constants/supportContent";
 import SidebarMenu from "../../components/common/SidebarMenu";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
@@ -18,75 +20,30 @@ import { TYPOGRAPHY } from "../../constants/typography";
 import { BORDER_RADIUS } from "../../constants/borderRadius";
 import { SHADOWS } from "../../constants/shadows";
 import type { BorrowerNavigation } from "../../types/navigation";
-import {
-  supportService,
-  type SupportStatus,
-} from "../../api/services/support.service";
-import { getApiErrorMessage } from "../../api/api-error";
-import { getUserId } from "../../utils/auth.storage";
-import Loader from "../../components/common/Loader";
 
 type SupportScreenProps = {
   navigation: BorrowerNavigation;
 };
 
-/**
- * Entry screen for borrower support and help resources.
- */
 export default function SupportScreen({ navigation }: SupportScreenProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [supportStatusCards, setSupportStatusCards] = useState<SupportStatus[]>(
-    [],
-  );
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
 
-  const fetchSupportStatus = async () => {
-    try {
-      setErrorMessage("");
-      const userId = await getUserId();
-      if (userId) {
-        const data = await supportService.getSupportStatus(userId);
-        setSupportStatusCards(data);
-      }
-    } catch (err) {
-      const message = getApiErrorMessage(err, "Failed to load support status.");
-      console.error("Error loading support status:", message);
-      setErrorMessage(message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    void fetchSupportStatus();
-  }, []);
-
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    void fetchSupportStatus();
-  }, []);
-
-  const onPressQuickAction = (actionId: string) => {
-    if (actionId === "qa-1") {
-      navigation.navigate("HelpCenter");
-      return;
-    }
-
-    if (actionId === "qa-2") {
-      navigation.navigate("ContactSupport", {
-        initialCategory: "call_request",
-      });
-      return;
-    }
-
-    if (actionId === "qa-3") {
-      navigation.navigate("ContactSupport", {
-        initialCategory: "dispute",
-      });
+  const onPressQuickAction = (actionId: SupportQuickActionId) => {
+    switch (actionId) {
+      case "help-center":
+        navigation.navigate("HelpCenter");
+        break;
+      case "contact-support":
+        navigation.navigate("ContactSupport");
+        break;
+      case "request-call":
+        navigation.navigate("ContactSupport", {
+          initialCategory: "call_request",
+        });
+        break;
+      case "raise-dispute":
+        navigation.navigate("Disputes");
+        break;
     }
   };
 
@@ -94,20 +51,33 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => setSidebarVisible(true)}>
-            <Feather name="menu" size={24} color="#FFFFFF" />
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => setSidebarVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open navigation menu"
+          >
+            <Feather name="menu" size={23} color={COLORS.surface} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Support</Text>
         </View>
-        <View style={styles.headerRight}>
+
+        <View style={styles.headerActions}>
           <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.navigate("Notifications")}
+            style={styles.headerButton}
+            onPress={() => navigation.navigate("NearbyLendersMap")}
+            accessibilityRole="button"
+            accessibilityLabel="Open nearby lenders map"
           >
-            <Feather name="bell" size={20} color="#FFFFFF" />
+            <Feather name="map-pin" size={20} color={COLORS.surface} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Feather name="map-pin" size={20} color="#FFFFFF" />
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.navigate("Notifications")}
+            accessibilityRole="button"
+            accessibilityLabel="Open notifications"
+          >
+            <Feather name="bell" size={20} color={COLORS.surface} />
           </TouchableOpacity>
         </View>
       </View>
@@ -116,71 +86,71 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={COLORS.primary}
-          />
-        }
       >
-        {errorMessage ? (
-          <Text style={styles.errorText}>{errorMessage}</Text>
-        ) : null}
+        <View style={styles.intro}>
+          <Text style={styles.introTitle}>How can we help?</Text>
+          <Text style={styles.introText}>
+            Find an answer, contact the support team, or report an issue.
+          </Text>
+        </View>
 
-        <View style={styles.quickActionRow}>
+        <TouchableOpacity
+          style={styles.assistantCard}
+          onPress={() => navigation.navigate("AiAssistant")}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Ask the AI Assistant"
+        >
+          <View style={styles.assistantIconWrap}>
+            <Feather name="message-circle" size={22} color={COLORS.primary} />
+          </View>
+          <View style={styles.assistantCopy}>
+            <Text style={styles.assistantEyebrow}>AI ASSISTANT</Text>
+            <Text style={styles.assistantTitle}>
+              Get help with your account
+            </Text>
+            <Text style={styles.assistantSubtitle}>
+              Ask about loans, payments, applications, or KYC.
+            </Text>
+          </View>
+          <View style={styles.assistantArrow}>
+            <Feather name="arrow-up-right" size={18} color={COLORS.primary} />
+          </View>
+        </TouchableOpacity>
+
+        <Text style={styles.sectionTitle}>Support options</Text>
+        <View style={styles.quickActionGrid}>
           {supportQuickActions.map((action) => (
             <TouchableOpacity
               key={action.id}
               style={styles.quickActionCard}
               onPress={() => onPressQuickAction(action.id)}
+              activeOpacity={0.82}
+              accessibilityRole="button"
+              accessibilityLabel={action.title}
             >
               <View style={styles.quickIconWrap}>
-                <Feather name={action.icon} size={18} color="#007AFF" />
+                <Feather name={action.icon} size={20} color={COLORS.primary} />
               </View>
               <Text style={styles.quickTitle}>{action.title}</Text>
               <Text style={styles.quickSubtitle}>{action.subtitle}</Text>
+              <Feather
+                name="arrow-right"
+                size={16}
+                color={COLORS.textSecondary}
+                style={styles.quickArrow}
+              />
             </TouchableOpacity>
           ))}
         </View>
 
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Support Status</Text>
+        <View style={styles.safetyNote}>
+          <Feather name="shield" size={18} color="#37546D" />
+          <Text style={styles.safetyText}>
+            Smart Credit support will never ask for your password, access token,
+            bank PIN, or one-time password.
+          </Text>
         </View>
-
-        {loading ? (
-          <View style={{ padding: 20 }}>
-            <Loader />
-          </View>
-        ) : (
-          <View style={styles.statusCardList}>
-            {supportStatusCards.map((item) => (
-              <View key={item.id} style={styles.statusCard}>
-                <View
-                  style={[
-                    styles.statusDot,
-                    {
-                      backgroundColor: item.color,
-                    },
-                  ]}
-                />
-                <View style={styles.statusInfo}>
-                  <Text style={styles.statusLabel}>{item.title}</Text>
-                  <Text style={styles.statusValue}>{item.value}</Text>
-                  <Text style={styles.statusSubtitle}>{item.subtitle}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={styles.helpCenterButton}
-          onPress={() => navigation.navigate("ContactSupport")}
-        >
-          <Feather name="send" size={16} color="#FFFFFF" />
-          <Text style={styles.helpCenterButtonText}>Contact Support</Text>
-        </TouchableOpacity>
       </ScrollView>
 
       <SidebarMenu
@@ -200,8 +170,8 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.primary,
     paddingTop: 50,
-    paddingBottom: 15,
-    paddingHorizontal: SPACING.xl,
+    paddingBottom: 12,
+    paddingHorizontal: SPACING.lg,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -211,130 +181,156 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: {
+    marginLeft: SPACING.sm,
+    color: COLORS.surface,
     fontSize: TYPOGRAPHY.subtitle.fontSize,
     fontWeight: TYPOGRAPHY.subtitle.fontWeight,
-    color: COLORS.surface,
-    marginLeft: SPACING.lg,
   },
-  headerRight: {
+  headerActions: {
     flexDirection: "row",
     alignItems: "center",
+    gap: SPACING.xs,
   },
-  iconButton: {
-    marginLeft: 15,
+  headerButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 22,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
     padding: SPACING.lg,
-    paddingBottom: 28,
+    paddingBottom: SPACING.xxl,
   },
-  quickActionRow: {
-    flexDirection: "row",
-    gap: 10,
+  intro: {
     marginBottom: SPACING.lg,
   },
-  errorText: {
-    color: COLORS.error ?? "#DC2626",
-    fontSize: TYPOGRAPHY.small.fontSize,
-    marginBottom: SPACING.md,
+  introTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 24,
+    fontWeight: "700",
+    letterSpacing: -0.3,
   },
-  quickActionCard: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
+  introText: {
+    marginTop: SPACING.xs,
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  assistantCard: {
+    minHeight: 112,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: SPACING.lg,
+    marginBottom: SPACING.xl,
     borderRadius: BORDER_RADIUS.large,
-    padding: 10,
-    ...SHADOWS.card,
+    borderWidth: 1,
+    borderColor: "#C9DCF0",
+    backgroundColor: "#F4F8FC",
   },
-  quickIconWrap: {
+  assistantIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E2EDF8",
+  },
+  assistantCopy: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+  assistantEyebrow: {
+    marginBottom: 3,
+    color: COLORS.primary,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  assistantTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  assistantSubtitle: {
+    marginTop: 4,
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  assistantArrow: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "#EAF2FF",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: SPACING.sm,
-  },
-  quickTitle: {
-    fontSize: TYPOGRAPHY.small.fontSize,
-    fontWeight: TYPOGRAPHY.heading.fontWeight,
-    color: "#111827",
-    marginBottom: SPACING.xs,
-  },
-  quickSubtitle: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    lineHeight: 15,
-  },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
+    backgroundColor: COLORS.surface,
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.body.fontSize,
-    fontWeight: TYPOGRAPHY.heading.fontWeight,
-    color: "#111827",
+    marginBottom: SPACING.md,
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: "700",
   },
-  sectionAction: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#374151",
+  quickActionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: SPACING.md,
   },
-  statusCardList: {
-    backgroundColor: "#FFFFFF",
+  quickActionCard: {
+    width: "48.5%",
+    minHeight: 154,
+    padding: SPACING.md,
     borderRadius: BORDER_RADIUS.large,
-    paddingVertical: 4,
-    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
     ...SHADOWS.card,
   },
-  statusCard: {
+  quickIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.md,
+    backgroundColor: "#EAF2FA",
+  },
+  quickTitle: {
+    paddingRight: 16,
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  quickSubtitle: {
+    marginTop: 4,
+    paddingRight: 12,
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  quickArrow: {
+    position: "absolute",
+    right: SPACING.md,
+    top: SPACING.md,
+  },
+  safetyNote: {
     flexDirection: "row",
     alignItems: "flex-start",
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginTop: 5,
-    marginRight: SPACING.sm,
-  },
-  statusInfo: {
-    flex: 1,
-  },
-  statusLabel: {
-    fontSize: TYPOGRAPHY.small.fontSize,
-    color: COLORS.textSecondary,
-    marginBottom: 2,
-  },
-  statusValue: {
-    fontSize: TYPOGRAPHY.body.fontSize,
-    fontWeight: TYPOGRAPHY.heading.fontWeight,
-    color: "#111827",
-    marginBottom: 3,
-  },
-  statusSubtitle: {
-    fontSize: 11,
-    color: "#9CA3AF",
-  },
-  helpCenterButton: {
-    marginTop: 14,
-    backgroundColor: COLORS.primary,
+    gap: SPACING.sm,
+    marginTop: SPACING.xl,
+    padding: SPACING.md,
     borderRadius: BORDER_RADIUS.medium,
-    paddingVertical: SPACING.md,
-    justifyContent: "center",
-    alignItems: "center",
-    flexDirection: "row",
+    backgroundColor: "#EAF0F5",
   },
-  helpCenterButtonText: {
-    color: COLORS.surface,
-    marginLeft: 6,
-    fontSize: 15,
-    fontWeight: "600",
+  safetyText: {
+    flex: 1,
+    color: "#37546D",
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

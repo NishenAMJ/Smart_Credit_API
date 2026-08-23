@@ -1,130 +1,88 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { AdminAuditService } from './admin-audit.service';
 import { FirebaseService } from '../../firebase/firebase.service';
 
-function snapshot(docs: Array<{ id: string; data: Record<string, unknown> }>) {
-  const snapshotDocs = docs.map((doc) => ({
-    id: doc.id,
-    data: () => doc.data,
-  }));
-
-  return {
-    docs: snapshotDocs,
-    forEach(
-      callback: (doc: {
-        id: string;
-        data: () => Record<string, unknown>;
-      }) => void,
-    ) {
-      snapshotDocs.forEach(callback);
-    },
-  };
-}
-
 describe('AdminAuditService', () => {
-  let service: AdminAuditService;
-  const collectionMock = jest.fn();
+  const get = jest.fn();
+  const limit = jest.fn();
+  const startAfter = jest.fn();
+  const orderBy = jest.fn();
+  const docGet = jest.fn();
+  const doc = jest.fn(() => ({ get: docGet }));
+  const query = { get, limit, startAfter };
+  const collection = jest.fn(() => ({ orderBy, doc }));
+  const service = new AdminAuditService({
+    db: { collection },
+  } as unknown as FirebaseService);
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AdminAuditService,
+  beforeEach(() => {
+    jest.clearAllMocks();
+    orderBy.mockReturnValue(query);
+    limit.mockReturnValue(query);
+    startAfter.mockReturnValue(query);
+  });
+
+  it('queries only immutable audit logs with ordering and a bounded page', async () => {
+    get.mockResolvedValue({
+      size: 1,
+      docs: [
         {
-          provide: FirebaseService,
-          useValue: {
-            db: {
-              collection: collectionMock,
-            },
-          },
+          id: 'audit-1',
+          data: () => ({
+            action: 'ad.approved',
+            actorUserId: 'admin-1',
+            entityType: 'ad',
+            entityId: 'listing-1',
+            metadata: { description: 'Ad approved' },
+            createdAt: new Date('2026-04-27T04:30:00.000Z'),
+          }),
         },
       ],
-    }).compile();
+    });
 
-    service = module.get<AdminAuditService>(AdminAuditService);
-    jest.clearAllMocks();
+    const result = await service.getAuditLogs('20');
+
+    expect(collection).toHaveBeenCalledTimes(1);
+    expect(collection).toHaveBeenCalledWith('auditLogs');
+    expect(orderBy).toHaveBeenCalledWith('createdAt', 'desc');
+    expect(limit).toHaveBeenCalledWith(21);
+    expect(result).toMatchObject({
+      success: true,
+      count: 1,
+      hasMore: false,
+      logs: [
+        {
+          id: 'audit-1',
+          actionType: 'ad_approved',
+          description: 'Ad approved',
+          performedBy: 'admin-1',
+          targetName: 'listing-1',
+          targetType: 'ad',
+          severity: 'success',
+        },
+      ],
+    });
   });
 
-  it('returns ad approval logs only when the ad has an approval timestamp', async () => {
-    const approvedAt = new Date('2026-04-27T04:30:00.000Z');
-    const snapshots: Record<string, unknown> = {
-      users: snapshot([]),
-      ads: snapshot([
-        {
-          id: 'seed-active-ad',
-          data: { status: 'active', lenderName: 'Seed Lender' },
-        },
-        {
-          id: 'approved-ad',
-          data: {
-            status: 'approved',
-            lenderName: 'Approved Lender',
-            approvedAt,
-          },
-        },
-      ]),
-      disputes: snapshot([]),
-    };
+  it('uses a document cursor and returns a next cursor', async () => {
+    docGet.mockResolvedValue({ exists: true, id: 'cursor-1' });
+    get.mockResolvedValue({
+      size: 2,
+      docs: [
+        { id: 'audit-2', data: () => ({ action: 'system.event' }) },
+        { id: 'audit-3', data: () => ({ action: 'system.event' }) },
+      ],
+    });
 
-    collectionMock.mockImplementation((name: string) => ({
-      get: jest.fn().mockResolvedValue(snapshots[name]),
-    }));
+    const result = await service.getAuditLogs('1', 'cursor-1');
 
-    const result = await service.getAuditLogs();
-
-    expect(result.logs).toEqual([
-      expect.objectContaining({
-        id: 'AD-A-approved-ad',
-        actionType: 'ad_approved',
-        targetName: 'Approved Lender',
-        dateTime: '2026-04-27 10:00:00',
-      }),
-    ]);
-  });
-
-  it('does not create audit rows for seeded active users, loan requests, or resolved disputes', async () => {
-    const snapshots: Record<string, unknown> = {
-      users: snapshot([
-        {
-          id: 'seed-user',
-          data: {
-            status: 'active',
-            kycStatus: 'approved',
-            updatedAt: new Date('2026-04-26T04:30:00.000Z'),
-          },
-        },
-      ]),
-      ads: snapshot([]),
-      disputes: snapshot([
-        {
-          id: 'seed-resolved-dispute',
-          data: {
-            status: 'resolved',
-            resolution: 'Resolved after reviewing payment and lender records',
-            resolvedAt: new Date('2026-04-29T10:14:33.000Z'),
-          },
-        },
-      ]),
-      loanRequests: snapshot([
-        {
-          id: 'request-1',
-          data: {
-            requestId: 'request-1',
-            status: 'accepted',
-            amount: 25000,
-            createdAt: new Date('2026-04-26T04:30:00.000Z'),
-          },
-        },
-      ]),
-    };
-
-    collectionMock.mockImplementation((name: string) => ({
-      get: jest.fn().mockResolvedValue(snapshots[name]),
-    }));
-
-    const result = await service.getAuditLogs();
-
-    expect(result.logs).toEqual([]);
-    expect(collectionMock).not.toHaveBeenCalledWith('loanRequests');
-    expect(collectionMock).not.toHaveBeenCalledWith('disputes');
+    expect(doc).toHaveBeenCalledWith('cursor-1');
+    expect(startAfter).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'cursor-1' }),
+    );
+    expect(result).toMatchObject({
+      count: 1,
+      hasMore: true,
+      nextCursor: 'audit-2',
+    });
   });
 });

@@ -56,21 +56,6 @@ export function getAdminUser<T>() {
   }
 }
 
-function readLenderAccounts() {
-  const value = localStorage.getItem(LENDER_ACCOUNTS_KEY);
-
-  if (!value) {
-    return [] as LenderSession[];
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? (parsed as LenderSession[]) : [];
-  } catch {
-    return [] as LenderSession[];
-  }
-}
-
 export function setLenderSession(token: string, user: SharedAuthUser) {
   const session: LenderSession = {
     lenderId: user.uid,
@@ -80,14 +65,10 @@ export function setLenderSession(token: string, user: SharedAuthUser) {
   };
 
   localStorage.setItem(LENDER_SESSION_KEY, JSON.stringify(session));
-
-  const accounts = readLenderAccounts().filter(
-    (account) => account.lenderId !== session.lenderId,
-  );
-  accounts.unshift(session);
-  localStorage.setItem(LENDER_ACCOUNTS_KEY, JSON.stringify(accounts));
+  localStorage.removeItem(LENDER_ACCOUNTS_KEY);
 }
 
 export function clearLenderSession() {
   localStorage.removeItem(LENDER_SESSION_KEY);
+  localStorage.removeItem(LENDER_ACCOUNTS_KEY);
 }

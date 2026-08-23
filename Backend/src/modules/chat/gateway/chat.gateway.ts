@@ -1,4 +1,3 @@
-
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -9,23 +8,21 @@ import {
   MessageBody,
   WsException,
 } from '@nestjs/websockets';
-import { UseFilters } from '@nestjs/common';
+import { UseFilters, Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import type { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
 import { WsExceptionFilter } from '../common/filters/ws-exception.filter';
 import { UsersService } from '../users/users.service';
 import { BlocksService } from '../users/blocks.service';
 
-//  DTO shapes 
-
 interface SendMessagePayload {
-  conversationId: string; // which conversation this belongs to
-  recipientId: string; // who should receive it
+  conversationId: string;
+  recipientId: string;
   message: {
-    id: string; // client-generated UUID (used for dedup + ack)
+    id: string;
     senderId: string;
     text: string;
-    createdAt: string; // ISO string — client sets this for local-first
+    createdAt: string;
   };
 }
 
@@ -38,88 +35,90 @@ interface TypingPayload {
 interface MarkReadPayload {
   conversationId: string;
   messageId: string;
-  senderId: string; // original sender of the message being read
+  senderId: string;
 }
 
 interface DeliveredPayload {
   messageId: string;
   conversationId: string;
-  senderId: string; // original sender
+  senderId: string;
 }
-
-// Gateway 
 
 @UseFilters(WsExceptionFilter)
 @WebSocketGateway({
-  cors: {
-    // In dev: allow the local network IP your phone connects to.
-    // In prod: set this to your actual domain.
-    origin: '*',
-    credentials: true,
-  },
+  cors: { origin: '*', credentials: true },
   transports: ['websocket'],
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Server;
   private readonly logger = new Logger(ChatGateway.name);
 
-  /**
-   * userId → Set of socketIds
-   * One user can be connected from multiple devices simultaneously.
-   */
+  // userId → Set of socketIds (one user, multiple devices)
   private userSockets = new Map<string, Set<string>>();
 
-  /**
-   * Offline message queue.
-   * userId → array of message payloads waiting to be delivered.
-   * Flushed when the user reconnects.
-   *
-   * NOTE: This is in-memory only. If the server restarts, queued messages
-   * are lost. For production, replace with a Redis queue or Firebase RTDB.
-   */
+  // Offline message queue: userId → pending payloads
   private offlineQueue = new Map<string, SendMessagePayload[]>();
 
   constructor(
+    private jwtService: JwtService,
     private users: UsersService,
     private blocks: BlocksService,
-  ) { }
+  ) {}
 
-  //  Connection lifecycle 
+  // ── Connection ────────────────────────────────────────────────────────────
 
   async handleConnection(client: Socket) {
     /**
-     * Auth: the mobile app sends userId in socket handshake.
-     * When real JWT auth is wired up, verify the token here.
+     * REAL AUTH: The mobile app sends the JWT token in the socket handshake.
+     * We verify it here using JwtService — the same secret used to sign it.
+     * If verification fails the socket is immediately disconnected.
+     *
+     * Frontend must connect like this:
+     *   const socket = io(WS_URL, {
+     *     auth: { token: 'Bearer eyJhbGc...' }  ← the JWT from login
+     *   });
      */
-    const userId =
-      client.handshake.auth?.userId ??
-      (client.handshake.headers['x-user-id'] as string);
+    const raw =
+      client.handshake.auth?.token ?? client.handshake.headers['authorization'];
 
-    if (!userId) {
-      this.logger.warn(`[${client.id}] Rejected — no userId in handshake`);
+    if (!raw) {
+      this.logger.warn(`[${client.id}] Rejected — no token in handshake`);
       client.emit('error', { message: 'Authentication required' });
       client.disconnect();
       return;
     }
 
-    // Store userId on the socket for all future event handlers
-    client.data.userId = userId;
+    // Strip 'Bearer ' prefix if present
+    const token = raw.startsWith('Bearer ') ? raw.slice(7) : raw;
 
-    // Track all sockets for this user
+    let payload: { sub: string; email: string; role: string };
+
+    try {
+      payload = this.jwtService.verify(token);
+    } catch {
+      this.logger.warn(`[${client.id}] Rejected — invalid or expired token`);
+      client.emit('error', { message: 'Invalid or expired token' });
+      client.disconnect();
+      return;
+    }
+
+    // userId comes from JWT sub — cannot be spoofed
+    const userId = payload.sub;
+
+    client.data.userId = userId;
+    client.data.role = payload.role;
+
     if (!this.userSockets.has(userId)) {
       this.userSockets.set(userId, new Set());
     }
     this.userSockets.get(userId)!.add(client.id);
 
-    // Mark user online in Firestore
-    await this.users.setOnlineStatus(userId, true);
+    void this.updatePresenceSafely(userId, true);
 
-    // Broadcast presence to everyone (frontend filters by relevant userId)
-    this.server.emit('userOnline', { userId, isOnline: true });
+    this.logger.log(
+      `[${client.id}] Connected — userId: ${userId} role: ${payload.role}`,
+    );
 
-    this.logger.log(`[${client.id}] Connected — userId: ${userId}`);
-
-    // Flush any messages that arrived while this user was offline
     await this.flushOfflineQueue(userId, client);
   }
 
@@ -130,31 +129,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const sockets = this.userSockets.get(userId);
     sockets?.delete(client.id);
 
-    // Only mark offline once ALL devices for this user disconnect
     if (!sockets || sockets.size === 0) {
       this.userSockets.delete(userId);
-      await this.users.setOnlineStatus(userId, false);
-      this.server.emit('userOnline', { userId, isOnline: false });
+      void this.updatePresenceSafely(userId, false);
     }
 
     this.logger.log(`[${client.id}] Disconnected — userId: ${userId}`);
   }
 
-  //  sendMessage 
+  // ── sendMessage ───────────────────────────────────────────────────────────
 
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: SendMessagePayload,
   ) {
+    // Always use the verified userId from the JWT — never trust client payload
     const senderId = client.data.userId as string;
 
-    // Validate payload shape
     if (!payload?.recipientId || !payload?.message?.id) {
       throw new WsException('Invalid sendMessage payload');
     }
 
-    // Block check: if recipient has blocked sender, silently drop
     const isBlocked = await this.blocks.isBlocked(
       senderId,
       payload.recipientId,
@@ -167,7 +163,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    // Try to deliver to recipient's active sockets
     const delivered = this.deliverToUser(
       payload.recipientId,
       'receiveMessage',
@@ -179,7 +174,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     if (delivered) {
-      // Ack sender: recipient received it in real-time
       client.emit('messageDelivered', {
         messageId: payload.message.id,
         conversationId: payload.conversationId,
@@ -189,17 +183,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         `Message ${payload.message.id} delivered to ${payload.recipientId}`,
       );
     } else {
-      // Recipient offline → queue the message
       if (!this.offlineQueue.has(payload.recipientId)) {
         this.offlineQueue.set(payload.recipientId, []);
       }
       this.offlineQueue.get(payload.recipientId)!.push(payload);
 
-      // Ack sender: message is queued (will deliver when recipient reconnects)
       client.emit('messageDelivered', {
         messageId: payload.message.id,
         conversationId: payload.conversationId,
-        status: 'sent', // 'sent' = reached server but not yet delivered to device
+        status: 'sent',
       });
       this.logger.log(
         `Message ${payload.message.id} queued for offline user ${payload.recipientId}`,
@@ -207,15 +199,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  //  messageDelivered (ack from recipient) 
+  // ── messageDelivered ──────────────────────────────────────────────────────
 
   @SubscribeMessage('messageDelivered')
   handleMessageDelivered(
     @ConnectedSocket() _client: Socket,
     @MessageBody() payload: DeliveredPayload,
   ) {
-    // Forward the delivery ack to the original sender so they can update
-    // their local DB status from 'sent' → 'delivered'
     this.deliverToUser(payload.senderId, 'messageDelivered', {
       messageId: payload.messageId,
       conversationId: payload.conversationId,
@@ -223,7 +213,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  //  typing indicator 
+  // ── typing ────────────────────────────────────────────────────────────────
 
   @SubscribeMessage('typing')
   handleTyping(
@@ -231,7 +221,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() payload: TypingPayload,
   ) {
     const userId = client.data.userId as string;
-    // Forward typing event to the other participant only
     this.deliverToUser(payload.recipientId, 'userTyping', {
       conversationId: payload.conversationId,
       userId,
@@ -239,7 +228,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  //  read receipt 
+  // ── markRead ──────────────────────────────────────────────────────────────
 
   @SubscribeMessage('markRead')
   handleMarkRead(
@@ -247,7 +236,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() payload: MarkReadPayload,
   ) {
     const userId = client.data.userId as string;
-    // Notify the original sender their message was read
     this.deliverToUser(payload.senderId, 'messageRead', {
       conversationId: payload.conversationId,
       messageId: payload.messageId,
@@ -256,33 +244,56 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  //  Helpers 
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
-  /**
-   * Deliver an event to ALL active sockets of a given user.
-   * Returns true if the user had at least one connected socket.
-   */
-  private deliverToUser(userId: string, event: string, data: any): boolean {
+  emitToUser(userId: string, event: string, data: unknown): boolean {
+    if (!this.server?.sockets) return false;
     const socketIds = this.userSockets.get(userId);
     if (!socketIds || socketIds.size === 0) return false;
-
     for (const socketId of socketIds) {
-      const socket = this.server.sockets.sockets.get(socketId);
-      socket?.emit(event, data);
+      this.server.sockets.sockets.get(socketId)?.emit(event, data);
     }
     return true;
   }
 
-  /**
-   * Flush all queued messages to a user who just came online.
-   * Messages are sent in order and cleared from the queue.
-   */
+  emitToRole(role: string, event: string, data: unknown): number {
+    if (!this.server?.sockets) return 0;
+    let delivered = 0;
+    for (const socket of this.server.sockets.sockets.values()) {
+      if (socket.data?.role === role) {
+        socket.emit(event, data);
+        delivered += 1;
+      }
+    }
+    return delivered;
+  }
+
+  private deliverToUser(userId: string, event: string, data: any): boolean {
+    return this.emitToUser(userId, event, data);
+  }
+
+  private async updatePresenceSafely(
+    userId: string,
+    isOnline: boolean,
+  ): Promise<void> {
+    try {
+      await this.users.setOnlineStatus(userId, isOnline);
+    } catch (error) {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String(error.code)
+          : 'unknown';
+      this.logger.warn(
+        `Could not mark user ${userId} ${isOnline ? 'online' : 'offline'} (Firestore code: ${code}). Chat will continue without a presence update.`,
+      );
+    }
+  }
+
   private async flushOfflineQueue(userId: string, client: Socket) {
     const queued = this.offlineQueue.get(userId);
     if (!queued || queued.length === 0) return;
 
     this.logger.log(`Flushing ${queued.length} offline messages to ${userId}`);
-
     for (const payload of queued) {
       client.emit('receiveMessage', {
         ...payload.message,
@@ -290,8 +301,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         status: 'delivered',
       });
     }
-
-    // Clear the queue after delivery
     this.offlineQueue.delete(userId);
   }
 }

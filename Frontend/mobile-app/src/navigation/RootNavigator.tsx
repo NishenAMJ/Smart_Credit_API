@@ -9,9 +9,9 @@ import { useAuth } from "../context/AuthContext";
 import { COLORS } from "../constants/colors";
 
 export default function RootNavigator() {
-  const { authLoading, session } = useAuth();
+  const { authInitializing, session } = useAuth();
 
-  if (authLoading && !session) {
+  if (authInitializing && !session) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -27,11 +27,11 @@ export default function RootNavigator() {
   }
 
   if (session.user.role === "lender") {
-    return <LenderStackNavigator />;
+    return <LenderStackNavigator key={`lender-${session.user.uid}`} />;
   }
 
   if (session.user.role === "borrower") {
-    return <BorrowerStackNavigator />;
+    return <BorrowerStackNavigator key={`borrower-${session.user.uid}`} />;
   }
 
   return (

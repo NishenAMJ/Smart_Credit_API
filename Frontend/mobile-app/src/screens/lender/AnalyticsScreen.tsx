@@ -13,15 +13,7 @@ import { LenderHeader, StatCard } from "../../components/lender";
 import { ActivityIndicator } from "react-native";
 import { AnalyticsService } from "../../services/lender.service";
 
-/**
- * AnalyticsSummaryResponse shape from backend:
- * {
- *   summary:     { totalLent, totalCollected, activeLoans, repaymentSuccessRate }
- *   performance: { activeAds, requestsReceived, acceptedRequests, requestToLoanConversionRate }
- *   portfolio:   { outstandingAmount, averageLoanSize, averageInterestRate, averageTenureMonths }
- *   risk:        { overdueLoans, defaultedLoans, openDisputes, averageBorrowerCreditScore }
- * }
- */
+
 
 export default function AnalyticsScreen({ navigation }: any) {
   const [period, setPeriod] = useState("month");

@@ -1,11 +1,5 @@
 import type { UserRole } from '../../auth/auth.types';
-
-export type LegalDocumentStatus =
-  | 'generated'
-  | 'partially_accepted'
-  | 'fully_accepted';
-
-export type LoanAgreementDocumentType = 'loan_agreement';
+import type { LoanAgreementStatus } from '../legal.types';
 
 export class LegalDocumentPartyDto {
   userId!: string;
@@ -15,54 +9,73 @@ export class LegalDocumentPartyDto {
   role!: 'borrower' | 'lender';
 }
 
-export class LegalPartySignatureAuditDto {
-  signedName?: string;
-  ipAddress?: string;
-  userAgent?: string;
+export class LegalAgreementTermsDto {
+  currency!: 'LKR';
+  principalMinor!: number;
+  annualInterestRate!: number;
+  interestAmountMinor!: number;
+  totalRepayableMinor!: number;
+  monthlyInstallmentMinor!: number;
+  tenureMonths!: number;
+  repaymentFrequency!: 'monthly';
+  repaymentStartRule!: 'one_month_after_activation';
 }
 
-export class LegalLoanSnapshotDto {
-  loanId!: string;
-  amount!: number;
-  interestRate!: number;
-  durationMonths!: number;
-  repaymentSchedule!: string;
-  status!: string;
-  nextDueDate?: string;
+export class LegalAcceptanceSummaryDto {
+  accepted!: boolean;
+  signedName!: string | null;
+  acceptedAt!: string | null;
+}
+
+export class LegalDisbursementConfirmationDto {
+  confirmed!: boolean;
+  confirmedByLenderId!: string | null;
+  confirmedAt!: string | null;
+  principalMinor!: number | null;
+  externalReference!: string | null;
 }
 
 export class LegalDocumentDto {
   id!: string;
   loanId!: string;
+  applicationId!: string;
+  listingId!: string;
+  version!: number;
   title!: string;
   summary!: string;
-  documentType!: LoanAgreementDocumentType;
-  status!: LegalDocumentStatus;
+  documentType!: 'loan_agreement';
+  status!: LoanAgreementStatus;
   generatedByUserId!: string;
-  generatedByRole!: UserRole;
+  generatedByRole!: UserRole | 'system';
   generatedAt!: string;
   updatedAt!: string;
   borrower!: LegalDocumentPartyDto;
   lender!: LegalDocumentPartyDto;
-  loanSnapshot!: LegalLoanSnapshotDto;
+  terms!: LegalAgreementTermsDto;
   htmlContent!: string;
-  borrowerAccepted!: boolean;
-  lenderAccepted!: boolean;
-  borrowerAcceptedAt?: string;
-  lenderAcceptedAt?: string;
-  borrowerSignatureAudit?: LegalPartySignatureAuditDto;
-  lenderSignatureAudit?: LegalPartySignatureAuditDto;
-  pdfDownloadPath?: string;
-  signedPdfStoragePath?: string;
-  signedPdfDocumentId?: string;
-  /** Short-lived signed Cloudinary URL – only present when the caller requests it via the access endpoint. */
-  signedPdfAccessUrl?: string;
-  signedPdfGeneratedAt?: string;
-  pdfSha256Hash?: string;
+  termsHash!: string;
+  consentTextVersion!: 'loan_agreement_consent_v1';
+  borrowerAcceptance!: LegalAcceptanceSummaryDto;
+  lenderAcceptance!: LegalAcceptanceSummaryDto;
+  disbursementConfirmation!: LegalDisbursementConfirmationDto;
+  pdfDownloadPath!: string;
+  pdfAvailable!: boolean;
+  signedPdfGeneratedAt!: string | null;
+  pdfSha256Hash!: string | null;
+  legacyReadOnly!: boolean;
 }
 
 export class AcceptLegalDocumentDto {
   signedName!: string;
+  consentAccepted!: boolean;
+  agreementVersion!: number;
+  termsHash!: string;
+  fundsReceivedConfirmed?: boolean;
+}
+
+export class ConfirmAgreementDisbursementDto {
+  confirmationAccepted!: boolean;
+  externalReference?: string;
 }
 
 export class GenerateLegalDocumentResponseDto {
@@ -81,4 +94,8 @@ export class AcceptLegalDocumentResponseDto {
 
 export class ListLegalDocumentsResponseDto {
   documents!: LegalDocumentDto[];
+  pageInfo!: {
+    nextCursor: string | null;
+    hasMore: boolean;
+  };
 }

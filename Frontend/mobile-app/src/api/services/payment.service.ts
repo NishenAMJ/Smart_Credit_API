@@ -5,6 +5,7 @@ import { ENDPOINTS } from "../endpoints";
 import { toIsoDate } from "../normalizers";
 import { getUserId } from "../../utils/auth.storage";
 import type { BorrowerRepayment } from "../../types/borrower";
+import type { ImagePickerAsset } from "expo-image-picker";
 
 export interface MakeRepaymentPayload {
   loanId: string;
@@ -12,6 +13,18 @@ export interface MakeRepaymentPayload {
   paymentMethod: "bank_transfer" | "qr_payment" | "card";
   transactionReference?: string;
   paymentProofUrl?: string;
+  receiptDocumentId?: string;
+}
+
+export interface InitiatePayHerePayload {
+  loanId: string;
+  amount: number;
+}
+
+export interface PayHereCheckoutSession {
+  orderId: string;
+  paymentPageUrl: string;
+  checkoutUrl: string;
 }
 
 type RepaymentListResponse = {
@@ -39,11 +52,71 @@ function normalizeRepayment(
 }
 
 export const paymentService = {
-  uploadPaymentReceipt: async (imageUri: string): Promise<string> => {
-    // Simulate a network delay for uploading
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    // Mock the uploaded URL
-    return `https://mock-storage.com/receipts/${Date.now()}.jpg`;
+  uploadPaymentReceipt: async (
+    asset: ImagePickerAsset,
+    loanId: string,
+  ): Promise<string> => {
+    const fileName = asset.fileName || `payment-receipt-${Date.now()}.jpg`;
+    const mimeType = asset.mimeType || "image/jpeg";
+    const intent = (
+      await apiClient.post<any>("/documents/uploads/init", {
+        category: "payment_receipt",
+        documentType: "bank_transfer_receipt",
+        fileName,
+        contentType: mimeType,
+        relatedEntityType: "loan",
+        relatedEntityId: loanId,
+      })
+    ).data;
+    const form = new FormData();
+    form.append("file", {
+      uri: asset.uri,
+      name: fileName,
+      type: mimeType,
+    } as any);
+    form.append("api_key", intent.apiKey);
+    form.append("timestamp", String(intent.timestamp));
+    form.append("signature", intent.signature);
+    form.append("folder", intent.folder);
+    form.append("public_id", intent.publicId);
+    form.append("type", intent.deliveryType);
+    const uploadedResponse = await fetch(intent.uploadUrl, {
+      method: "POST",
+      body: form,
+    });
+    if (!uploadedResponse.ok) {
+      throw new Error("The receipt could not be uploaded.");
+    }
+    const uploaded = (await uploadedResponse.json()) as any;
+    const completed = await apiClient.post<{ documentId: string }>(
+      "/documents/uploads/complete",
+      {
+        publicId: uploaded.public_id,
+        assetId: uploaded.asset_id,
+        resourceType: uploaded.resource_type,
+        deliveryType: uploaded.type,
+        bytes: uploaded.bytes,
+        version: uploaded.version,
+        secureUrl: uploaded.secure_url,
+        format: uploaded.format,
+        fileHash: `receipt-${loanId}-${asset.fileSize ?? 0}-${Date.now()}`,
+        originalFilename: fileName,
+        mimeType,
+        category: "payment_receipt",
+        documentType: "bank_transfer_receipt",
+        relatedEntityType: "loan",
+        relatedEntityId: loanId,
+        displayName: "Bank transfer receipt",
+      },
+    );
+    const documentId = completed.data?.documentId?.trim();
+    if (!documentId) {
+      throw new Error(
+        "The receipt upload completed without a document ID. Please try again.",
+      );
+    }
+
+    return documentId;
   },
 
   makeRepayment: async (data: MakeRepaymentPayload) => {
@@ -63,6 +136,27 @@ export const paymentService = {
       ...response.data,
       data: normalizeRepayment(response.data?.data ?? {}),
     };
+  },
+
+  initiatePayHerePayment: async (data: InitiatePayHerePayload) => {
+    const borrowerId = await getUserId();
+    if (!borrowerId)
+      throw new Error("User session expired. Please log in again.");
+
+    const response = await apiClient.post<{
+      success?: boolean;
+      data?: PayHereCheckoutSession;
+    }>(
+      ENDPOINTS.repayments.initiatePayHere,
+      { ...data, borrowerId },
+      { params: { borrowerId } },
+    );
+
+    if (!response.data?.data?.paymentPageUrl) {
+      throw new Error("PayHere checkout could not be started.");
+    }
+
+    return response.data.data;
   },
 
   generateQr: async (loanId: string) => {

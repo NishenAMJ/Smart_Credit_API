@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import Card from "../../components/common/Card";
@@ -13,9 +14,11 @@ import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { useAuth } from "../../context/AuthContext";
 
-export default function LenderKycScreen() {
+export default function LenderKycScreen({ navigation }: any) {
   const { kycSubmission, refreshing, refreshWorkspace, sessionStatus } =
     useAuth();
+  const status =
+    kycSubmission?.status ?? sessionStatus?.kycStatus ?? "not_submitted";
 
   return (
     <ScrollView
@@ -38,13 +41,7 @@ export default function LenderKycScreen() {
 
         <View style={styles.statusPill}>
           <Text style={styles.statusText}>
-            {(
-              kycSubmission?.status ??
-              sessionStatus?.kycStatus ??
-              "not_submitted"
-            )
-              .replace(/_/g, " ")
-              .toUpperCase()}
+            {status.replace(/_/g, " ").toUpperCase()}
           </Text>
         </View>
 
@@ -68,6 +65,16 @@ export default function LenderKycScreen() {
           label="Review notes"
           value={kycSubmission?.reviewNotes ?? "No notes yet"}
         />
+        {status === "rejected" ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Re-upload rejected KYC documents"
+            style={styles.resubmitButton}
+            onPress={() => navigation.navigate("KycResubmission")}
+          >
+            <Text style={styles.resubmitButtonText}>Re-upload documents</Text>
+          </TouchableOpacity>
+        ) : null}
       </Card>
     </ScrollView>
   );
@@ -130,5 +137,18 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 15,
     fontWeight: "600",
+  },
+  resubmitButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.lg,
+  },
+  resubmitButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });

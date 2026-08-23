@@ -1,60 +1,97 @@
+import "./index.css";
 import "./App.css";
 import LenderLayout from "./components/layout/LenderLayout";
 import type { LenderView } from "./components/common/LenderSidebar";
-import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useCallback, useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import AnalyticsPage from "./pages/analytics";
 import ActiveAdsRequestsPage from "./pages/active-ads-requests";
 import CreateAdPage from "./pages/create-ad";
 import DashboardPage from "./pages/dashboard";
+import LoansPage from "./pages/loans";
+import BorrowersPage from "./pages/borrowers";
 import PendingRequestsPage from "./pages/pending-requests";
 import NotificationsPage from "./pages/notifications";
 import RecentTransactionsPage from "./pages/recent-transactions";
+import DailyCollectionPage from "./pages/daily-collection";
 import SettingsPage from "./pages/settings";
-import AgreementsPage from "./pages/agreements";
+import SmsPage from "./pages/sms";
+import LenderAgreementsPage from "./pages/agreements";
+import LenderDisputesPage from "./pages/disputes";
 import LenderProfileModal from "./components/profile/LenderProfileModal";
 import {
   clearStoredSession,
-  getSessionFromSearchParams,
   getStoredSession,
+  removeLegacyAuthParams,
   updateStoredSession,
   type LenderSession,
 } from "./lib/lender-session";
 import type { LenderProfile } from "./lib/lender-profile-api";
+import AiAssistant from "../components/assistant/AiAssistant";
+
+removeLegacyAuthParams();
+
+const LENDER_VIEWS = new Set<LenderView>([
+  "dashboard",
+  "loans",
+  "borrowers",
+  "recent-transactions",
+  "daily-collection",
+  "analytics",
+  "active-ads-requests",
+  "create-ad",
+  "pending-requests",
+  "settings",
+  "notifications",
+  "sms",
+  "agreements",
+  "disputes",
+]);
+
+function getLenderView(pathname: string): LenderView | null {
+  const path = pathname.replace(/^\/lender\/?/, "").replace(/\/$/, "");
+
+  if (!path) return null;
+  return LENDER_VIEWS.has(path as LenderView) ? (path as LenderView) : null;
+}
 
 function App() {
-  const [activeView, setActiveView] = useState<LenderView>("dashboard");
   const navigate = useNavigate();
-  const [session, setSession] = useState<LenderSession | null>(() => {
-    const storedSession = getStoredSession();
-    const handoffSession = getSessionFromSearchParams();
-
-    if (handoffSession) {
-      updateStoredSession(handoffSession);
-      return handoffSession;
-    }
-
-    if (storedSession) {
-      return storedSession;
-    }
-
-    return null;
-  });
+  const location = useLocation();
+  const activeView = getLenderView(location.pathname);
+  const [session, setSession] = useState<LenderSession | null>(() =>
+    getStoredSession(),
+  );
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [agreementLoanId, setAgreementLoanId] = useState<string | null>(null);
+
+  const clearAgreementLoanId = useCallback(() => setAgreementLoanId(null), []);
+
+  function openLoanAgreement(loanId: string) {
+    setAgreementLoanId(loanId);
+    handleNavigate("agreements");
+  }
+
+  function handleNavigate(view: LenderView) {
+    navigate(`/lender/${view}`);
+  }
 
   function handleLogout() {
     clearStoredSession();
     setSession(null);
-    setActiveView("dashboard");
-    navigate("/", { replace: true });
+    navigate("/signin", { replace: true });
   }
 
   function handleProfileSaved(profile: LenderProfile) {
+    if (!session) {
+      return;
+    }
+
     const nextSession: LenderSession = {
       lenderId: profile.lenderId,
       displayName: profile.businessName || profile.fullName,
       email: profile.email,
-      accessToken: session!.accessToken,
+      accessToken: session.accessToken,
     };
 
     updateStoredSession(nextSession);
@@ -66,26 +103,43 @@ function App() {
     .replace(/\b\w/g, (character: string) => character.toUpperCase());
 
   if (!session) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/signin" replace />;
+  }
+
+  if (!activeView) {
+    return <Navigate to="/lender/dashboard" replace />;
   }
 
   return (
     <>
       <LenderLayout
         activeView={activeView}
-        onNavigate={setActiveView}
+        onNavigate={handleNavigate}
         session={session}
         onOpenProfile={() => setIsProfileOpen(true)}
         onLogout={handleLogout}
       >
         {activeView === "dashboard" ? (
-          <DashboardPage session={session} onNavigate={setActiveView} />
+          <DashboardPage session={session} onNavigate={handleNavigate} />
+        ) : activeView === "loans" ? (
+          <LoansPage session={session} onOpenAgreement={openLoanAgreement} />
+        ) : activeView === "borrowers" ? (
+          <BorrowersPage
+            session={session}
+            onOpenAgreement={openLoanAgreement}
+          />
         ) : activeView === "recent-transactions" ? (
           <RecentTransactionsPage session={session} />
+        ) : activeView === "daily-collection" ? (
+          <DailyCollectionPage session={session} onNavigate={handleNavigate} />
         ) : activeView === "analytics" ? (
-          <AnalyticsPage session={session} />
+          <AnalyticsPage session={session} onNavigate={handleNavigate} />
         ) : activeView === "active-ads-requests" ? (
-          <ActiveAdsRequestsPage session={session} onNavigate={setActiveView} />
+          <ActiveAdsRequestsPage
+            session={session}
+            onNavigate={handleNavigate}
+            onOpenAgreement={openLoanAgreement}
+          />
         ) : activeView === "create-ad" ? (
           <CreateAdPage session={session} />
         ) : activeView === "pending-requests" ? (
@@ -97,9 +151,17 @@ function App() {
             onOpenProfile={() => setIsProfileOpen(true)}
           />
         ) : activeView === "notifications" ? (
-          <NotificationsPage session={session} onNavigate={setActiveView} />
+          <NotificationsPage session={session} onNavigate={handleNavigate} />
+        ) : activeView === "sms" ? (
+          <SmsPage session={session} />
         ) : activeView === "agreements" ? (
-          <AgreementsPage session={session} />
+          <LenderAgreementsPage
+            session={session}
+            initialLoanId={agreementLoanId}
+            onInitialLoanHandled={clearAgreementLoanId}
+          />
+        ) : activeView === "disputes" ? (
+          <LenderDisputesPage session={session} />
         ) : (
           <section className="dashboard-panel">
             <header className="page-header">
@@ -112,7 +174,7 @@ function App() {
                   style-audit tokens.
                 </p>
                 <p className="dashboard-context-pill">
-                  Signed in as {session.displayName} - {session.lenderId}
+                  Signed in as {session.displayName}
                 </p>
               </div>
             </header>
@@ -135,6 +197,7 @@ function App() {
         onClose={() => setIsProfileOpen(false)}
         onProfileSaved={handleProfileSaved}
       />
+      <AiAssistant accessToken={session.accessToken} role="lender" />
     </>
   );
 }

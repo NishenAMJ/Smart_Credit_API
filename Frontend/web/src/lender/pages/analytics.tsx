@@ -1,71 +1,157 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from 'react'
+import { Activity, BadgeCheck, HandCoins, ReceiptText, type LucideIcon } from 'lucide-react'
+import type { LenderView } from '../components/common/LenderSidebar'
 import type {
   AnalyticsDrilldownResponse,
   AnalyticsBreakdownPoint,
   AnalyticsOverviewResponse,
+  AnalyticsSummaryResponse,
   AnalyticsTrendPoint,
-} from "../lib/analytics-api";
-import {
-  fetchAnalyticsDrilldown,
-  fetchAnalyticsOverview,
-} from "../lib/analytics-api";
-import type { LenderSession } from "../lib/lender-session";
+} from '../lib/analytics-api'
+import type { LenderSession } from '../lib/lender-session'
+import { API_BASE_URL, getAuthHeaders } from '../lib/api-config'
 
 const RANGE_OPTIONS = [
-  { key: "30d", label: "30 Days" },
-  { key: "90d", label: "90 Days" },
-  { key: "365d", label: "12 Months" },
-] as const;
+  { key: '30d', label: '30 Days' },
+  { key: '90d', label: '90 Days' },
+  { key: '365d', label: '12 Months' },
+] as const
 
-const currencyFormatter = new Intl.NumberFormat("en-LK", {
-  style: "currency",
-  currency: "LKR",
+const currencyFormatter = new Intl.NumberFormat('en-LK', {
+  style: 'currency',
+  currency: 'LKR',
   maximumFractionDigits: 0,
-});
+})
 
-const percentFormatter = new Intl.NumberFormat("en-LK", {
-  style: "percent",
+const percentFormatter = new Intl.NumberFormat('en-LK', {
+  style: 'percent',
   maximumFractionDigits: 0,
-});
+})
+
+function SummaryIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={22} strokeWidth={1.8} />
+}
 
 function formatCurrency(value: number): string {
-  return currencyFormatter.format(value);
+  return currencyFormatter.format(value)
 }
 
 function formatPercent(value: number): string {
-  return percentFormatter.format(value);
+  return percentFormatter.format(value)
 }
 
 function formatShortDate(value: string | null): string {
   if (!value) {
-    return "Unknown";
+    return 'Unknown'
   }
 
-  const parsed = new Date(value);
+  const parsed = new Date(value)
 
   return Number.isNaN(parsed.getTime())
-    ? "Unknown"
-    : new Intl.DateTimeFormat("en-LK", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      }).format(parsed);
+    ? 'Unknown'
+    : new Intl.DateTimeFormat('en-LK', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }).format(parsed)
 }
 
 function formatLabel(value: string): string {
   return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function getDrilldownTitle(title: string, type: string): string {
+  if (!/^(Loan|Request|Dispute)\s/i.test(title)) {
+    return title
+  }
+
+  if (type === 'requests-received' || type === 'accepted-requests') {
+    return 'Borrower request'
+  }
+
+  if (type === 'open-disputes') {
+    return 'Borrower dispute'
+  }
+
+  return 'Loan activity'
+}
+
+function getDrilldownSubtitle(subtitle: string, type: string): string | null {
+  if (
+    !['requests-received', 'accepted-requests'].includes(type) ||
+    /^Request\s/i.test(subtitle)
+  ) {
+    return null
+  }
+
+  return subtitle
+}
+
+async function fetchAnalyticsOverview(
+  lenderId: string,
+  range: string,
+): Promise<AnalyticsOverviewResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/overview?lenderId=${encodeURIComponent(
+      lenderId,
+    )}&range=${encodeURIComponent(range)}`,
+    { headers: getAuthHeaders() },
+  )
+
+  if (!response.ok) {
+    throw new Error(`Analytics request failed with status ${response.status}`)
+  }
+
+  return response.json()
+}
+
+async function fetchAnalyticsSummary(
+  lenderId: string,
+  range: string,
+): Promise<AnalyticsSummaryResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/summary?lenderId=${encodeURIComponent(
+      lenderId,
+    )}&range=${encodeURIComponent(range)}`,
+    { headers: getAuthHeaders() },
+  )
+
+  if (!response.ok) {
+    throw new Error(`Analytics summary failed with status ${response.status}`)
+  }
+
+  return response.json()
+}
+
+async function fetchAnalyticsDrilldown(
+  lenderId: string,
+  type: string,
+  range: string,
+): Promise<AnalyticsDrilldownResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/drilldown?lenderId=${encodeURIComponent(
+      lenderId,
+    )}&type=${encodeURIComponent(type)}&range=${encodeURIComponent(range)}`,
+    { headers: getAuthHeaders() },
+  )
+
+  if (!response.ok) {
+    throw new Error(`Analytics drilldown failed with status ${response.status}`)
+  }
+
+  return response.json()
 }
 
 function TrendBars({
   data,
   colorClassName,
 }: {
-  data: AnalyticsTrendPoint[];
-  colorClassName: string;
+  data: AnalyticsTrendPoint[]
+  colorClassName: string
 }) {
-  const maxValue = Math.max(...data.map((point) => point.value), 1);
+  const maxValue = Math.max(...data.map((point) => point.value), 1)
 
   return (
     <div className="analytics-bars">
@@ -84,17 +170,21 @@ function TrendBars({
         </div>
       ))}
     </div>
-  );
+  )
 }
 
-function StatusBreakdown({ data }: { data: AnalyticsBreakdownPoint[] }) {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+function StatusBreakdown({
+  data,
+}: {
+  data: AnalyticsBreakdownPoint[]
+}) {
+  const total = data.reduce((sum, item) => sum + item.value, 0)
 
   return (
     <div className="analytics-status-list">
       {data.length > 0 ? (
         data.map((item) => {
-          const width = total > 0 ? (item.value / total) * 100 : 0;
+          const width = total > 0 ? (item.value / total) * 100 : 0
 
           return (
             <div className="analytics-status-list__item" key={item.label}>
@@ -109,171 +199,211 @@ function StatusBreakdown({ data }: { data: AnalyticsBreakdownPoint[] }) {
                 />
               </div>
             </div>
-          );
+          )
         })
       ) : (
         <p className="analytics-empty-copy">No loan status data yet.</p>
       )}
     </div>
-  );
+  )
 }
 
 type AnalyticsPageProps = {
-  session: LenderSession;
-};
+  session: LenderSession
+  onNavigate: (view: LenderView) => void
+}
 
-export default function AnalyticsPage({ session }: AnalyticsPageProps) {
+export default function AnalyticsPage({ session, onNavigate }: AnalyticsPageProps) {
   const [selectedRange, setSelectedRange] =
-    useState<(typeof RANGE_OPTIONS)[number]["key"]>("90d");
-  const [overview, setOverview] = useState<AnalyticsOverviewResponse | null>(
-    null,
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [drilldownType, setDrilldownType] = useState<string | null>(null);
-  const [drilldown, setDrilldown] = useState<AnalyticsDrilldownResponse | null>(
-    null,
-  );
-  const [isDrilldownLoading, setIsDrilldownLoading] = useState(false);
-  const [drilldownError, setDrilldownError] = useState<string | null>(null);
+    useState<(typeof RANGE_OPTIONS)[number]['key']>('90d')
+  const [summaryData, setSummaryData] = useState<AnalyticsSummaryResponse | null>(null)
+  const [overview, setOverview] = useState<AnalyticsOverviewResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isOverviewLoading, setIsOverviewLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [drilldownType, setDrilldownType] = useState<string | null>(null)
+  const [drilldown, setDrilldown] = useState<AnalyticsDrilldownResponse | null>(null)
+  const [isDrilldownLoading, setIsDrilldownLoading] = useState(false)
+  const [drilldownError, setDrilldownError] = useState<string | null>(null)
 
   useEffect(() => {
-    let isMounted = true;
+    let isMounted = true
 
     const loadAnalytics = async () => {
       try {
-        setIsLoading(true);
-        setError(null);
-        const data = await fetchAnalyticsOverview(selectedRange);
+        setIsLoading(true)
+        setIsOverviewLoading(false)
+        setError(null)
+        setSummaryData(null)
+        setOverview(null)
+        const data = await fetchAnalyticsSummary(session.lenderId, selectedRange)
 
         if (isMounted) {
-          setOverview(data);
+          setSummaryData(data)
         }
       } catch (loadError) {
         if (isMounted) {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : "Failed to load analytics data.",
-          );
+              : 'Failed to load analytics data.',
+          )
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsLoading(false)
         }
       }
-    };
+    }
 
-    void loadAnalytics();
+    void loadAnalytics()
 
     return () => {
-      isMounted = false;
-    };
-  }, [selectedRange, session.lenderId]);
+      isMounted = false
+    }
+  }, [selectedRange, session.lenderId])
+
+  useEffect(() => {
+    if (!summaryData) {
+      return
+    }
+
+    let isMounted = true
+
+    const loadOverview = async () => {
+      try {
+        setIsOverviewLoading(true)
+        const data = await fetchAnalyticsOverview(session.lenderId, selectedRange)
+
+        if (isMounted) {
+          setOverview(data)
+        }
+      } catch {
+        if (isMounted) {
+          setOverview(null)
+        }
+      } finally {
+        if (isMounted) {
+          setIsOverviewLoading(false)
+        }
+      }
+    }
+
+    void loadOverview()
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedRange, session.lenderId, summaryData])
 
   useEffect(() => {
     if (!drilldownType) {
-      return;
+      return
     }
 
-    let isMounted = true;
+    let isMounted = true
 
     const loadDrilldown = async () => {
       try {
-        setIsDrilldownLoading(true);
-        setDrilldownError(null);
+        setIsDrilldownLoading(true)
+        setDrilldownError(null)
         const data = await fetchAnalyticsDrilldown(
+          session.lenderId,
           drilldownType,
           selectedRange,
-        );
+        )
 
         if (isMounted) {
-          setDrilldown(data);
+          setDrilldown(data)
         }
       } catch (loadError) {
         if (isMounted) {
           setDrilldownError(
             loadError instanceof Error
               ? loadError.message
-              : "Failed to load drilldown data.",
-          );
+              : 'Failed to load drilldown data.',
+          )
         }
       } finally {
         if (isMounted) {
-          setIsDrilldownLoading(false);
+          setIsDrilldownLoading(false)
         }
       }
-    };
+    }
 
-    void loadDrilldown();
+    void loadDrilldown()
 
     return () => {
-      isMounted = false;
-    };
-  }, [drilldownType, selectedRange, session.lenderId]);
+      isMounted = false
+    }
+  }, [drilldownType, selectedRange, session.lenderId])
 
   useEffect(() => {
     if (!drilldownType) {
-      return;
+      return
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        handleCloseDrilldown();
+      if (event.key === 'Escape') {
+        handleCloseDrilldown()
       }
-    };
+    }
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [drilldownType]);
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [drilldownType])
 
   const summaryCards = useMemo(() => {
-    if (!overview) {
-      return [];
+    if (!summaryData) {
+      return []
     }
 
     return [
       {
-        label: "Total Lent",
-        value: formatCurrency(overview.summary.totalLent),
-        caption: "Lending volume in selected period",
-        tone: "primary",
-        drilldownType: "total-lent",
+        label: 'Total Lent',
+        value: formatCurrency(summaryData.summary.totalLent),
+        caption: 'Lending volume in selected period',
+        tone: 'primary',
+        icon: HandCoins,
+        drilldownType: 'total-lent',
       },
       {
-        label: "Total Collected",
-        value: formatCurrency(overview.summary.totalCollected),
-        caption: "Repayments captured in selected period",
-        tone: "success",
-        drilldownType: "total-collected",
+        label: 'Total Collected',
+        value: formatCurrency(summaryData.summary.totalCollected),
+        caption: 'Repayments captured in selected period',
+        tone: 'success',
+        icon: ReceiptText,
+        drilldownType: 'total-collected',
       },
       {
-        label: "Active Loans",
-        value: String(overview.summary.activeLoans),
-        caption: "Loans currently in active status",
-        tone: "warning",
-        drilldownType: "active-loans",
+        label: 'Active Loans',
+        value: String(summaryData.summary.activeLoans),
+        caption: 'Loans currently in active status',
+        tone: 'warning',
+        icon: Activity,
+        drilldownType: 'active-loans',
       },
       {
-        label: "Repayment Success",
-        value: formatPercent(overview.summary.repaymentSuccessRate),
-        caption: "Completed vs defaulted closed loans",
-        tone: "danger",
+        label: 'Repayment Success',
+        value: formatPercent(summaryData.summary.repaymentSuccessRate),
+        caption: 'Completed vs defaulted closed loans',
+        tone: 'danger',
+        icon: BadgeCheck,
         drilldownType: null,
       },
-    ];
-  }, [overview]);
+    ]
+  }, [summaryData])
 
   function handleOpenDrilldown(type: string) {
-    setDrilldownType(type);
-    setDrilldown(null);
-    setDrilldownError(null);
+    setDrilldownType(type)
+    setDrilldown(null)
+    setDrilldownError(null)
   }
 
   function handleCloseDrilldown() {
-    setDrilldownType(null);
-    setDrilldown(null);
-    setDrilldownError(null);
+    setDrilldownType(null)
+    setDrilldown(null)
+    setDrilldownError(null)
   }
 
   return (
@@ -291,21 +421,15 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
 
           <div className="analytics-header-tools">
             <div className="analytics-lender-pill">
-              {session.displayName} • {session.lenderId}
+              {session.displayName}
             </div>
-            <div
-              className="analytics-range-tabs"
-              role="tablist"
-              aria-label="Time range"
-            >
+            <div className="analytics-range-tabs" role="tablist" aria-label="Time range">
               {RANGE_OPTIONS.map((option) => (
                 <button
                   key={option.key}
                   type="button"
                   className={`analytics-range-tab${
-                    selectedRange === option.key
-                      ? " analytics-range-tab--active"
-                      : ""
+                    selectedRange === option.key ? ' analytics-range-tab--active' : ''
                   }`}
                   onClick={() => setSelectedRange(option.key)}
                 >
@@ -329,20 +453,18 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
               data exists in Firebase.
             </p>
           </section>
-        ) : overview ? (
+        ) : summaryData ? (
           <>
             <section className="summary-grid" aria-label="Analytics summary">
               {summaryCards.map((card) => {
-                const isClickable = Boolean(card.drilldownType);
+                const isClickable = Boolean(card.drilldownType)
 
                 return (
                   <button
                     key={card.label}
                     type="button"
                     className={`card metric-card analytics-drilldown-card${
-                      isClickable
-                        ? " analytics-drilldown-card--interactive"
-                        : ""
+                      isClickable ? ' analytics-drilldown-card--interactive' : ''
                     }`}
                     onClick={() =>
                       card.drilldownType
@@ -355,7 +477,7 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                       className={`metric-icon metric-icon--${card.tone}`}
                       aria-hidden="true"
                     >
-                      {card.label.slice(0, 2).toUpperCase()}
+                      <SummaryIcon icon={card.icon} />
                     </div>
                     <div className="metric-copy">
                       <p className="metric-label">{card.label}</p>
@@ -363,12 +485,10 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                       <p className="metric-caption">{card.caption}</p>
                     </div>
                     {isClickable ? (
-                      <span className="analytics-drilldown-card__hint">
-                        View
-                      </span>
+                      <span className="analytics-drilldown-card__hint">View</span>
                     ) : null}
                   </button>
-                );
+                )
               })}
             </section>
 
@@ -383,10 +503,16 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                     </p>
                   </div>
                 </div>
-                <TrendBars
-                  data={overview.trends.lendingByMonth}
-                  colorClassName="analytics-bars__fill--primary"
-                />
+                {overview ? (
+                  <TrendBars
+                    data={overview.trends.lendingByMonth}
+                    colorClassName="analytics-bars__fill--primary"
+                  />
+                ) : (
+                  <p className="analytics-empty-copy">
+                    {isOverviewLoading ? 'Loading lending trend...' : 'Trend data is not available yet.'}
+                  </p>
+                )}
               </article>
 
               <article className="card analytics-card">
@@ -398,7 +524,13 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                     </p>
                   </div>
                 </div>
-                <StatusBreakdown data={overview.breakdowns.loanStatus} />
+                {overview ? (
+                  <StatusBreakdown data={overview.breakdowns.loanStatus} />
+                ) : (
+                  <p className="analytics-empty-copy">
+                    {isOverviewLoading ? 'Loading loan status mix...' : 'Loan status data is not available yet.'}
+                  </p>
+                )}
               </article>
             </section>
 
@@ -412,10 +544,16 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                     </p>
                   </div>
                 </div>
-                <TrendBars
-                  data={overview.trends.collectionByMonth}
-                  colorClassName="analytics-bars__fill--success"
-                />
+                {overview ? (
+                  <TrendBars
+                    data={overview.trends.collectionByMonth}
+                    colorClassName="analytics-bars__fill--success"
+                  />
+                ) : (
+                  <p className="analytics-empty-copy">
+                    {isOverviewLoading ? 'Loading collection trend...' : 'Collection trend data is not available yet.'}
+                  </p>
+                )}
               </article>
 
               <article className="card analytics-card">
@@ -429,33 +567,27 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                 </div>
                 <div className="analytics-mini-grid">
                   <article className="analytics-mini-card">
-                    <p className="analytics-mini-card__label">
-                      Outstanding Amount
-                    </p>
+                    <p className="analytics-mini-card__label">Outstanding Amount</p>
                     <p className="analytics-mini-card__value">
-                      {formatCurrency(overview.portfolio.outstandingAmount)}
+                      {formatCurrency(summaryData.portfolio.outstandingAmount)}
                     </p>
                   </article>
                   <article className="analytics-mini-card">
-                    <p className="analytics-mini-card__label">
-                      Average Loan Size
-                    </p>
+                    <p className="analytics-mini-card__label">Average Loan Size</p>
                     <p className="analytics-mini-card__value">
-                      {formatCurrency(overview.portfolio.averageLoanSize)}
+                      {formatCurrency(summaryData.portfolio.averageLoanSize)}
                     </p>
                   </article>
                   <article className="analytics-mini-card">
-                    <p className="analytics-mini-card__label">
-                      Average Interest
-                    </p>
+                    <p className="analytics-mini-card__label">Average Interest</p>
                     <p className="analytics-mini-card__value">
-                      {overview.portfolio.averageInterestRate.toFixed(1)}%
+                      {summaryData.portfolio.averageInterestRate.toFixed(1)}%
                     </p>
                   </article>
                   <article className="analytics-mini-card">
                     <p className="analytics-mini-card__label">Average Tenure</p>
                     <p className="analytics-mini-card__value">
-                      {overview.portfolio.averageTenureMonths.toFixed(1)} months
+                      {summaryData.portfolio.averageTenureMonths.toFixed(1)} months
                     </p>
                   </article>
                 </div>
@@ -477,45 +609,37 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   <button
                     type="button"
                     className="analytics-mini-card analytics-mini-card--interactive"
-                    onClick={() => handleOpenDrilldown("active-ads")}
+                    onClick={() => onNavigate('active-ads-requests')}
                   >
                     <p className="analytics-mini-card__label">Active Ads</p>
                     <p className="analytics-mini-card__value">
-                      {overview.performance.activeAds}
+                      {summaryData.performance.activeAds}
                     </p>
                   </button>
                   <button
                     type="button"
                     className="analytics-mini-card analytics-mini-card--interactive"
-                    onClick={() => handleOpenDrilldown("requests-received")}
+                    onClick={() => handleOpenDrilldown('requests-received')}
                   >
-                    <p className="analytics-mini-card__label">
-                      Requests Received
-                    </p>
+                    <p className="analytics-mini-card__label">Requests Received</p>
                     <p className="analytics-mini-card__value">
-                      {overview.performance.requestsReceived}
+                      {summaryData.performance.requestsReceived}
                     </p>
                   </button>
                   <button
                     type="button"
                     className="analytics-mini-card analytics-mini-card--interactive"
-                    onClick={() => handleOpenDrilldown("accepted-requests")}
+                    onClick={() => handleOpenDrilldown('accepted-requests')}
                   >
-                    <p className="analytics-mini-card__label">
-                      Accepted Requests
-                    </p>
+                    <p className="analytics-mini-card__label">Accepted Requests</p>
                     <p className="analytics-mini-card__value">
-                      {overview.performance.acceptedRequests}
+                      {summaryData.performance.acceptedRequests}
                     </p>
                   </button>
                   <article className="analytics-mini-card">
-                    <p className="analytics-mini-card__label">
-                      Conversion Rate
-                    </p>
+                    <p className="analytics-mini-card__label">Conversion Rate</p>
                     <p className="analytics-mini-card__value">
-                      {formatPercent(
-                        overview.performance.requestToLoanConversionRate,
-                      )}
+                      {formatPercent(summaryData.performance.requestToLoanConversionRate)}
                     </p>
                   </article>
                 </div>
@@ -534,33 +658,31 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                   <button
                     type="button"
                     className="analytics-mini-card analytics-mini-card--interactive"
-                    onClick={() => handleOpenDrilldown("overdue-loans")}
+                    onClick={() => handleOpenDrilldown('overdue-loans')}
                   >
                     <p className="analytics-mini-card__label">Overdue Loans</p>
                     <p className="analytics-mini-card__value">
-                      {overview.risk.overdueLoans}
+                      {summaryData.risk.overdueLoans}
                     </p>
                   </button>
                   <button
                     type="button"
                     className="analytics-mini-card analytics-mini-card--interactive"
-                    onClick={() => handleOpenDrilldown("defaulted-loans")}
+                    onClick={() => handleOpenDrilldown('defaulted-loans')}
                   >
-                    <p className="analytics-mini-card__label">
-                      Defaulted Loans
-                    </p>
+                    <p className="analytics-mini-card__label">Defaulted Loans</p>
                     <p className="analytics-mini-card__value">
-                      {overview.risk.defaultedLoans}
+                      {summaryData.risk.defaultedLoans}
                     </p>
                   </button>
                   <button
                     type="button"
                     className="analytics-mini-card analytics-mini-card--interactive"
-                    onClick={() => handleOpenDrilldown("open-disputes")}
+                    onClick={() => handleOpenDrilldown('open-disputes')}
                   >
                     <p className="analytics-mini-card__label">Open Disputes</p>
                     <p className="analytics-mini-card__value">
-                      {overview.risk.openDisputes}
+                      {summaryData.risk.openDisputes}
                     </p>
                   </button>
                   <article className="analytics-mini-card">
@@ -568,9 +690,9 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                       Avg Borrower Credit Score
                     </p>
                     <p className="analytics-mini-card__value">
-                      {overview.risk.averageBorrowerCreditScore !== null
-                        ? overview.risk.averageBorrowerCreditScore.toFixed(0)
-                        : "N/A"}
+                      {summaryData.risk.averageBorrowerCreditScore !== null
+                        ? summaryData.risk.averageBorrowerCreditScore.toFixed(0)
+                        : 'N/A'}
                     </p>
                   </article>
                 </div>
@@ -582,22 +704,21 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                 <div>
                   <h2 className="section-title">Business Insights</h2>
                   <p className="section-subtitle">
-                    Quick plain-English takeaways for lender growth and
-                    portfolio quality.
+                    Quick plain-English takeaways for lender growth and portfolio
+                    quality.
                   </p>
                 </div>
               </div>
               <div className="analytics-insights">
-                {overview.insights.length > 0 ? (
+                {overview?.insights.length ? (
                   overview.insights.map((insight) => (
                     <article className="analytics-insight" key={insight}>
-                      <span
-                        className="analytics-insight__dot"
-                        aria-hidden="true"
-                      />
+                      <span className="analytics-insight__dot" aria-hidden="true" />
                       <p>{insight}</p>
                     </article>
                   ))
+                ) : isOverviewLoading ? (
+                  <p className="analytics-empty-copy">Loading insights...</p>
                 ) : (
                   <p className="analytics-empty-copy">
                     Insights will appear when enough lender data is available.
@@ -626,11 +747,11 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
               <div>
                 <p className="eyebrow">Analytics drilldown</p>
                 <h2 className="section-title" id="analytics-drilldown-title">
-                  {drilldown?.title ?? "Loading details..."}
+                  {drilldown?.title ?? 'Loading details...'}
                 </h2>
                 <p className="section-subtitle">
                   {drilldown?.description ??
-                    "Review the underlying lender records behind this metric."}
+                    'Review the underlying lender records behind this metric.'}
                 </p>
               </div>
               <button
@@ -656,17 +777,16 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
                 drilldown.items.length > 0 ? (
                   <div className="analytics-drilldown-list">
                     {drilldown.items.map((item) => (
-                      <article
-                        className="analytics-drilldown-item"
-                        key={item.id}
-                      >
+                      <article className="analytics-drilldown-item" key={item.id}>
                         <div className="analytics-drilldown-item__main">
                           <h3 className="analytics-drilldown-item__title">
-                            {item.title}
+                            {getDrilldownTitle(item.title, drilldown.type)}
                           </h3>
-                          <p className="analytics-drilldown-item__subtitle">
-                            {item.subtitle}
-                          </p>
+                          {getDrilldownSubtitle(item.subtitle, drilldown.type) ? (
+                            <p className="analytics-drilldown-item__subtitle">
+                              {getDrilldownSubtitle(item.subtitle, drilldown.type)}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="analytics-drilldown-item__meta">
                           <span className="badge badge-gray">
@@ -698,5 +818,5 @@ export default function AnalyticsPage({ session }: AnalyticsPageProps) {
         </div>
       ) : null}
     </>
-  );
+  )
 }

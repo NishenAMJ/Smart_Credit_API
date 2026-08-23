@@ -1,18 +1,63 @@
 export interface KycDocument {
   id: string;
   userId: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  userKycStatus?: string;
   documentType: string;
   originalFilename?: string;
   mimeType?: string;
   fileHash?: string;
+  cloudinaryAssetId?: string;
   cloudinaryPublicId?: string;
   cloudinaryResourceType?: string;
   cloudinaryDeliveryType?: string;
+  cloudinaryVersion?: number;
+  format?: string;
+  fileSize?: number;
   documentUrl?: string;
-  status: 'pending_review' | 'approved' | 'rejected' | 'expired' | 'deleted';
+  status: 'pending' | 'approved' | 'rejected';
+  documentStatus?:
+    | 'pending_review'
+    | 'approved'
+    | 'rejected'
+    | 'expired'
+    | 'deleted';
   submittedAt: any;
   reviewedAt?: any;
   reviewedBy?: string;
+  reviewerId?: string;
+  reviewTimestamp?: any;
+  reviewNotes?: string;
   rejectionReason?: string;
   notes?: string;
+  applicant?: {
+    fullName: string;
+    email: string;
+    phone: string;
+    role?: 'borrower' | 'lender';
+    address?: {
+      line1: string;
+      line2?: string;
+      city: string;
+      district: string;
+      province: string;
+    };
+  };
+  identityDetails?: {
+    documentType: string;
+    documentNumber: string;
+    fullName: string;
+    issuingCountry?: string;
+    expiryDate?: string;
+  };
+  location?: {
+    latitude: number;
+    longitude: number;
+    city?: string;
+    district?: string;
+    visibility: 'hidden' | 'approximate' | 'exact';
+    updatedAt?: any;
+  };
 }

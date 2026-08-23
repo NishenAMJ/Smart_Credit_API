@@ -27,5 +27,7 @@ export function rethrowFirebaseError(
     );
   }
 
-  throw new InternalServerErrorException(fallbackMessage);
+  throw new InternalServerErrorException(
+    message ? `${fallbackMessage}: ${message}` : fallbackMessage,
+  );
 }

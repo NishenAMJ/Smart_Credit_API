@@ -4,35 +4,79 @@ function pad(value, length) {
   return String(value).padStart(length, '0');
 }
 
-async function commitSetWrites(db, writes, label) {
+const sleep = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+function isRetryableFirestoreError(error) {
+  if (error instanceof Error && error.message.includes('timed out')) {
+    return true;
+  }
+
+  const retryableCodes = new Set([
+    4,
+    8,
+    10,
+    13,
+    14,
+    'deadline-exceeded',
+    'resource-exhausted',
+    'aborted',
+    'internal',
+    'unavailable',
+  ]);
+  return retryableCodes.has(error?.code);
+}
+
+async function commitSetWrites(db, writes, label, options = {}) {
   if (!writes.length) {
     console.log(`No ${label} writes to apply.`);
     return;
   }
 
-  const MAX_BATCH_SIZE = 400;
-  let batch = db.batch();
-  let count = 0;
-  let batchNumber = 0;
+  const maxBatchSize = options.batchSize ?? 200;
+  const writeDelayMs = options.delayMs ?? 100;
+  const MAX_ATTEMPTS = 3;
 
-  for (let index = 0; index < writes.length; index += 1) {
-    const write = writes[index];
-    batch.set(write.ref, write.data, { merge: true });
-    count += 1;
+  for (let offset = 0; offset < writes.length; offset += maxBatchSize) {
+    const chunk = writes.slice(offset, offset + maxBatchSize);
+    const batchNumber = Math.floor(offset / maxBatchSize) + 1;
 
-    if (count === MAX_BATCH_SIZE || index === writes.length - 1) {
-      batchNumber += 1;
-      await batch.commit();
-      console.log(
-        `Committed ${label} batch ${pad(batchNumber, 2)} with ${count} writes.`,
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const batch = db.batch();
+      chunk.forEach((write) =>
+        batch.set(write.ref, write.data, { merge: true }),
       );
-      batch = db.batch();
-      count = 0;
+
+      try {
+        await batch.commit();
+        console.log(
+          `Committed ${label} batch ${pad(batchNumber, 2)} with ${chunk.length} writes.`,
+        );
+        break;
+      } catch (error) {
+        if (attempt === MAX_ATTEMPTS || !isRetryableFirestoreError(error)) {
+          throw error;
+        }
+        const retryDelayMs = 1000 * 2 ** (attempt - 1);
+        console.warn(
+          `${label} batch ${pad(batchNumber, 2)} attempt ${attempt} failed; retrying in ${retryDelayMs}ms.`,
+        );
+        await sleep(retryDelayMs);
+      }
+    }
+
+    if (offset + maxBatchSize < writes.length && writeDelayMs > 0) {
+      await sleep(writeDelayMs);
     }
   }
 }
 
-async function assertTopLevelDocsExist(db, collectionName, ids, dependencyLabel) {
+async function assertTopLevelDocsExist(
+  db,
+  collectionName,
+  ids,
+  dependencyLabel,
+) {
   const snapshots = await Promise.all(
     ids.map((id) => db.collection(collectionName).doc(id).get()),
   );

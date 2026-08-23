@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { type CollectionReference, Timestamp } from 'firebase-admin/firestore';
 
 import { FirebaseService } from '../../firebase/firebase.service';
+import { buildSearchTokens } from '../../common/firestore/search-tokens';
 import {
   AuthResponseDto,
   MeResponseDto,
@@ -25,11 +26,18 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SessionResponseDto } from './dto/session-response.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { UserDocument, UserRole, KycStatus, USER_ROLES } from './auth.types';
+import {
+  AuthCredentialDocument,
+  UserDocument,
+  UserRole,
+  KycStatus,
+  USER_ROLES,
+} from './auth.types';
 
 @Injectable()
 export class AuthService {
   private readonly usersCollection: CollectionReference<UserDocument>;
+  private readonly credentialsCollection: CollectionReference<AuthCredentialDocument>;
 
   constructor(
     private readonly firebaseService: FirebaseService,
@@ -38,8 +46,12 @@ export class AuthService {
     this.usersCollection = this.firebaseService.db.collection(
       'users',
     ) as CollectionReference<UserDocument>;
+    this.credentialsCollection = this.firebaseService.db.collection(
+      'authCredentials',
+    ) as CollectionReference<AuthCredentialDocument>;
   }
 
+  // Registers a local account and stores the normalized identity fields used for login lookups.
   async register(registerDto: RegisterDto): Promise<RegisterResponseDto> {
     const emailLower = this.normalizeEmail(registerDto.email);
     const phoneNormalized = this.normalizePhone(registerDto.phone);
@@ -63,28 +75,70 @@ export class AuthService {
     const userRef = this.usersCollection.doc();
     const now = Timestamp.now();
     const user: UserDocument = {
-      uid: userRef.id,
-      role: [registerDto.role],
+      userId: userRef.id,
+      roles: [registerDto.role],
+      primaryRole: registerDto.role,
       fullName: registerDto.fullName.trim(),
-      photoURL: '',
-      phone: registerDto.phone.trim(),
-      email: registerDto.email.trim(),
-      emailLower,
-      phoneNormalized,
-      passwordHash,
-      creditScore: 0,
-      rating: 0,
-      totalLoansCompleted: 0,
-      totalAmountLent: 0,
-      totalAmountBorrowed: 0,
+      photoUrl: null,
+      phone: phoneNormalized,
+      email: emailLower,
+      address: {
+        line1: registerDto.address.line1.trim(),
+        ...(registerDto.address.line2?.trim()
+          ? { line2: registerDto.address.line2.trim() }
+          : {}),
+        city: registerDto.address.city.trim(),
+        district: registerDto.address.district.trim(),
+        province: registerDto.address.province.trim(),
+      },
+      borrowerProfile:
+        registerDto.role === 'borrower'
+          ? {
+              dateOfBirth: null,
+              occupation: null,
+              monthlyIncomeMinor: null,
+              creditScore: null,
+            }
+          : null,
+      lenderProfile:
+        registerDto.role === 'lender'
+          ? {
+              businessName: null,
+              registrationNumber: null,
+              description: null,
+              rating: 0,
+            }
+          : null,
       kycStatus: 'not_submitted',
       accountStatus: 'active',
-      authProvider: 'local',
+      searchTokens: buildSearchTokens([
+        userRef.id,
+        registerDto.fullName,
+        emailLower,
+        phoneNormalized,
+        registerDto.role,
+        registerDto.address.line1,
+        registerDto.address.line2,
+        registerDto.address.city,
+        registerDto.address.district,
+        registerDto.address.province,
+      ]),
       createdAt: now,
       updatedAt: now,
+      lastLoginAt: null,
     };
-
-    await userRef.set(user);
+    const batch = this.firebaseService.db.batch();
+    batch.create(userRef, user);
+    batch.create(this.credentialsCollection.doc(userRef.id), {
+      userId: userRef.id,
+      passwordHash,
+      passwordChangedAt: now,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await batch.commit();
 
     return {
       message: 'Account created successfully. Please log in to continue.',
@@ -92,6 +146,7 @@ export class AuthService {
     };
   }
 
+  // Validates credentials, resolves the active role, and issues a JWT for that session.
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     const user = await this.findUserByIdentifier(loginDto.identifier);
 
@@ -103,24 +158,27 @@ export class AuthService {
       throw new UnauthorizedException('This account is not active.');
     }
 
+    const credentials = await this.getRequiredCredentials(user.userId);
     const passwordMatches = await bcrypt.compare(
       loginDto.password,
-      user.passwordHash,
+      credentials.passwordHash,
     );
 
     if (!passwordMatches) {
       throw new UnauthorizedException('Invalid credentials.');
     }
 
+    await this.repairMissingCanonicalRoles(user);
+
     const activeRole = this.resolveLoginRole(user, loginDto.role);
 
     const accessToken = this.jwtService.sign({
-      sub: user.uid,
+      sub: user.userId,
       email: user.email,
       role: activeRole,
     });
 
-    await this.usersCollection.doc(user.uid).update({
+    await this.usersCollection.doc(user.userId).update({
       lastLoginAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -128,9 +186,11 @@ export class AuthService {
     return {
       accessToken,
       user: this.toSafeUser(user, activeRole),
+      availableRoles: this.getRoles(user.roles),
     };
   }
 
+  // Loads the current user's safe profile payload without exposing sensitive fields.
   async getMe(userId: string): Promise<MeResponseDto> {
     const user = await this.getRequiredUser(userId);
 
@@ -139,33 +199,30 @@ export class AuthService {
     };
   }
 
+  // Builds the dashboard data by combining user data with related loans, relationships, and ads.
   async getDashboard(
     userId: string,
     activeRole: UserRole,
   ): Promise<DashboardResponseDto> {
     const user = await this.getRequiredUser(userId);
-    const roles = this.getRoles(user.role);
+    const roles = this.getRoles(user.roles);
     const role = roles.includes(activeRole) ? activeRole : roles[0];
 
     if (role === 'admin') {
       return this.getAdminDashboard(userId);
     }
 
-    const [loanDocs, relationDocs, adDocs] = await Promise.all([
+    const [loanDocs, adDocs] = await Promise.all([
       this.getCollectionDocs(
         'loans',
         role === 'borrower' ? 'borrowerId' : 'lenderId',
         userId,
       ),
-      this.getCollectionDocs(
-        'lenderBorrowers',
-        role === 'borrower' ? 'borrowerId' : 'lenderId',
-        userId,
-      ),
       role === 'lender'
-        ? this.getCollectionDocs('ads', 'lenderId', userId)
+        ? this.getCollectionDocs('loanListings', 'lenderId', userId)
         : Promise.resolve([]),
     ]);
+    const relationDocs = loanDocs;
 
     const sortedLoanDocs = this.sortByTimestamp(loanDocs, 'createdAt').slice(
       0,
@@ -207,6 +264,7 @@ export class AuthService {
     };
   }
 
+  // Aggregates cross-user metrics for the admin review dashboard.
   async getAdminDashboard(userId: string): Promise<DashboardResponseDto> {
     const user = await this.getRequiredUser(userId);
     const snapshot = await this.usersCollection.get();
@@ -219,7 +277,7 @@ export class AuthService {
     const recentUsers = this.sortByTimestamp(
       users.map((candidate) => ({
         ...candidate,
-        id: candidate.uid,
+        id: candidate.userId,
       })),
       'createdAt',
     ).slice(0, 5);
@@ -240,7 +298,7 @@ export class AuthService {
           'Borrowers',
           String(
             users.filter((candidate) =>
-              this.hasRole(candidate.role, 'borrower'),
+              this.hasRole(candidate.roles, 'borrower'),
             ).length,
           ),
           'Registered borrower accounts',
@@ -248,7 +306,7 @@ export class AuthService {
         this.metric(
           'Lenders',
           String(
-            users.filter((candidate) => this.hasRole(candidate.role, 'lender'))
+            users.filter((candidate) => this.hasRole(candidate.roles, 'lender'))
               .length,
           ),
           'Registered lender accounts',
@@ -261,29 +319,30 @@ export class AuthService {
       ],
       primaryListTitle: 'KYC review queue',
       primaryList: pendingUsers.slice(0, 5).map((candidate) => ({
-        id: candidate.uid,
+        id: candidate.userId,
         title: candidate.fullName,
-        subtitle: `${candidate.email} - ${this.getRoles(candidate.role).join(', ')}`,
+        subtitle: `${candidate.email} - ${this.getRoles(candidate.roles).join(', ')}`,
         meta: `KYC: ${candidate.kycStatus}`,
         status: candidate.accountStatus,
       })),
       secondaryListTitle: 'Recent accounts',
       secondaryList: recentUsers.map((candidate) => ({
-        id: this.readString(candidate.id, candidate.uid),
+        id: this.readString(candidate.id, candidate.userId),
         title: this.readString(candidate.fullName, 'User account'),
-        subtitle: `${this.readString(candidate.email, 'No email')} - ${Array.isArray(candidate.role) ? candidate.role.join(', ') : 'unknown'}`,
+        subtitle: `${this.readString(candidate.email, 'No email')} - ${candidate.roles.join(', ')}`,
         meta: this.readTimestampLabel(candidate.createdAt, 'Created'),
         status: this.readString(candidate.kycStatus, 'unknown'),
       })),
     };
   }
 
+  // Returns the current session's resolved role and account state for the client app.
   async getSessionStatus(
     userId: string,
     activeRole: UserRole,
   ): Promise<SessionResponseDto> {
     const user = await this.getRequiredUser(userId);
-    const roles = this.getRoles(user.role);
+    const roles = this.getRoles(user.roles);
     const resolvedRole = roles.includes(activeRole) ? activeRole : roles[0];
 
     return {
@@ -301,10 +360,11 @@ export class AuthService {
     userId: string,
     changePasswordDto: ChangePasswordDto,
   ): Promise<{ message: string }> {
-    const user = await this.getRequiredUser(userId);
+    await this.getRequiredUser(userId);
+    const credentials = await this.getRequiredCredentials(userId);
     const currentPasswordMatches = await bcrypt.compare(
       changePasswordDto.currentPassword,
-      user.passwordHash,
+      credentials.passwordHash,
     );
 
     if (!currentPasswordMatches) {
@@ -319,8 +379,9 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(changePasswordDto.newPassword, 10);
 
-    await this.usersCollection.doc(userId).update({
+    await this.credentialsCollection.doc(userId).update({
       passwordHash,
+      passwordChangedAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
 
@@ -329,10 +390,12 @@ export class AuthService {
     };
   }
 
+  // Shared helper used by other modules that need the full stored user record.
   async getUserById(userId: string): Promise<UserDocument> {
     return this.getRequiredUser(userId);
   }
 
+  // Keeps the user's top-level KYC status in sync with document review decisions.
   async updateUserKycStatus(
     userId: string,
     kycStatus: KycStatus,
@@ -354,49 +417,42 @@ export class AuthService {
 
     if (trimmedIdentifier.includes('@')) {
       const snapshot = await this.usersCollection
-        .where('emailLower', '==', this.normalizeEmail(trimmedIdentifier))
-        .limit(1)
-        .get();
-
-      if (!snapshot.empty) {
-        return snapshot.docs[0].data() as UserDocument;
-      }
-
-      const legacySnapshot = await this.usersCollection
         .where('email', '==', this.normalizeEmail(trimmedIdentifier))
         .limit(1)
         .get();
 
-      return legacySnapshot.empty
-        ? null
-        : (legacySnapshot.docs[0].data() as UserDocument);
+      if (!snapshot.empty) {
+        return {
+          ...(snapshot.docs[0].data() as UserDocument),
+          userId: snapshot.docs[0].id,
+        };
+      }
+
+      return null;
     }
 
     const normalizedPhone = this.normalizePhone(trimmedIdentifier);
     const snapshot = await this.usersCollection
-      .where('phoneNormalized', '==', normalizedPhone)
-      .limit(1)
-      .get();
-
-    if (!snapshot.empty) {
-      return snapshot.docs[0].data() as UserDocument;
-    }
-
-    const legacySnapshot = await this.usersCollection
       .where('phone', '==', normalizedPhone)
       .limit(1)
       .get();
 
-    return legacySnapshot.empty
-      ? null
-      : (legacySnapshot.docs[0].data() as UserDocument);
+    if (!snapshot.empty) {
+      return {
+        ...(snapshot.docs[0].data() as UserDocument),
+        userId: snapshot.docs[0].id,
+      };
+    }
+
+    return null;
   }
 
+  // Shapes the user object that is safe to send back to the frontend.
   private toSafeUser(user: UserDocument, roleOverride?: UserRole): SafeUserDto {
-    const primaryRole = this.getPrimaryRole(user.role);
+    const primaryRole = this.getPrimaryRole(user.roles);
 
     return {
-      uid: user.uid,
+      uid: user.userId,
       fullName: user.fullName,
       email: user.email,
       phone: user.phone,
@@ -405,11 +461,12 @@ export class AuthService {
     };
   }
 
+  // Ensures the requested login role is one of the roles assigned to the user.
   private resolveLoginRole(
     user: UserDocument,
     requestedRole?: UserRole,
   ): UserRole {
-    const roles = this.getRoles(user.role);
+    const roles = this.getRoles(user.roles);
 
     if (requestedRole) {
       if (!roles.includes(requestedRole)) {
@@ -434,24 +491,48 @@ export class AuthService {
     return email.trim().toLowerCase();
   }
 
-  private getRoles(role: UserDocument['role']): UserRole[] {
-    if (Array.isArray(role)) {
-      return role.filter(
-        (entry): entry is UserRole =>
-          typeof entry === 'string' && USER_ROLES.includes(entry as UserRole),
-      );
-    }
+  // Normalizes the stored role field so the rest of the service can treat it as an array.
+  private getRoles(role: UserDocument['roles']): UserRole[] {
+    const normalizedRoles = Array.isArray(role)
+      ? role.filter(
+          (entry): entry is UserRole =>
+            typeof entry === 'string' && USER_ROLES.includes(entry as UserRole),
+        )
+      : typeof role === 'string' && USER_ROLES.includes(role as UserRole)
+        ? [role as UserRole]
+        : [];
+    const uniqueRoles = Array.from(new Set(normalizedRoles));
 
-    return typeof role === 'string' && USER_ROLES.includes(role as UserRole)
-      ? [role as UserRole]
-      : [];
+    // Administrator accounts are intentionally exclusive. Only borrower and
+    // lender roles may coexist on the same account.
+    return uniqueRoles.includes('admin') ? ['admin'] : uniqueRoles;
   }
 
-  private hasRole(role: UserDocument['role'], expectedRole: UserRole): boolean {
+  private async repairMissingCanonicalRoles(user: UserDocument): Promise<void> {
+    if (this.getRoles(user.roles).length > 0) {
+      return;
+    }
+
+    const primaryRole = user.primaryRole;
+    if (!primaryRole || !USER_ROLES.includes(primaryRole)) {
+      return;
+    }
+
+    user.roles = [primaryRole];
+    await this.usersCollection.doc(user.userId).update({
+      roles: [primaryRole],
+      updatedAt: Timestamp.now(),
+    });
+  }
+
+  private hasRole(
+    role: UserDocument['roles'],
+    expectedRole: UserRole,
+  ): boolean {
     return this.getRoles(role).includes(expectedRole);
   }
 
-  private getPrimaryRole(role: UserDocument['role']): UserRole {
+  private getPrimaryRole(role: UserDocument['roles']): UserRole {
     const primaryRole = this.getRoles(role)[0];
 
     if (!primaryRole) {
@@ -463,6 +544,7 @@ export class AuthService {
     return primaryRole;
   }
 
+  // Converts several phone input styles into a single E.164-like format used by the system.
   private normalizePhone(phone: string): string {
     const raw = phone.trim();
 
@@ -497,34 +579,50 @@ export class AuthService {
   }
 
   private async hasExistingEmail(emailLower: string): Promise<boolean> {
-    const [normalizedSnapshot, legacySnapshot] = await Promise.all([
-      this.usersCollection.where('emailLower', '==', emailLower).limit(1).get(),
-      this.usersCollection.where('email', '==', emailLower).limit(1).get(),
-    ]);
-
-    return !normalizedSnapshot.empty || !legacySnapshot.empty;
+    const snapshot = await this.usersCollection
+      .where('email', '==', emailLower)
+      .limit(1)
+      .get();
+    return !snapshot.empty;
   }
 
   private async hasExistingPhone(phoneNormalized: string): Promise<boolean> {
-    const [normalizedSnapshot, legacySnapshot] = await Promise.all([
-      this.usersCollection
-        .where('phoneNormalized', '==', phoneNormalized)
-        .limit(1)
-        .get(),
-      this.usersCollection.where('phone', '==', phoneNormalized).limit(1).get(),
-    ]);
-
-    return !normalizedSnapshot.empty || !legacySnapshot.empty;
+    const snapshot = await this.usersCollection
+      .where('phone', '==', phoneNormalized)
+      .limit(1)
+      .get();
+    return !snapshot.empty;
   }
 
   private async getRequiredUser(userId: string): Promise<UserDocument> {
+    if (!userId?.trim()) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+
     const snapshot = await this.usersCollection.doc(userId).get();
 
     if (!snapshot.exists) {
       throw new NotFoundException('User not found.');
     }
 
-    return snapshot.data() as UserDocument;
+    return {
+      ...(snapshot.data() as UserDocument),
+      userId: snapshot.id,
+    };
+  }
+
+  private async getRequiredCredentials(
+    userId: string,
+  ): Promise<AuthCredentialDocument> {
+    if (!userId?.trim()) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+
+    const snapshot = await this.credentialsCollection.doc(userId).get();
+    if (!snapshot.exists) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+    return snapshot.data() as AuthCredentialDocument;
   }
 
   private async getCollectionDocs(
@@ -543,6 +641,7 @@ export class AuthService {
     }));
   }
 
+  // Builds the small metric cards shown on the borrower dashboard.
   private buildBorrowerMetrics(
     user: UserDocument,
     loanDocs: Array<Record<string, unknown>>,
@@ -559,7 +658,7 @@ export class AuthService {
     return [
       this.metric(
         'Credit score',
-        String(user.creditScore ?? 0),
+        String(user.borrowerProfile?.creditScore ?? 0),
         'Current borrower score',
       ),
       this.metric(
@@ -594,12 +693,17 @@ export class AuthService {
     return [
       this.metric(
         'Total lent',
-        this.formatCurrency(user.totalAmountLent ?? 0),
-        'Tracked from your Firestore profile',
+        this.formatCurrency(
+          loanDocs.reduce(
+            (sum, doc) => sum + this.readNumber(doc.principalMinor),
+            0,
+          ) / 100,
+        ),
+        'Derived from loan principal',
       ),
       this.metric(
         'Completed loans',
-        String(user.totalLoansCompleted ?? 0),
+        String(loanDocs.filter((doc) => doc.status === 'completed').length),
         'Closed lending cycles',
       ),
       this.metric(

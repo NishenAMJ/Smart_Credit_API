@@ -121,7 +121,7 @@ export class LenderSettingsService {
 
     const data = snapshot.data();
 
-    if (!data || !hasRole(data.role, 'lender')) {
+    if (!data || !hasRole(data.roles ?? data.role, 'lender')) {
       throw new NotFoundException(`Lender ${lenderId} was not found.`);
     }
 

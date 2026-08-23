@@ -24,7 +24,7 @@ export default function ApplicationCard({
 }: ApplicationCardProps) {
   const displayStatus = (() => {
     const status = String(application.status ?? "").toLowerCase();
-    if (status === "draft" || status === "open" || status === "pending") {
+    if (status === "open" || status === "pending" || status === "submitted") {
       return "under_review";
     }
     return status;
@@ -35,6 +35,7 @@ export default function ApplicationCard({
       case "under_review":
         return { bg: "#FEF3C7", text: "#F59E0B" };
       case "approved":
+      case "converted":
         return { bg: "#D1FAE5", text: "#10B981" };
       case "rejected":
         return { bg: "#FEE2E2", text: "#EF4444" };

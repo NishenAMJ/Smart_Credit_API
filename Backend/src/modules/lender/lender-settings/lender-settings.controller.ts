@@ -1,8 +1,18 @@
-import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { resolveAuthenticatedLenderId } from '../lender-request.utils';
 import { LenderSettingsService } from './lender-settings.service';
 import {
   AnalyticsRangeKey,
@@ -28,20 +38,32 @@ type UpdateLenderSettingsBody = {
 export class LenderSettingsController {
   constructor(private readonly lenderSettingsService: LenderSettingsService) {}
 
-  @Get('me')
+  @Get(':lenderId')
   getSettings(
     @Req() req: AuthenticatedRequest,
+    @Param('lenderId') lenderId: string,
   ): Promise<LenderSettingsResponse> {
-    return this.lenderSettingsService.getSettings(req.user.sub);
+    if (!lenderId.trim()) {
+      throw new BadRequestException('lenderId is required.');
+    }
+
+    return this.lenderSettingsService.getSettings(
+      resolveAuthenticatedLenderId(req.user.sub, lenderId),
+    );
   }
 
-  @Patch('me')
+  @Patch(':lenderId')
   updateSettings(
     @Req() req: AuthenticatedRequest,
+    @Param('lenderId') lenderId: string,
     @Body() body: UpdateLenderSettingsBody,
   ): Promise<LenderSettingsResponse> {
+    if (!lenderId.trim()) {
+      throw new BadRequestException('lenderId is required.');
+    }
+
     return this.lenderSettingsService.updateSettings(
-      req.user.sub,
+      resolveAuthenticatedLenderId(req.user.sub, lenderId),
       this.toUpdateInput(body),
     );
   }

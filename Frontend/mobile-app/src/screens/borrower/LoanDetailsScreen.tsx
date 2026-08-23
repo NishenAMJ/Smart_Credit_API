@@ -72,7 +72,7 @@ export default function LoanDetailsScreen({
       <View style={{ marginBottom: SPACING.lg }}>
         <Button
           onPress={() =>
-            navigation.navigate("Agreement", {
+            navigation.navigate("LoanAgreement", {
               initialLoanId: loan?.loanId,
             })
           }
@@ -98,7 +98,7 @@ export default function LoanDetailsScreen({
 
         {loading ? (
           <ActivityIndicator
-            size="small"
+            size='small'
             color={COLORS.primary}
             style={{ marginTop: 20 }}
           />
@@ -107,12 +107,12 @@ export default function LoanDetailsScreen({
             <PaymentCard
               key={payment.paymentId ?? `up-${index}`}
               payment={payment}
-              paymentMethod="Card"
+              paymentMethod='Card'
               onPay={() => navigateToBorrowerTab(navigation, "Payments")}
             />
           ))
         ) : (
-          <EmptyState title="No upcoming payment" />
+          <EmptyState title='No upcoming payment' />
         )}
 
         {pastPayments.length > 0 && (
@@ -140,7 +140,7 @@ export default function LoanDetailsScreen({
   return (
     <View style={styles.container}>
       <LoanDetailsHeader
-        title="Active Loan"
+        title='Active Loan'
         onBack={() => navigation.goBack()}
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>

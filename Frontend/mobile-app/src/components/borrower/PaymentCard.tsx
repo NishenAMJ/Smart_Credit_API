@@ -34,6 +34,10 @@ interface IPayment {
   lenderName?: string;
   status?: string;
   type?: string;
+  paymentMethod?: string;
+  verificationStatus?: string;
+  statusLabel?: string;
+  statusDetail?: string;
 }
 
 /**
@@ -93,16 +97,27 @@ export default function PaymentCard({
   // Determine status colors based on payment state
   let statusColor: string = STATUS_COLORS.PENDING.text;
   let statusBgColor: string = STATUS_COLORS.PENDING.background;
-  let statusLabel: string = PAYMENT_BUTTON_LABELS.PENDING;
+  let statusLabel: string = payment.statusLabel || PAYMENT_BUTTON_LABELS.PENDING;
+  const verificationStatus = String(payment.verificationStatus ?? "").toLowerCase();
 
   if (isPaid) {
     statusColor = STATUS_COLORS.PAID.text;
     statusBgColor = STATUS_COLORS.PAID.background;
-    statusLabel = PAYMENT_BUTTON_LABELS.PAID;
+    statusLabel = payment.statusLabel || PAYMENT_BUTTON_LABELS.PAID;
   } else if (isOverdue) {
     statusColor = STATUS_COLORS.OVERDUE.text;
     statusBgColor = STATUS_COLORS.OVERDUE.background;
-    statusLabel = PAYMENT_BUTTON_LABELS.OVERDUE;
+    statusLabel = payment.statusLabel || PAYMENT_BUTTON_LABELS.OVERDUE;
+  } else if (verificationStatus === "rejected") {
+    statusColor = STATUS_COLORS.OVERDUE.text;
+    statusBgColor = STATUS_COLORS.OVERDUE.background;
+  } else if (
+    verificationStatus === "pending_verification" ||
+    verificationStatus === "receipt_required" ||
+    verificationStatus === "awaiting_lender_scan"
+  ) {
+    statusColor = STATUS_COLORS.PENDING.text;
+    statusBgColor = STATUS_COLORS.PENDING.background;
   }
 
   // Wrap card with TouchableOpacity only for paid payments
@@ -131,6 +146,9 @@ export default function PaymentCard({
                 payment.timestamp ?? payment.paidAt ?? payment.dueDate,
               )}
             </Text>
+            {payment.statusDetail ? (
+              <Text style={styles.statusDetail}>{payment.statusDetail}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -283,6 +301,13 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 12,
     color: "#9CA3AF",
+  },
+
+  statusDetail: {
+    fontSize: 12,
+    color: "#6B7280",
+    lineHeight: 17,
+    marginTop: 4,
   },
 
   /** Status badge (Pending/Paid) */

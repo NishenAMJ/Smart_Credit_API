@@ -1,12 +1,3 @@
-/**
- * messages.controller.ts
- * Base path: /conversations/:conversationId/messages
- *
- * LOCAL-FIRST NOTE:
- * The GET endpoint is used on first install to seed the local SQLite database.
- * The POST endpoint is an HTTP fallback if WebSocket is unavailable.
- * Normal message sending goes through the WebSocket gateway.
- */
 import {
   Controller,
   Get,
@@ -14,30 +5,33 @@ import {
   Param,
   Body,
   Query,
+  UseGuards,
   NotImplementedException,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { IsString } from 'class-validator';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { MessagesService } from './messages.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 class SendMessageDto {
-  @IsString()
-  text!: string;
+  @IsString() text!: string;
 }
 
+/**
+ * All routes protected by JwtAuthGuard.
+ * MessagesService.getMessages() calls ConversationsService.findOne()
+ * internally which checks participantIds — so a user can only read
+ * messages from conversations they belong to.
+ */
+@UseGuards(JwtAuthGuard)
 @Controller('conversations/:conversationId/messages')
 export class MessagesController {
   constructor(private messagesService: MessagesService) {}
 
-  /**
-   * GET /conversations/:conversationId/messages
-   * Returns paginated message history from Firestore.
-   * Used on first install to seed the local SQLite database.
-   * page is 0-indexed (page=0 → newest 30 messages).
-   */
+  /** GET /conversations/:id/messages — paginated, 0-indexed page */
   @Get()
   list(
     @Param('conversationId') conversationId: string,
@@ -45,19 +39,10 @@ export class MessagesController {
     @Query('page') page: string = '0',
     @Query('limit') limit: string = '30',
   ) {
-    return this.messagesService.getMessages(
-      conversationId,
-      userId,
-      page,
-      limit,
-    );
+    return this.messagesService.getMessages(conversationId, userId, page, limit);
   }
 
-  /**
-   * POST /conversations/:conversationId/messages
-   * HTTP fallback for sending a message when WebSocket is unavailable.
-   * Under normal conditions the frontend uses the WebSocket gateway instead.
-   */
+  /** POST /conversations/:id/messages — HTTP fallback when WebSocket unavailable */
   @Post()
   sendText(
     @Param('conversationId') conversationId: string,
@@ -67,16 +52,12 @@ export class MessagesController {
     return this.messagesService.sendText(conversationId, userId, dto.text);
   }
 
-  /**
-   * POST /conversations/:conversationId/messages/upload
-   * Media upload — not yet implemented.
-   * Needs a proper Firebase Storage upload before storing the URL.
-   */
+  /** POST /conversations/:id/messages/upload — not yet implemented */
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   uploadMedia() {
     throw new NotImplementedException(
-      'Media upload not yet implemented. Implement Firebase Storage upload first.',
+      'Media upload not yet implemented.',
     );
   }
 }

@@ -86,8 +86,7 @@ export default function Transactions() {
   useEffect(() => {
     setCurrentPage(1);
     setCursorStack([]);
-    void loadTransactions();
-  }, [loadTransactions]);
+  }, [pageSize]);
 
   useEffect(() => {
     if (currentPage !== 1) {
@@ -110,16 +109,17 @@ export default function Transactions() {
           );
           setTotalLoaded(data.count);
           setError(data.error ?? "");
+          setLoading(false);
         }
       },
       () => {
-        // Keep the lumith UI unchanged; fall back to normal manual refresh on stream errors.
+        void loadTransactions();
       },
       pageSize,
     );
 
     return () => source.close();
-  }, [currentPage, pageSize]);
+  }, [currentPage, loadTransactions, pageSize]);
 
   const filteredTransactions = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();

@@ -3,6 +3,7 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import BorrowerTabNavigator from "./BorrowerTabNavigator";
+import ChatNavigator from "./ChatNavigator";
 import MyLoansScreen from "../screens/borrower/MyLoansScreen";
 import LoanDetailsScreen from "../screens/borrower/LoanDetailsScreen";
 import LoanApplicationScreen from "../screens/borrower/LoanApplicationScreen";
@@ -14,8 +15,12 @@ import CreditHistoryScreen from "../screens/borrower/CreditHistoryScreen";
 import HelpCenterScreen from "../screens/borrower/HelpCenterScreen";
 import ContactSupportScreen from "../screens/borrower/ContactSupportScreen";
 import NotificationsScreen from "../screens/borrower/NotificationsScreen";
+import NearbyLendersMapScreen from "../screens/borrower/NearbyLendersMapScreen";
 import AgreementsListScreen from "../screens/shared/AgreementsListScreen";
 import LegalAgreementScreen from "../screens/shared/LegalAgreementScreen";
+import AiAssistantScreen from "../screens/shared/AiAssistantScreen";
+import DisputesScreen from "../screens/shared/DisputesScreen";
+import KycResubmissionScreen from "../screens/borrower/KycResubmissionScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -40,10 +45,18 @@ export default function BorrowerStackNavigator() {
       <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
       <Stack.Screen name="ContactSupport" component={ContactSupportScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="KycResubmission" component={KycResubmissionScreen} />
+      <Stack.Screen name="BorrowerChat" component={ChatNavigator} />
+      <Stack.Screen
+        name="NearbyLendersMap"
+        component={NearbyLendersMapScreen}
+      />
       <Stack.Screen name="AgreementsList" component={AgreementsListScreen} />
       <Stack.Screen name="LoanAgreement">
         {(props) => <LegalAgreementScreen {...props} role="borrower" />}
       </Stack.Screen>
+      <Stack.Screen name="AiAssistant" component={AiAssistantScreen} />
+      <Stack.Screen name="Disputes" component={DisputesScreen} />
     </Stack.Navigator>
   );
 }

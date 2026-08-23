@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { FirebaseService } from '../../../firebase/firebase.service';
+import { UsersService } from '../users/users.service';
 
 describe('ConversationsService', () => {
   let service: ConversationsService;
@@ -14,6 +15,10 @@ describe('ConversationsService', () => {
     serverTimestamp: jest.fn(),
   };
 
+  const mockUsersService = {
+    findById: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -21,6 +26,10 @@ describe('ConversationsService', () => {
         {
           provide: FirebaseService,
           useValue: mockFirebaseService,
+        },
+        {
+          provide: UsersService,
+          useValue: mockUsersService,
         },
       ],
     }).compile();

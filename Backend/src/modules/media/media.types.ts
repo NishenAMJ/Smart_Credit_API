@@ -17,7 +17,12 @@ export type SensitiveDocumentMimeType =
   (typeof SENSITIVE_DOCUMENT_MIME_TYPES)[number];
 
 export type MediaUploadVisibility = 'public' | 'authenticated';
-export type MediaUploadCategory = 'profile_picture' | 'kyc' | 'agreement';
+export type MediaUploadCategory =
+  | 'profile_picture'
+  | 'kyc'
+  | 'agreement'
+  | 'dispute_evidence'
+  | 'payment_receipt';
 export type MediaResourceType = 'image' | 'raw' | 'auto';
 
 export type UploadedMedia = {

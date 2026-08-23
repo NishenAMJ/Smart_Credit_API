@@ -28,24 +28,45 @@ export interface CreateApplicationPayload {
 
 function normalizeApplication(
   application: Partial<BorrowerApplication> & {
+    listingId?: string;
+    requestedPrincipalMinor?: number;
+    requestedTenureMonths?: number;
+    requestedPurpose?: string;
     loanPurpose?: string;
     purposeDescription?: string;
   },
 ): BorrowerApplication {
   const rawStatus = String(application.status ?? "").toLowerCase();
   const normalizedStatus =
-    rawStatus === "draft" || rawStatus === "open" || rawStatus === "pending"
-      ? "under_review"
-      : rawStatus;
+    rawStatus === "open" || rawStatus === "pending"
+      ? "submitted"
+      : rawStatus === "accepted"
+        ? "approved"
+        : rawStatus === "cancelled"
+          ? "withdrawn"
+          : rawStatus === "funded"
+            ? "converted"
+            : rawStatus;
 
   return {
     ...application,
+    requestId: application.requestId ?? application.applicationId,
+    adId: application.adId ?? application.listingId,
     status: normalizedStatus as ApplicationStatus,
     createdAt: toIsoDate(application.createdAt),
     updatedAt: toIsoDate(application.updatedAt),
-    loanTitle: `${titleCase(application.loanPurpose)} Loan`,
+    amount:
+      application.amount ??
+      (typeof application.requestedPrincipalMinor === "number"
+        ? application.requestedPrincipalMinor / 100
+        : 0),
+    tenureMonths: application.tenureMonths ?? application.requestedTenureMonths,
+    loanTitle: `${titleCase(
+      application.requestedPurpose ?? application.loanPurpose,
+    )} Loan`,
     purpose:
-      application.purposeDescription ?? titleCase(application.loanPurpose),
+      application.purposeDescription ??
+      titleCase(application.requestedPurpose ?? application.loanPurpose),
   };
 }
 
@@ -139,6 +160,21 @@ export const applicationService = {
       {},
       { params: { borrowerId } },
     );
+    return {
+      ...response.data,
+      data: normalizeApplication(response.data?.data ?? {}),
+    };
+  },
+
+  cancelApplication: async (applicationId: string) => {
+    const borrowerId = await getUserId();
+    if (!borrowerId)
+      throw new Error("User session expired. Please log in again.");
+
+    const response = await apiClient.post<{
+      success?: boolean;
+      data?: BorrowerApplication;
+    }>(ENDPOINTS.applications.cancel(applicationId));
     return {
       ...response.data,
       data: normalizeApplication(response.data?.data ?? {}),

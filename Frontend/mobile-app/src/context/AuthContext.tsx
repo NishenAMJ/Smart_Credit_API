@@ -17,18 +17,25 @@ import {
   submitKyc,
 } from "../api/services/auth.service";
 import { setAuthToken } from "../api/axios.config";
+import { ApiError, getApiErrorMessage } from "../api/api-error";
 import {
   clearAuthStorage,
   getMobileSession,
   saveMobileSession,
 } from "../utils/auth.storage";
-import { setCurrentUserId, setAuthToken as setLenderAuthToken } from "../services/api";
+import {
+  setCurrentUserId,
+  setAuthToken as setLenderAuthToken,
+} from "../services/api";
+import { chatSocket } from "../services/socketService";
+import { locationService } from "../api/services/location.service";
 import type {
   AuthResponse,
   DashboardResponse,
   KycSubmission,
   LoginPayload,
   MobileRole,
+  RegistrationAddress,
   SessionResponse,
   SubmitKycPayload,
 } from "../types/auth";
@@ -38,10 +45,18 @@ type SignUpPayload = {
     fullName: string;
     email: string;
     phone: string;
+    address: RegistrationAddress;
     password: string;
     role: MobileRole;
   };
   kyc: SubmitKycPayload;
+  location?: {
+    latitude: number;
+    longitude: number;
+    city?: string;
+    district?: string;
+    visibility?: "hidden" | "approximate" | "exact";
+  };
 };
 
 type MobileSession = {
@@ -54,11 +69,12 @@ type AuthContextValue = {
   sessionStatus: SessionResponse | null;
   dashboard: DashboardResponse | null;
   kycSubmission: KycSubmission | null;
+  authInitializing: boolean;
   authLoading: boolean;
   refreshing: boolean;
   error: string;
   signIn: (payload: LoginPayload) => Promise<void>;
-  signUp: (payload: SignUpPayload) => Promise<void>;
+  signUp: (payload: SignUpPayload) => Promise<{ locationSaved: boolean }>;
   signOut: () => void;
   refreshWorkspace: () => Promise<void>;
 };
@@ -66,8 +82,6 @@ type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue | undefined>(
   undefined,
 );
-
-// Also export for direct useContext usage if needed
 export default AuthContext;
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -79,6 +93,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [kycSubmission, setKycSubmission] = useState<KycSubmission | null>(
     null,
   );
+  const [authInitializing, setAuthInitializing] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -90,6 +105,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setAuthToken(accessToken);
     setLenderAuthToken(accessToken);
     setCurrentUserId(user?.uid);
+
+    // Connect WebSocket with JWT token
+    // Wrapped in try/catch so a socket error never breaks login
+    try {
+      chatSocket.connect(accessToken);
+    } catch (e) {
+      console.warn("[Auth] chatSocket.connect failed:", e);
+    }
+
     const nextSessionStatus = await getSession();
     const dashboardPromise =
       nextSessionStatus.activeRole === "lender"
@@ -97,15 +121,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         : nextSessionStatus.activeRole === "borrower"
           ? getDashboard("borrower")
           : Promise.resolve<DashboardResponse | null>(null);
+
     const [nextDashboard, nextKyc] = await Promise.all([
       dashboardPromise,
       getMyKycSubmission().catch(() => ({ submission: null })),
     ]);
 
-    const nextSession = {
-      accessToken,
-      user: nextSessionStatus.user ?? user,
-    };
+    const nextSession = { accessToken, user: nextSessionStatus.user ?? user };
 
     setSession(nextSession);
     setSessionStatus(nextSessionStatus);
@@ -118,6 +140,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setAuthToken(null);
     setLenderAuthToken(null);
     setCurrentUserId(null);
+
+    // Disconnect socket safely
+    try {
+      chatSocket.disconnect();
+    } catch (e) {
+      console.warn("[Auth] chatSocket.disconnect failed:", e);
+    }
+
+    // NOTE: intentionally NOT calling localDatabase.clearAll() here.
+    // Clearing the local DB on every auth reset wipes chat history.
+    // Only clear on explicit sign-out (see signOut below).
+
     setSession(null);
     setSessionStatus(null);
     setDashboard(null);
@@ -130,19 +164,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     async function restoreSession() {
       try {
         const storedSession = await getMobileSession();
-
         if (!storedSession.accessToken || !storedSession.user) {
-          if (active) {
-            setAuthLoading(false);
-          }
+          if (active) setAuthLoading(false);
           return;
         }
-
         await hydrateWorkspace(storedSession.accessToken, storedSession.user);
       } catch (nextError) {
         await clearAuthStorage();
         resetWorkspaceState();
-
         if (active) {
           setError(
             nextError instanceof Error
@@ -152,13 +181,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       } finally {
         if (active) {
+          setAuthInitializing(false);
           setAuthLoading(false);
         }
       }
     }
 
     void restoreSession();
-
     return () => {
       active = false;
     };
@@ -173,9 +202,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } catch (nextError) {
       await clearAuthStorage();
       resetWorkspaceState();
-      setError(
-        nextError instanceof Error ? nextError.message : "Sign in failed.",
-      );
+      setError(getApiErrorMessage(nextError, "Could not sign in."));
       throw nextError;
     } finally {
       setAuthLoading(false);
@@ -183,25 +210,56 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   async function signUp(payload: SignUpPayload) {
+    let accountReady = false;
+    let resumingExistingAccount = false;
     try {
       setAuthLoading(true);
       setError("");
-      await register(payload.account);
+      try {
+        await register(payload.account);
+        accountReady = true;
+      } catch (registerError) {
+        const message =
+          registerError instanceof Error ? registerError.message : "";
+        if (!message.toLowerCase().includes("already exists")) {
+          throw registerError;
+        }
+        accountReady = true;
+        resumingExistingAccount = true;
+      }
       const loginResponse = await login({
         identifier: payload.account.email,
         password: payload.account.password,
         role: payload.account.role,
       });
-
       setAuthToken(loginResponse.accessToken);
+      let locationSaved = false;
+      if (payload.location) {
+        try {
+          await locationService.saveMyLocation(payload.location);
+          locationSaved = true;
+        } catch (locationError) {
+          console.warn(
+            "Registration location could not be saved:",
+            getApiErrorMessage(locationError, "Location update failed."),
+          );
+        }
+      }
       const kycResponse = await submitKyc(payload.kyc);
       setKycSubmission(kycResponse.submission);
       await hydrateWorkspace(loginResponse.accessToken, loginResponse.user);
+      return { locationSaved };
     } catch (nextError) {
       await clearAuthStorage();
       resetWorkspaceState();
       setError(
-        nextError instanceof Error ? nextError.message : "Sign up failed.",
+        resumingExistingAccount &&
+          nextError instanceof ApiError &&
+          nextError.status === 401
+          ? "An account already exists with this email or phone. Keep the form open and enter that account's original password, or correct the email or phone before retrying."
+          : accountReady
+            ? `Your account details are saved. Correct the KYC information below and try again. ${getApiErrorMessage(nextError, "KYC submission failed.")}`
+            : getApiErrorMessage(nextError, "Sign up failed."),
       );
       throw nextError;
     } finally {
@@ -210,10 +268,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   async function refreshWorkspace() {
-    if (!session) {
-      return;
-    }
-
+    if (!session) return;
     try {
       setRefreshing(true);
       setError("");
@@ -232,6 +287,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
   function signOut() {
     void clearAuthStorage();
     resetWorkspaceState();
+    // Only clear local chat data on explicit logout
+    try {
+      const { localDatabase } = require("../services/localDatabase");
+      localDatabase.clearAll();
+    } catch (e) {
+      console.warn("[Auth] localDatabase.clearAll failed:", e);
+    }
     setError("");
     setAuthLoading(false);
   }
@@ -242,6 +304,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       sessionStatus,
       dashboard,
       kycSubmission,
+      authInitializing,
       authLoading,
       refreshing,
       error,
@@ -251,6 +314,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       refreshWorkspace,
     }),
     [
+      authInitializing,
       authLoading,
       dashboard,
       error,
@@ -266,10 +330,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 }

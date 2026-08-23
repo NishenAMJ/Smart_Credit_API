@@ -1,0 +1,87 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { LenderSmsService } from './lender-sms.service';
+import { PaymentReceivedSmsService } from './payment-received-sms.service';
+import type {
+  LenderSmsSettings,
+  SendSmsInput,
+  SendSmsResponse,
+  SmsBorrowerSearchResponse,
+  PaymentReceivedSmsSettings,
+  UpdatePaymentReceivedSmsInput,
+} from './lender-sms.types';
+
+@Controller('lender/sms')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
+export class LenderSmsController {
+  constructor(
+    private readonly smsService: LenderSmsService,
+    private readonly paymentReceivedSmsService: PaymentReceivedSmsService,
+  ) {}
+
+  @Get('settings')
+  getSettings(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<LenderSmsSettings> {
+    return this.smsService.getSettings(request.user.sub);
+  }
+
+  @Patch('settings')
+  updateSettings(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: { enabled?: boolean },
+  ): Promise<LenderSmsSettings> {
+    return this.smsService.setEnabled(request.user.sub, body?.enabled);
+  }
+
+  @Patch('payment-received')
+  updatePaymentReceivedSettings(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: UpdatePaymentReceivedSmsInput,
+  ): Promise<PaymentReceivedSmsSettings> {
+    return this.paymentReceivedSmsService.updateSettings(
+      request.user.sub,
+      body,
+    );
+  }
+
+  @Get('borrowers')
+  searchBorrowers(
+    @Req() request: AuthenticatedRequest,
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+  ): Promise<SmsBorrowerSearchResponse> {
+    return this.smsService.searchBorrowers(
+      request.user.sub,
+      search?.trim() ?? '',
+      this.toNumber(limit) ?? 30,
+    );
+  }
+
+  @Post('send')
+  send(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: SendSmsInput,
+  ): Promise<SendSmsResponse> {
+    return this.smsService.send(request.user.sub, body);
+  }
+
+  private toNumber(value: string | undefined): number | null {
+    if (!value) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+}

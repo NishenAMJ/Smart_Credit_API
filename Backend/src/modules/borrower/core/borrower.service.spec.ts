@@ -1,0 +1,325 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { BorrowerService } from './borrower.service';
+import { FirebaseService } from '../../../firebase/firebase.service';
+import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { LoanStatus } from '../types/borrower.types';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { CreditScoreService } from '../credit-score/credit-score.service';
+
+/**
+ * Baseline wiring tests for `BorrowerService`.
+ */
+describe('BorrowerService', () => {
+  let service: BorrowerService;
+
+  /**
+   * Create Mock functions for Firestore fluent API
+   */
+  const mockGet = jest.fn();
+  const mockWhere = jest.fn();
+  const mockDoc = jest.fn();
+  const mockUpdate = jest.fn();
+  const mockSet = jest.fn();
+
+  // Support for .where().where().get() chaining
+  const mockQuery = {
+    where: mockWhere,
+    get: mockGet,
+  };
+  mockWhere.mockReturnValue(mockQuery);
+
+  const mockCollectionRef = {
+    doc: mockDoc,
+    where: mockWhere,
+    get: mockGet,
+  };
+
+  const mockCollection = jest.fn().mockReturnValue(mockCollectionRef);
+
+  // Support for .doc().get() and .doc().update()
+  mockDoc.mockReturnValue({ get: mockGet, update: mockUpdate, set: mockSet });
+
+  /**
+   * Create a mock FirebaseService that returns our mocked DB
+   */
+
+  const mockFirebaseService = {
+    db: {
+      collection: mockCollection,
+    },
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        BorrowerService,
+        {
+          provide: FirebaseService,
+          useValue: mockFirebaseService, //use mock instead of the real FirebaseService
+        },
+        {
+          provide: JwtService,
+          useValue: {
+            signAsync: jest.fn(),
+            verifyAsync: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
+          },
+        },
+        {
+          provide: CreditScoreService,
+          useValue: {
+            calculateCreditScore: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<BorrowerService>(BorrowerService);
+  });
+
+  /*
+   *Clear mock history after each test
+   */
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('getLoanById', () => {
+    it('should return the loan if exists', async () => {
+      //Setup our mock database
+      const mockLoanData = {
+        loanId: 'loan_1',
+        borrowerId: 'borrower_1',
+        status: LoanStatus.ACTIVE,
+        principalAmount: 100000,
+        tenureMonths: 10,
+        totalRepayable: 120000,
+      };
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => mockLoanData,
+      });
+
+      //Call the method we are testing
+      const result = await service.getLoanById('loan_1', 'borrower_1');
+      //verify the results
+      expect(result).toMatchObject({
+        loanId: 'loan_1',
+        borrowerId: 'borrower_1',
+        status: LoanStatus.ACTIVE,
+        principalAmount: 100000,
+        tenureMonths: 10,
+        monthlyInstallment: 12000,
+        outstandingBalance: 120000,
+      });
+      expect(mockCollection).toHaveBeenCalledWith('loans');
+
+      expect(mockDoc).toHaveBeenCalledWith('loan_1');
+    });
+
+    it('maps canonical minor-unit loan fields to borrower-facing LKR values', async () => {
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          loanId: 'loan_canonical',
+          applicationId: 'application_1',
+          borrowerId: 'borrower_1',
+          lenderId: 'lender_1',
+          status: 'active',
+          principalMinor: 10_000_000,
+          annualInterestRate: 12,
+          interestAmountMinor: 1_200_000,
+          totalRepayableMinor: 11_200_000,
+          monthlyInstallmentMinor: 933_333,
+          remainingBalanceMinor: 8_400_000,
+          tenureMonths: 12,
+        }),
+      });
+
+      const result = await service.getLoanById('loan_canonical', 'borrower_1');
+
+      expect(result).toMatchObject({
+        requestId: 'application_1',
+        principalAmount: 100_000,
+        interestRate: 12,
+        totalInterest: 12_000,
+        monthlyInstallment: 9_333.33,
+        outstandingBalance: 84_000,
+      });
+    });
+
+    it('keeps a pending-disbursement loan pending without a payment due date', async () => {
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          loanId: 'loan_pending',
+          applicationId: 'application_pending',
+          borrowerId: 'borrower_1',
+          lenderId: 'lender_1',
+          status: 'pending_disbursement',
+          principalMinor: 10_000_000,
+          totalRepayableMinor: 11_200_000,
+          monthlyInstallmentMinor: 933_333,
+          remainingBalanceMinor: 11_200_000,
+          tenureMonths: 12,
+        }),
+      });
+
+      const result = await service.getLoanById('loan_pending', 'borrower_1');
+
+      expect(result.status).toBe(LoanStatus.PENDING_DISBURSEMENT);
+      expect(result.nextDueDate).toBeNull();
+    });
+
+    it('does not normalize an unknown loan status to active', () => {
+      jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      expect((service as any).normalizeLoanStatus('future_state')).toBe(
+        LoanStatus.UNKNOWN,
+      );
+    });
+
+    it('should throw NotFoundException if the loan document does not exist', async () => {
+      // Arrange: Database returns exists: false
+      mockGet.mockResolvedValueOnce({
+        exists: false,
+      });
+      // Act & Assert: We expect the promise to reject with a NotFoundException
+      await expect(
+        service.getLoanById('invalid_loan', 'borrower_1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+    it('should throw ForbiddenException if the loan belongs to a different borrower', async () => {
+      // Arrange: Database returns a loan, but the borrowerId is different
+      const mockLoanData = {
+        loanId: 'loan_1',
+        borrowerId: 'different_borrower',
+      };
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => mockLoanData,
+      });
+      // Act & Assert: We expect it to throw a ForbiddenException
+      await expect(service.getLoanById('loan_1', 'borrower_1')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+  });
+
+  describe('getLoans', () => {
+    it('should query loans collection by borrowerId', async () => {
+      // Arrange
+      const mockDocs = [
+        { data: () => ({ loanId: '1', borrowerId: 'b_1' }) },
+        { data: () => ({ loanId: '2', borrowerId: 'b_1' }) },
+      ];
+      mockGet.mockResolvedValueOnce({ docs: mockDocs });
+
+      // Act
+      const result = await service.getLoans('b_1');
+
+      // Assert
+      expect(mockCollection).toHaveBeenCalledWith('loans');
+      expect(mockWhere).toHaveBeenCalledWith('borrowerId', '==', 'b_1');
+      expect(result).toHaveLength(2);
+      expect(result.map((loan) => loan.loanId)).toEqual(
+        expect.arrayContaining(['1', '2']),
+      );
+    });
+
+    it('should chain a status filter if provided', async () => {
+      // Arrange
+      mockGet.mockResolvedValueOnce({ docs: [] });
+
+      // Act
+      await service.getLoans('b_1', LoanStatus.ACTIVE);
+
+      // Assert
+      expect(mockWhere).toHaveBeenCalledWith('borrowerId', '==', 'b_1');
+      expect(mockWhere).toHaveBeenCalledWith('status', '==', LoanStatus.ACTIVE);
+    });
+  });
+
+  describe('getActiveLoanAds', () => {
+    it('maps canonical listing amounts, rates, and tenures for discovery', async () => {
+      mockGet.mockResolvedValueOnce({
+        docs: [
+          {
+            id: 'listing_1',
+            data: () => ({
+              listingId: 'listing_1',
+              lenderId: 'lender_1',
+              lenderName: 'Lender One',
+              status: 'active',
+              minAmountMinor: 5_000_000,
+              maxAmountMinor: 25_000_000,
+              minInterestRateAnnual: 11.5,
+              minTenureMonths: 6,
+              maxTenureMonths: 24,
+              purposeCategories: ['business'],
+            }),
+          },
+        ],
+      });
+
+      const result = await service.getActiveLoanAds();
+
+      expect(mockWhere).toHaveBeenCalledWith('status', 'in', [
+        'active',
+        'approved',
+      ]);
+      expect(result[0]).toMatchObject({
+        adId: 'listing_1',
+        loanId: 'listing_1',
+        minAmount: 50_000,
+        maxAmount: 250_000,
+        interestRate: 11.5,
+        minTenureMonths: 6,
+        maxTenureMonths: 24,
+        preferredPurposes: ['business'],
+      });
+    });
+  });
+
+  describe('getLenderNamesMap', () => {
+    it('should return an empty map if no IDs are provided', async () => {
+      const result = await service.getLenderNamesMap([]);
+      expect(result.size).toBe(0);
+      expect(mockCollection).not.toHaveBeenCalled();
+    });
+
+    it('should fetch and map lender names', async () => {
+      // Arrange
+      mockGet
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({ userId: 'lender_1', fullName: 'Bank A' }),
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({ userId: 'lender_2', fullName: 'Bank B' }),
+        });
+
+      // Act
+      const result = await service.getLenderNamesMap([
+        'lender_1',
+        'lender_2',
+        'lender_1',
+      ]);
+
+      // Assert
+      expect(mockCollection).toHaveBeenCalledWith('users');
+      // Should deduplicate the array
+      expect(mockDoc).toHaveBeenCalledWith('lender_1');
+      expect(mockDoc).toHaveBeenCalledWith('lender_2');
+      expect(result.get('lender_1')).toBe('Bank A');
+      expect(result.get('lender_2')).toBe('Bank B');
+    });
+  });
+});

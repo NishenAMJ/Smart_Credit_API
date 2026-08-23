@@ -1,15 +1,24 @@
-import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Eye, Check, X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
+import { Check, Eye, RefreshCw, Search, X } from "lucide-react";
 import {
   approveKyc,
+  getKycDocumentAccess,
   getPendingKyc,
   rejectKyc,
   type KycDocument,
 } from "../../lib/api";
+import { subscribeToAdminChanges } from "../../lib/admin-realtime";
 import { formatFirestoreDate } from "../../lib/admin-format";
-
-type KycStatus = "pending" | "approved" | "rejected";
+import {
+  toEpochMillis,
+  useNewItemHighlights,
+} from "../../lib/use-new-item-highlights";
 
 type KycRow = {
   id: string;
@@ -17,67 +26,173 @@ type KycRow = {
   fullName: string;
   email: string;
   phone: string;
+  role: string;
+  address?: {
+    line1: string;
+    line2?: string;
+    city: string;
+    district: string;
+    province: string;
+  };
+  identityDetails: {
+    documentType: string;
+    documentNumber: string;
+    fullName: string;
+    issuingCountry?: string;
+    expiryDate?: string;
+  };
+  location?: {
+    latitude: number;
+    longitude: number;
+    city?: string;
+    district?: string;
+    visibility: "hidden" | "approximate" | "exact";
+    updatedAt?: unknown;
+  };
   documentType: string;
-  status: KycStatus;
-  submittedAt: string;
-  documentUrl?: string;
+  originalFilename: string;
+  status: "pending" | "approved" | "rejected";
+  uploadedAt: string;
+  createdAtMs: number;
+  userKycStatus: string;
+  reviewedAt?: string;
+  reviewerId?: string;
+  reviewNotes?: string;
+  rejectionReason?: string;
+  accessUrl?: string;
 };
 
-// Converts raw KYC documents into stable rows so table rendering stays simple.
+type KycSubmissionRow = {
+  id: string;
+  userId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: string;
+  address?: KycRow["address"];
+  identityDetails: KycRow["identityDetails"];
+  location?: KycRow["location"];
+  uploadedAt: string;
+  createdAtMs: number;
+  status: KycRow["status"];
+  userKycStatus: string;
+  documents: KycRow[];
+};
+
+type KycStatusFilter = "all" | KycRow["status"];
+
 function mapDocument(document: KycDocument): KycRow {
   return {
     id: document.id,
     userId: document.userId,
-    fullName: document.fullName || "Unknown user",
-    email: document.email || "N/A",
-    phone: document.phone || "N/A",
+    fullName:
+      document.applicant?.fullName || document.fullName || "Unknown user",
+    email: document.applicant?.email || document.email || "Not provided",
+    phone: document.applicant?.phone || document.phone || "Not provided",
+    role: document.applicant?.role || "Not provided",
+    address: document.applicant?.address,
+    identityDetails: document.identityDetails ?? {
+      documentType: "Not provided",
+      documentNumber: "Not provided",
+      fullName: "Not provided",
+    },
+    location: document.location,
     documentType: document.documentType,
+    originalFilename: document.originalFilename || "Unknown file",
     status: document.status,
-    submittedAt: formatFirestoreDate(document.submittedAt),
-    documentUrl: document.documentUrl,
+    uploadedAt: formatFirestoreDate(document.submittedAt),
+    createdAtMs: toEpochMillis(document.submittedAt),
+    userKycStatus: document.userKycStatus || document.status,
+    reviewedAt: formatFirestoreDate(
+      document.reviewTimestamp || document.reviewedAt,
+    ),
+    reviewerId: document.reviewerId || document.reviewedBy,
+    reviewNotes: document.reviewNotes || document.notes || "",
+    rejectionReason: document.rejectionReason || "",
   };
 }
 
-// Centralizes status styling so review states are easy to scan.
-function StatusBadge({ status }: { status: KycStatus }) {
-  const className = {
+function statusClass(status: KycRow["status"]) {
+  return {
     pending: "badge badge-warning",
     approved: "badge badge-success",
     rejected: "badge badge-danger",
   }[status];
-
-  return <span className={className}>{status}</span>;
 }
 
-function iconButton(color: string, bg: string): CSSProperties {
-  return {
-    width: 30,
-    height: 30,
-    borderRadius: 6,
-    border: "none",
-    background: bg,
-    color,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-  };
+function formatLabel(value: string) {
+  return value.replace(/_/g, " ");
 }
 
-// Keeps KYC review state and moderation actions together on one page.
-// Renders the admin KYC review queue and moderation actions.
+function formatDocumentLabel(
+  document: Pick<KycRow, "documentType" | "identityDetails">,
+) {
+  const storedType = document.documentType.toLowerCase();
+  const identityType = document.identityDetails.documentType
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  const side = storedType === "nic_front" ? "front" : "back";
+
+  // Older uploads were saved as nic_front/nic_back even when the applicant
+  // selected Passport or Driving Licence. Render those legacy records using
+  // the canonical identity type without changing the stored audit record.
+  if (storedType === "nic_front" || storedType === "nic_back") {
+    if (identityType === "passport") return `passport ${side}`;
+    if (
+      identityType === "driving_license" ||
+      identityType === "drivers_license"
+    ) {
+      return `driving licence ${side}`;
+    }
+  }
+
+  return formatLabel(document.documentType);
+}
+
+function formatAddress(address?: KycRow["address"]) {
+  if (!address) return "Not provided";
+  return [
+    address.line1,
+    address.line2,
+    address.city,
+    address.district,
+    address.province,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function normalizeComparableName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export default function KYCApprovals() {
   const [records, setRecords] = useState<KycRow[]>([]);
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<KycStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<KycStatusFilter>("all");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [summary, setSummary] = useState({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  });
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<KycRow | null>(null);
+  const [selectedSubmission, setSelectedSubmission] =
+    useState<KycSubmissionRow | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewError, setPreviewError] = useState("");
 
   const loadKyc = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const response = await getPendingKyc();
+      const response = await getPendingKyc({ limit: 100 });
       setRecords(response.documents.map(mapDocument));
+      setSummary(response.summary);
       setError("");
     } catch (err) {
       setError(
@@ -85,69 +200,165 @@ export default function KYCApprovals() {
       );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    // Loads the latest review queue before the admin starts taking actions.
     void loadKyc();
   }, [loadKyc]);
 
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      void loadKyc();
-    }, 10000);
+  useEffect(
+    () => subscribeToAdminChanges(["kyc"], () => void loadKyc()),
+    [loadKyc],
+  );
 
-    return () => window.clearInterval(interval);
-  }, [loadKyc]);
+  const submissions = useMemo(() => {
+    const grouped = new Map<string, KycRow[]>();
+    records.forEach((record) => {
+      grouped.set(record.userId, [
+        ...(grouped.get(record.userId) ?? []),
+        record,
+      ]);
+    });
+
+    return [...grouped.entries()].map(([userId, documents]) => {
+      const first = documents[0];
+      return {
+        id: first.id,
+        userId,
+        fullName: first.fullName,
+        email: first.email,
+        phone: first.phone,
+        role: first.role,
+        address: first.address,
+        identityDetails: first.identityDetails,
+        location: first.location,
+        uploadedAt: first.uploadedAt,
+        createdAtMs: first.createdAtMs,
+        status: first.status,
+        userKycStatus: first.userKycStatus,
+        documents,
+      } satisfies KycSubmissionRow;
+    });
+  }, [records]);
+
+  const newItemCandidates = useMemo(
+    () =>
+      submissions.map((submission) => ({
+        id: submission.id,
+        createdAtMs: submission.createdAtMs,
+        actionable: submission.status === "pending",
+      })),
+    [submissions],
+  );
+  const newHighlights = useNewItemHighlights(
+    "kyc",
+    newItemCandidates,
+    !loading,
+  );
 
   const filtered = useMemo(() => {
-    return records.filter((record) => {
-      const searchValue = search.toLowerCase();
-      const matchesSearch =
-        record.userId.toLowerCase().includes(searchValue) ||
-        record.fullName.toLowerCase().includes(searchValue) ||
-        record.email.toLowerCase().includes(searchValue) ||
-        record.id.toLowerCase().includes(searchValue) ||
-        record.documentType.toLowerCase().includes(searchValue);
-      const matchesStatus =
-        filterStatus === "all" || record.status === filterStatus;
-      return matchesSearch && matchesStatus;
+    const q = search.toLowerCase();
+    return submissions.filter((submission) => {
+      if (statusFilter !== "all" && submission.status !== statusFilter) {
+        return false;
+      }
+
+      return [
+        submission.fullName,
+        submission.userId,
+        submission.email,
+        submission.phone,
+        submission.role,
+        submission.identityDetails.fullName,
+        submission.identityDetails.documentNumber,
+        submission.address?.line1,
+        submission.address?.city,
+        submission.address?.district,
+        submission.userKycStatus,
+        ...submission.documents.flatMap((document) => [
+          document.documentType,
+          formatDocumentLabel(document),
+          document.originalFilename,
+          document.id,
+        ]),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
     });
-  }, [filterStatus, records, search]);
+  }, [search, statusFilter, submissions]);
 
-  const counts = {
-    all: records.length,
-    pending: records.filter((record) => record.status === "pending").length,
-    approved: records.filter((record) => record.status === "approved").length,
-    rejected: records.filter((record) => record.status === "rejected").length,
-  };
+  async function openPreview(record: KycRow) {
+    setSelectedRecord(record);
+    setPreviewUrl("");
+    setPreviewError("");
+    setPreviewLoading(true);
 
-  // Mirrors an approval in local state to avoid an extra full reload.
-  async function handleApprove(id: string) {
     try {
-      await approveKyc(id);
-      setRecords((prev) =>
-        prev.map((record) =>
-          record.id === id ? { ...record, status: "approved" } : record,
-        ),
-      );
+      const response = await getKycDocumentAccess(record.id);
+      setPreviewUrl(response.accessUrl);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to approve KYC.");
+      setPreviewError(
+        err instanceof Error ? err.message : "Failed to fetch signed URL.",
+      );
+    } finally {
+      setPreviewLoading(false);
     }
   }
 
-  // Mirrors a rejection in local state to avoid an extra full reload.
-  async function handleReject(id: string) {
+  async function refreshAfterAction() {
+    await loadKyc();
+    setSelectedRecord(null);
+    setSelectedSubmission(null);
+    setPreviewUrl("");
+  }
+
+  async function handleApprove(submission: KycSubmissionRow) {
+    const record = submission.documents[0];
+    if (
+      !window.confirm(
+        `Approve the complete KYC submission for ${record.fullName}? All pending documents in this submission will be approved.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusyId(record.id);
     try {
-      await rejectKyc(id);
-      setRecords((prev) =>
-        prev.map((record) =>
-          record.id === id ? { ...record, status: "rejected" } : record,
-        ),
-      );
+      await approveKyc(record.id);
+      await refreshAfterAction();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to approve KYC.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReject(submission: KycSubmissionRow) {
+    const record = submission.documents[0];
+    const reason = window.prompt("Enter a rejection reason or note:");
+    if (!reason || !reason.trim()) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Reject the complete KYC submission for ${record.fullName}? All pending documents in this submission will be rejected.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusyId(record.id);
+    try {
+      await rejectKyc(record.id, reason.trim());
+      await refreshAfterAction();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject KYC.");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -155,12 +366,16 @@ export default function KYCApprovals() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">KYC Approvals</h1>
+          <h1 className="page-title">KYC Reviews</h1>
           <p className="page-subtitle">
-            KYC status is sourced from Firestore user profiles
+            Review each user's complete KYC submission and inspect every file
+            through a secure preview before making a decision.
           </p>
         </div>
-        <span style={S.pendingChip}>{counts.pending} Pending</span>
+        <button className="btn btn-secondary" onClick={() => void loadKyc()}>
+          <RefreshCw size={14} style={{ marginRight: 6 }} />
+          Refresh
+        </button>
       </div>
 
       {error && (
@@ -171,68 +386,39 @@ export default function KYCApprovals() {
 
       <div style={S.summaryGrid}>
         {[
-          {
-            label: "Total",
-            count: counts.all,
-            color: "#007AFF",
-            bg: "#EFF6FF",
-          },
-          {
-            label: "Pending",
-            count: counts.pending,
-            color: "#F59E0B",
-            bg: "#FFFBEB",
-          },
-          {
-            label: "Approved",
-            count: counts.approved,
-            color: "#10B981",
-            bg: "#ECFDF5",
-          },
-          {
-            label: "Rejected",
-            count: counts.rejected,
-            color: "#EF4444",
-            bg: "#FEF2F2",
-          },
+          { label: "Total", value: summary.total, color: "#2563EB" },
+          { label: "Pending", value: summary.pending, color: "#D97706" },
+          { label: "Approved", value: summary.approved, color: "#059669" },
+          { label: "Rejected", value: summary.rejected, color: "#DC2626" },
         ].map((item) => (
           <div key={item.label} className="card" style={S.summaryCard}>
-            <p style={{ fontSize: 13, color: "#6B7280", fontWeight: 500 }}>
-              {item.label}
-            </p>
-            <p
-              style={{
-                fontSize: 28,
-                fontWeight: 700,
-                color: item.color,
-                marginTop: 4,
-              }}
-            >
-              {loading ? "..." : item.count}
+            <p style={{ color: "#6B7280", fontSize: 13 }}>{item.label}</p>
+            <p style={{ color: item.color, fontSize: 28, fontWeight: 700 }}>
+              {loading ? "..." : item.value}
             </p>
           </div>
         ))}
       </div>
 
-      <div style={S.filtersRow}>
-        <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
+      <div style={S.searchRow}>
+        <div style={S.searchWrap}>
           <Search size={15} style={S.searchIcon} />
           <input
             className="input"
-            placeholder="Search by user, email, document type or record ID..."
+            placeholder="Search by user, document, file name, or ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ paddingLeft: 36 }}
+            style={S.searchInput}
           />
         </div>
-
-        <div className="tabs">
+        <div className="tabs" aria-label="Filter KYC submissions by status">
           {(["all", "pending", "approved", "rejected"] as const).map(
             (status) => (
               <button
                 key={status}
-                className={`tab ${filterStatus === status ? "active" : ""}`}
-                onClick={() => setFilterStatus(status)}
+                className={`tab ${statusFilter === status ? "active" : ""}`}
+                aria-pressed={statusFilter === status}
+                onClick={() => setStatusFilter(status)}
               >
                 {status}
               </button>
@@ -242,87 +428,85 @@ export default function KYCApprovals() {
       </div>
 
       <div className="table-container">
-        <table>
+        <table style={S.reviewTable}>
+          <colgroup>
+            <col style={{ width: "32%" }} />
+            <col style={{ width: "28%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "22%" }} />
+          </colgroup>
           <thead>
             <tr>
               <th>User</th>
-              <th>User ID</th>
-              <th>Contact</th>
-              <th>Submitted</th>
-              <th>Status</th>
-              <th style={{ textAlign: "center" }}>Action</th>
+              <th>Submission</th>
+              <th>Uploaded</th>
+              <th>Current Status</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} style={S.emptyCell}>
-                  {loading ? "Loading KYC records..." : "No records found."}
+                <td colSpan={4} style={S.emptyCell}>
+                  {loading
+                    ? "Loading pending KYC documents..."
+                    : "No documents found."}
                 </td>
               </tr>
             ) : (
-              filtered.map((record) => (
-                <tr key={record.id}>
+              filtered.map((submission) => (
+                <tr
+                  key={submission.id}
+                  className={`kyc-review-row${
+                    newHighlights.isNew(submission.id) ? " admin-new-row" : ""
+                  }`}
+                  style={S.clickableRow}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Open KYC submission for ${submission.fullName}`}
+                  onClick={() => {
+                    newHighlights.markSeen(submission.id);
+                    setSelectedSubmission(submission);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      newHighlights.markSeen(submission.id);
+                      setSelectedSubmission(submission);
+                    }
+                  }}
+                >
                   <td>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 2,
-                      }}
-                    >
-                      <span style={{ fontWeight: 600 }}>{record.fullName}</span>
-                      <span style={{ fontSize: 12, color: "#6B7280" }}>
-                        {record.documentType}
+                    <div style={S.cellStack}>
+                      <div style={S.nameRow}>
+                        <strong>{submission.fullName}</strong>
+                        {newHighlights.isNew(submission.id) && (
+                          <span className="admin-new-badge">New</span>
+                        )}
+                      </div>
+                      <span style={S.mutedText}>{submission.userId}</span>
+                      <span style={S.mutedText}>{submission.email}</span>
+                      <span style={S.mutedText}>{submission.phone}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div style={S.cellStack}>
+                      <span>{submission.documents.length} documents</span>
+                      <span style={S.mutedText}>
+                        {submission.documents
+                          .map(formatDocumentLabel)
+                          .join(", ")}
                       </span>
                     </div>
                   </td>
-                  <td style={S.monoCell}>{record.userId}</td>
+                  <td>{submission.uploadedAt}</td>
                   <td>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 2,
-                      }}
-                    >
-                      <span>{record.email}</span>
-                      <span style={{ fontSize: 12, color: "#6B7280" }}>
-                        {record.phone}
+                    <div style={S.statusStack}>
+                      <span className={statusClass(submission.status)}>
+                        {submission.status}
                       </span>
-                    </div>
-                  </td>
-                  <td>{record.submittedAt}</td>
-                  <td>
-                    <StatusBadge status={record.status} />
-                  </td>
-                  <td>
-                    <div style={S.actionRow}>
-                      <button
-                        style={iconButton("#6B7280", "#F3F4F6")}
-                        onClick={() => setSelectedRecord(record)}
-                        title="View"
-                      >
-                        <Eye size={14} />
-                      </button>
-                      {record.status === "pending" && (
-                        <>
-                          <button
-                            style={iconButton("#10B981", "#ECFDF5")}
-                            onClick={() => void handleApprove(record.id)}
-                            title="Approve"
-                          >
-                            <Check size={14} />
-                          </button>
-                          <button
-                            style={iconButton("#EF4444", "#FEF2F2")}
-                            onClick={() => void handleReject(record.id)}
-                            title="Reject"
-                          >
-                            <X size={14} />
-                          </button>
-                        </>
-                      )}
+                      <span style={S.mutedText}>
+                        User: {submission.userKycStatus}
+                      </span>
                     </div>
                   </td>
                 </tr>
@@ -332,72 +516,292 @@ export default function KYCApprovals() {
         </table>
       </div>
 
-      {selectedRecord && (
-        <div style={S.modalOverlay} onClick={() => setSelectedRecord(null)}>
+      {selectedSubmission && (
+        <div
+          style={S.modalOverlay}
+          onClick={() => {
+            setSelectedSubmission(null);
+          }}
+        >
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
             <div style={S.modalHeader}>
-              <h3 style={{ fontSize: 18, fontWeight: 700 }}>KYC Submission</h3>
+              <div>
+                <h3 style={S.modalTitle}>KYC Submission</h3>
+                <p style={S.modalSubtitle}>
+                  {selectedSubmission.fullName} •{" "}
+                  {selectedSubmission.documents.length} documents
+                </p>
+              </div>
               <button
-                style={S.closeButton}
-                onClick={() => setSelectedRecord(null)}
+                className="btn btn-secondary"
+                onClick={() => {
+                  setSelectedSubmission(null);
+                }}
               >
-                ×
+                Close
               </button>
             </div>
-            <div style={S.detailCard}>
-              <Detail label="Record ID" value={selectedRecord.id} />
-              <Detail label="Full Name" value={selectedRecord.fullName} />
-              <Detail label="User ID" value={selectedRecord.userId} />
-              <Detail label="Email" value={selectedRecord.email} />
-              <Detail label="Phone" value={selectedRecord.phone} />
-              <Detail
-                label="Document Type"
-                value={selectedRecord.documentType}
-              />
-              <Detail label="Status" value={selectedRecord.status} />
-              <Detail label="Submitted At" value={selectedRecord.submittedAt} />
-              <Detail
-                label="Document URL"
-                value={selectedRecord.documentUrl || "Not available"}
-              />
+
+            <section style={S.documentsSection}>
+              <div>
+                <h4 style={S.reviewSectionTitle}>Submitted documents</h4>
+                <p style={S.reviewSectionCopy}>
+                  Select a file to open it in a secure preview window.
+                </p>
+              </div>
+              <div style={S.documentTabs}>
+                {selectedSubmission.documents.map((document) => (
+                  <button
+                    key={document.id}
+                    className="btn btn-secondary btn-sm"
+                    style={S.documentButton}
+                    onClick={() => void openPreview(document)}
+                  >
+                    <Eye size={14} />
+                    {formatDocumentLabel(document)}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {selectedSubmission && (
+              <div style={S.reviewSections}>
+                {selectedSubmission.identityDetails.fullName !==
+                  "Not provided" &&
+                normalizeComparableName(selectedSubmission.fullName) !==
+                  normalizeComparableName(
+                    selectedSubmission.identityDetails.fullName,
+                  ) ? (
+                  <div style={S.mismatchAlert} role="alert">
+                    <strong>Names require attention</strong>
+                    <span>
+                      The account name and name entered from the identity
+                      document do not match exactly. Compare both against the
+                      uploaded files before deciding.
+                    </span>
+                  </div>
+                ) : null}
+
+                <section style={S.reviewSection}>
+                  <div style={S.reviewSectionHeader}>
+                    <div>
+                      <h4 style={S.reviewSectionTitle}>Account information</h4>
+                      <p style={S.reviewSectionCopy}>
+                        Details entered when this account was created.
+                      </p>
+                    </div>
+                    <span style={S.reviewSectionTag}>User input</span>
+                  </div>
+                  <div style={S.detailGrid}>
+                    <Detail
+                      label="Account name"
+                      value={selectedSubmission.fullName}
+                    />
+                    <Detail
+                      label="Role"
+                      value={formatLabel(selectedSubmission.role)}
+                    />
+                    <Detail label="Email" value={selectedSubmission.email} />
+                    <Detail label="Phone" value={selectedSubmission.phone} />
+                  </div>
+                </section>
+
+                <section style={S.reviewSection}>
+                  <div style={S.reviewSectionHeader}>
+                    <div>
+                      <h4 style={S.reviewSectionTitle}>Identity details</h4>
+                      <p style={S.reviewSectionCopy}>
+                        Values supplied by the applicant for document review.
+                      </p>
+                    </div>
+                    <span style={S.reviewSectionTag}>Compare with files</span>
+                  </div>
+                  <div style={S.detailGrid}>
+                    <Detail
+                      label="Name on identity document"
+                      value={selectedSubmission.identityDetails.fullName}
+                    />
+                    <Detail
+                      label="Identity document type"
+                      value={formatLabel(
+                        selectedSubmission.identityDetails.documentType,
+                      )}
+                    />
+                    <Detail
+                      label="Identity number"
+                      value={selectedSubmission.identityDetails.documentNumber}
+                    />
+                    <Detail
+                      label="Issuing country"
+                      value={
+                        selectedSubmission.identityDetails.issuingCountry ||
+                        "Not provided"
+                      }
+                    />
+                    <Detail
+                      label="Expiry date"
+                      value={
+                        selectedSubmission.identityDetails.expiryDate ||
+                        "Not provided"
+                      }
+                    />
+                  </div>
+                </section>
+
+                <section style={S.reviewSection}>
+                  <div style={S.reviewSectionHeader}>
+                    <div>
+                      <h4 style={S.reviewSectionTitle}>
+                        Registered address and location
+                      </h4>
+                      <p style={S.reviewSectionCopy}>
+                        Address is required; GPS remains permission-based.
+                      </p>
+                    </div>
+                    <span style={S.reviewSectionTag}>Location</span>
+                  </div>
+                  <div style={S.detailGrid}>
+                    <Detail
+                      label="Registered address"
+                      value={formatAddress(selectedSubmission.address)}
+                    />
+                    <Detail
+                      label="Map visibility"
+                      value={
+                        selectedSubmission.location
+                          ? formatLabel(selectedSubmission.location.visibility)
+                          : "Not shared"
+                      }
+                    />
+                    <Detail
+                      label="Coordinates"
+                      value={
+                        selectedSubmission.location
+                          ? `${selectedSubmission.location.latitude.toFixed(6)}, ${selectedSubmission.location.longitude.toFixed(6)}`
+                          : "Not provided"
+                      }
+                    />
+                    <Detail
+                      label="Location updated"
+                      value={
+                        selectedSubmission.location?.updatedAt
+                          ? formatFirestoreDate(
+                              selectedSubmission.location.updatedAt,
+                            )
+                          : "Not provided"
+                      }
+                    />
+                  </div>
+                  {selectedSubmission.location ? (
+                    <a
+                      href={`https://www.google.com/maps?q=${selectedSubmission.location.latitude},${selectedSubmission.location.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={S.mapLink}
+                    >
+                      Open location in Google Maps
+                    </a>
+                  ) : (
+                    <p style={S.locationNotice}>
+                      This user has not granted location permission yet and will
+                      not appear on maps until a location is saved.
+                    </p>
+                  )}
+                </section>
+              </div>
+            )}
+
+            <div style={S.modalActions}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setSelectedSubmission(null)}
+              >
+                Close
+              </button>
+              {selectedSubmission.status === "pending" && (
+                <>
+                  <button
+                    className="btn btn-success"
+                    onClick={() => void handleApprove(selectedSubmission)}
+                    disabled={busyId === selectedSubmission.documents[0].id}
+                  >
+                    <Check size={16} />
+                    Approve submission
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => void handleReject(selectedSubmission)}
+                    disabled={busyId === selectedSubmission.documents[0].id}
+                  >
+                    <X size={16} />
+                    Reject submission
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
+      )}
+
+      {selectedRecord && (
+        <div style={S.previewOverlay} onClick={() => setSelectedRecord(null)}>
+          <div
+            style={S.previewModal}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={S.modalHeader}>
+              <div>
+                <h3 style={S.modalTitle}>
+                  {formatDocumentLabel(selectedRecord)}
+                </h3>
+                <p style={S.modalSubtitle}>
+                  {selectedRecord.originalFilename} • {selectedRecord.fullName}
+                </p>
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setSelectedRecord(null)}
+              >
+                Close preview
+              </button>
+            </div>
+
+            <div style={S.previewBox}>
+              {previewLoading ? (
+                <div style={S.previewState}>Loading secure preview...</div>
+              ) : previewError ? (
+                <div style={S.previewState}>{previewError}</div>
+              ) : previewUrl ? (
+                <iframe
+                  title={`${formatDocumentLabel(selectedRecord)} preview`}
+                  src={previewUrl}
+                  style={S.previewFrame}
+                />
+              ) : (
+                <div style={S.previewState}>Preview is unavailable.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {refreshing && (
+        <div style={S.refreshHint}>Refreshing review queue...</div>
       )}
     </div>
   );
 }
 
-// Reuses one field renderer so the modal layout stays consistent.
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 14,
-          fontWeight: 600,
-          color: "#111827",
-          wordBreak: "break-word",
-        }}
-      >
-        {value}
-      </div>
+      <div style={S.detailLabel}>{label}</div>
+      <div style={S.detailValue}>{value}</div>
     </div>
   );
 }
 
 const S: Record<string, CSSProperties> = {
-  pendingChip: {
-    background: "#FEF3C7",
-    color: "#92400E",
-    borderRadius: 20,
-    padding: "4px 12px",
-    fontSize: 13,
-    fontWeight: 600,
-  },
   errorCard: {
     marginBottom: 16,
     color: "#991B1B",
@@ -406,20 +810,26 @@ const S: Record<string, CSSProperties> = {
   },
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 16,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   summaryCard: {
     display: "flex",
     flexDirection: "column",
+    gap: 4,
   },
-  filtersRow: {
+  searchRow: {
     display: "flex",
+    justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
     marginBottom: 16,
-    flexWrap: "wrap",
+  },
+  searchWrap: {
+    position: "relative",
+    flex: 1,
+    maxWidth: 420,
   },
   searchIcon: {
     position: "absolute",
@@ -428,56 +838,242 @@ const S: Record<string, CSSProperties> = {
     transform: "translateY(-50%)",
     color: "#6B7280",
   },
+  searchInput: {
+    paddingLeft: 36,
+  },
   emptyCell: {
     textAlign: "center",
     padding: 40,
     color: "#6B7280",
   },
-  monoCell: {
-    fontFamily: "monospace",
-    fontSize: 12,
-    color: "#6B7280",
+  reviewTable: {
+    width: "100%",
+    tableLayout: "fixed",
   },
-  actionRow: {
+  clickableRow: {
+    cursor: "pointer",
+  },
+  cellStack: {
     display: "flex",
-    gap: 6,
-    justifyContent: "center",
+    flexDirection: "column",
+    gap: 2,
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+  nameRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  statusStack: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
+  },
+  mutedText: {
+    color: "#6B7280",
+    fontSize: 12,
   },
   modalOverlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.45)",
+    background: "rgba(15, 23, 42, 0.55)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 1000,
+    padding: 20,
   },
   modal: {
-    width: "min(620px, 92vw)",
+    width: "min(980px, 96vw)",
+    maxHeight: "92vh",
+    overflow: "auto",
     background: "#FFFFFF",
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 24,
+    boxShadow: "0 24px 80px rgba(15, 23, 42, 0.32)",
   },
   modalHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
+    gap: 16,
     marginBottom: 16,
   },
-  closeButton: {
-    border: "none",
-    background: "transparent",
-    fontSize: 24,
-    cursor: "pointer",
-    color: "#6B7280",
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 700,
+    margin: 0,
   },
-  detailCard: {
+  modalSubtitle: {
+    margin: "4px 0 0",
+    color: "#6B7280",
+    fontSize: 13,
+  },
+  documentTabs: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+  },
+  documentsSection: {
+    border: "1px solid #BFDBFE",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    background: "#F8FBFF",
+  },
+  documentButton: {
+    minWidth: 130,
+    justifyContent: "center",
+  },
+  reviewSections: {
+    display: "grid",
+    gap: 16,
+    marginBottom: 18,
+  },
+  reviewSection: {
+    border: "1px solid #DCE6F1",
+    borderRadius: 16,
+    padding: 16,
+    background: "#FFFFFF",
+  },
+  reviewSectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 16,
+    marginBottom: 14,
+  },
+  reviewSectionTitle: {
+    margin: 0,
+    color: "#0F172A",
+    fontSize: 16,
+    fontWeight: 700,
+  },
+  reviewSectionCopy: {
+    margin: "4px 0 0",
+    color: "#64748B",
+    fontSize: 13,
+  },
+  reviewSectionTag: {
+    borderRadius: 999,
+    padding: "5px 9px",
+    background: "#EAF2FF",
+    color: "#1D4ED8",
+    fontSize: 11,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  },
+  mismatchAlert: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    border: "1px solid #F59E0B",
+    borderRadius: 14,
+    padding: 14,
+    background: "#FFFBEB",
+    color: "#92400E",
+    fontSize: 13,
+  },
+  mapLink: {
+    display: "inline-flex",
+    marginTop: 2,
+    color: "#2563EB",
+    fontSize: 13,
+    fontWeight: 700,
+    textDecoration: "none",
+  },
+  locationNotice: {
+    margin: 0,
+    color: "#92400E",
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+  detailGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
     background: "#F8FAFC",
     border: "1px solid #E2E8F0",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
+    marginBottom: 16,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#111827",
+    wordBreak: "break-word",
+  },
+  previewBox: {
+    border: "1px solid #E2E8F0",
+    borderRadius: 16,
+    overflow: "hidden",
+    minHeight: 420,
+    background: "#0F172A",
+  },
+  previewFrame: {
+    width: "100%",
+    height: "68vh",
+    border: "none",
+    background: "#FFFFFF",
+  },
+  previewState: {
+    minHeight: 420,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#E2E8F0",
+    padding: 24,
+    textAlign: "center",
+  },
+  modalActions: {
+    position: "sticky",
+    bottom: -24,
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    padding: "16px 24px",
+    margin: "0 -24px -24px",
+    borderTop: "1px solid #E2E8F0",
+    background: "rgba(255, 255, 255, 0.98)",
+    boxShadow: "0 -8px 20px rgba(15, 23, 42, 0.06)",
+  },
+  previewOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15, 23, 42, 0.72)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1100,
+    padding: 20,
+  },
+  previewModal: {
+    width: "min(1100px, 96vw)",
+    maxHeight: "94vh",
+    overflow: "hidden",
+    background: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    boxShadow: "0 28px 90px rgba(0, 0, 0, 0.45)",
+  },
+  refreshHint: {
+    position: "fixed",
+    right: 18,
+    bottom: 18,
+    background: "#0F172A",
+    color: "#FFFFFF",
+    borderRadius: 999,
+    padding: "10px 14px",
+    fontSize: 12,
+    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.24)",
   },
 };

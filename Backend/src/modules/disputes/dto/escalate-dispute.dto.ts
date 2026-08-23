@@ -1,10 +1,13 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, MaxLength } from 'class-validator';
 
 export class EscalateDisputeDto {
   @IsString()
-  reason: string;
+  @IsNotEmpty()
+  @MaxLength(1000)
+  reason!: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(2000)
   notes?: string;
 }

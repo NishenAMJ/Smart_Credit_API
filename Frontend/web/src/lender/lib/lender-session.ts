@@ -1,147 +1,106 @@
 export type LenderSession = {
-  lenderId: string;
-  displayName: string;
-  email: string;
-  accessToken: string;
-};
+  lenderId: string
+  displayName: string
+  email: string
+  accessToken: string
+}
 
-const SESSION_STORAGE_KEY = "smart-credit:lender-session";
-const ACCOUNTS_STORAGE_KEY = "smart-credit:lender-accounts";
+const SESSION_STORAGE_KEY = 'smart-credit:lender-session'
+const ACCOUNTS_STORAGE_KEY = 'smart-credit:lender-accounts'
+const SHARED_SESSION_STORAGE_KEY = 'smart-credit-shared-auth-session'
+const LEGACY_AUTH_PARAMS = ['accessToken', 'lenderId', 'displayName', 'email']
 
 function canUseStorage(): boolean {
-  return (
-    typeof window !== "undefined" && typeof window.localStorage !== "undefined"
-  );
+  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
 }
 
 function safeParseAccounts(value: string | null): LenderSession[] {
   if (!value) {
-    return [];
+    return []
   }
 
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed = JSON.parse(value) as unknown
 
     if (!Array.isArray(parsed)) {
-      return [];
+      return []
     }
 
     return parsed.filter((item): item is LenderSession => {
-      if (!item || typeof item !== "object") {
-        return false;
+      if (!item || typeof item !== 'object') {
+        return false
       }
 
-      const candidate = item as Partial<LenderSession>;
+      const candidate = item as Partial<LenderSession>
       return (
-        typeof candidate.lenderId === "string" &&
-        typeof candidate.displayName === "string" &&
-        typeof candidate.email === "string" &&
-        typeof candidate.accessToken === "string" &&
-        candidate.accessToken.trim().length > 0
-      );
-    });
+        typeof candidate.lenderId === 'string' &&
+        typeof candidate.displayName === 'string' &&
+        typeof candidate.email === 'string' &&
+        typeof candidate.accessToken === 'string' &&
+        candidate.accessToken.length > 0
+      )
+    })
   } catch {
-    return [];
+    return []
   }
-}
-
-function readStoredAccounts(): LenderSession[] {
-  if (!canUseStorage()) {
-    return [];
-  }
-
-  return safeParseAccounts(window.localStorage.getItem(ACCOUNTS_STORAGE_KEY));
-}
-
-function writeStoredAccounts(accounts: LenderSession[]) {
-  if (!canUseStorage()) {
-    return;
-  }
-
-  window.localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
 }
 
 export function getStoredSession(): LenderSession | null {
   if (!canUseStorage()) {
-    return null;
+    return null
   }
 
-  const rawSession = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  const rawSession = window.localStorage.getItem(SESSION_STORAGE_KEY)
 
   if (!rawSession) {
-    return null;
+    return null
   }
 
-  const [session] = safeParseAccounts(`[${rawSession}]`);
-  return session ?? null;
-}
-
-export function getSessionFromSearchParams(): LenderSession | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const lenderId = params.get("lenderId");
-  const displayName = params.get("displayName");
-  const email = params.get("email");
-  const accessToken = params.get("accessToken");
-  const hasLegacyHandoffParams =
-    params.has("lenderId") ||
-    params.has("displayName") ||
-    params.has("email") ||
-    params.has("accessToken");
-
-  if (hasLegacyHandoffParams) {
-    params.delete("lenderId");
-    params.delete("displayName");
-    params.delete("email");
-    params.delete("accessToken");
-
-    const nextSearch = params.toString();
-    const nextUrl = `${window.location.pathname}${
-      nextSearch ? `?${nextSearch}` : ""
-    }${window.location.hash}`;
-
-    window.history.replaceState({}, document.title, nextUrl);
-  }
-
-  if (!lenderId || !displayName || !accessToken) {
-    return null;
-  }
-
-  return {
-    lenderId,
-    displayName,
-    email: email ?? "",
-    accessToken,
-  };
+  const [session] = safeParseAccounts(`[${rawSession}]`)
+  return session ?? null
 }
 
 export function setStoredSession(session: LenderSession) {
   if (!canUseStorage()) {
-    return;
+    return
   }
 
-  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
 }
 
 export function clearStoredSession() {
   if (!canUseStorage()) {
-    return;
+    return
   }
 
-  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  window.localStorage.removeItem(SESSION_STORAGE_KEY)
+  window.localStorage.removeItem(ACCOUNTS_STORAGE_KEY)
+  window.localStorage.removeItem(SHARED_SESSION_STORAGE_KEY)
 }
 
 export function updateStoredSession(session: LenderSession) {
-  setStoredSession(session);
+  setStoredSession(session)
+  window.localStorage.removeItem(ACCOUNTS_STORAGE_KEY)
+}
 
-  const existingAccounts = readStoredAccounts();
-  const nextAccounts = existingAccounts.filter(
-    (account) => account.lenderId !== session.lenderId,
-  );
+export function removeLegacyAuthParams() {
+  if (typeof window === 'undefined') {
+    return
+  }
 
-  nextAccounts.unshift(session);
-  writeStoredAccounts(nextAccounts);
+  const url = new URL(window.location.href)
+  const hadLegacyParams = LEGACY_AUTH_PARAMS.some((key) =>
+    url.searchParams.has(key),
+  )
+
+  if (!hadLegacyParams) {
+    return
+  }
+
+  LEGACY_AUTH_PARAMS.forEach((key) => url.searchParams.delete(key))
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`,
+  )
 }

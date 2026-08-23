@@ -83,4 +83,6 @@ export class DocumentAccessResponseDto {
   /** Short-lived signed Cloudinary URL (5 min TTL). */
   accessUrl!: string;
   expiresAt!: string;
+  fileName!: string;
+  mimeType!: string;
 }

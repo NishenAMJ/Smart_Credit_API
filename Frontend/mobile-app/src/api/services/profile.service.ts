@@ -50,6 +50,7 @@ export const profileService = {
   updateMyProfile: async (data: {
     fullName?: string;
     email?: string;
+    currentPassword?: string;
     password?: string;
     phone?: string;
     address?: string;
@@ -96,6 +97,7 @@ export const profileService = {
     const payload: Record<string, unknown> = {};
     if (data.fullName) payload.fullName = data.fullName;
     if (data.email) payload.email = data.email.trim();
+    if (data.currentPassword) payload.currentPassword = data.currentPassword;
     if (data.password) payload.password = data.password;
     if (phone) payload.phone = phone;
     if (address) payload.address = address;
@@ -104,11 +106,6 @@ export const profileService = {
       if (!isNaN(income)) payload.monthlyIncome = income;
     }
     if (data.occupation) payload.occupation = data.occupation;
-
-    console.log(
-      "[ProfileService] Sending update payload:",
-      JSON.stringify(payload, null, 2),
-    );
 
     try {
       const response = await apiClient.put(

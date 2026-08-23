@@ -1,200 +1,129 @@
 import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  TextInput,
-  Alert,
   ActivityIndicator,
+  Alert,
+  Linking,
+  SafeAreaView,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { commonStyles, COLORS } from "../../styles/lender.styles";
-import { AdService } from "../../services/advertisement.service";
+import * as ImagePicker from "expo-image-picker";
+import { AdService, type AdBoostPlan } from "../../services/advertisement.service";
+import { getApiErrorMessage } from "../../api/api-error";
+import { COLORS, commonStyles } from "../../styles/lender.styles";
 
-export default function BoostAdScreen({ route, navigation }: any) {
-  const { ad } = route.params;
-
-  const [packages, setPackages] = useState<any[]>([]);
-  const [selected, setSelected] = useState("");
-  const [paymentRef, setPaymentRef] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [pkgLoading, setPkgLoading] = useState(true);
+export default function BoostAdScreen({ navigation, route }: any) {
+  const ad = route.params?.ad;
+  const [plans, setPlans] = useState<AdBoostPlan[]>([]);
+  const [planId, setPlanId] = useState("");
+  const [method, setMethod] = useState<"card" | "bank_transfer">("card");
+  const [paymentMethods, setPaymentMethods] = useState({ card: false, bankTransfer: false });
+  const [bank, setBank] = useState<Record<string, string>>({});
+  const [reference, setReference] = useState("");
+  const [receipt, setReceipt] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pendingBoostId, setPendingBoostId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadPackages();
+    AdService.getBoostPlans()
+      .then((result) => {
+        setPlans(result.plans);
+        setPlanId(result.plans[0]?.id ?? "");
+        setBank(result.bankAccount);
+        setPaymentMethods(result.paymentMethods);
+        if (result.paymentMethods.card) setMethod("card");
+        else if (result.paymentMethods.bankTransfer) setMethod("bank_transfer");
+        else Alert.alert("Boost unavailable", "Boost payment methods are not configured yet. Your advertisement remains active.");
+      })
+      .catch((error) => Alert.alert("Boost unavailable", getApiErrorMessage(error)));
   }, []);
 
-  const loadPackages = async () => {
-    try {
-      setPkgLoading(true);
-      const data = await AdService.getBoostPackages();
-      setPackages(data);
-    } catch (e: any) {
-      Alert.alert(
-        "Error",
-        e?.response?.data?.message || "Failed to load packages",
-      );
-    } finally {
-      setPkgLoading(false);
-    }
-  };
+  async function chooseReceipt() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.85,
+    });
+    if (!result.canceled) setReceipt(result.assets[0]);
+  }
 
-  const handleBoost = async () => {
-    if (!selected) {
-      Alert.alert("Validation Error", "Please select a package");
+  async function submit() {
+    if (!ad || !planId) return;
+    if (method === "bank_transfer" && (!receipt || !reference.trim())) {
+      Alert.alert("Payment details required", "Select a receipt and enter the bank reference.");
       return;
     }
-
-    if (!paymentRef.trim()) {
-      Alert.alert("Validation Error", "Please enter your payment reference");
-      return;
-    }
-
-    const pkg = packages.find((p: any) => p.package === selected);
-    if (!pkg) return;
-
     try {
-      setLoading(true);
-      await AdService.boostAd(ad.adId, {
-        package: selected,
-        amount: pkg.price,
-        paymentReference: paymentRef.trim(),
-      });
-
-      Alert.alert("Success", "Ad boosted successfully!", [
-        { text: "OK", onPress: () => navigation.navigate("MyAds") },
+      setBusy(true);
+      const boost = pendingBoostId
+        ? { boostId: pendingBoostId }
+        : await AdService.createBoost({ listingId: ad.id ?? ad.adId, planId, paymentMethod: method });
+      if (method === "card") {
+        const url = boost.checkout?.paymentPageUrl;
+        if (!url) throw new Error("Card checkout could not be started.");
+        await Linking.openURL(url);
+        Alert.alert("Checkout opened", "Complete the card payment, then return to My Ads.", [
+          { text: "OK", onPress: () => navigation.goBack() },
+        ]);
+        return;
+      }
+      setPendingBoostId(boost.boostId);
+      const documentId = await AdService.uploadBoostReceipt(receipt!, boost.boostId);
+      await AdService.submitBoostReceipt(boost.boostId, documentId, reference.trim());
+      Alert.alert("Payment submitted", "An administrator will verify your bank transfer.", [
+        { text: "OK", onPress: () => navigation.goBack() },
       ]);
-    } catch (e: any) {
-      Alert.alert("Error", e?.response?.data?.message || "Failed to boost ad");
+    } catch (error) {
+      Alert.alert("Boost failed", getApiErrorMessage(error, "Could not submit the boost payment."));
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  };
+  }
 
+  const selectedPlan = plans.find((plan) => plan.id === planId);
   return (
     <SafeAreaView style={commonStyles.safe}>
       <View style={commonStyles.header}>
         <View style={commonStyles.headerFlexRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={commonStyles.headerTitle}>Boost Ad</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()}><Feather name="arrow-left" size={22} color={COLORS.textPrimary} /></TouchableOpacity>
+          <Text style={commonStyles.headerTitle}>Boost Advertisement</Text>
           <View style={{ width: 22 }} />
         </View>
       </View>
-
-      <ScrollView style={commonStyles.scrollContainer}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <View style={commonStyles.card}>
-          <Text style={commonStyles.sectionTitle}>Current Ad</Text>
-          <Text style={commonStyles.textPrimary}>{ad.title}</Text>
-          <Text style={commonStyles.textSecondary}>
-            LKR {ad.minAmount.toLocaleString()} –{" "}
-            {ad.maxAmount.toLocaleString()}
-          </Text>
-          {ad.isBoosted && (
-            <Text
-              style={{
-                marginTop: 8,
-                fontSize: 12,
-                color: COLORS.warning,
-                fontWeight: "600",
-              }}
-            >
-              ⚡ Already boosted — boosting again will extend after current
-              boost expires
-            </Text>
-          )}
+          <Text style={commonStyles.textPrimary}>{ad?.title}</Text>
+          <Text style={[commonStyles.textSecondary, { marginTop: 6 }]}>Boosting is optional. Your approved ad stays live without it.</Text>
         </View>
-
-        <Text style={commonStyles.sectionTitle}>Select Package</Text>
-
-        {pkgLoading ? (
-          <View style={{ padding: 24, alignItems: "center" }}>
-            <ActivityIndicator color={COLORS.primary} />
-          </View>
-        ) : (
-          packages.map((pkg: any) => (
-            <TouchableOpacity
-              key={pkg.package}
-              onPress={() => setSelected(pkg.package)}
-              style={[
-                commonStyles.card,
-                {
-                  borderWidth: 2,
-                  borderColor:
-                    selected === pkg.package ? COLORS.primary : "transparent",
-                  backgroundColor:
-                    selected === pkg.package ? "#EBF4FF" : COLORS.surface,
-                },
-              ]}
-            >
-              <View style={commonStyles.rowSpaceBetween}>
-                <View>
-                  <Text style={commonStyles.textPrimary}>
-                    {pkg.description}
-                  </Text>
-                  <Text style={[commonStyles.textSecondary, { marginTop: 4 }]}>
-                    {pkg.days} days
-                  </Text>
-                </View>
-                <Text style={[commonStyles.textPrimary, { fontSize: 18 }]}>
-                  LKR {pkg.price.toLocaleString()}
-                </Text>
-              </View>
-              {selected === pkg.package && (
-                <View style={[commonStyles.row, { marginTop: 12 }]}>
-                  <Feather
-                    name="check-circle"
-                    size={16}
-                    color={COLORS.primary}
-                  />
-                  <Text
-                    style={[
-                      commonStyles.textPrimary,
-                      { marginLeft: 6, color: COLORS.primary },
-                    ]}
-                  >
-                    Selected
-                  </Text>
-                </View>
-              )}
+        <Text style={[commonStyles.textPrimary, { marginTop: 20, marginBottom: 8 }]}>Choose a plan</Text>
+        {plans.map((plan) => (
+          <TouchableOpacity key={plan.id} onPress={() => setPlanId(plan.id)} style={[commonStyles.card, { marginBottom: 8, borderWidth: 2, borderColor: planId === plan.id ? COLORS.primary : "transparent" }]}>
+            <View style={commonStyles.rowSpaceBetween}><Text style={commonStyles.textPrimary}>{plan.name}</Text><Text style={commonStyles.textPrimary}>LKR {(plan.amountMinor / 100).toLocaleString()}</Text></View>
+          </TouchableOpacity>
+        ))}
+        <Text style={[commonStyles.textPrimary, { marginTop: 16, marginBottom: 8 }]}>Payment method</Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {(["card", "bank_transfer"] as const).map((value) => (
+            <TouchableOpacity key={value} disabled={value === "card" ? !paymentMethods.card : !paymentMethods.bankTransfer} onPress={() => setMethod(value)} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: method === value ? COLORS.primary : COLORS.border, opacity: (value === "card" ? paymentMethods.card : paymentMethods.bankTransfer) ? 1 : 0.5 }}>
+              <Text style={{ textAlign: "center", fontWeight: "700", color: method === value ? "#fff" : COLORS.textPrimary }}>{value === "card" ? "Card" : "Bank transfer"}</Text>
             </TouchableOpacity>
-          ))
-        )}
-
-        <Text style={commonStyles.sectionTitle}>Payment Details</Text>
-        <View style={commonStyles.card}>
-          <Text style={commonStyles.textPrimary}>Payment Reference *</Text>
-          <TextInput
-            value={paymentRef}
-            onChangeText={setPaymentRef}
-            placeholder="Bank transfer ref or receipt no."
-            style={commonStyles.input}
-            placeholderTextColor={COLORS.textSecondary}
-          />
-          <Text style={[commonStyles.textSmall, { marginTop: 8 }]}>
-            Enter your bank transfer reference or payment receipt number
-          </Text>
+          ))}
         </View>
-
-        <TouchableOpacity
-          onPress={handleBoost}
-          disabled={loading || !selected || pkgLoading}
-          style={[
-            commonStyles.primaryButton,
-            { marginVertical: 24, opacity: !selected || loading ? 0.5 : 1 },
-          ]}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Feather name="trending-up" size={18} color="#fff" />
-              <Text style={commonStyles.buttonText}>Confirm Boost</Text>
-            </>
-          )}
+        {method === "bank_transfer" ? (
+          <View style={[commonStyles.card, { marginTop: 12 }]}>
+            <Text style={commonStyles.textSecondary}>Pay LKR {((selectedPlan?.amountMinor ?? 0) / 100).toLocaleString()} to {bank.bankName || "the platform bank account"}</Text>
+            <Text style={[commonStyles.textPrimary, { marginTop: 6 }]}>{bank.accountName} {bank.accountNumber} {bank.branch}</Text>
+            <TextInput style={[commonStyles.input, { marginTop: 12 }]} placeholder="Bank reference" value={reference} onChangeText={setReference} />
+            <TouchableOpacity onPress={() => void chooseReceipt()} style={{ marginTop: 10, padding: 12, borderRadius: 8, backgroundColor: COLORS.border }}>
+              <Text style={{ textAlign: "center", color: COLORS.textPrimary }}>{receipt ? receipt.fileName || "Receipt selected" : "Select payment receipt"}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        <TouchableOpacity disabled={busy || !selectedPlan || (!paymentMethods.card && !paymentMethods.bankTransfer)} onPress={() => void submit()} style={{ marginTop: 20, padding: 14, borderRadius: 8, backgroundColor: COLORS.primary, opacity: busy || (!paymentMethods.card && !paymentMethods.bankTransfer) ? 0.6 : 1 }}>
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", textAlign: "center", fontWeight: "700" }}>{method === "card" ? "Pay securely" : "Submit payment"}</Text>}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

@@ -11,28 +11,26 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { commonStyles, COLORS } from "../../styles/lender.styles";
 import { LenderHeader, AlertBanner } from "../../components/lender";
-import { RecentTransactionsService } from "../../services/lender.service";
-
-/**
- 
-   loanStatus ('active'|'completed'|'overdue'), status (installment status),
- **/
+import {
+  LenderLoansService,
+  type LenderLoan,
+} from "../../services/lender.service";
 
 type FilterType = "all" | "active" | "completed" | "overdue";
 
 export default function ActiveLoansScreen({ navigation }: any) {
   const [filter, setFilter] = useState<FilterType>("all");
-  const [allLoans, setAllLoans] = useState<any[]>([]);
+  const [allLoans, setAllLoans] = useState<LenderLoan[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const data = await RecentTransactionsService.getTransactions({
-          pageSize: 100,
+        const data = await LenderLoansService.getLoans({
+          pageSize: 50,
         });
-        setAllLoans(data?.transactions ?? []);
+        setAllLoans(data?.loans ?? []);
         setSummary(data?.summary ?? null);
       } catch {
         setAllLoans([]);
@@ -42,10 +40,8 @@ export default function ActiveLoansScreen({ navigation }: any) {
     })();
   }, []);
 
-  // Filter by loanStatus (not the installment payment status)
   const filtered = allLoans.filter(
-    (l) =>
-      filter === "all" || (l.loanStatus ?? "active").toLowerCase() === filter,
+    (loan) => filter === "all" || loan.status.toLowerCase() === filter,
   );
 
   const getLoanStatusStyle = (loanStatus: string) => {
@@ -101,15 +97,15 @@ export default function ActiveLoansScreen({ navigation }: any) {
             <View style={commonStyles.rowSpaceBetween}>
               <View style={{ alignItems: "center" }}>
                 <Text style={styles.sumNum}>
-                  {summary.loansWithActivity ?? allLoans.length}
+                  {summary.totalLoans ?? allLoans.length}
                 </Text>
                 <Text style={commonStyles.textSecondary}>Total Loans</Text>
               </View>
               <View style={{ alignItems: "center" }}>
                 <Text style={[styles.sumNum, { color: COLORS.success }]}>
-                  LKR {((summary.totalCollected ?? 0) / 1000).toFixed(0)}K
+                  LKR {((summary.outstandingBalance ?? 0) / 1000).toFixed(0)}K
                 </Text>
-                <Text style={commonStyles.textSecondary}>Collected</Text>
+                <Text style={commonStyles.textSecondary}>Outstanding</Text>
               </View>
               <View style={{ alignItems: "center" }}>
                 <Text
@@ -117,13 +113,13 @@ export default function ActiveLoansScreen({ navigation }: any) {
                     styles.sumNum,
                     {
                       color:
-                        summary.overdueInstallments > 0
+                        summary.overdueLoans > 0
                           ? COLORS.danger
                           : COLORS.textSecondary,
                     },
                   ]}
                 >
-                  {summary.overdueInstallments ?? 0}
+                  {summary.overdueLoans ?? 0}
                 </Text>
                 <Text style={commonStyles.textSecondary}>Overdue</Text>
               </View>
@@ -155,21 +151,21 @@ export default function ActiveLoansScreen({ navigation }: any) {
             message={`No ${filter === "all" ? "" : filter} loans found`}
           />
         ) : (
-          filtered.map((loan: any, index: number) => {
-            const ss = getLoanStatusStyle(loan.loanStatus);
-            const paid = loan.installmentSummary?.paidInstallments ?? 0;
-            const total = loan.installmentSummary?.totalInstallments ?? 0;
+          filtered.map((loan) => {
+            const ss = getLoanStatusStyle(loan.status);
+            const paid = loan.installmentProgress.paid;
+            const total = loan.installmentProgress.total;
             const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
-            const days = daysUntilDue(loan.installmentSummary?.nextDueDate);
-            const principal = loan.amount ?? 0;
-            const remaining = loan.remainingAmount ?? 0;
+            const days = daysUntilDue(loan.installmentProgress.nextDueAt);
+            const principal = loan.principal;
+            const remaining = loan.remainingBalance;
 
             return (
               <TouchableOpacity
-                key={`${loan.loanId ?? loan.transactionId}-${index}`}
+                key={loan.id}
                 style={commonStyles.card}
                 onPress={() =>
-                  navigation.push("LoanDetails", { loanId: loan.loanId })
+                  navigation.push("LoanDetails", { loanId: loan.id })
                 }
                 activeOpacity={0.8}
               >
@@ -177,10 +173,10 @@ export default function ActiveLoansScreen({ navigation }: any) {
                 <View style={commonStyles.rowSpaceBetween}>
                   <View style={{ flex: 1 }}>
                     <Text style={commonStyles.sectionTitle}>
-                      {loan.borrowerName ?? "Unknown"}
+                      {loan.borrower.fullName}
                     </Text>
                     <Text style={commonStyles.textSecondary}>
-                      Loan ...{(loan.loanId ?? "").slice(-6)}
+                      Loan ...{loan.id.slice(-6)}
                     </Text>
                   </View>
                   <View style={[styles.badge, { backgroundColor: ss.bg }]}>
@@ -239,7 +235,7 @@ export default function ActiveLoansScreen({ navigation }: any) {
 
                 {/* Next due / days */}
                 {days !== null &&
-                  (loan.loanStatus ?? "active") !== "completed" && (
+                  loan.status !== "completed" && (
                     <View style={[commonStyles.row, { marginTop: 8 }]}>
                       <Feather
                         name="clock"

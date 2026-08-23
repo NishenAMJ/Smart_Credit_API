@@ -53,12 +53,9 @@ export default function LoanCard({
       </View>
 
       <View style={styles.badgeRow}>
-        <View style={[styles.badge, styles.sponsoredBadge]}>
-          <Text style={styles.sponsoredBadgeText}>SPONSORED</Text>
-        </View>
         {loan.isFeatured ? (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>High Smart Score</Text>
+          <View style={[styles.badge, styles.sponsoredBadge]}>
+            <Text style={styles.sponsoredBadgeText}>SPONSORED</Text>
           </View>
         ) : null}
       </View>

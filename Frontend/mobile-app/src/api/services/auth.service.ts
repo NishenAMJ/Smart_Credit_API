@@ -7,6 +7,7 @@ import type {
   DashboardResponse,
   KycSubmissionResponse,
   LegalDocument,
+  LegalDocumentsResponse,
   LegalDocumentResponse,
   LoginPayload,
   MyKycSubmissionResponse,
@@ -61,6 +62,19 @@ export async function submitKyc(payload: SubmitKycPayload) {
   return response.data;
 }
 
+export async function resubmitKyc(payload: {
+  documentFrontUrl: string;
+  documentBackUrl: string;
+  selfieUrl?: string;
+}) {
+  const response = await apiClient.post<{
+    success: boolean;
+    kycStatus: string;
+    message: string;
+  }>("/kyc/resubmit", payload);
+  return response.data;
+}
+
 export async function getMyKycSubmission() {
   const response = await apiClient.get<MyKycSubmissionResponse>(
     ENDPOINTS.kyc.mySubmission,
@@ -84,7 +98,13 @@ export async function getLatestLegalDocument(loanId: string) {
 
 export async function acceptLegalDocument(
   documentId: string,
-  payload: { signedName: string },
+  payload: {
+    signedName: string;
+    consentAccepted: true;
+    agreementVersion: number;
+    termsHash: string;
+    fundsReceivedConfirmed?: boolean;
+  },
 ) {
   const response = await apiClient.post<LegalDocumentResponse>(
     ENDPOINTS.legal.accept(documentId),
@@ -93,8 +113,26 @@ export async function acceptLegalDocument(
   return response.data;
 }
 
+export async function confirmAgreementDisbursement(
+  documentId: string,
+  payload: { confirmationAccepted: true; externalReference?: string },
+) {
+  const response = await apiClient.post<LegalDocumentResponse>(
+    ENDPOINTS.legal.confirmDisbursement(documentId),
+    payload,
+  );
+  return response.data;
+}
+
+export async function retryLegalDocumentFinalization(documentId: string) {
+  const response = await apiClient.post<LegalDocumentResponse>(
+    ENDPOINTS.legal.finalize(documentId),
+  );
+  return response.data;
+}
+
 export async function listLegalDocuments() {
-  const response = await apiClient.get<{ documents: LegalDocument[] }>(
+  const response = await apiClient.get<LegalDocumentsResponse>(
     ENDPOINTS.legal.list,
   );
   return response.data;

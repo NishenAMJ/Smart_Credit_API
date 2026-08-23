@@ -12,6 +12,12 @@ describe('lender role compatibility', () => {
               role: ['lender'],
               fullName: 'Lender Array',
               email: 'lender@example.com',
+              address: {
+                line1: '10 Main Street',
+                city: 'Colombo',
+                district: 'Colombo',
+                province: 'Western',
+              },
             }),
           }),
         }),
@@ -23,6 +29,7 @@ describe('lender role compatibility', () => {
 
     expect(result.fullName).toBe('Lender Array');
     expect(result.email).toBe('lender@example.com');
+    expect(result.address).toBe('10 Main Street, Colombo, Colombo, Western');
   });
 
   it('accepts lenders stored with role arrays in lender settings', async () => {

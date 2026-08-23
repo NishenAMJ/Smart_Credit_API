@@ -1,40 +1,92 @@
+export type DisputeRole = 'borrower' | 'lender' | 'admin';
+export type DisputeCategory =
+  | 'payment'
+  | 'loan_terms'
+  | 'fraud'
+  | 'conduct'
+  | 'other';
+export type DisputeStatus =
+  | 'open'
+  | 'under_review'
+  | 'awaiting_response'
+  | 'escalated'
+  | 'resolved'
+  | 'closed';
+export type ParticipantDisputeScope = 'active' | 'history';
+export type DisputePriority = 'low' | 'medium' | 'high' | 'critical';
+export type DisputeEventVisibility = 'shared' | 'admin';
+export type DisputeResponseRequestedFrom =
+  | 'complainant'
+  | 'respondent'
+  | 'both';
+
+export interface DisputeResolution {
+  summary: string;
+  recommendedActions: string[];
+  issuedByAdminId: string;
+  issuedAt: FirebaseFirestore.Timestamp;
+  reopenUntil: FirebaseFirestore.Timestamp;
+}
+
 export interface Dispute {
   id: string;
-  disputeId?: string;
-  disputeCode?: string;
-  transactionId: string;
-  loanId?: string;
-  lenderId?: string;
-  borrowerId?: string;
-  lenderName?: string;
-  borrowerName?: string;
-  lenderPhotoURL?: string;
-  borrowerPhotoURL?: string;
-  raisedBy: string;
-  raisedByUserId?: string;
-  raisedByRole?: 'borrower' | 'lender';
-  againstUser: string;
-  againstUserId?: string;
-  againstUserRole?: 'borrower' | 'lender';
-  title?: string;
+  disputeId: string;
+  disputeCode: string;
+  loanId: string | null;
+  transactionId: string | null;
+  installmentId: string | null;
+  complainantId: string;
+  complainantRole: 'borrower' | 'lender';
+  respondentId: string;
+  respondentRole: 'borrower' | 'lender';
+  borrowerId: string;
+  lenderId: string;
+  borrowerName: string;
+  lenderName: string;
+  category: DisputeCategory;
+  subject: string;
   description: string;
-  category: 'payment' | 'fraud' | 'service' | 'other';
-  status: 'open' | 'in-progress' | 'resolved' | 'escalated' | 'closed';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  disputedAmount?: number;
-  evidenceUrls?: string[];
-  statusHistory?: Array<{
-    status: string;
-    note: string;
-    at: FirebaseFirestore.Timestamp;
-    by: string;
-  }>;
+  desiredOutcome: string;
+  disputedAmountMinor: number | null;
+  currency: 'LKR';
+  evidenceDocumentIds: string[];
+  searchTokens?: string[];
+  status: DisputeStatus;
+  priority: DisputePriority;
+  assignedAdminId: string | null;
+  resolution: DisputeResolution | null;
+  acknowledgements: Record<string, FirebaseFirestore.Timestamp>;
+  reopenCount: number;
+  responseRequestedFrom: DisputeResponseRequestedFrom | null;
   createdAt: FirebaseFirestore.Timestamp;
-  updatedAt?: FirebaseFirestore.Timestamp;
-  resolvedAt?: FirebaseFirestore.Timestamp;
-  resolution?: string;
-  escalatedAt?: FirebaseFirestore.Timestamp;
-  escalationReason?: string;
-  notes?: string;
-  assignedTo?: string;
+  updatedAt: FirebaseFirestore.Timestamp;
+  resolvedAt: FirebaseFirestore.Timestamp | null;
+  closedAt: FirebaseFirestore.Timestamp | null;
+}
+
+export interface DisputeEvent {
+  id: string;
+  eventId: string;
+  disputeId: string;
+  type: string;
+  actorUserId: string;
+  actorRole: DisputeRole | 'system';
+  message: string;
+  documentIds: string[];
+  visibility: DisputeEventVisibility;
+  previousStatus: DisputeStatus | null;
+  nextStatus: DisputeStatus | null;
+  createdAt: FirebaseFirestore.Timestamp;
+}
+
+export interface CreateDisputeInput {
+  loanId?: string;
+  transactionId?: string;
+  installmentId?: string;
+  category: DisputeCategory;
+  subject: string;
+  description: string;
+  desiredOutcome: string;
+  disputedAmountMinor?: number;
+  evidenceDocumentIds?: string[];
 }

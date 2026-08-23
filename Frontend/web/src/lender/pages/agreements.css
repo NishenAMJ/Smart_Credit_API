@@ -1,0 +1,226 @@
+.lender-agreements__detail {
+  padding: 18px;
+}
+
+.agreement-portfolio-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.agreement-portfolio-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.agreement-portfolio-card .portfolio-loan-card__details {
+  width: 100%;
+}
+
+.agreement-portfolio-card__status {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.agreement-portfolio-card__status small {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.agreement-portfolio-card__signatures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.agreement-portfolio-card__signature {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agreement-portfolio-card__signature--complete {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.agreement-portfolio-card__footer {
+  width: 100%;
+  margin-top: auto;
+}
+
+.lender-agreements__state {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #64748b;
+  text-align: center;
+  padding: 42px 20px;
+}
+
+.lender-agreements__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.lender-agreements__detail {
+  width: min(820px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.26);
+}
+
+.lender-agreements__detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.lender-agreements__detail-header h2 {
+  margin: 3px 0 6px;
+}
+
+.lender-agreements__detail-header p:last-child {
+  color: #64748b;
+}
+
+.lender-agreements__detail-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lender-agreements__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.lender-agreements__terms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 0;
+}
+
+.lender-agreements__terms div {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.lender-agreements__terms span,
+.lender-agreements__sign-form label > span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lender-agreements__signatures {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.lender-agreements__signatures p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lender-agreements__sign-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.lender-agreements__sign-form > label:first-child {
+  display: grid;
+  gap: 7px;
+}
+
+.lender-agreements__consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.lender-agreements__consent input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+}
+
+.lender-agreements__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .agreement-portfolio-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .lender-agreements__terms {
+    grid-template-columns: 1fr;
+  }
+
+  .lender-agreements__detail-header {
+    flex-direction: column;
+  }
+
+  .lender-agreements__detail-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .lender-agreements__backdrop {
+    place-items: end center;
+    padding: 12px;
+  }
+
+  .lender-agreements__detail {
+    max-height: calc(100vh - 24px);
+  }
+
+  .agreement-portfolio-card__footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

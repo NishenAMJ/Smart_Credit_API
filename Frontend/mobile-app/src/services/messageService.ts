@@ -1,11 +1,14 @@
 /**
  * messageService.ts
- * 
- * LOCAL-FIRST message operations.
  *
- * Reading:  always from local SQLite (instant, no loading)
- * Sending:  save locally first → route via WebSocket → update status on ack
- * Seeding:  on first install, fetch from backend Firestore to populate SQLite
+ * FIX: Replaced `import { v4 as uuidv4 } from 'uuid'` with a custom
+ * generateId() function. The uuid package calls crypto.getRandomValues()
+ * which is not available in React Native's JS environment without a polyfill,
+ * causing the error:
+ *   "crypto.getRandomValues() not supported"
+ *
+ * generateId() uses Math.random() + Date.now() which is sufficient for
+ * generating unique local message IDs before they reach the backend.
  */
 
 import { api } from "./api";
@@ -13,7 +16,18 @@ import { localDatabase } from "./localDatabase";
 import { chatSocket } from "./socketService";
 import { getCurrentUserId } from "./api";
 import type { Message } from "../types/chat.types";
-import { v4 as uuidv4 } from "uuid";
+
+/**
+ * Generates a unique ID without needing crypto.getRandomValues().
+ * Format: timestamp-randomhex (e.g. "1719556234123-a3f8c2d1e9b4")
+ * Collision probability is negligible for local message IDs.
+ */
+function generateId(): string {
+  const timestamp = Date.now().toString(36);
+  const random1 = Math.random().toString(36).slice(2, 9);
+  const random2 = Math.random().toString(36).slice(2, 9);
+  return `${timestamp}-${random1}-${random2}`;
+}
 
 export const messageService = {
   /**
@@ -42,7 +56,6 @@ export const messageService = {
     const data: Message[] = await api.get(
       `/conversations/${conversationId}/messages?page=${page}&limit=${limit}`,
     );
-    // Persist each fetched message locally
     data.forEach((msg) => localDatabase.insertMessage(msg));
     return data;
   },
@@ -50,7 +63,7 @@ export const messageService = {
   /**
    * send
    * LOCAL-FIRST send flow:
-   *   1. Generate a UUID for the message
+   *   1. Generate a unique ID for the message (no crypto needed)
    *   2. Save to local SQLite immediately with status:'sending'
    *   3. Emit to WebSocket gateway
    *   4. If socket not connected → fall back to HTTP POST
@@ -63,8 +76,13 @@ export const messageService = {
     text: string,
   ): Promise<Message> => {
     const senderId = getCurrentUserId();
+
+    if (!senderId) {
+      throw new Error("User not authenticated — cannot send message");
+    }
+
     const message: Message = {
-      id: uuidv4(),
+      id: generateId(), // ✅ FIXED: no longer uses uuidv4()
       conversationId,
       senderId,
       text,
@@ -96,17 +114,18 @@ export const messageService = {
       },
     });
 
-    if (!sent) {
+    if (sent) {
+      console.log("[messageService] Message sent via WebSocket:", message.id);
+    } else {
       // Step 4: WebSocket unavailable — HTTP fallback
+      console.warn("[messageService] Socket not connected, trying HTTP fallback...");
       try {
         await api.post(`/conversations/${conversationId}/messages`, { text });
         localDatabase.updateMessageStatus(message.id, "sent");
-      } catch {
-        // Keep as 'sending' so the UI shows a retry option
-        console.warn(
-          "[messageService] HTTP fallback also failed for",
-          message.id,
-        );
+        console.log("[messageService] HTTP fallback succeeded:", message.id);
+      } catch (err) {
+        console.warn("[messageService] HTTP fallback also failed:", message.id, err);
+        // Keep as 'sending' — UI shows pending state with retry option
       }
     }
 

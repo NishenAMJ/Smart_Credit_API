@@ -17,6 +17,7 @@ export class RegisterResponseDto {
 export class AuthResponseDto {
   accessToken!: string;
   user!: SafeUserDto;
+  availableRoles!: UserRole[];
 }
 
 export class MeResponseDto {

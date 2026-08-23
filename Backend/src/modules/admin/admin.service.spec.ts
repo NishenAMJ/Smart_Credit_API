@@ -10,6 +10,7 @@ describe('AdminService', () => {
   let docMock: jest.Mock;
   let updateMock: jest.Mock;
   let deleteMock: jest.Mock;
+  let whereMock: jest.Mock;
 
   beforeEach(async () => {
     getMock = jest.fn();
@@ -20,10 +21,20 @@ describe('AdminService', () => {
       update: updateMock,
       delete: deleteMock,
     }));
-    collectionMock = jest.fn(() => ({
+    whereMock = jest.fn();
+    const query = {
       get: getMock,
       doc: docMock,
-    }));
+      where: whereMock,
+      orderBy: jest.fn(),
+      startAfter: jest.fn(),
+      limit: jest.fn(),
+    };
+    query.where.mockReturnValue(query);
+    query.orderBy.mockReturnValue(query);
+    query.startAfter.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
+    collectionMock = jest.fn(() => query);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -48,6 +59,8 @@ describe('AdminService', () => {
 
   it('filters users and removes passwordHash from the response', async () => {
     getMock.mockResolvedValue({
+      empty: false,
+      size: 1,
       docs: [
         {
           id: 'admin-1',
@@ -55,15 +68,6 @@ describe('AdminService', () => {
             email: 'admin@example.com',
             role: 'admin',
             status: 'active',
-            passwordHash: 'hidden',
-          }),
-        },
-        {
-          id: 'borrower-1',
-          data: () => ({
-            email: 'borrower@example.com',
-            role: 'borrower',
-            status: 'suspended',
             passwordHash: 'hidden',
           }),
         },
@@ -79,6 +83,7 @@ describe('AdminService', () => {
       role: 'admin',
     });
     expect(result.users[0]).not.toHaveProperty('passwordHash');
+    expect(whereMock).toHaveBeenCalledWith('primaryRole', '==', 'admin');
   });
 
   it('throws NotFoundException when suspending a missing user', async () => {

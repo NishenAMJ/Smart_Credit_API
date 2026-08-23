@@ -1,134 +1,140 @@
-import { api, getCurrentUserId } from './api';
+import { api } from "./api";
+import type { ImagePickerAsset } from "expo-image-picker";
 
-// 
+export interface CreateAdvertisementInput {
+  headline: string;
+  minAmount: number;
+  maxAmount: number;
+  interestRate: number;
+  minTenureMonths?: number;
+  tenureMonths: number;
+  borrowerFocus: string;
+  processingTime: string;
+  responseTimeHours?: number;
+  preferredPurposes?: string[];
+  repaymentStyle: string;
+  requirements: string;
+  supportNote: string;
+}
 
-// The shared auth layer in api.ts now owns the current user id.
-// 
+export interface AdvertisementAnalytics {
+  adId: string;
+  title: string;
+  status: string;
+  createdAt: string | null;
+  expiresAt: string | null;
+  applications: {
+    total: number;
+    submitted: number;
+    underReview: number;
+    approved: number;
+    rejected: number;
+    converted: number;
+  };
+  loans: {
+    funded: number;
+    active: number;
+    overdue: number;
+    completed: number;
+    defaulted: number;
+  };
+  fundingRate: number;
+}
 
+export interface AdvertisementPage {
+  ads: any[];
+  pageInfo: {
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
+}
 
-export const setLenderId = (id: string) => {
-  // No-op: the shared auth layer now owns the current user id.
-};
-
-const getLenderId = (): string => getCurrentUserId();
+export interface AdBoostPlan {
+  id: string;
+  name: string;
+  durationDays: number;
+  amountMinor: number;
+  currency: "LKR";
+}
 
 export const AdService = {
-
-  // Browse ads (for borrowers) 
-
-  getAllAds: async (filters?: {
-    location?: string;
-    purpose?: string;
-    search?: string;
-    minAmount?: number;
-    maxAmount?: number;
-  }) => {
-    const params = new URLSearchParams();
-    if (filters?.location)  params.append('location',  filters.location);
-    if (filters?.purpose)   params.append('purpose',   filters.purpose);
-    if (filters?.search)    params.append('search',    filters.search);
-    if (filters?.minAmount) params.append('minAmount', String(filters.minAmount));
-    if (filters?.maxAmount) params.append('maxAmount', String(filters.maxAmount));
-
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return api.get(`/advertisements${query}`);
+  getMyAds: async (status?: string, cursor?: string | null) => {
+    const params = new URLSearchParams({ pageSize: "12" });
+    if (status) params.append("status", status);
+    if (cursor) params.append("cursor", cursor);
+    return api.get<AdvertisementPage>(`/lender-ads?${params.toString()}`);
   },
 
-  // Get lender's own ads 
+  getAdAnalytics: async (adId: string) =>
+    api.get<AdvertisementAnalytics>(`/lender-ads/${adId}/analytics`),
 
-  getMyAds: async () => {
-    const lenderId = getLenderId();
-    return api.get(`/advertisements/my?lenderId=${lenderId}`);
+  createAd: async (data: CreateAdvertisementInput) =>
+    api.post("/lender-ads", data),
+
+  updateAd: async (adId: string, data: Record<string, unknown>) =>
+    api.patch(`/lender-ads/${adId}`, data),
+
+  pauseAd: async (adId: string) =>
+    api.patch(`/lender-ads/${adId}`, { status: "paused" }),
+
+  activateAd: async (adId: string) =>
+    api.patch(`/lender-ads/${adId}`, { status: "active" }),
+
+  getBoostPlans: () =>
+    api.get<{ plans: AdBoostPlan[]; bankAccount: Record<string, string>; paymentMethods: { card: boolean; bankTransfer: boolean } }>(
+      "/lender-ad-boosts/plans",
+    ),
+
+  createBoost: (data: {
+    listingId: string;
+    planId: string;
+    paymentMethod: "card" | "bank_transfer";
+  }) =>
+    api.post<any>("/lender-ad-boosts", data),
+
+  uploadBoostReceipt: async (asset: ImagePickerAsset, boostId: string) => {
+    const fileName = asset.fileName || `boost-receipt-${Date.now()}.jpg`;
+    const mimeType = asset.mimeType || "image/jpeg";
+    const intent = await api.post<any>("/documents/uploads/init", {
+      category: "payment_receipt",
+      documentType: "ad_boost_bank_receipt",
+      fileName,
+      contentType: mimeType,
+      relatedEntityType: "ad_boost",
+      relatedEntityId: boostId,
+    });
+    const form = new FormData();
+    form.append("file", { uri: asset.uri, name: fileName, type: mimeType } as any);
+    form.append("api_key", String(intent.apiKey));
+    form.append("timestamp", String(intent.timestamp));
+    form.append("signature", intent.signature);
+    form.append("folder", intent.folder);
+    form.append("public_id", intent.publicId);
+    form.append("type", intent.deliveryType);
+    const uploadedResponse = await fetch(intent.uploadUrl, { method: "POST", body: form });
+    if (!uploadedResponse.ok) throw new Error("The receipt could not be uploaded.");
+    const uploaded = await uploadedResponse.json();
+    const completed = await api.post<{ documentId: string }>("/documents/uploads/complete", {
+      publicId: uploaded.public_id,
+      assetId: uploaded.asset_id,
+      resourceType: uploaded.resource_type,
+      deliveryType: uploaded.type,
+      bytes: uploaded.bytes,
+      version: uploaded.version,
+      secureUrl: uploaded.secure_url,
+      format: uploaded.format,
+      fileHash: `boost-receipt-${boostId}-${asset.fileSize ?? 0}-${Date.now()}`,
+      originalFilename: fileName,
+      mimeType,
+      category: "payment_receipt",
+      documentType: "ad_boost_bank_receipt",
+      relatedEntityType: "ad_boost",
+      relatedEntityId: boostId,
+      displayName: "Advertisement boost payment receipt",
+    });
+    return completed.documentId;
   },
 
-  // Get single ad 
-
-  getAdById: async (adId: string) => {
-    return api.get(`/advertisements/${adId}`);
-  },
-
-  // Create ad 
-
-  createAd: async (data: any) => {
-    const lenderId = getLenderId();
-    return api.post(`/advertisements?lenderId=${lenderId}`, data);
-  },
-
-  // Update ad 
-
-  updateAd: async (adId: string, data: any) => {
-    const lenderId = getLenderId();
-    return api.patch(`/advertisements/${adId}?lenderId=${lenderId}`, data);
-  },
-
-  // Soft delete ad 
-
-  deleteAd: async (adId: string) => {
-    const lenderId = getLenderId();
-    return api.delete(`/advertisements/${adId}?lenderId=${lenderId}`);
-  },
-
-  // Pause ad 
-
-  pauseAd: async (adId: string) => {
-    const lenderId = getLenderId();
-    return api.patch(`/advertisements/${adId}/pause?lenderId=${lenderId}`);
-  },
-
-  // Activate ad 
-
-  activateAd: async (adId: string) => {
-    const lenderId = getLenderId();
-    return api.patch(`/advertisements/${adId}/activate?lenderId=${lenderId}`);
-  },
-
-  // Boost ad 
-
-  boostAd: async (adId: string, data: {
-    package: string;
-    amount: number;
-    paymentReference: string;
-  }) => {
-    const lenderId = getLenderId();
-    return api.post(`/advertisements/${adId}/boost?lenderId=${lenderId}`, data);
-  },
-
-  // Get boost packages 
-
-  getBoostPackages: async () => {
-    return api.get('/advertisements/boost-packages');
-  },
-
-  // Cancel boost 
-
-  cancelBoost: async (adId: string) => {
-    const lenderId = getLenderId();
-    return api.patch(`/advertisements/${adId}/boost/cancel?lenderId=${lenderId}`);
-  },
-
-  // Analytics summary (all lender ads) 
-
-  getAnalyticsSummary: async () => {
-    const lenderId = getLenderId();
-    return api.get(`/advertisements/analytics/summary?lenderId=${lenderId}`);
-  },
-
-  // Full analytics for one ad 
-
-  getAdAnalytics: async (adId: string) => {
-    const lenderId = getLenderId();
-    return api.get(`/advertisements/${adId}/analytics/full?lenderId=${lenderId}`);
-  },
-
-  // Track view 
-
-  trackView: async (adId: string) => {
-    return api.post(`/advertisements/${adId}/view`);
-  },
-
-  // Track click 
-
-  trackClick: async (adId: string) => {
-    return api.post(`/advertisements/${adId}/click`);
-  },
+  submitBoostReceipt: (boostId: string, receiptDocumentId: string, bankReference: string) =>
+    api.post(`/lender-ad-boosts/${boostId}/receipt`, { receiptDocumentId, bankReference }),
 };

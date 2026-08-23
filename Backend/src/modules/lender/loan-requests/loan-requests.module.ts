@@ -3,9 +3,10 @@ import { FirebaseModule } from '../../../firebase/firebase.module';
 import { AuthModule } from '../../auth/auth.module';
 import { LoanRequestsController } from './loan-requests.controller';
 import { LoanRequestsService } from './loan-requests.service';
+import { CoreLedgerModule } from '../../core-ledger/core-ledger.module';
 
 @Module({
-  imports: [FirebaseModule, AuthModule],
+  imports: [AuthModule, FirebaseModule, CoreLedgerModule],
   controllers: [LoanRequestsController],
   providers: [LoanRequestsService],
   exports: [LoanRequestsService],

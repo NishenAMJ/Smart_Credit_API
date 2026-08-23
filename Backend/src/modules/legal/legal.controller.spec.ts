@@ -1,6 +1,5 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { JwtService } from '@nestjs/jwt';
-import type { Request, Response } from 'express';
+import { Test, type TestingModule } from '@nestjs/testing';
+import type { Response } from 'express';
 
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
 import { LegalController } from './legal.controller';
@@ -8,126 +7,115 @@ import { LegalService } from './legal.service';
 
 describe('LegalController', () => {
   let controller: LegalController;
-  let legalService: {
-    generateLoanAgreement: jest.Mock;
-    getDocumentById: jest.Mock;
-    getLatestLoanDocument: jest.Mock;
-    acceptDocument: jest.Mock;
-    downloadDocumentPdf: jest.Mock;
-  };
-  let jwtService: {
-    verifyAsync: jest.Mock;
-  };
+  let legalService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     legalService = {
       generateLoanAgreement: jest.fn(),
+      listDocuments: jest.fn(),
       getDocumentById: jest.fn(),
       getLatestLoanDocument: jest.fn(),
       acceptDocument: jest.fn(),
+      confirmDisbursement: jest.fn(),
+      retryFinalization: jest.fn(),
       downloadDocumentPdf: jest.fn(),
     };
-    jwtService = {
-      verifyAsync: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       controllers: [LegalController],
-      providers: [
-        {
-          provide: LegalService,
-          useValue: legalService,
-        },
-        {
-          provide: JwtService,
-          useValue: jwtService,
-        },
-      ],
+      providers: [{ provide: LegalService, useValue: legalService }],
     }).compile();
-
-    controller = module.get<LegalController>(LegalController);
+    controller = module.get(LegalController);
   });
 
-  it('delegates document generation to the service with the authenticated user', async () => {
-    const req = {
-      user: {
-        sub: 'borrower-1',
-        email: 'borrower@example.com',
-        role: 'borrower',
-      },
-    } as AuthenticatedRequest;
+  it('records transfer confirmation using only the authenticated lender identity', async () => {
+    const body = {
+      confirmationAccepted: true,
+      externalReference: 'BANK-123',
+    };
+    await controller.confirmDisbursement(
+      'agreement-1',
+      request('lender'),
+      body,
+    );
 
-    await controller.generateLoanAgreement('loan-1', req);
-
-    expect(legalService.generateLoanAgreement).toHaveBeenCalledWith(
-      'loan-1',
-      'borrower-1',
-      'borrower',
+    expect(legalService.confirmDisbursement).toHaveBeenCalledWith(
+      'agreement-1',
+      'lender-1',
+      'lender',
+      expect.objectContaining({
+        ...body,
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest-agent',
+      }),
     );
   });
 
-  it('delegates document reads and acceptance to the service', async () => {
-    const req = {
-      user: {
-        sub: 'lender-1',
-        email: 'lender@example.com',
-        role: 'lender',
-      },
+  function request(role: 'borrower' | 'lender' | 'admin') {
+    return {
+      user: { sub: `${role}-1`, email: `${role}@example.com`, role },
+      headers: { 'user-agent': 'jest-agent' },
+      ip: '127.0.0.1',
     } as AuthenticatedRequest;
+  }
 
-    await controller.getDocumentById('doc-1', req);
-    await controller.getLatestLoanDocument('loan-1', req);
-    await controller.acceptDocument('doc-1', req, {
-      signedName: 'Lender User',
-    });
+  it('uses only the authenticated JWT identity for generation and reads', async () => {
+    await controller.generateLoanAgreement('loan-1', request('lender'));
+    await controller.getLatestLoanDocument('loan-1', request('borrower'));
 
-    expect(legalService.getDocumentById).toHaveBeenCalledWith(
-      'doc-1',
+    expect(legalService.generateLoanAgreement).toHaveBeenCalledWith(
+      'loan-1',
       'lender-1',
       'lender',
     );
     expect(legalService.getLatestLoanDocument).toHaveBeenCalledWith(
       'loan-1',
-      'lender-1',
-      'lender',
+      'borrower-1',
+      'borrower',
     );
+  });
+
+  it('forwards explicit consent, agreement version and terms hash', async () => {
+    const body = {
+      signedName: 'Lender Legal Name',
+      consentAccepted: true,
+      agreementVersion: 2,
+      termsHash: 'a'.repeat(64),
+    };
+    await controller.acceptDocument('agreement-1', request('lender'), body);
+
     expect(legalService.acceptDocument).toHaveBeenCalledWith(
-      'doc-1',
+      'agreement-1',
       'lender-1',
       'lender',
       expect.objectContaining({
-        signedName: 'Lender User',
+        ...body,
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest-agent',
       }),
     );
   });
 
-  it('downloads a legal document pdf using the verified token', async () => {
-    const req = {
-      headers: {},
-    } as Request;
-    const res = {
+  it('streams downloads using the guarded request identity, never a query token', async () => {
+    const response = {
       setHeader: jest.fn(),
       send: jest.fn(),
     } as unknown as Response;
-    const pdfBuffer = Buffer.from('pdf');
-
-    jwtService.verifyAsync.mockResolvedValue({
-      sub: 'borrower-1',
-      email: 'borrower@example.com',
-      role: 'borrower',
-    });
     legalService.downloadDocumentPdf.mockResolvedValue({
-      buffer: pdfBuffer,
+      buffer: Buffer.from('pdf'),
       fileName: 'agreement.pdf',
     });
 
-    await controller.downloadDocumentPdf('doc-9', req, res, 'token-123');
-
-    expect(jwtService.verifyAsync).toHaveBeenCalledWith('token-123');
-    expect(legalService.downloadDocumentPdf).toHaveBeenCalledWith(
-      'doc-9',
-      'borrower-1',
-      'borrower',
+    await controller.downloadDocumentPdf(
+      'agreement-1',
+      request('admin'),
+      response,
     );
+
+    expect(legalService.downloadDocumentPdf).toHaveBeenCalledWith(
+      'agreement-1',
+      'admin-1',
+      'admin',
+    );
+    expect(response.send).toHaveBeenCalledWith(Buffer.from('pdf'));
   });
 });

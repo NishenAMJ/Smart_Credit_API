@@ -16,7 +16,6 @@ export const ENDPOINTS = {
   MY_PAYMENTS: "/borrower/payments",
   CREATE_PAYMENT: "/borrower/payments",
   GENERATE_QR: "/borrower/payments/generate-qr",
-  UPLOAD_RECEIPT: "/borrower/payments/upload-receipt",
   MY_TRANSACTIONS: "/borrower/transactions",
   TRANSACTION_DETAILS: (transactionId: string) =>
     `/borrower/transactions/${transactionId}`,
@@ -38,6 +37,9 @@ export const ENDPOINTS = {
     generate: (loanId: string) => `/legal/documents/generate/${loanId}`,
     latestByLoan: (loanId: string) => `/legal/documents/loan/${loanId}/latest`,
     accept: (documentId: string) => `/legal/documents/${documentId}/accept`,
+    confirmDisbursement: (documentId: string) =>
+      `/legal/documents/${documentId}/disbursement-confirmation`,
+    finalize: (documentId: string) => `/legal/documents/${documentId}/finalize`,
     download: (documentId: string) => `/legal/documents/${documentId}/download`,
     list: "/legal/documents",
   },
@@ -52,9 +54,6 @@ export const ENDPOINTS = {
     borrower: (borrowerId: string) => `/borrower/dashboard/${borrowerId}`,
     get: (borrowerId: string) => `/borrower/dashboard/${borrowerId}`,
   },
-  support: {
-    status: "/borrower/support/status",
-  },
   profile: {
     get: (userId: string) => `/borrower/profile/${userId}`,
     update: (userId: string) => `/borrower/profile/${userId}`,
@@ -65,6 +64,7 @@ export const ENDPOINTS = {
     byId: (id: string) => `/borrower/applications/${id}`,
     update: (id: string) => `/borrower/applications/${id}`,
     submit: (id: string) => `/borrower/applications/${id}/submit`,
+    cancel: (id: string) => `/borrower/applications/${id}/cancel`,
     delete: (id: string) => `/borrower/applications/${id}`,
   },
   repayments: {
@@ -72,6 +72,7 @@ export const ENDPOINTS = {
     make: "/borrower/payments",
     generateQr: "/borrower/payments/generate-qr",
     verifyQr: "/borrower/payments/verify-qr",
+    initiatePayHere: "/borrower/payments/payhere/initiate",
   },
   transactions: {
     list: "/borrower/transactions",

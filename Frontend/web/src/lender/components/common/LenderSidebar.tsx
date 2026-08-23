@@ -1,152 +1,53 @@
-import { useEffect, useState, type JSX } from "react";
+import { useEffect, useState } from "react";
+import {
+  CreditCard,
+  FileSignature,
+  Landmark,
+  LayoutDashboard,
+  LogOut,
+  Megaphone,
+  MessageSquareText,
+  ShieldAlert,
+  PanelLeftClose,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import type { LenderSession } from "../../lib/lender-session";
 
 type LenderView =
   | "dashboard"
+  | "loans"
+  | "borrowers"
   | "recent-transactions"
+  | "daily-collection"
   | "analytics"
   | "active-ads-requests"
   | "create-ad"
   | "pending-requests"
   | "settings"
   | "notifications"
-  | "agreements";
+  | "sms"
+  | "agreements"
+  | "disputes";
 
 type NavItem = {
   id: LenderView;
   label: string;
-  icon: () => JSX.Element;
+  icon: LucideIcon;
 };
 
-function DashboardIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <rect x="4.5" y="4.5" width="6.5" height="6.5" rx="1.5" />
-      <rect x="13" y="4.5" width="6.5" height="6.5" rx="1.5" />
-      <rect x="4.5" y="13" width="6.5" height="6.5" rx="1.5" />
-      <rect x="13" y="13" width="6.5" height="6.5" rx="1.5" />
-    </svg>
-  );
-}
-
-function TransactionsIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <rect x="4" y="5.5" width="16" height="13" rx="2.5" />
-      <path d="M4 10h16" />
-      <path d="M8 14h3.5" />
-      <path d="M14.5 14H16" />
-    </svg>
-  );
-}
-
-function AnalyticsIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <path d="M5 19.5h14" />
-      <path d="M8 17V11" />
-      <path d="M12 17V7" />
-      <path d="M16 17v-4" />
-    </svg>
-  );
-}
-
-function CreateAdIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-      <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
-    </svg>
-  );
-}
-
-function SidebarToggleIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <rect x="4.5" y="5" width="15" height="14" rx="2.5" />
-      <path d="M10 5v14" />
-      <rect
-        x="6.5"
-        y="7.5"
-        width="1.5"
-        height="9"
-        rx="0.75"
-        fill="currentColor"
-        stroke="none"
-      />
-    </svg>
-  );
-}
-
-function AgreementsIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-      <polyline points="14 2 14 8 20 8"></polyline>
-      <line x1="16" y1="13" x2="8" y2="13"></line>
-      <line x1="16" y1="17" x2="8" y2="17"></line>
-      <polyline points="10 9 9 9 8 9"></polyline>
-    </svg>
-  );
-}
-
 const navItems: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: DashboardIcon },
-  { id: "recent-transactions", label: "Payments", icon: TransactionsIcon },
-  { id: "analytics", label: "Analytics", icon: AnalyticsIcon },
-  { id: "create-ad", label: "Create Ad", icon: CreateAdIcon },
-  { id: "agreements", label: "Agreements", icon: AgreementsIcon },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "loans", label: "Loans", icon: Landmark },
+  { id: "borrowers", label: "Borrowers", icon: UsersRound },
+  { id: "agreements", label: "Agreements", icon: FileSignature },
+  { id: "disputes", label: "Disputes", icon: ShieldAlert },
+  { id: "recent-transactions", label: "Payments", icon: CreditCard },
+  { id: "active-ads-requests", label: "Advertisements", icon: Megaphone },
+  { id: "sms", label: "SMS", icon: MessageSquareText },
 ];
 
 const SIDEBAR_COLLAPSE_STORAGE_KEY = "smart-credit:lender-sidebar-collapsed";
-
-function LogoutIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <path d="M10 6H7.75A2.75 2.75 0 0 0 5 8.75v6.5A2.75 2.75 0 0 0 7.75 18H10" />
-      <path d="M13 8.5 17 12l-4 3.5" />
-      <path d="M9 12h8" />
-    </svg>
-  );
-}
 
 type LenderSidebarProps = {
   activeView: LenderView;
@@ -192,7 +93,9 @@ export default function LenderSidebar({
     <>
       <div className="lender-sidebar__mobile-bar">
         <div className="lender-sidebar__logo-inner">
-          <div className="lender-sidebar__logo-icon">SC</div>
+          <div className="lender-sidebar__logo-icon">
+            <Landmark size={20} />
+          </div>
           <div>
             <div className="lender-sidebar__logo-text">Smart Credit+</div>
             <div className="lender-sidebar__logo-sub">Lender Panel</div>
@@ -242,11 +145,13 @@ export default function LenderSidebar({
                   aria-hidden="true"
                   className="lender-sidebar__collapse-icon"
                 >
-                  <SidebarToggleIcon />
+                  <PanelLeftClose />
                 </span>
               </button>
 
-              <div className="lender-sidebar__logo-icon">SC</div>
+              <div className="lender-sidebar__logo-icon">
+                <Landmark size={20} />
+              </div>
               <div className="lender-sidebar__brand-copy">
                 <div className="lender-sidebar__logo-text">Smart Credit+</div>
                 <div className="lender-sidebar__logo-sub">Lender Panel</div>
@@ -301,9 +206,7 @@ export default function LenderSidebar({
                 <div className="lender-sidebar__admin-name">
                   {session.displayName}
                 </div>
-                <div className="lender-sidebar__admin-role">
-                  {session.lenderId}
-                </div>
+                <div className="lender-sidebar__admin-role">Lender account</div>
               </div>
             </button>
 
@@ -315,7 +218,7 @@ export default function LenderSidebar({
               onClick={onLogout}
             >
               <span className="lender-sidebar__logout-icon" aria-hidden="true">
-                <LogoutIcon />
+                <LogOut />
               </span>
             </button>
           </div>

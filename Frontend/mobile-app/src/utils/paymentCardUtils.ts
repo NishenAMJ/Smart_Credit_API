@@ -161,8 +161,12 @@ export const shouldShowPayButton = (
   const isPaid = isPaidPayment(paymentStatus, paymentType);
   const s = String(paymentStatus || "").toLowerCase();
 
-  // Hide Pay button if the payment is a pending bank transfer waiting for admin verification
-  if (s === "pending" && paymentMethod === "bank_transfer") {
+  // Submitted or rejected records are history/status entries, not payable installments.
+  if (
+    s === "pending_verification" ||
+    s === "rejected" ||
+    (s === "pending" && paymentMethod === "bank_transfer")
+  ) {
     return false;
   }
 

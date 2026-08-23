@@ -1,164 +1,155 @@
-import { useEffect, useMemo, useState } from "react";
-import type { LenderSession } from "../lib/lender-session";
+import { useEffect, useMemo, useState } from 'react'
+import { Clock3, Store, Target, TriangleAlert, type LucideIcon } from 'lucide-react'
+import BorrowerSidePanel from '../components/borrowers/BorrowerSidePanel'
+import type { LenderSession } from '../lib/lender-session'
 import {
-  approvePendingRequest,
   fetchPendingRequests,
-  markPendingRequestUnderReview,
-  rejectPendingRequest,
   type PendingRequest,
   type PendingRequestsResponse,
-} from "../lib/pending-requests-api";
+} from '../lib/pending-requests-api'
 
 type PendingRequestsPageProps = {
-  session: LenderSession;
-};
+  session: LenderSession
+}
 
-const API_LIMIT = 30;
-const currencyFormatter = new Intl.NumberFormat("en-LK", {
-  style: "currency",
-  currency: "LKR",
+function SummaryIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={22} strokeWidth={1.8} />
+}
+
+const API_LIMIT = 30
+const currencyFormatter = new Intl.NumberFormat('en-LK', {
+  style: 'currency',
+  currency: 'LKR',
   maximumFractionDigits: 0,
-});
+})
 
 function formatCurrency(value: number): string {
-  return currencyFormatter.format(value);
+  return currencyFormatter.format(value)
 }
 
 function formatLabel(value: string): string {
   return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
 }
 
 function formatDate(value: string | null): string {
   if (!value) {
-    return "Unknown";
+    return 'Unknown'
   }
 
-  const parsed = new Date(value);
+  const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) {
-    return "Unknown";
+    return 'Unknown'
   }
 
-  return new Intl.DateTimeFormat("en-LK", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(parsed);
+  return new Intl.DateTimeFormat('en-LK', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(parsed)
 }
 
 function getUrgencyBadgeClass(value: string): string {
-  if (value === "critical" || value === "high") {
-    return "badge-danger";
+  if (value === 'critical' || value === 'high') {
+    return 'badge-danger'
   }
 
-  if (value === "medium") {
-    return "badge-gray";
+  if (value === 'medium') {
+    return 'badge-gray'
   }
 
-  return "badge-success";
+  return 'badge-success'
 }
 
 function getStatusBadgeClass(value: string): string {
-  if (value === "approved" || value === "matched") {
-    return "badge-success";
+  if (value === 'approved' || value === 'matched') {
+    return 'badge-success'
   }
 
-  if (value === "under_review" || value === "pending_kyc") {
-    return "badge-gray";
+  if (value === 'under_review' || value === 'pending_kyc') {
+    return 'badge-gray'
   }
 
-  return "badge-danger";
+  return 'badge-danger'
 }
 
 export default function PendingRequestsPage({
   session,
 }: PendingRequestsPageProps) {
-  const [response, setResponse] = useState<PendingRequestsResponse | null>(
-    null,
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedRequest, setSelectedRequest] = useState<PendingRequest | null>(
-    null,
-  );
-  const [decisionNotes, setDecisionNotes] = useState("");
-  const [decisionError, setDecisionError] = useState<string | null>(null);
-  const [decisionSuccess, setDecisionSuccess] = useState<string | null>(null);
-  const [isDecisionSaving, setIsDecisionSaving] = useState(false);
+  const [response, setResponse] = useState<PendingRequestsResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [selectedRequest, setSelectedRequest] = useState<PendingRequest | null>(null)
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null)
 
-  async function loadRequests(nextSelectedRequestId?: string | null) {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await fetchPendingRequests(API_LIMIT);
-      setResponse(data);
+  useEffect(() => {
+    let isMounted = true
 
-      if (typeof nextSelectedRequestId === "string") {
-        const nextSelected =
-          data.requests.find(
-            (request) => request.requestId === nextSelectedRequestId,
-          ) ?? null;
-        setSelectedRequest(nextSelected);
+    const loadRequests = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const data = await fetchPendingRequests(API_LIMIT)
+
+        if (isMounted) {
+          setResponse(data)
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Failed to load pending requests.',
+          )
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Failed to load pending requests.",
-      );
-    } finally {
-      setIsLoading(false);
     }
-  }
 
-  useEffect(() => {
-    void loadRequests();
-  }, [session.lenderId]);
+    void loadRequests()
 
-  useEffect(() => {
-    setDecisionNotes("");
-    setDecisionError(null);
-    setDecisionSuccess(null);
-    setIsDecisionSaving(false);
-  }, [selectedRequest?.requestId]);
+    return () => {
+      isMounted = false
+    }
+  }, [session.lenderId])
 
   useEffect(() => {
     if (!selectedRequest) {
-      return;
+      return
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSelectedRequest(null);
+      if (event.key === 'Escape') {
+        setSelectedRequest(null)
       }
-    };
+    }
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedRequest]);
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedRequest])
 
-  const requests = useMemo(
-    () => response?.requests ?? [],
-    [response?.requests],
-  );
-  const summary = response?.summary;
+  const requests = useMemo(() => response?.requests ?? [], [response?.requests])
+  const summary = response?.summary
 
   const filteredRequests = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedQuery = searchQuery.trim().toLowerCase()
 
     return requests.filter((request) => {
       const matchesStatus =
-        statusFilter === "all" ? true : request.status === statusFilter;
+        statusFilter === 'all' ? true : request.status === statusFilter
 
       if (!matchesStatus) {
-        return false;
+        return false
       }
 
       if (!normalizedQuery) {
-        return true;
+        return true
       }
 
       return (
@@ -167,102 +158,40 @@ export default function PendingRequestsPage({
         request.purpose.toLowerCase().includes(normalizedQuery) ||
         request.requestedRegion.toLowerCase().includes(normalizedQuery) ||
         formatLabel(request.urgency).toLowerCase().includes(normalizedQuery)
-      );
-    });
-  }, [requests, searchQuery, statusFilter]);
+      )
+    })
+  }, [requests, searchQuery, statusFilter])
 
   const statusOptions = useMemo(() => {
-    return [
-      "all",
-      ...Array.from(new Set(requests.map((request) => request.status))),
-    ];
-  }, [requests]);
+    return ['all', ...Array.from(new Set(requests.map((request) => request.status)))]
+  }, [requests])
 
   const summaryCards = [
     {
-      label: "Pending Requests",
-      value: summary ? String(summary.totalPendingRequests) : "--",
-      caption: "Requests currently waiting in your pipeline",
-      accent: "RQ",
+      label: 'Pending Requests',
+      value: summary ? String(summary.totalPendingRequests) : '--',
+      caption: 'Requests currently waiting in your pipeline',
+      icon: Clock3,
     },
     {
-      label: "Targeted Requests",
-      value: summary ? String(summary.targetedRequests) : "--",
-      caption: "Requests that came directly through your ad",
-      accent: "TG",
+      label: 'Targeted Requests',
+      value: summary ? String(summary.targetedRequests) : '--',
+      caption: 'Requests that came directly through your ad',
+      icon: Target,
     },
     {
-      label: "Marketplace Matches",
-      value: summary ? String(summary.marketplaceMatches) : "--",
-      caption: "Requests surfaced to you through marketplace matching",
-      accent: "MP",
+      label: 'Marketplace Matches',
+      value: summary ? String(summary.marketplaceMatches) : '--',
+      caption: 'Requests surfaced to you through marketplace matching',
+      icon: Store,
     },
     {
-      label: "High Urgency",
-      value: summary ? String(summary.highUrgencyRequests) : "--",
-      caption: "Requests marked high or critical urgency",
-      accent: "HI",
+      label: 'High Urgency',
+      value: summary ? String(summary.highUrgencyRequests) : '--',
+      caption: 'Requests marked high or critical urgency',
+      icon: TriangleAlert,
     },
-  ];
-
-  const selectedRequestStatus = selectedRequest?.status ?? null;
-  const canApprove =
-    selectedRequestStatus !== null &&
-    selectedRequestStatus !== "approved" &&
-    selectedRequestStatus !== "rejected";
-  const canReject =
-    selectedRequestStatus !== null &&
-    selectedRequestStatus !== "approved" &&
-    selectedRequestStatus !== "rejected";
-  const canMarkUnderReview =
-    selectedRequestStatus !== null &&
-    selectedRequestStatus !== "under_review" &&
-    selectedRequestStatus !== "approved" &&
-    selectedRequestStatus !== "rejected";
-
-  async function handleDecision(action: "approve" | "reject" | "review") {
-    if (!selectedRequest) {
-      return;
-    }
-
-    const trimmedNotes = decisionNotes.trim();
-
-    if (action === "reject" && trimmedNotes.length === 0) {
-      setDecisionError("A rejection reason is required.");
-      setDecisionSuccess(null);
-      return;
-    }
-
-    try {
-      setIsDecisionSaving(true);
-      setDecisionError(null);
-      setDecisionSuccess(null);
-
-      if (action === "approve") {
-        await approvePendingRequest(selectedRequest.requestId, trimmedNotes);
-        setDecisionSuccess("Request approved successfully.");
-      } else if (action === "reject") {
-        await rejectPendingRequest(selectedRequest.requestId, trimmedNotes);
-        setDecisionSuccess("Request rejected successfully.");
-      } else {
-        await markPendingRequestUnderReview(
-          selectedRequest.requestId,
-          trimmedNotes,
-        );
-        setDecisionSuccess("Request moved to under review.");
-      }
-
-      await loadRequests(selectedRequest.requestId);
-    } catch (decisionLoadError) {
-      setDecisionError(
-        decisionLoadError instanceof Error
-          ? decisionLoadError.message
-          : "Failed to update the request.",
-      );
-    } finally {
-      setIsDecisionSaving(false);
-    }
-  }
+  ]
 
   return (
     <>
@@ -276,7 +205,7 @@ export default function PendingRequestsPage({
               came directly through your ads or through marketplace matching.
             </p>
             <p className="dashboard-context-pill">
-              Request desk: {session.displayName} - {session.lenderId}
+              Request desk: {session.displayName}
             </p>
           </div>
         </header>
@@ -296,20 +225,16 @@ export default function PendingRequestsPage({
           </section>
         ) : (
           <>
-            <section
-              className="summary-grid"
-              aria-label="Pending requests summary"
-            >
+            <section className="summary-grid" aria-label="Pending requests summary">
               {summaryCards.map((card, index) => (
                 <article className="card metric-card" key={card.label}>
                   <div
                     className={`metric-icon metric-icon--${
-                      ["primary", "success", "warning", "danger"][index] ??
-                      "primary"
+                      ['primary', 'success', 'warning', 'danger'][index] ?? 'primary'
                     }`}
                     aria-hidden="true"
                   >
-                    {card.accent}
+                    <SummaryIcon icon={card.icon} />
                   </div>
                   <div className="metric-copy">
                     <p className="metric-label">{card.label}</p>
@@ -353,9 +278,7 @@ export default function PendingRequestsPage({
                     >
                       {statusOptions.map((option) => (
                         <option key={option} value={option}>
-                          {option === "all"
-                            ? "All statuses"
-                            : formatLabel(option)}
+                          {option === 'all' ? 'All statuses' : formatLabel(option)}
                         </option>
                       ))}
                     </select>
@@ -385,19 +308,20 @@ export default function PendingRequestsPage({
                         >
                           <td>
                             <div className="borrower-cell">
-                              <span
-                                className="borrower-avatar"
-                                aria-hidden="true"
-                              >
+                              <span className="borrower-avatar" aria-hidden="true">
                                 {request.borrowerName.slice(0, 2).toUpperCase()}
                               </span>
                               <div>
-                                <p className="borrower-name">
+                                <button
+                                  type="button"
+                                  className="borrower-name borrower-name--button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setSelectedBorrowerId(request.borrowerId)
+                                  }}
+                                >
                                   {request.borrowerName}
-                                </p>
-                                <p className="borrower-email">
-                                  {request.borrowerEmail}
-                                </p>
+                                </button>
                               </div>
                             </div>
                           </td>
@@ -413,7 +337,7 @@ export default function PendingRequestsPage({
                             <div className="dashboard-table__stack">
                               <span>{formatCurrency(request.amount)}</span>
                               <span className="dashboard-table__subcopy">
-                                {request.tenureMonths} months at{" "}
+                                {request.tenureMonths} months at{' '}
                                 {request.suggestedInterestRate.toFixed(1)}%
                               </span>
                             </div>
@@ -445,9 +369,9 @@ export default function PendingRequestsPage({
                     ) : (
                       <tr>
                         <td className="table-empty" colSpan={6}>
-                          {searchQuery || statusFilter !== "all"
-                            ? "No pending requests match the current filters."
-                            : "No pending requests are available for this lender yet."}
+                          {searchQuery || statusFilter !== 'all'
+                            ? 'No pending requests match the current filters.'
+                            : 'No pending requests are available for this lender yet.'}
                         </td>
                       </tr>
                     )}
@@ -476,11 +400,19 @@ export default function PendingRequestsPage({
               <div>
                 <p className="eyebrow">Request details</p>
                 <h2 className="section-title" id="pending-request-title">
-                  {selectedRequest.borrowerName}
+                  <button
+                    type="button"
+                    className="borrower-name borrower-name--button"
+                    onClick={() => {
+                      setSelectedRequest(null)
+                      setSelectedBorrowerId(selectedRequest.borrowerId)
+                    }}
+                  >
+                    {selectedRequest.borrowerName}
+                  </button>
                 </h2>
                 <p className="section-subtitle">
-                  Review the borrower profile, requested terms, and how this
-                  request entered your pipeline.
+                  Review the requested terms and how this request entered your pipeline.
                 </p>
               </div>
               <button
@@ -497,92 +429,51 @@ export default function PendingRequestsPage({
               <div className="borrower-modal__content">
                 <div className="borrower-modal__grid">
                   {[
-                    { label: "Request ID", value: selectedRequest.requestId },
-                    { label: "Borrower ID", value: selectedRequest.borrowerId },
-                    { label: "Email", value: selectedRequest.borrowerEmail },
                     {
-                      label: "Phone",
-                      value: selectedRequest.borrowerPhone ?? "Not available",
-                    },
-                    {
-                      label: "Credit Score",
+                      label: 'Credit Score',
                       value:
                         selectedRequest.borrowerCreditScore !== null
                           ? String(selectedRequest.borrowerCreditScore)
-                          : "Not available",
+                          : 'Not available',
                     },
                     {
-                      label: "Borrower KYC",
+                      label: 'Borrower KYC',
                       value: formatLabel(selectedRequest.borrowerKycStatus),
                     },
+                    { label: 'Requested Amount', value: formatCurrency(selectedRequest.amount) },
+                    { label: 'Tenure', value: `${selectedRequest.tenureMonths} months` },
                     {
-                      label: "Requested Amount",
-                      value: formatCurrency(selectedRequest.amount),
-                    },
-                    {
-                      label: "Tenure",
-                      value: `${selectedRequest.tenureMonths} months`,
-                    },
-                    {
-                      label: "Suggested Interest",
+                      label: 'Suggested Interest',
                       value: `${selectedRequest.suggestedInterestRate.toFixed(1)}%`,
                     },
+                    { label: 'Urgency', value: formatLabel(selectedRequest.urgency) },
                     {
-                      label: "Urgency",
-                      value: formatLabel(selectedRequest.urgency),
-                    },
-                    {
-                      label: "Monthly Income",
+                      label: 'Monthly Income',
                       value: formatCurrency(selectedRequest.monthlyIncome),
                     },
+                    { label: 'Income Source', value: formatLabel(selectedRequest.incomeSource) },
+                    { label: 'Requested Region', value: selectedRequest.requestedRegion },
                     {
-                      label: "Income Source",
-                      value: formatLabel(selectedRequest.incomeSource),
+                      label: 'Collateral Offered',
+                      value: selectedRequest.collateralOffered ? 'Yes' : 'No',
                     },
+                    { label: 'Channel', value: formatLabel(selectedRequest.targetType) },
                     {
-                      label: "Requested Region",
-                      value: selectedRequest.requestedRegion,
+                      label: 'Linked Ad',
+                      value: selectedRequest.adTitle ?? 'Marketplace request',
                     },
+                    { label: 'Status', value: formatLabel(selectedRequest.status) },
+                    { label: 'Purpose', value: selectedRequest.purpose },
                     {
-                      label: "Collateral Offered",
-                      value: selectedRequest.collateralOffered ? "Yes" : "No",
-                    },
-                    {
-                      label: "Channel",
-                      value: formatLabel(selectedRequest.targetType),
-                    },
-                    {
-                      label: "Linked Ad",
-                      value:
-                        selectedRequest.adTitle ??
-                        selectedRequest.adId ??
-                        "Marketplace request",
-                    },
-                    {
-                      label: "Status",
-                      value: formatLabel(selectedRequest.status),
-                    },
-                    { label: "Purpose", value: selectedRequest.purpose },
-                    {
-                      label: "Purpose Category",
+                      label: 'Purpose Category',
                       value: formatLabel(selectedRequest.purposeCategory),
                     },
-                    {
-                      label: "Created",
-                      value: formatDate(selectedRequest.createdAt),
-                    },
-                    {
-                      label: "Last Updated",
-                      value: formatDate(selectedRequest.updatedAt),
-                    },
+                    { label: 'Created', value: formatDate(selectedRequest.createdAt) },
+                    { label: 'Last Updated', value: formatDate(selectedRequest.updatedAt) },
                   ].map((field) => (
                     <article className="borrower-detail-card" key={field.label}>
-                      <p className="borrower-detail-card__label">
-                        {field.label}
-                      </p>
-                      <p className="borrower-detail-card__value">
-                        {field.value}
-                      </p>
+                      <p className="borrower-detail-card__label">{field.label}</p>
+                      <p className="borrower-detail-card__value">{field.value}</p>
                     </article>
                   ))}
                 </div>
@@ -591,119 +482,31 @@ export default function PendingRequestsPage({
                   <article className="borrower-loan-card">
                     <div className="borrower-loan-card__header">
                       <div>
-                        <p className="borrower-loan-card__eyebrow">
-                          Borrower note
-                        </p>
+                        <p className="borrower-loan-card__eyebrow">Borrower note</p>
                         <h4 className="borrower-loan-card__title">
                           Request context
                         </h4>
                       </div>
                     </div>
                     <p className="pending-request-notes">
-                      {selectedRequest.notes ||
-                        "No borrower note was attached to this request."}
+                      {selectedRequest.notes || 'No borrower note was attached to this request.'}
                     </p>
                   </article>
 
-                  <article className="borrower-loan-card">
-                    <div className="borrower-loan-card__header">
-                      <div>
-                        <p className="borrower-loan-card__eyebrow">Routing</p>
-                        <h4 className="borrower-loan-card__title">
-                          Lender matching details
-                        </h4>
-                      </div>
-                    </div>
-                    <div className="pending-request-match-list">
-                      {selectedRequest.matchedLenderIds.length > 0 ? (
-                        selectedRequest.matchedLenderIds.map((lenderId) => (
-                          <span className="badge badge-gray" key={lenderId}>
-                            {lenderId}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="pending-request-notes">
-                          No matched lender IDs were stored for this request.
-                        </p>
-                      )}
-                    </div>
-                  </article>
-                </section>
-
-                <section className="pending-request-decision-card">
-                  <div className="pending-request-decision-card__header">
-                    <div>
-                      <p className="borrower-loan-card__eyebrow">
-                        Lender decision
-                      </p>
-                      <h4 className="borrower-loan-card__title">
-                        Review and update request status
-                      </h4>
-                    </div>
-                    <span
-                      className={`badge ${getStatusBadgeClass(selectedRequest.status)}`}
-                    >
-                      {formatLabel(selectedRequest.status)}
-                    </span>
-                  </div>
-
-                  <label className="pending-request-decision-card__field">
-                    <span>
-                      {selectedRequest.status === "rejected"
-                        ? "Rejection reason"
-                        : "Decision note"}
-                    </span>
-                    <textarea
-                      className="input pending-request-decision-card__textarea"
-                      rows={4}
-                      placeholder="Add a note for this decision. Rejection requires a reason."
-                      value={decisionNotes}
-                      onChange={(event) => setDecisionNotes(event.target.value)}
-                      disabled={isDecisionSaving}
-                    />
-                  </label>
-
-                  {decisionError ? (
-                    <p className="auth-error">{decisionError}</p>
-                  ) : null}
-                  {decisionSuccess ? (
-                    <p className="pending-request-decision-card__success">
-                      {decisionSuccess}
-                    </p>
-                  ) : null}
-
-                  <div className="pending-request-decision-card__actions">
-                    <button
-                      type="button"
-                      className="button button-secondary"
-                      onClick={() => void handleDecision("review")}
-                      disabled={!canMarkUnderReview || isDecisionSaving}
-                    >
-                      Mark Under Review
-                    </button>
-                    <button
-                      type="button"
-                      className="button button-primary"
-                      onClick={() => void handleDecision("approve")}
-                      disabled={!canApprove || isDecisionSaving}
-                    >
-                      Approve Request
-                    </button>
-                    <button
-                      type="button"
-                      className="button button-danger"
-                      onClick={() => void handleDecision("reject")}
-                      disabled={!canReject || isDecisionSaving}
-                    >
-                      Reject Request
-                    </button>
-                  </div>
                 </section>
               </div>
             </div>
           </section>
         </div>
       ) : null}
+
+      {selectedBorrowerId ? (
+        <BorrowerSidePanel
+          session={session}
+          borrowerId={selectedBorrowerId}
+          onClose={() => setSelectedBorrowerId(null)}
+        />
+      ) : null}
     </>
-  );
+  )
 }

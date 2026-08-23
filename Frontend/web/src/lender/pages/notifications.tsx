@@ -1,4 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  BellRing,
+  CalendarDays,
+  CheckCheck,
+  RefreshCw,
+  Search,
+  Tags,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import type { LenderView } from "../components/common/LenderSidebar";
 import type { LenderSession } from "../lib/lender-session";
 import {
@@ -17,12 +27,17 @@ type NotificationsPageProps = {
   onNavigate: (view: LenderView) => void;
 };
 
+function SummaryIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={22} strokeWidth={1.8} />;
+}
+
 const CATEGORY_OPTIONS = [
   { key: "all", label: "All" },
   { key: "loan_request", label: "Requests" },
   { key: "transaction", label: "Transactions" },
   { key: "repayment_risk", label: "Risk" },
   { key: "dispute", label: "Disputes" },
+  { key: "agreement", label: "Agreements" },
   { key: "ad", label: "Ads" },
   { key: "system", label: "System" },
 ] as const;
@@ -103,6 +118,8 @@ function getCategoryTone(value: NotificationCategory): string {
       return "warning";
     case "dispute":
       return "danger";
+    case "agreement":
+      return "primary";
     case "ad":
       return "primary";
     case "system":
@@ -213,14 +230,20 @@ export default function NotificationsPage({
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedState, setSelectedState] =
     useState<NotificationStateFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadNotifications() {
     const [summaryResponse, listResponse] = await Promise.all([
       fetchLenderNotificationSummary(),
-      fetchLenderNotifications(selectedCategory, selectedState, 80),
+      fetchLenderNotifications(
+        selectedCategory,
+        selectedState,
+        80,
+      ),
     ]);
 
     setSummary(summaryResponse);
@@ -234,9 +257,15 @@ export default function NotificationsPage({
       try {
         setIsLoading(true);
         setError(null);
+        setSummary(null);
+        setNotifications([]);
         const [summaryResponse, listResponse] = await Promise.all([
           fetchLenderNotificationSummary(),
-          fetchLenderNotifications(selectedCategory, selectedState, 80),
+          fetchLenderNotifications(
+            selectedCategory,
+            selectedState,
+            80,
+          ),
         ]);
 
         if (isMounted) {
@@ -268,7 +297,9 @@ export default function NotificationsPage({
   async function handleNotificationAction(notification: LenderNotification) {
     try {
       if (!notification.isRead) {
-        const updated = await markNotificationAsRead(notification.id);
+        const updated = await markNotificationAsRead(
+          notification.id,
+        );
         setNotifications((current) =>
           selectedState === "unread"
             ? current.filter((item) => item.id !== updated.id)
@@ -300,7 +331,10 @@ export default function NotificationsPage({
     try {
       setIsMarkingAll(true);
       setError(null);
-      await markAllNotificationsAsRead(selectedCategory, selectedState);
+      await markAllNotificationsAsRead(
+        selectedCategory,
+        selectedState,
+      );
       await loadNotifications();
     } catch (markError) {
       setError(
@@ -310,6 +344,22 @@ export default function NotificationsPage({
       );
     } finally {
       setIsMarkingAll(false);
+    }
+  }
+
+  async function handleRefresh() {
+    try {
+      setIsRefreshing(true);
+      setError(null);
+      await loadNotifications();
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : "Failed to refresh notifications.",
+      );
+    } finally {
+      setIsRefreshing(false);
     }
   }
 
@@ -323,28 +373,28 @@ export default function NotificationsPage({
         label: "Unread Total",
         value: String(summary.unreadCount),
         caption: "Notifications still waiting for lender action",
-        accent: "UN",
+        icon: BellRing,
         tone: "primary",
       },
       {
         label: "High Priority",
         value: String(summary.highPriorityCount),
         caption: "Warning or critical items across the inbox",
-        accent: "HP",
+        icon: TriangleAlert,
         tone: "danger",
       },
       {
         label: "Today's Activity",
         value: String(summary.todaysCount),
         caption: "Notifications created today",
-        accent: "TD",
+        icon: CalendarDays,
         tone: "warning",
       },
       {
         label: "Top Category",
         value: formatCategoryLabel(summary.topCategory),
         caption: "Category with the most current activity",
-        accent: "TC",
+        icon: Tags,
         tone: "success",
       },
     ];
@@ -354,6 +404,22 @@ export default function NotificationsPage({
     () => notifications.filter((notification) => !notification.isRead).length,
     [notifications],
   );
+
+  const visibleNotifications = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return notifications;
+    }
+
+    return notifications.filter((notification) =>
+      [
+        notification.title,
+        notification.message,
+        formatCategoryLabel(notification.category),
+      ].some((value) => value.toLowerCase().includes(normalizedQuery)),
+    );
+  }, [notifications, searchQuery]);
 
   return (
     <section className="dashboard-panel">
@@ -403,7 +469,7 @@ export default function NotificationsPage({
                   className={`metric-icon metric-icon--${card.tone}`}
                   aria-hidden="true"
                 >
-                  {card.accent}
+                  <SummaryIcon icon={card.icon} />
                 </div>
                 <div className="metric-copy">
                   <p className="metric-label">{card.label}</p>
@@ -425,6 +491,22 @@ export default function NotificationsPage({
               </div>
 
               <div className="notifications-toolbar__actions">
+                <button
+                  type="button"
+                  className="notifications-icon-button"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  aria-label="Refresh notifications"
+                  title="Refresh notifications"
+                >
+                  <RefreshCw
+                    size={17}
+                    className={
+                      isRefreshing ? "notifications-icon--spinning" : undefined
+                    }
+                    aria-hidden="true"
+                  />
+                </button>
                 <select
                   className="pending-requests-select__control"
                   value={selectedState}
@@ -443,35 +525,57 @@ export default function NotificationsPage({
 
                 <button
                   type="button"
-                  className="create-ad-button"
+                  className="create-ad-button create-ad-button--ghost notifications-mark-read"
                   onClick={handleMarkAllVisibleAsRead}
                   disabled={isMarkingAll || visibleUnreadCount === 0}
                 >
-                  {isMarkingAll ? "Updating..." : "Mark All Visible As Read"}
+                  <CheckCheck size={17} aria-hidden="true" />
+                  {isMarkingAll ? "Updating..." : "Mark all read"}
                 </button>
               </div>
             </div>
 
-            <div className="notifications-category-tabs" role="tablist">
-              {CATEGORY_OPTIONS.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={`notifications-category-tab${
-                    selectedCategory === option.key
-                      ? " notifications-category-tab--active"
-                      : ""
-                  }`}
-                  onClick={() => setSelectedCategory(option.key)}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div className="notifications-filter-bar">
+              <div className="notifications-category-tabs" role="tablist">
+                {CATEGORY_OPTIONS.map((option) => {
+                  const count =
+                    option.key === "all"
+                      ? (summary?.totalCount ?? 0)
+                      : (summary?.countsByCategory[option.key] ?? 0);
+
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`notifications-category-tab${
+                        selectedCategory === option.key
+                          ? " notifications-category-tab--active"
+                          : ""
+                      }`}
+                      onClick={() => setSelectedCategory(option.key)}
+                    >
+                      {option.label}
+                      <span>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <label className="notifications-search">
+                <Search size={17} aria-hidden="true" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search notifications"
+                  aria-label="Search notifications"
+                />
+              </label>
             </div>
 
             <div className="notifications-list">
-              {notifications.length > 0 ? (
-                notifications.map((notification) => (
+              {visibleNotifications.length > 0 ? (
+                visibleNotifications.map((notification) => (
                   <article
                     className={`notifications-item${
                       notification.isRead ? "" : " notifications-item--unread"
@@ -540,8 +644,14 @@ export default function NotificationsPage({
                   </article>
                 ))
               ) : (
-                <div className="borrower-modal__state">
-                  No notifications match the current filters yet.
+                <div className="notifications-empty-state">
+                  <BellRing size={24} aria-hidden="true" />
+                  <strong>Nothing to review</strong>
+                  <span>
+                    {searchQuery.trim()
+                      ? "No notifications match your search."
+                      : "No notifications match the selected filters."}
+                  </span>
                 </div>
               )}
             </div>

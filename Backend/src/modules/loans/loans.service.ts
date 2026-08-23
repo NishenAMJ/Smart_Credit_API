@@ -79,7 +79,7 @@ export class LoansService {
     if (createLoanDto.adId) {
       try {
         await this.firebaseService.db
-          .collection('ads')
+          .collection('loanListings')
           .doc(createLoanDto.adId)
           .update({
             status: 'active',
@@ -143,7 +143,9 @@ export class LoansService {
     const [totalLoans, activeLoans, completedLoans, snapshot] =
       await Promise.all([
         this.getCount(loansCollection),
-        this.getCount(loansCollection.where('status', 'in', ['active', 'ACTIVE'])),
+        this.getCount(
+          loansCollection.where('status', 'in', ['active', 'ACTIVE']),
+        ),
         this.getCount(
           loansCollection.where('status', 'in', ['completed', 'COMPLETED']),
         ),
@@ -152,12 +154,7 @@ export class LoansService {
 
     const totalAmount = snapshot.docs.reduce((sum: number, doc) => {
       const loan = doc.data();
-      return (
-        sum +
-        Number(
-          loan.amount ?? loan.principalAmount ?? 0,
-        )
-      );
+      return sum + Number(loan.amount ?? loan.principalAmount ?? 0);
     }, 0);
 
     return {

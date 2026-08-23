@@ -9,21 +9,6 @@ function createDoc(id: string, data: Record<string, unknown>) {
   } as any;
 }
 
-function createLoanRequestQuery(docs: any[], shouldReject = false) {
-  return {
-    where: jest.fn().mockReturnThis(),
-    orderBy: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockReturnThis(),
-    get: jest.fn().mockImplementation(async () => {
-      if (shouldReject) {
-        throw new Error('loan request query failed');
-      }
-
-      return { docs };
-    }),
-  };
-}
-
 describe('LoanRequestsService', () => {
   it('returns only lender-visible paginated requests and preserves page metadata', async () => {
     const adDoc = createDoc('ad_1', { title: 'Targeted ad' });
@@ -39,57 +24,12 @@ describe('LoanRequestsService', () => {
     } as any;
     const db = {
       collection: jest.fn((name: string) => {
-        if (name === 'ads') {
+        if (name === 'loanListings') {
           return {
             where: jest.fn().mockReturnValue({
               get: jest.fn().mockResolvedValue({ docs: [adDoc] }),
             }),
           };
-        }
-
-        if (name === 'loanRequests') {
-          return createLoanRequestQuery([
-            createDoc('req_1', {
-              requestId: 'req_1',
-              borrowerId: 'borrower_1',
-              adId: 'ad_1',
-              amount: 50000,
-              tenureMonths: 12,
-              purpose: 'business',
-              purposeCategory: 'business',
-              status: 'open',
-              suggestedInterestRate: 14,
-              urgency: 'high',
-              monthlyIncome: 120000,
-              incomeSource: 'salary',
-              requestedRegion: 'Colombo',
-              collateralOffered: false,
-              matchedLenderIds: ['lender_1'],
-              notes: 'seeded request',
-              createdAt: '2026-04-21T00:00:00.000Z',
-              updatedAt: '2026-04-21T00:00:00.000Z',
-            }),
-            createDoc('req_2', {
-              requestId: 'req_2',
-              borrowerId: 'borrower_2',
-              adId: 'ad_other',
-              amount: 60000,
-              tenureMonths: 10,
-              purpose: 'medical',
-              purposeCategory: 'medical',
-              status: 'open',
-              suggestedInterestRate: 15,
-              urgency: 'medium',
-              monthlyIncome: 100000,
-              incomeSource: 'salary',
-              requestedRegion: 'Kandy',
-              collateralOffered: false,
-              matchedLenderIds: [],
-              notes: '',
-              createdAt: '2026-04-20T00:00:00.000Z',
-              updatedAt: '2026-04-20T00:00:00.000Z',
-            }),
-          ]);
         }
 
         if (name === 'users') {
@@ -110,12 +50,13 @@ describe('LoanRequestsService', () => {
       .mockImplementation(async ({ mapDoc }) => {
         const visible = await mapDoc(
           createDoc('req_1', {
-            requestId: 'req_1',
+            applicationId: 'req_1',
             borrowerId: 'borrower_1',
-            adId: 'ad_1',
-            amount: 50000,
-            tenureMonths: 12,
-            purpose: 'business',
+            listingId: 'ad_1',
+            lenderId: 'lender_1',
+            requestedPrincipalMinor: 5000000,
+            requestedTenureMonths: 12,
+            requestedPurpose: 'business',
             status: 'open',
             urgency: 'high',
             createdAt: '2026-04-21T00:00:00.000Z',
@@ -123,12 +64,12 @@ describe('LoanRequestsService', () => {
         );
         const hidden = await mapDoc(
           createDoc('req_2', {
-            requestId: 'req_2',
+            applicationId: 'req_2',
             borrowerId: 'borrower_2',
-            adId: 'ad_other',
-            amount: 60000,
-            tenureMonths: 10,
-            purpose: 'medical',
+            listingId: 'ad_other',
+            requestedPrincipalMinor: 6000000,
+            requestedTenureMonths: 10,
+            requestedPurpose: 'medical',
             status: 'open',
             createdAt: '2026-04-20T00:00:00.000Z',
           }),
@@ -147,20 +88,15 @@ describe('LoanRequestsService', () => {
       false,
     );
 
-    expect(result.requests).toHaveLength(2);
+    expect(result.requests).toHaveLength(1);
     expect(result.requests[0]).toMatchObject({
       requestId: 'req_1',
       borrowerName: 'Borrower One',
       targetType: 'targeted',
       adTitle: 'Targeted ad',
     });
-    expect(result.requests[1]).toMatchObject({
-      requestId: 'req_2',
-      borrowerName: 'Unknown borrower',
-      targetType: 'targeted',
-    });
     expect(result.pageInfo.hasMore).toBe(false);
-    expect(result.summary.totalPendingRequests).toBe(2);
+    expect(result.summary.totalPendingRequests).toBe(1);
   });
 
   it('returns ad-linked requests with accepted status when all statuses are requested', async () => {
@@ -177,37 +113,12 @@ describe('LoanRequestsService', () => {
     } as any;
     const db = {
       collection: jest.fn((name: string) => {
-        if (name === 'ads') {
+        if (name === 'loanListings') {
           return {
             where: jest.fn().mockReturnValue({
               get: jest.fn().mockResolvedValue({ docs: [adDoc] }),
             }),
           };
-        }
-
-        if (name === 'loanRequests') {
-          return createLoanRequestQuery([
-            createDoc('req_1', {
-              requestId: 'req_1',
-              borrowerId: 'borrower_1',
-              adId: 'ad_1',
-              amount: 50000,
-              tenureMonths: 12,
-              purpose: 'business',
-              purposeCategory: 'business',
-              status: 'accepted',
-              suggestedInterestRate: 14,
-              urgency: 'high',
-              monthlyIncome: 120000,
-              incomeSource: 'salary',
-              requestedRegion: 'Colombo',
-              collateralOffered: false,
-              matchedLenderIds: ['lender_1'],
-              notes: 'seeded request',
-              createdAt: '2026-04-21T00:00:00.000Z',
-              updatedAt: '2026-04-21T00:00:00.000Z',
-            }),
-          ]);
         }
 
         if (name === 'users') {
@@ -228,12 +139,13 @@ describe('LoanRequestsService', () => {
       .mockImplementationOnce(async ({ mapDoc }) => {
         const accepted = await mapDoc(
           createDoc('req_1', {
-            requestId: 'req_1',
+            applicationId: 'req_1',
             borrowerId: 'borrower_1',
-            adId: 'ad_1',
-            amount: 50000,
-            tenureMonths: 12,
-            purpose: 'business',
+            listingId: 'ad_1',
+            lenderId: 'lender_1',
+            requestedPrincipalMinor: 5000000,
+            requestedTenureMonths: 12,
+            requestedPurpose: 'business',
             status: 'accepted',
             urgency: 'high',
             createdAt: '2026-04-21T00:00:00.000Z',
@@ -264,204 +176,105 @@ describe('LoanRequestsService', () => {
     });
   });
 
-  it('falls back when lender ad lookup fails and still returns pending requests', async () => {
-    const request = createDoc('req_1', {
-      requestId: 'req_1',
-      borrowerId: 'borrower_1',
-      adId: 'ad_1',
-      targetLenderId: 'lender_1',
-      amount: 50000,
-      tenureMonths: 12,
-      purpose: 'business',
-      purposeCategory: 'business',
-      status: 'open',
-      suggestedInterestRate: 14,
-      urgency: 'high',
-      monthlyIncome: 120000,
-      incomeSource: 'salary',
-      requestedRegion: 'Colombo',
-      collateralOffered: false,
-      matchedLenderIds: ['lender_1'],
-      notes: 'seeded request',
-      createdAt: '2026-04-21T00:00:00.000Z',
-      updatedAt: '2026-04-21T00:00:00.000Z',
-    });
-
-    const borrowerSnapshot = {
-      id: 'borrower_1',
-      data: () => ({
-        fullName: 'Borrower One',
-        email: 'borrower@example.com',
-        phone: '+94770000000',
-        creditScore: 710,
-        kycStatus: 'approved',
-      }),
-    } as any;
-
+  it('allows the owning lender to approve a legacy pending ad request', async () => {
+    const application = {
+      applicationId: 'req_1',
+      listingId: 'ad_1',
+      lenderId: 'lender_1',
+      status: 'pending',
+      requestedPrincipalMinor: 5000000,
+      requestedTenureMonths: 12,
+    };
+    const listing = {
+      lenderId: 'lender_1',
+      minInterestRateAnnual: 11.5,
+    };
     const db = {
-      collection: jest.fn((name: string) => {
-        if (name === 'ads') {
-          return {
-            where: jest.fn().mockReturnValue({
-              get: jest.fn().mockRejectedValue(new Error('ads lookup failed')),
-            }),
-          };
-        }
-
-        if (name === 'loanRequests') {
-          return createLoanRequestQuery([request]);
-        }
-
-        if (name === 'users') {
-          return {
-            doc: jest.fn().mockReturnValue({ id: 'borrower_1' }),
-          };
-        }
-
-        return {};
-      }),
-      getAll: jest.fn().mockResolvedValue([borrowerSnapshot]),
+      collection: jest.fn((name: string) => ({
+        doc: jest.fn(() => ({
+          get: jest.fn(async () => ({
+            exists: true,
+            data: () => (name === 'loanApplications' ? application : listing),
+          })),
+        })),
+      })),
     };
-
-    const service = new LoanRequestsService({ getDb: () => db } as any);
-
-    jest.spyOn(service as any, 'buildSummary').mockResolvedValue({
-      totalPendingRequests: 1,
-      targetedRequests: 1,
-      marketplaceMatches: 0,
-      highUrgencyRequests: 1,
-    });
-
-    const result = await service.getPendingRequests('lender_1', 10, null, true);
-
-    expect(result.requests).toHaveLength(1);
-    expect(result.requests[0]).toMatchObject({
-      requestId: 'req_1',
-      borrowerName: 'Borrower One',
-      adId: 'ad_1',
-    });
-  });
-
-  it('approves a lender-visible request', async () => {
-    const update = jest.fn().mockResolvedValue(undefined);
-    const requestData: Record<string, unknown> = {
-      requestId: 'req_1',
-      borrowerId: 'borrower_1',
-      adId: 'ad_1',
-      targetLenderId: 'lender_1',
-      status: 'open',
-      matchedLenderIds: [],
-      createdAt: '2026-04-21T00:00:00.000Z',
-      updatedAt: '2026-04-21T00:00:00.000Z',
+    const coreLedgerService = {
+      approveApplication: jest.fn(async () => ({
+        loanId: 'loan_1',
+        agreementId: 'agreement_loan_1_v001',
+      })),
     };
-    const requestSnapshot = {
-      exists: true,
-      id: 'req_1',
-      data: () => requestData,
-      get: (field: string) => requestData[field],
-    } as any;
-    const db = {
-      collection: jest.fn((name: string) => {
-        if (name === 'loanRequests') {
-          return {
-            doc: jest.fn(() => ({
-              id: 'req_1',
-              get: jest.fn().mockResolvedValue(requestSnapshot),
-              update,
-            })),
-          };
-        }
+    const service = new LoanRequestsService(
+      { getDb: () => db } as any,
+      coreLedgerService as any,
+    );
 
-        if (name === 'ads') {
-          return {
-            where: jest.fn().mockReturnValue({
-              get: jest
-                .fn()
-                .mockResolvedValue({ docs: [createDoc('ad_1', {})] }),
-            }),
-          };
-        }
-
-        return {};
-      }),
-    };
-
-    const service = new LoanRequestsService({ getDb: () => db } as any);
-
-    const result = await service.approveRequest(
+    const result = await service.decideRequest(
       'lender_1',
       'req_1',
+      'approve',
       'Looks good',
     );
 
-    expect(result.requestId).toBe('req_1');
-    expect(result.status).toBe('approved');
-    expect(update).toHaveBeenCalledWith(
+    expect(result).toMatchObject({
+      requestId: 'req_1',
+      status: 'converted',
+      loanId: 'loan_1',
+      agreementId: 'agreement_loan_1_v001',
+    });
+    expect(coreLedgerService.approveApplication).toHaveBeenCalledWith(
+      'req_1',
+      'lender_1',
       expect.objectContaining({
-        status: 'approved',
-        approvedByLenderId: 'lender_1',
-        lenderDecisionNotes: 'Looks good',
+        approvedPrincipalMinor: 5000000,
+        approvedTenureMonths: 12,
+        annualInterestRate: 11.5,
+        decisionNote: 'Looks good',
       }),
     );
   });
 
-  it('rejects a lender-visible request with a reason', async () => {
-    const update = jest.fn().mockResolvedValue(undefined);
-    const requestData: Record<string, unknown> = {
-      requestId: 'req_1',
-      borrowerId: 'borrower_1',
-      adId: null,
-      targetLenderId: 'lender_1',
-      status: 'under_review',
-      matchedLenderIds: [],
-      createdAt: '2026-04-21T00:00:00.000Z',
-      updatedAt: '2026-04-21T00:00:00.000Z',
+  it('does not let a lender decide another lender request', async () => {
+    const transaction = {
+      get: jest
+        .fn()
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            listingId: 'ad_other',
+            lenderId: 'lender_other',
+            status: 'submitted',
+          }),
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({ lenderId: 'lender_other' }),
+        }),
+      update: jest.fn(),
     };
-    const requestSnapshot = {
-      exists: true,
-      id: 'req_1',
-      data: () => requestData,
-      get: (field: string) => requestData[field],
-    } as any;
     const db = {
-      collection: jest.fn((name: string) => {
-        if (name === 'loanRequests') {
-          return {
-            doc: jest.fn(() => ({
-              id: 'req_1',
-              get: jest.fn().mockResolvedValue(requestSnapshot),
-              update,
-            })),
-          };
-        }
-
-        if (name === 'ads') {
-          return {
-            where: jest.fn().mockReturnValue({
-              get: jest.fn().mockResolvedValue({ docs: [] }),
-            }),
-          };
-        }
-
-        return {};
-      }),
+      collection: jest.fn((name: string) => ({
+        doc: jest.fn((id: string) => ({ collection: name, id })),
+      })),
+      runTransaction: jest.fn(
+        (work: (value: typeof transaction) => Promise<unknown>) =>
+          work(transaction),
+      ),
     };
-
     const service = new LoanRequestsService({ getDb: () => db } as any);
 
-    const result = await service.rejectRequest(
-      'lender_1',
-      'req_1',
-      'Income proof mismatch',
-    );
+    await expect(
+      service.decideRequest('lender_1', 'req_1', 'reject'),
+    ).rejects.toThrow('Loan request was not found.');
+    expect(transaction.update).not.toHaveBeenCalled();
+  });
 
-    expect(result.status).toBe('rejected');
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'rejected',
-        rejectedByLenderId: 'lender_1',
-        rejectionReason: 'Income proof mismatch',
-      }),
-    );
+  it('never exposes incomplete borrower drafts to a lender history query', () => {
+    const service = new LoanRequestsService({} as any, {} as any);
+
+    expect((service as any).isStatusIncluded('draft', true)).toBe(false);
+    expect((service as any).isStatusIncluded('submitted', false)).toBe(true);
+    expect((service as any).isStatusIncluded('converted', true)).toBe(true);
   });
 });

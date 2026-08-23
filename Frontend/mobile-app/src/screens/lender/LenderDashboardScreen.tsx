@@ -26,7 +26,7 @@ import {
 
 const { width } = Dimensions.get("window");
 
-// ── Main Component ────────────────────────────────────────
+
 export default function LenderDashboardScreen({ navigation }: any) {
   const [activeSlide, setActiveSlide] = useState(0);
   const [summary, setSummary] = useState<any>(null);
@@ -203,20 +203,6 @@ export default function LenderDashboardScreen({ navigation }: any) {
         <Text style={commonStyles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickRow}>
           <QuickAction
-            icon="plus-circle"
-            backgroundColor="#EBF4FF"
-            iconColor={COLORS.primary}
-            label="New Offer"
-            onPress={() => navigation.navigate("CreateLoanOffer")}
-          />
-          <QuickAction
-            icon="layers"
-            backgroundColor="#ECFDF5"
-            iconColor={COLORS.success}
-            label="My Offers"
-            onPress={() => navigation.navigate("MyOffers")}
-          />
-          <QuickAction
             icon="inbox"
             backgroundColor="#FFFBEB"
             iconColor={COLORS.warning}
@@ -224,16 +210,12 @@ export default function LenderDashboardScreen({ navigation }: any) {
             onPress={() => navigation.navigate("ApplicationsReceived")}
           />
           <QuickAction
-            icon="trending-up"
-            backgroundColor="#FEF2F2"
-            iconColor={COLORS.danger}
-            label="Active Loans"
-            onPress={() => navigation.navigate("ActiveLoans")}
+            icon="message-circle"
+            backgroundColor="#F5F3FF"
+            iconColor="#8B5CF6"
+            label="AI Assistant"
+            onPress={() => navigation.navigate("AiAssistant")}
           />
-        </View>
-
-        {/* ── SECOND ROW QUICK ACTIONS ──────────────── */}
-        <View style={styles.quickRow}>
           <QuickAction
             icon="radio"
             backgroundColor="#F5F3FF"
@@ -241,6 +223,8 @@ export default function LenderDashboardScreen({ navigation }: any) {
             label="My Ads"
             onPress={() => navigation.navigate("MyAds")}
           />
+        </View>
+        <View style={styles.quickRow}>
           <QuickAction
             icon="plus-square"
             backgroundColor="#EBF4FF"
@@ -256,11 +240,11 @@ export default function LenderDashboardScreen({ navigation }: any) {
             onPress={() => navigation.navigate("AgreementsList")}
           />
           <QuickAction
-            icon="maximize"
-            backgroundColor="#FEF2F2"
-            iconColor={COLORS.danger}
-            label="Scan QR"
-            onPress={() => navigation.navigate("QRScanner")}
+            icon="users"
+            backgroundColor="#EBF4FF"
+            iconColor={COLORS.primary}
+            label="Borrowers"
+            onPress={() => navigation.navigate("MyBorrowers")}
           />
         </View>
 
@@ -278,17 +262,11 @@ export default function LenderDashboardScreen({ navigation }: any) {
         <Text style={commonStyles.sectionTitle}>More Actions</Text>
         <View style={styles.actionsList}>
           <LenderActionItem
-            icon="layers"
-            iconColor={COLORS.primary}
-            label="My Offers"
-            onPress={() => navigation.navigate("MyOffers")}
-            isFirst
-          />
-          <LenderActionItem
             icon="trending-up"
             iconColor={COLORS.success}
             label="Active Loans"
             onPress={() => navigation.navigate("ActiveLoans")}
+            isFirst
           />
           <LenderActionItem
             icon="users"
@@ -313,12 +291,6 @@ export default function LenderDashboardScreen({ navigation }: any) {
             iconColor={COLORS.primary}
             label="Agreements"
             onPress={() => navigation.navigate("AgreementsList")}
-          />
-          <LenderActionItem
-            icon="bar-chart-2"
-            iconColor={COLORS.success}
-            label="Ad Analytics"
-            onPress={() => navigation.navigate("AdSummaryAnalytics")}
           />
         </View>
 
@@ -395,7 +367,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingHorizontal: 16,
     justifyContent: "space-between",
+    alignItems: "stretch",
     marginBottom: 16,
+    gap: 8,
   },
   appAvatar: {
     width: 42,

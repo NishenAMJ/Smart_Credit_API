@@ -13,7 +13,7 @@ export class QueryUsersDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['active', 'suspended', 'pending', 'inactive'])
+  @IsIn(['active', 'suspended', 'pending'])
   status?: UserStatus;
 
   @IsOptional()

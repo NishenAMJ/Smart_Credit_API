@@ -14,9 +14,7 @@ import {
 import { Users, CreditCard, TrendingUp, Activity } from "lucide-react";
 import {
   getDashboardAnalytics,
-  getUsersReport,
   type DashboardAnalyticsResponse,
-  type UsersReportResponse,
 } from "../../lib/api";
 
 // Renders the admin dashboard overview, charts, and summary cards.
@@ -24,20 +22,13 @@ export default function Dashboard() {
   const [dashboard, setDashboard] = useState<
     DashboardAnalyticsResponse["data"] | null
   >(null);
-  const [usersReport, setUsersReport] = useState<
-    UsersReportResponse["data"] | null
-  >(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const loadDashboard = useCallback(async () => {
     try {
-      const [dashboardResponse, usersResponse] = await Promise.all([
-        getDashboardAnalytics(),
-        getUsersReport(),
-      ]);
+      const dashboardResponse = await getDashboardAnalytics();
       setDashboard(dashboardResponse.data);
-      setUsersReport(usersResponse.data);
       setError("");
     } catch (err) {
       setError(
@@ -50,14 +41,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     void loadDashboard();
-  }, [loadDashboard]);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      void loadDashboard();
-    }, 10000);
-
-    return () => window.clearInterval(interval);
   }, [loadDashboard]);
 
   const statCards = [
@@ -118,9 +101,9 @@ export default function Dashboard() {
   ];
 
   const roleBreakdown = [
-    { label: "Lenders", value: usersReport?.lenders ?? 0 },
-    { label: "Borrowers", value: usersReport?.borrowers ?? 0 },
-    { label: "Admins", value: usersReport?.usersByRole.admin ?? 0 },
+    { label: "Lenders", value: dashboard?.userRoles.lender ?? 0 },
+    { label: "Borrowers", value: dashboard?.userRoles.borrower ?? 0 },
+    { label: "Admins", value: dashboard?.userRoles.admin ?? 0 },
   ];
 
   return (
@@ -196,7 +179,7 @@ export default function Dashboard() {
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={roleBreakdown} barSize={32} barGap={10}>
+              <BarChart data={roleBreakdown} barSize={50} barGap={10}>
                 <CartesianGrid
                   strokeDasharray="3 3"
                   stroke="#F3F4F6"
@@ -223,7 +206,9 @@ export default function Dashboard() {
                           ? "#007AFF"
                           : entry.label === "Borrowers"
                             ? "#10B981"
-                            : "#8B5CF6"
+                            : entry.label === "Admins"
+                              ? "#8B5CF6"
+                              : "#9CA3AF"
                       }
                     />
                   ))}

@@ -5,6 +5,7 @@ import { FirebaseModule } from '../../firebase/firebase.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
+  // Expose transaction history for admin review and live updates.
   imports: [FirebaseModule, AuthModule],
   controllers: [TransactionsController],
   providers: [TransactionsService],

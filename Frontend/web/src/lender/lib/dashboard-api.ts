@@ -1,8 +1,4 @@
-import {
-  fetchLenderApi,
-  fetchLenderApiWithQuery,
-  parseApiError,
-} from "./api-client";
+import { API_BASE_URL, getAuthHeaders } from "./api-config";
 
 export type DashboardSummary = {
   totalBorrowers: number;
@@ -15,6 +11,7 @@ export type DashboardBorrower = {
   id: string;
   fullName: string;
   email: string;
+  phone: string | null;
   creditScore: number | null;
   kycStatus: string;
   loanCount: number;
@@ -23,6 +20,7 @@ export type DashboardBorrower = {
   outstandingAmount: number;
   latestLoanStatus: string;
   latestLoanCreatedAt: string | null;
+  firstLoanCreatedAt: string | null;
   isActive: boolean;
   createdAt: string | null;
 };
@@ -32,13 +30,15 @@ export type DashboardSummaryResponse = {
   generatedAt: string;
 };
 
+export type CursorPageInfo = {
+  pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
 export type DashboardBorrowersResponse = {
   borrowers: DashboardBorrower[];
-  pageInfo: {
-    pageSize: number;
-    hasMore: boolean;
-    nextCursor: string | null;
-  };
+  pageInfo: CursorPageInfo;
   generatedAt: string;
 };
 
@@ -72,55 +72,106 @@ export type BorrowerLoan = {
   createdAt: string | null;
 };
 
-export async function fetchDashboardSummary(): Promise<DashboardSummaryResponse> {
-  const response = await fetchLenderApi("/dashboard/summary");
+async function parseError(
+  response: Response,
+  fallback: string,
+): Promise<never> {
+  try {
+    const body = (await response.json()) as { message?: string | string[] };
+    const message = Array.isArray(body.message)
+      ? body.message.join(", ")
+      : body.message;
+    throw new Error(message || fallback);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    throw new Error(fallback);
+  }
+}
+
+export async function fetchDashboardSummary(
+  lenderId: string,
+): Promise<DashboardSummaryResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/summary?lenderId=${encodeURIComponent(lenderId)}`,
+    { headers: getAuthHeaders() },
+  );
 
   if (!response.ok) {
-    return parseApiError(response, "Failed to load dashboard summary.");
+    return parseError(response, "Failed to load dashboard summary.");
   }
 
   return response.json();
 }
 
 export async function fetchDashboardBorrowers(
-  pageSize = 8,
-  cursor?: string | null,
-  search?: string,
+  lenderId: string,
+  options: {
+    pageSize?: number;
+    cursor?: string | null;
+  } = {},
 ): Promise<DashboardBorrowersResponse> {
-  const searchParams = new URLSearchParams({
-    pageSize: String(pageSize),
+  const params = new URLSearchParams({
+    lenderId,
+    pageSize: String(options.pageSize ?? 8),
   });
 
-  if (cursor) {
-    searchParams.set("cursor", cursor);
+  if (options.cursor) {
+    params.set("cursor", options.cursor);
   }
 
-  if (search && search.trim().length > 0) {
-    searchParams.set("search", search.trim());
-  }
-
-  const response = await fetchLenderApiWithQuery(
-    "/dashboard/borrowers",
-    searchParams,
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/borrowers?${params.toString()}`,
+    { headers: getAuthHeaders() },
   );
 
   if (!response.ok) {
-    return parseApiError(response, "Failed to load dashboard borrowers.");
+    return parseError(response, "Failed to load dashboard borrowers.");
   }
 
   return response.json();
 }
 
 export async function fetchBorrowerDetails(
+  lenderId: string,
   borrowerId: string,
 ): Promise<BorrowerDetails> {
-  const response = await fetchLenderApi(
-    `/dashboard/borrowers/${encodeURIComponent(borrowerId)}`,
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/borrowers/${borrowerId}?lenderId=${encodeURIComponent(
+      lenderId,
+    )}`,
+    { headers: getAuthHeaders() },
   );
 
   if (!response.ok) {
-    return parseApiError(response, "Failed to load borrower details.");
+    return parseError(response, "Failed to load borrower details.");
   }
 
   return response.json();
+}
+
+export async function fetchBorrowersCsv(
+  startDate: string,
+  endDate: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const params = new URLSearchParams({ startDate, endDate });
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/borrowers/export?${params.toString()}`,
+    { headers: getAuthHeaders() },
+  );
+
+  if (!response.ok) {
+    return parseError(response, "Failed to export borrowers.");
+  }
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const fileNameMatch = /filename="?([^";]+)"?/i.exec(disposition);
+  return {
+    blob: await response.blob(),
+    fileName:
+      fileNameMatch?.[1] ??
+      `smart-credit-borrowers-${startDate}-to-${endDate}.csv`,
+  };
 }

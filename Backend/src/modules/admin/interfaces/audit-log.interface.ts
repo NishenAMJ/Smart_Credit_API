@@ -5,6 +5,7 @@ export type AuditActionType =
   | 'user_activated'
   | 'ad_approved'
   | 'ad_rejected'
+  | 'dispute_updated'
   | 'report_generated'
   | 'system_event';
 
@@ -16,7 +17,7 @@ export interface AuditLogEntry {
   description: string;
   performedBy: string;
   targetName: string;
-  targetType: 'user' | 'ad' | 'system' | 'report';
+  targetType: 'user' | 'ad' | 'dispute' | 'transaction' | 'system' | 'report';
   dateTime: string;
   severity: AuditSeverity;
 }

@@ -1,464 +1,250 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from 'react'
 import {
-  fetchBorrowerDetails,
-  type BorrowerDetails,
-} from "../lib/dashboard-api";
-import type { LenderSession } from "../lib/lender-session";
+  ArrowDownLeft,
+  ArrowUpRight,
+  Check,
+  Eye,
+  FileCheck2,
+  RefreshCw,
+  Search,
+  X,
+} from 'lucide-react'
+import BorrowerSidePanel from '../components/borrowers/BorrowerSidePanel'
+import PaymentCsvExport from '../components/payments/PaymentCsvExport'
+import type { LenderSession } from '../lib/lender-session'
+import { formatInstallmentLabel } from '../lib/payment-format'
 import {
-  fetchLoanLedgerDetails,
-  type LoanLedgerDetailsResponse,
   fetchRecentTransactions,
-  recordInstallmentPayment,
-  type RecentTransactionItem,
+  fetchReceiptAccess,
+  fetchReceiptSubmissions,
+  decideReceiptSubmission,
+  type ReceiptSubmission,
   type RecentTransactionsResponse,
-} from "../lib/recent-transactions-api";
+} from '../lib/recent-transactions-api'
 
-type RecentTransactionsPageProps = {
-  session: LenderSession;
-};
+const PAGE_SIZE = 15
 
-type DetailSection = "loan" | "borrower";
-
-type PaymentFormState = {
-  installmentId: string | null;
-  amount: string;
-  paidAt: string;
-  note: string;
-  error: string | null;
-  success: string | null;
-  isSaving: boolean;
-};
-
-const PAGE_SIZE = 15;
-
-const currencyFormatter = new Intl.NumberFormat("en-LK", {
-  style: "currency",
-  currency: "LKR",
+const currencyFormatter = new Intl.NumberFormat('en-LK', {
+  style: 'currency',
+  currency: 'LKR',
   maximumFractionDigits: 0,
-});
+})
 
 function formatCurrency(value: number): string {
-  return currencyFormatter.format(value);
+  return currencyFormatter.format(value)
 }
 
 function formatLabel(value: string): string {
   return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
 }
 
-function formatDate(value: string | null): string {
-  if (!value) {
-    return "Unknown";
-  }
+function formatDateTime(value: string | null): string {
+  if (!value) return 'Unknown'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Unknown'
 
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "Unknown";
-  }
-
-  return new Intl.DateTimeFormat("en-LK", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(parsed);
+  return new Intl.DateTimeFormat('en-LK', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed)
 }
 
 function getStatusBadgeClass(value: string): string {
-  if (value === "overdue" || value === "defaulted" || value === "failed") {
-    return "badge-danger";
+  if (value === 'failed' || value === 'reversed') return 'badge-danger'
+  if (['paid', 'completed', 'success', 'successful'].includes(value)) {
+    return 'badge-success'
   }
-
-  if (value === "paid" || value === "completed" || value === "repayment") {
-    return "badge-success";
-  }
-
-  return "badge-gray";
+  return 'badge-gray'
 }
 
 export default function RecentTransactionsPage({
   session,
-}: RecentTransactionsPageProps) {
+}: {
+  session: LenderSession
+}) {
   const [response, setResponse] = useState<RecentTransactionsResponse | null>(
     null,
-  );
-  const [isListLoading, setIsListLoading] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
-  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<
-    RecentTransactionsResponse["summary"] | null
-  >(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
-  const [selectedTransaction, setSelectedTransaction] =
-    useState<RecentTransactionItem | null>(null);
-  const [detailSection, setDetailSection] = useState<DetailSection>("loan");
-  const [borrowerDetails, setBorrowerDetails] =
-    useState<BorrowerDetails | null>(null);
-  const [loanDetails, setLoanDetails] =
-    useState<LoanLedgerDetailsResponse | null>(null);
-  const [detailError, setDetailError] = useState<string | null>(null);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [paymentForm, setPaymentForm] = useState<PaymentFormState>({
-    installmentId: null,
-    amount: "",
-    paidAt: new Date().toISOString().slice(0, 10),
-    note: "",
-    error: null,
-    success: null,
-    isSaving: false,
-  });
-
-  const activeCursor = pageCursors[currentPage - 1] ?? null;
-
-  async function loadTransactionsData(options?: {
-    cursor?: string | null;
-    search?: string;
-  }) {
-    setIsListLoading(true);
-    setListError(null);
-
-    try {
-      const normalizedSearch = options?.search ?? debouncedSearchQuery;
-      const data = await fetchRecentTransactions({
-        pageSize: PAGE_SIZE,
-        cursor: options?.cursor ?? activeCursor,
-        includeSummary: false,
-        includeSearchCount: normalizedSearch.trim().length > 0,
-        search: normalizedSearch,
-      });
-      setResponse(data);
-    } catch (loadError) {
-      setListError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Failed to load recent transactions.",
-      );
-    } finally {
-      setIsListLoading(false);
-    }
-  }
+  )
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [activity, setActivity] = useState<'all' | 'payment' | 'disbursement'>(
+    'payment',
+  )
+  const [reloadVersion, setReloadVersion] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
+    null,
+  )
+  const [receiptSubmissions, setReceiptSubmissions] = useState<
+    ReceiptSubmission[]
+  >([])
+  const [receiptError, setReceiptError] = useState<string | null>(null)
+  const [reviewingReceiptId, setReviewingReceiptId] = useState<string | null>(
+    null,
+  )
+  const [rejectingReceiptId, setRejectingReceiptId] = useState<string | null>(
+    null,
+  )
+  const [rejectionReason, setRejectionReason] = useState('')
+  const activeCursor = pageCursors[currentPage - 1] ?? null
 
   useEffect(() => {
-    setCurrentPage(1);
-    setPageCursors([null]);
-    setResponse(null);
-    setSummary(null);
-    setSearchQuery("");
-    setDebouncedSearchQuery("");
-  }, [session.lenderId]);
+    setCurrentPage(1)
+    setPageCursors([null])
+    setResponse(null)
+    setSearchQuery('')
+    setDebouncedSearchQuery('')
+    setActivity('payment')
+  }, [session.lenderId])
+
+  useEffect(() => {
+    setCurrentPage(1)
+    setPageCursors([null])
+    setResponse(null)
+  }, [activity])
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-    }, 250);
+      setCurrentPage(1)
+      setPageCursors([null])
+      setDebouncedSearchQuery(searchQuery.trim())
+    }, 600)
 
-    return () => window.clearTimeout(handle);
-  }, [searchQuery]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-    setPageCursors([null]);
-  }, [debouncedSearchQuery]);
+    return () => window.clearTimeout(handle)
+  }, [searchQuery])
 
   useEffect(() => {
-    let isMounted = true;
+    let isMounted = true
 
-    const loadTransactions = async () => {
+    async function loadPayments() {
+      setIsLoading(true)
+      setError(null)
+
       try {
-        setIsListLoading(true);
-        setListError(null);
-
-        const data = await fetchRecentTransactions({
+        const data = await fetchRecentTransactions(session.lenderId, {
           pageSize: PAGE_SIZE,
           cursor: activeCursor,
           includeSummary: false,
-          includeSearchCount: debouncedSearchQuery.trim().length > 0,
+          includeSearchCount: false,
           search: debouncedSearchQuery,
-        });
+          activity,
+        })
 
-        if (isMounted) {
-          setResponse(data);
-        }
+        if (isMounted) setResponse(data)
       } catch (loadError) {
         if (isMounted) {
-          setListError(
+          setError(
             loadError instanceof Error
               ? loadError.message
-              : "Failed to load recent transactions.",
-          );
+              : 'Failed to load payments.',
+          )
         }
       } finally {
-        if (isMounted) {
-          setIsListLoading(false);
-        }
+        if (isMounted) setIsLoading(false)
       }
-    };
+    }
 
-    void loadTransactions();
-
+    void loadPayments()
     return () => {
-      isMounted = false;
-    };
-  }, [activeCursor, currentPage, debouncedSearchQuery, session.lenderId]);
+      isMounted = false
+    }
+  }, [
+    activeCursor,
+    activity,
+    debouncedSearchQuery,
+    reloadVersion,
+    session.lenderId,
+  ])
 
   useEffect(() => {
-    if (!response || summary) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadSummary = async () => {
-      try {
-        setIsSummaryLoading(true);
-        setSummaryError(null);
-
-        const data = await fetchRecentTransactions({
-          pageSize: PAGE_SIZE,
-          includeSummary: true,
-          includeSearchCount: false,
-        });
-
-        if (isMounted) {
-          setSummary(data.summary);
-        }
-      } catch (loadError) {
-        if (isMounted) {
-          setSummaryError(
+    let mounted = true
+    fetchReceiptSubmissions()
+      .then((items) => mounted && setReceiptSubmissions(items))
+      .catch(
+        (loadError) =>
+          mounted &&
+          setReceiptError(
             loadError instanceof Error
               ? loadError.message
-              : "Failed to load payments summary.",
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsSummaryLoading(false);
-        }
-      }
-    };
-
-    void loadSummary();
-
+              : 'Failed to load receipt submissions.',
+          ),
+      )
     return () => {
-      isMounted = false;
-    };
-  }, [response, session.lenderId, summary]);
-
-  useEffect(() => {
-    if (!selectedTransaction) {
-      return;
+      mounted = false
     }
+  }, [reloadVersion, session.lenderId])
 
-    let isMounted = true;
-
-    const loadDetails = async () => {
-      try {
-        setIsDetailLoading(true);
-        setDetailError(null);
-
-        const [borrowerData, loanData] = await Promise.all([
-          fetchBorrowerDetails(selectedTransaction.borrowerId),
-          fetchLoanLedgerDetails(selectedTransaction.loanId),
-        ]);
-
-        if (isMounted) {
-          setBorrowerDetails(borrowerData);
-          setLoanDetails(loanData);
-        }
-      } catch (loadError) {
-        if (isMounted) {
-          setDetailError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load loan activity details.",
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsDetailLoading(false);
-        }
-      }
-    };
-
-    void loadDetails();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSelectedTransaction(null);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      isMounted = false;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [selectedTransaction, session.lenderId]);
-
-  function openLoanSection(transaction: RecentTransactionItem) {
-    setSelectedTransaction(transaction);
-    setDetailSection("loan");
-    setBorrowerDetails(null);
-    setLoanDetails(null);
-    setDetailError(null);
-    setPaymentForm({
-      installmentId: null,
-      amount: "",
-      paidAt: new Date().toISOString().slice(0, 10),
-      note: "",
-      error: null,
-      success: null,
-      isSaving: false,
-    });
-  }
-
-  function openBorrowerSection(transaction: RecentTransactionItem) {
-    setSelectedTransaction(transaction);
-    setDetailSection("borrower");
-    setBorrowerDetails(null);
-    setLoanDetails(null);
-    setDetailError(null);
-  }
-
-  function openPaymentForm(installmentId: string) {
-    setPaymentForm({
-      installmentId,
-      amount: "",
-      paidAt: new Date().toISOString().slice(0, 10),
-      note: "",
-      error: null,
-      success: null,
-      isSaving: false,
-    });
-  }
-
-  async function handleRecordPayment(installmentId: string) {
-    if (!selectedTransaction) {
-      return;
-    }
-
-    const amount = Number(paymentForm.amount);
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setPaymentForm((current) => ({
-        ...current,
-        error: "Enter a valid payment amount greater than zero.",
-        success: null,
-      }));
-      return;
-    }
-
+  async function openReceipt(documentId: string) {
     try {
-      setPaymentForm((current) => ({
-        ...current,
-        isSaving: true,
-        error: null,
-        success: null,
-      }));
-
-      const updatedLoanDetails = await recordInstallmentPayment(
-        selectedTransaction.loanId,
-        installmentId,
-        {
-          amount,
-          paidAt: paymentForm.paidAt,
-          note: paymentForm.note,
-        },
-      );
-
-      setLoanDetails(updatedLoanDetails);
-      setPaymentForm({
-        installmentId: null,
-        amount: "",
-        paidAt: new Date().toISOString().slice(0, 10),
-        note: "",
-        error: null,
-        success: "Payment recorded successfully.",
-        isSaving: false,
-      });
-      setCurrentPage(1);
-      setPageCursors([null]);
-      await loadTransactionsData({
-        cursor: null,
-        search: debouncedSearchQuery,
-      });
-      try {
-        setIsSummaryLoading(true);
-        setSummaryError(null);
-        const summaryData = await fetchRecentTransactions({
-          pageSize: PAGE_SIZE,
-          includeSummary: true,
-          includeSearchCount: false,
-        });
-        setSummary(summaryData.summary);
-      } catch (loadError) {
-        setSummaryError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Failed to load payments summary.",
-        );
-      } finally {
-        setIsSummaryLoading(false);
-      }
-    } catch (saveError) {
-      setPaymentForm((current) => ({
-        ...current,
-        isSaving: false,
-        error:
-          saveError instanceof Error
-            ? saveError.message
-            : "Failed to record payment.",
-        success: null,
-      }));
+      setReceiptError(null)
+      const access = await fetchReceiptAccess(documentId)
+      window.open(access.accessUrl, '_blank', 'noopener,noreferrer')
+    } catch (openError) {
+      setReceiptError(
+        openError instanceof Error
+          ? openError.message
+          : 'Failed to open receipt.',
+      )
     }
   }
 
-  const transactions = useMemo(
-    () => response?.transactions ?? [],
-    [response?.transactions],
-  );
-
-  const visibleStart = response?.transactions.length
-    ? (currentPage - 1) * PAGE_SIZE + 1
-    : 0;
-  const visibleEnd = response?.transactions.length
-    ? visibleStart + response.transactions.length - 1
-    : 0;
-  const isSearchActive = debouncedSearchQuery.trim().length > 0;
-  const matchedPaymentsCount =
-    response?.searchResultCount ?? (isSearchActive ? transactions.length : 0);
-  const displaySummary = summary ?? {
-    totalTransactions: 0,
-    totalCollected: 0,
-    loansWithActivity: 0,
-    overdueInstallments: 0,
-  };
-
-  function goToPreviousPage() {
-    setCurrentPage((page) => Math.max(1, page - 1));
+  async function reviewReceipt(
+    submission: ReceiptSubmission,
+    decision: 'approve' | 'reject',
+  ) {
+    if (decision === 'reject' && rejectionReason.trim().length < 3) {
+      setReceiptError(
+        'Enter a clear rejection reason before rejecting the receipt.',
+      )
+      return
+    }
+    try {
+      setReviewingReceiptId(submission.transactionId)
+      setReceiptError(null)
+      await decideReceiptSubmission(
+        submission.transactionId,
+        decision,
+        decision === 'reject' ? rejectionReason : undefined,
+      )
+      setReceiptSubmissions((current) =>
+        current.filter(
+          (item) => item.transactionId !== submission.transactionId,
+        ),
+      )
+      setRejectingReceiptId(null)
+      setRejectionReason('')
+      setReloadVersion((version) => version + 1)
+    } catch (reviewError) {
+      setReceiptError(
+        reviewError instanceof Error
+          ? reviewError.message
+          : 'Failed to review receipt.',
+      )
+    } finally {
+      setReviewingReceiptId(null)
+    }
   }
 
   function goToNextPage() {
-    const nextCursor = response?.pageInfo.nextCursor;
+    const nextCursor = response?.pageInfo.nextCursor
+    if (!nextCursor) return
 
-    if (!nextCursor) {
-      return;
-    }
-
-    setPageCursors((current) => {
-      if (current[currentPage] === nextCursor) {
-        return current;
-      }
-
-      return [...current.slice(0, currentPage), nextCursor];
-    });
-    setCurrentPage((page) => page + 1);
+    setPageCursors((current) => [...current.slice(0, currentPage), nextCursor])
+    setCurrentPage((page) => page + 1)
   }
+
+  const payments = response?.transactions ?? []
+  const visibleStart = payments.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0
+  const visibleEnd = payments.length ? visibleStart + payments.length - 1 : 0
+  const isSearchPending = searchQuery.trim() !== debouncedSearchQuery
 
   return (
     <>
@@ -466,899 +252,318 @@ export default function RecentTransactionsPage({
         <header className="page-header">
           <div>
             <p className="eyebrow">Lender cash flow</p>
-            <h1 className="page-title">Loans</h1>
+            <h1 className="page-title">Payments</h1>
             <p className="page-subtitle">
-              Review your loan activity ledger with lender-owned payments,
-              installment progress, and remaining balances in one place.
-            </p>
-            <p className="dashboard-context-pill">
-              Loan ledger: {session.displayName} - {session.lenderId}
+              Review completed borrower payments and loan disbursements. Record
+              new payments from the Loans page.
             </p>
           </div>
+          <PaymentCsvExport />
         </header>
 
-        {isListLoading && !response ? (
-          <section className="card loading-card">
-            <p>Loading loan activity ledger...</p>
-          </section>
-        ) : listError && !response ? (
-          <section className="card error-card">
-            <h2>Loan activity ledger is not available yet</h2>
-            <p>{listError}</p>
-            <p>
-              Check the lender loan ledger API, lender-linked loan data, and
-              whether payment or transaction records exist in Firestore.
-            </p>
-          </section>
-        ) : (
-          <>
-            <section
-              className="summary-grid"
-              aria-label="Loan activity summary"
-            >
-              <article className="card metric-card">
-                <div
-                  className="metric-icon metric-icon--primary"
-                  aria-hidden="true"
+        <section className="card receipt-review-card">
+          <div className="receipt-review-card__header">
+            <div>
+              <p className="eyebrow">Action required</p>
+              <h2 className="section-title">Bank transfer receipts</h2>
+              <p className="section-subtitle">
+                Confirm only after matching the receipt with your bank records.
+              </p>
+            </div>
+            <span className="receipt-review-count">
+              <FileCheck2 size={16} /> {receiptSubmissions.length} pending
+            </span>
+          </div>
+          {receiptError ? (
+            <p className="receipt-review-error">{receiptError}</p>
+          ) : null}
+          {receiptSubmissions.length ? (
+            <div className="receipt-review-list">
+              {receiptSubmissions.map((submission) => (
+                <article
+                  className="receipt-review-item"
+                  key={submission.transactionId}
                 >
-                  PM
-                </div>
-                <div className="metric-copy">
-                  <p className="metric-label">Total Payments</p>
-                  <p className="metric-value">
-                    {isSummaryLoading
-                      ? "..."
-                      : String(displaySummary.totalTransactions)}
-                  </p>
-                  <p className="metric-caption">
-                    {summaryError ??
-                      "Completed lender-linked payment rows across your loan book"}
-                  </p>
-                </div>
-              </article>
-              <article className="card metric-card">
-                <div
-                  className="metric-icon metric-icon--success"
-                  aria-hidden="true"
-                >
-                  LKR
-                </div>
-                <div className="metric-copy">
-                  <p className="metric-label">Total Collected</p>
-                  <p className="metric-value">
-                    {isSummaryLoading
-                      ? "..."
-                      : formatCurrency(displaySummary.totalCollected)}
-                  </p>
-                  <p className="metric-caption">
-                    Repayments collected across all linked loans
-                  </p>
-                </div>
-              </article>
-              <article className="card metric-card">
-                <div
-                  className="metric-icon metric-icon--warning"
-                  aria-hidden="true"
-                >
-                  LN
-                </div>
-                <div className="metric-copy">
-                  <p className="metric-label">Loans With Activity</p>
-                  <p className="metric-value">
-                    {isSummaryLoading
-                      ? "..."
-                      : String(displaySummary.loansWithActivity)}
-                  </p>
-                  <p className="metric-caption">
-                    Loans with at least one recorded repayment
-                  </p>
-                </div>
-              </article>
-              <article className="card metric-card">
-                <div
-                  className="metric-icon metric-icon--danger"
-                  aria-hidden="true"
-                >
-                  OD
-                </div>
-                <div className="metric-copy">
-                  <p className="metric-label">Overdue Installments</p>
-                  <p className="metric-value">
-                    {isSummaryLoading
-                      ? "..."
-                      : String(displaySummary.overdueInstallments)}
-                  </p>
-                  <p className="metric-caption">
-                    Overdue installments in your current portfolio
-                  </p>
-                </div>
-              </article>
-            </section>
-
-            <section className="card pending-requests-card">
-              <div className="borrowers-toolbar">
-                <div>
-                  <h2 className="section-title">Loan Activity Ledger</h2>
-                  <p className="section-subtitle">
-                    Every row is a lender-linked payment record. The page loads
-                    the latest {PAGE_SIZE} first, then fetches the next{" "}
-                    {PAGE_SIZE} when you move forward. Search runs on the
-                    server, so loan and installment lookups can match beyond the
-                    current page.
-                  </p>
-                </div>
-
-                <label className="search-field">
-                  <span className="search-field__icon" aria-hidden="true">
-                    Search
-                  </span>
-                  <input
-                    className="input"
-                    type="search"
-                    placeholder="Search borrower, email, loan id, installment, status"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                  />
-                </label>
-              </div>
-
-              {isSearchActive ? (
-                <section
-                  className="summary-grid"
-                  aria-label="Loan search summary"
-                >
-                  <article className="card metric-card">
-                    <div
-                      className="metric-icon metric-icon--primary"
-                      aria-hidden="true"
+                  <div className="receipt-review-item__main">
+                    <strong>{submission.borrowerName}</strong>
+                    <span>
+                      {formatInstallmentLabel(submission.installmentId)} ·{' '}
+                      {formatDateTime(submission.submittedAt)}
+                    </span>
+                  </div>
+                  <strong className="receipt-review-item__amount">
+                    {formatCurrency(submission.amount)}
+                  </strong>
+                  <div className="receipt-review-item__actions">
+                    <button
+                      type="button"
+                      className="receipt-action-button"
+                      onClick={() =>
+                        void openReceipt(submission.receiptDocumentId)
+                      }
                     >
-                      PM
-                    </div>
-                    <div className="metric-copy">
-                      <p className="metric-label">Total Payments</p>
-                      <p className="metric-value">
-                        {isListLoading ? "..." : String(matchedPaymentsCount)}
-                      </p>
-                      <p className="metric-caption">
-                        Total matched payment rows across all pages for this
-                        search
-                      </p>
-                    </div>
-                  </article>
-                </section>
-              ) : null}
-
-              <div className="table-container">
-                <table className="dashboard-table">
-                  <thead>
-                    <tr>
-                      <th>Borrower</th>
-                      <th>Loan</th>
-                      <th>Payment</th>
-                      <th>Remaining</th>
-                      <th>Installments</th>
-                      <th>Next Due</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isListLoading ? (
-                      <tr>
-                        <td className="table-empty" colSpan={6}>
-                          Loading lender-linked payment activity...
-                        </td>
-                      </tr>
-                    ) : listError ? (
-                      <tr>
-                        <td className="table-empty" colSpan={6}>
-                          {listError}
-                        </td>
-                      </tr>
-                    ) : transactions.length > 0 ? (
-                      transactions.map((transaction) => (
-                        <tr
-                          key={transaction.transactionId}
-                          className="dashboard-table__row"
-                          onClick={() => openLoanSection(transaction)}
+                      <Eye size={15} /> View
+                    </button>
+                    <button
+                      type="button"
+                      className="receipt-action-button receipt-action-button--approve"
+                      disabled={reviewingReceiptId === submission.transactionId}
+                      onClick={() => void reviewReceipt(submission, 'approve')}
+                    >
+                      <Check size={15} /> Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="receipt-action-button receipt-action-button--reject"
+                      disabled={reviewingReceiptId === submission.transactionId}
+                      onClick={() =>
+                        setRejectingReceiptId(submission.transactionId)
+                      }
+                    >
+                      <X size={15} /> Reject
+                    </button>
+                  </div>
+                  {rejectingReceiptId === submission.transactionId ? (
+                    <div className="receipt-reject-form">
+                      <label>
+                        <span>Reason for rejection</span>
+                        <textarea
+                          value={rejectionReason}
+                          onChange={(event) =>
+                            setRejectionReason(event.target.value)
+                          }
+                          maxLength={500}
+                          placeholder="Explain what is unclear or incorrect on this receipt"
+                        />
+                      </label>
+                      <div>
+                        <button
+                          type="button"
+                          className="receipt-action-button"
+                          onClick={() => {
+                            setRejectingReceiptId(null)
+                            setRejectionReason('')
+                          }}
                         >
-                          <td>
-                            <div className="borrower-cell">
-                              <span
-                                className="borrower-avatar"
-                                aria-hidden="true"
-                              >
-                                {transaction.borrowerName
-                                  .slice(0, 2)
-                                  .toUpperCase()}
-                              </span>
-                              <div>
-                                <button
-                                  type="button"
-                                  className="borrower-name borrower-name--button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openBorrowerSection(transaction);
-                                  }}
-                                >
-                                  {transaction.borrowerName}
-                                </button>
-                                <p className="borrower-email">
-                                  {transaction.borrowerEmail}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="dashboard-table__stack">
-                              <span>{transaction.loanId}</span>
-                              <span className="dashboard-table__subcopy">
-                                {formatLabel(transaction.loanStatus)}
-                                {transaction.installmentId
-                                  ? ` · ${transaction.installmentId}`
-                                  : ""}
-                              </span>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="dashboard-table__stack">
-                              <span>{formatCurrency(transaction.amount)}</span>
-                              <span className="dashboard-table__subcopy">
-                                {formatDate(transaction.createdAt)} ·{" "}
-                                {transaction.source === "payment"
-                                  ? "Payment record"
-                                  : "Transaction record"}
-                              </span>
-                            </div>
-                          </td>
-                          <td>{formatCurrency(transaction.remainingAmount)}</td>
-                          <td>
-                            <div className="dashboard-table__stack">
-                              <span>
-                                {
-                                  transaction.installmentSummary
-                                    .paidInstallments
-                                }
-                                /
-                                {
-                                  transaction.installmentSummary
-                                    .totalInstallments
-                                }{" "}
-                                paid
-                              </span>
-                              <span
-                                className={`badge ${getStatusBadgeClass(
-                                  transaction.installmentSummary
-                                    .latestInstallmentStatus,
-                                )}`}
-                              >
-                                {formatLabel(
-                                  transaction.installmentSummary
-                                    .latestInstallmentStatus,
-                                )}
-                              </span>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="dashboard-table__stack">
-                              <span>
-                                {formatDate(
-                                  transaction.installmentSummary.nextDueDate,
-                                )}
-                              </span>
-                              <span className="dashboard-table__subcopy">
-                                {
-                                  transaction.installmentSummary
-                                    .overdueInstallments
-                                }{" "}
-                                overdue
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="table-empty" colSpan={6}>
-                          {searchQuery
-                            ? "No loan ledger entries match the current search."
-                            : "No recent lender-linked payment activity is available yet."}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="receipt-action-button receipt-action-button--reject"
+                          disabled={
+                            reviewingReceiptId === submission.transactionId
+                          }
+                          onClick={() =>
+                            void reviewReceipt(submission, 'reject')
+                          }
+                        >
+                          Confirm rejection
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="receipt-review-empty">
+              No bank transfer receipts are waiting for review.
+            </div>
+          )}
+        </section>
 
-              <div className="table-footer">
-                <p>
-                  {isSearchActive
-                    ? `Showing ${visibleStart}-${visibleEnd} of ${matchedPaymentsCount} matched payment row(s) on page ${currentPage}.`
-                    : `Showing ${visibleStart}-${visibleEnd} lender-linked payments on page ${currentPage}.`}
-                </p>
+        <section className="card pending-requests-card payment-activity-card">
+          <div className="borrowers-toolbar">
+            <div>
+              <h2 className="section-title">Payment activity</h2>
+              <p className="section-subtitle">
+                Choose whether to review received payments, disbursements, or
+                both.
+              </p>
+            </div>
 
-                <div className="pagination">
-                  <button
-                    type="button"
-                    className="pagination-button"
-                    onClick={goToPreviousPage}
-                    disabled={currentPage === 1 || isListLoading}
-                  >
-                    Previous
-                  </button>
-
-                  <span className="pagination-status">Page {currentPage}</span>
-
-                  <button
-                    type="button"
-                    className="pagination-button"
-                    onClick={goToNextPage}
-                    disabled={!response?.pageInfo.hasMore || isListLoading}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </section>
-          </>
-        )}
-      </section>
-
-      {selectedTransaction ? (
-        <div
-          className="borrower-modal__backdrop"
-          role="presentation"
-          onClick={() => setSelectedTransaction(null)}
-        >
-          <section
-            className="borrower-modal pending-request-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="recent-transaction-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="borrower-modal__header">
-              <div>
-                <p className="eyebrow">Loan activity details</p>
-                <h2 className="section-title" id="recent-transaction-title">
-                  {selectedTransaction.borrowerName}
-                </h2>
-                <p className="section-subtitle">
-                  Switch between the lender-owned loan ledger and the borrower
-                  profile without leaving this page.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="borrower-modal__close"
-                aria-label="Close transaction details"
-                onClick={() => setSelectedTransaction(null)}
+            <div className="pending-requests-toolbar__controls payment-activity-toolbar">
+              <div
+                className="payment-activity-filter"
+                role="group"
+                aria-label="Filter payment activity"
               >
-                X
+                <button
+                  type="button"
+                  className={activity === 'all' ? 'is-active' : ''}
+                  aria-pressed={activity === 'all'}
+                  onClick={() => setActivity('all')}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={activity === 'payment' ? 'is-active' : ''}
+                  aria-pressed={activity === 'payment'}
+                  onClick={() => setActivity('payment')}
+                >
+                  <ArrowDownLeft size={14} /> Payments
+                </button>
+                <button
+                  type="button"
+                  className={activity === 'disbursement' ? 'is-active' : ''}
+                  aria-pressed={activity === 'disbursement'}
+                  onClick={() => setActivity('disbursement')}
+                >
+                  <ArrowUpRight size={14} /> Disbursements
+                </button>
+              </div>
+              <label className="payment-activity-search">
+                <Search size={16} aria-hidden="true" />
+                <span className="sr-only">Search payment activity</span>
+                <input
+                  type="search"
+                  placeholder="Search activity"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  aria-describedby="payments-search-status"
+                />
+              </label>
+              <button
+                className="payment-reload-button"
+                type="button"
+                disabled={isLoading}
+                onClick={() => setReloadVersion((version) => version + 1)}
+              >
+                <RefreshCw
+                  aria-hidden="true"
+                  className={
+                    isLoading ? 'payment-reload-button__icon--spinning' : ''
+                  }
+                  size={14}
+                />
+                {isLoading ? 'Reloading' : 'Reload'}
+              </button>
+              <span
+                className="sr-only"
+                id="payments-search-status"
+                aria-live="polite"
+              >
+                {isSearchPending
+                  ? 'Search will update after 600 milliseconds.'
+                  : isLoading
+                    ? 'Reloading payment history.'
+                    : 'Payment history updated.'}
+              </span>
+            </div>
+          </div>
+
+          <div className="table-container">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Borrower</th>
+                  <th>Installment</th>
+                  <th>Amount</th>
+                  <th>Recorded At</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  <tr>
+                    <td className="table-empty" colSpan={6}>
+                      Loading payments...
+                    </td>
+                  </tr>
+                ) : error ? (
+                  <tr>
+                    <td className="table-empty" colSpan={6}>
+                      {error}
+                    </td>
+                  </tr>
+                ) : payments.length ? (
+                  payments.map((payment) => (
+                    <tr key={payment.transactionId}>
+                      <td>
+                        <button
+                          type="button"
+                          className="borrower-name borrower-name--button"
+                          onClick={() =>
+                            setSelectedBorrowerId(payment.borrowerId)
+                          }
+                        >
+                          {payment.borrowerName}
+                        </button>
+                      </td>
+                      <td>
+                        {payment.type === 'disbursement'
+                          ? 'Not applicable'
+                          : formatInstallmentLabel(payment.installmentId)}
+                      </td>
+                      <td>
+                        <strong>{formatCurrency(payment.amount)}</strong>
+                      </td>
+                      <td>{formatDateTime(payment.createdAt)}</td>
+                      <td>{formatLabel(payment.type)}</td>
+                      <td>
+                        <span
+                          className={`badge ${getStatusBadgeClass(payment.status)}`}
+                        >
+                          {formatLabel(payment.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="table-empty" colSpan={6}>
+                      {debouncedSearchQuery
+                        ? 'No activity matches the current search.'
+                        : activity === 'payment'
+                          ? 'No completed payments are available yet.'
+                          : activity === 'disbursement'
+                            ? 'No completed disbursements are available yet.'
+                            : 'No payment activity is available yet.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="table-footer">
+            <p>
+              {isLoading
+                ? 'Loading the payment list...'
+                : `Showing ${visibleStart}-${visibleEnd} records on page ${currentPage}.`}
+            </p>
+            <div className="pagination">
+              <button
+                className="pagination-button"
+                type="button"
+                disabled={currentPage === 1 || isLoading}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              >
+                Previous
+              </button>
+              <span className="pagination-status">Page {currentPage}</span>
+              <button
+                className="pagination-button"
+                type="button"
+                disabled={!response?.pageInfo.hasMore || isLoading}
+                onClick={goToNextPage}
+              >
+                Next
               </button>
             </div>
+          </div>
+        </section>
+      </section>
 
-            <div className="borrower-modal__body">
-              <div
-                className="analytics-range-tabs"
-                role="tablist"
-                aria-label="Loan detail sections"
-              >
-                <button
-                  type="button"
-                  className={`analytics-range-tab${
-                    detailSection === "loan"
-                      ? " analytics-range-tab--active"
-                      : ""
-                  }`}
-                  role="tab"
-                  aria-selected={detailSection === "loan"}
-                  onClick={() => setDetailSection("loan")}
-                >
-                  Loan, Installments, Payments
-                </button>
-                <button
-                  type="button"
-                  className={`analytics-range-tab${
-                    detailSection === "borrower"
-                      ? " analytics-range-tab--active"
-                      : ""
-                  }`}
-                  role="tab"
-                  aria-selected={detailSection === "borrower"}
-                  onClick={() => setDetailSection("borrower")}
-                >
-                  Borrower Details
-                </button>
-              </div>
-
-              <div className="borrower-modal__content">
-                {isDetailLoading ? (
-                  <div className="borrower-modal__state">
-                    Loading loan activity details...
-                  </div>
-                ) : detailError ? (
-                  <div className="borrower-modal__state borrower-modal__state--error">
-                    {detailError}
-                  </div>
-                ) : detailSection === "loan" ? (
-                  <div className="borrower-modal__content">
-                    <div className="borrower-modal__grid">
-                      {[
-                        {
-                          label: "Ledger Entry ID",
-                          value: selectedTransaction.transactionId,
-                        },
-                        { label: "Loan ID", value: selectedTransaction.loanId },
-                        {
-                          label: "Installment ID",
-                          value:
-                            selectedTransaction.installmentId ?? "Not linked",
-                        },
-                        {
-                          label: "Loan Status",
-                          value: formatLabel(selectedTransaction.loanStatus),
-                        },
-                        {
-                          label: "Loan Amount",
-                          value: formatCurrency(loanDetails?.loan.amount ?? 0),
-                        },
-                        {
-                          label: "Remaining Amount",
-                          value: formatCurrency(
-                            loanDetails?.loan.remainingAmount ?? 0,
-                          ),
-                        },
-                        {
-                          label: "Interest Rate",
-                          value: `${loanDetails?.loan.interestRate ?? 0}%`,
-                        },
-                        {
-                          label: "Tenure",
-                          value: `${loanDetails?.loan.tenureMonths ?? 0} months`,
-                        },
-                        {
-                          label: "Entry Type",
-                          value: formatLabel(selectedTransaction.type),
-                        },
-                        {
-                          label: "Entry Status",
-                          value: formatLabel(selectedTransaction.status),
-                        },
-                        {
-                          label: "Amount",
-                          value: formatCurrency(selectedTransaction.amount),
-                        },
-                        {
-                          label: "Recorded On",
-                          value: formatDate(selectedTransaction.createdAt),
-                        },
-                      ].map((field) => (
-                        <article
-                          className="borrower-detail-card"
-                          key={field.label}
-                        >
-                          <p className="borrower-detail-card__label">
-                            {field.label}
-                          </p>
-                          <p className="borrower-detail-card__value">
-                            {field.value}
-                          </p>
-                        </article>
-                      ))}
-                    </div>
-
-                    <section className="borrower-loans-section">
-                      <div className="borrower-loans-section__header">
-                        <div>
-                          <h3 className="section-title">
-                            Installments and payments
-                          </h3>
-                          <p className="section-subtitle">
-                            Full lender-owned installment record for this loan.
-                          </p>
-                        </div>
-                      </div>
-
-                      {paymentForm.success ? (
-                        <p className="create-ad-banner create-ad-banner--primary">
-                          {paymentForm.success}
-                        </p>
-                      ) : null}
-
-                      <div className="borrower-loan-list">
-                        {(loanDetails?.installments ?? []).length > 0 ? (
-                          loanDetails?.installments.map((installment) => (
-                            <article
-                              className="borrower-loan-card"
-                              key={installment.id}
-                            >
-                              <div className="borrower-loan-card__header">
-                                <div>
-                                  <p className="borrower-loan-card__eyebrow">
-                                    Installment
-                                  </p>
-                                  <h4 className="borrower-loan-card__title">
-                                    {installment.id}
-                                  </h4>
-                                </div>
-                                <span
-                                  className={`badge ${getStatusBadgeClass(
-                                    installment.status,
-                                  )}`}
-                                >
-                                  {formatLabel(installment.status)}
-                                </span>
-                              </div>
-
-                              <div className="borrower-loan-card__grid">
-                                <article className="borrower-detail-card">
-                                  <p className="borrower-detail-card__label">
-                                    Due Date
-                                  </p>
-                                  <p className="borrower-detail-card__value">
-                                    {formatDate(installment.dueDate)}
-                                  </p>
-                                </article>
-                                <article className="borrower-detail-card">
-                                  <p className="borrower-detail-card__label">
-                                    Installment Amount
-                                  </p>
-                                  <p className="borrower-detail-card__value">
-                                    {formatCurrency(installment.amount)}
-                                  </p>
-                                </article>
-                                <article className="borrower-detail-card">
-                                  <p className="borrower-detail-card__label">
-                                    Paid Amount
-                                  </p>
-                                  <p className="borrower-detail-card__value">
-                                    {formatCurrency(installment.paidAmount)}
-                                  </p>
-                                </article>
-                                <article className="borrower-detail-card">
-                                  <p className="borrower-detail-card__label">
-                                    Payments Count
-                                  </p>
-                                  <p className="borrower-detail-card__value">
-                                    {String(installment.payments.length)}
-                                  </p>
-                                </article>
-                              </div>
-
-                              <div className="loan-ledger-actions">
-                                <div className="dashboard-table__stack">
-                                  <span className="borrower-detail-card__label">
-                                    Outstanding for this installment
-                                  </span>
-                                  <span className="borrower-detail-card__value">
-                                    {formatCurrency(
-                                      Math.max(
-                                        0,
-                                        installment.amount -
-                                          installment.paidAmount,
-                                      ),
-                                    )}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="button button-primary"
-                                  disabled={
-                                    installment.paidAmount >= installment.amount
-                                  }
-                                  onClick={() =>
-                                    openPaymentForm(installment.id)
-                                  }
-                                >
-                                  {installment.paidAmount >= installment.amount
-                                    ? "Fully paid"
-                                    : "Record Payment"}
-                                </button>
-                              </div>
-
-                              {paymentForm.installmentId === installment.id ? (
-                                <div className="loan-payment-form">
-                                  <div className="create-ad-form-grid">
-                                    <label className="create-ad-field">
-                                      <span className="create-ad-field__label">
-                                        Payment Amount
-                                      </span>
-                                      <input
-                                        className="input"
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={paymentForm.amount}
-                                        onChange={(event) =>
-                                          setPaymentForm((current) => ({
-                                            ...current,
-                                            amount: event.target.value,
-                                            error: null,
-                                            success: null,
-                                          }))
-                                        }
-                                      />
-                                    </label>
-
-                                    <label className="create-ad-field">
-                                      <span className="create-ad-field__label">
-                                        Paid Date
-                                      </span>
-                                      <input
-                                        className="input"
-                                        type="date"
-                                        value={paymentForm.paidAt}
-                                        onChange={(event) =>
-                                          setPaymentForm((current) => ({
-                                            ...current,
-                                            paidAt: event.target.value,
-                                            error: null,
-                                            success: null,
-                                          }))
-                                        }
-                                      />
-                                    </label>
-
-                                    <label className="create-ad-field create-ad-field--full">
-                                      <span className="create-ad-field__label">
-                                        Note
-                                      </span>
-                                      <textarea
-                                        className="create-ad-textarea"
-                                        rows={3}
-                                        placeholder="Optional note about this payment"
-                                        value={paymentForm.note}
-                                        onChange={(event) =>
-                                          setPaymentForm((current) => ({
-                                            ...current,
-                                            note: event.target.value,
-                                            error: null,
-                                            success: null,
-                                          }))
-                                        }
-                                      />
-                                    </label>
-                                  </div>
-
-                                  {paymentForm.error ? (
-                                    <p className="create-ad-banner create-ad-banner--error">
-                                      {paymentForm.error}
-                                    </p>
-                                  ) : null}
-
-                                  <div className="loan-payment-form__actions">
-                                    <button
-                                      type="button"
-                                      className="button button-secondary"
-                                      onClick={() =>
-                                        setPaymentForm((current) => ({
-                                          ...current,
-                                          installmentId: null,
-                                          error: null,
-                                        }))
-                                      }
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="button button-primary"
-                                      disabled={paymentForm.isSaving}
-                                      onClick={() =>
-                                        void handleRecordPayment(installment.id)
-                                      }
-                                    >
-                                      {paymentForm.isSaving
-                                        ? "Saving..."
-                                        : "Save Payment"}
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              <div className="loan-ledger-payments">
-                                <p className="borrower-detail-card__label">
-                                  Payments
-                                </p>
-                                {installment.payments.length > 0 ? (
-                                  installment.payments.map((payment) => (
-                                    <div
-                                      className="loan-ledger-payment-row"
-                                      key={payment.id}
-                                    >
-                                      <div className="dashboard-table__stack">
-                                        <span>{payment.id}</span>
-                                        <span className="dashboard-table__subcopy">
-                                          {formatDate(payment.createdAt)} ·{" "}
-                                          {payment.source === "payment"
-                                            ? "Installment payment"
-                                            : "Transaction fallback"}
-                                        </span>
-                                      </div>
-                                      <div className="dashboard-table__stack">
-                                        <span>
-                                          {formatCurrency(payment.amount)}
-                                        </span>
-                                        <span className="dashboard-table__subcopy">
-                                          {formatLabel(payment.type)}
-                                          {payment.note
-                                            ? ` · ${payment.note}`
-                                            : ""}
-                                        </span>
-                                      </div>
-                                      <span
-                                        className={`badge ${getStatusBadgeClass(
-                                          payment.status,
-                                        )}`}
-                                      >
-                                        {formatLabel(payment.status)}
-                                      </span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="section-subtitle">
-                                    No payment records are linked to this
-                                    installment yet.
-                                  </p>
-                                )}
-                              </div>
-                            </article>
-                          ))
-                        ) : (
-                          <div className="borrower-modal__state">
-                            No installment details are available for this loan
-                            yet.
-                          </div>
-                        )}
-                      </div>
-                    </section>
-                  </div>
-                ) : borrowerDetails ? (
-                  <div className="borrower-modal__content">
-                    <div className="borrower-modal__grid">
-                      {[
-                        { label: "Borrower ID", value: borrowerDetails.id },
-                        { label: "Full Name", value: borrowerDetails.fullName },
-                        { label: "Email", value: borrowerDetails.email },
-                        {
-                          label: "Phone",
-                          value: borrowerDetails.phone ?? "Not provided",
-                        },
-                        {
-                          label: "Address",
-                          value: borrowerDetails.address ?? "Not provided",
-                        },
-                        {
-                          label: "NIC",
-                          value: borrowerDetails.nic ?? "Not provided",
-                        },
-                        {
-                          label: "KYC Status",
-                          value: formatLabel(borrowerDetails.kycStatus),
-                        },
-                        {
-                          label: "Credit Score",
-                          value:
-                            borrowerDetails.creditScore !== null
-                              ? String(borrowerDetails.creditScore)
-                              : "Unknown",
-                        },
-                        {
-                          label: "Rating",
-                          value:
-                            borrowerDetails.rating !== null
-                              ? String(borrowerDetails.rating)
-                              : "Unknown",
-                        },
-                        {
-                          label: "Loan Count",
-                          value: String(borrowerDetails.loanCount),
-                        },
-                        {
-                          label: "Active Loans",
-                          value: String(borrowerDetails.activeLoansCount),
-                        },
-                        {
-                          label: "Outstanding Amount",
-                          value: formatCurrency(
-                            borrowerDetails.outstandingAmount,
-                          ),
-                        },
-                      ].map((field) => (
-                        <article
-                          className="borrower-detail-card"
-                          key={field.label}
-                        >
-                          <p className="borrower-detail-card__label">
-                            {field.label}
-                          </p>
-                          <p className="borrower-detail-card__value">
-                            {field.value}
-                          </p>
-                        </article>
-                      ))}
-                    </div>
-
-                    <section className="borrower-loans-section">
-                      <div className="borrower-loans-section__header">
-                        <div>
-                          <h3 className="section-title">
-                            Borrower loan summary
-                          </h3>
-                          <p className="section-subtitle">
-                            Loans this borrower has with you as the current
-                            lender.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="borrower-loan-list">
-                        {borrowerDetails.loans.map((loan) => (
-                          <article className="borrower-loan-card" key={loan.id}>
-                            <div className="borrower-loan-card__header">
-                              <div>
-                                <p className="borrower-loan-card__eyebrow">
-                                  Loan
-                                </p>
-                                <h4 className="borrower-loan-card__title">
-                                  {loan.id}
-                                </h4>
-                              </div>
-                              <span
-                                className={`badge ${getStatusBadgeClass(loan.status)}`}
-                              >
-                                {formatLabel(loan.status)}
-                              </span>
-                            </div>
-
-                            <div className="borrower-loan-card__grid">
-                              <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">
-                                  Amount
-                                </p>
-                                <p className="borrower-detail-card__value">
-                                  {formatCurrency(loan.amount)}
-                                </p>
-                              </article>
-                              <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">
-                                  Remaining
-                                </p>
-                                <p className="borrower-detail-card__value">
-                                  {formatCurrency(loan.remainingAmount)}
-                                </p>
-                              </article>
-                              <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">
-                                  Interest Rate
-                                </p>
-                                <p className="borrower-detail-card__value">
-                                  {loan.interestRate}%
-                                </p>
-                              </article>
-                              <article className="borrower-detail-card">
-                                <p className="borrower-detail-card__label">
-                                  Tenure
-                                </p>
-                                <p className="borrower-detail-card__value">
-                                  {loan.tenureMonths} months
-                                </p>
-                              </article>
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-                ) : (
-                  <div className="borrower-modal__state">
-                    Borrower details are not available yet.
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-        </div>
+      {selectedBorrowerId ? (
+        <BorrowerSidePanel
+          session={session}
+          borrowerId={selectedBorrowerId}
+          onClose={() => setSelectedBorrowerId(null)}
+        />
       ) : null}
     </>
-  );
+  )
 }

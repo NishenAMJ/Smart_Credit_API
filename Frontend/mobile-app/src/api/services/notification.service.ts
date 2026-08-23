@@ -1,0 +1,70 @@
+/** @format */
+
+import apiClient from "../axios.config";
+
+export type BorrowerNotification = {
+  id: string;
+  borrowerId: string;
+  category:
+    | "application"
+    | "payment"
+    | "profile"
+    | "dispute"
+    | "agreement"
+    | "system";
+  severity: "info" | "success" | "warning" | "critical";
+  title: string;
+  message: string;
+  isRead: boolean;
+  relatedEntityType: string | null;
+  relatedEntityId: string | null;
+  actionTarget: string | null;
+  createdAt: string;
+  readAt: string | null;
+  metadata: Record<string, unknown>;
+};
+
+type NotificationsResponse = {
+  success?: boolean;
+  data?: {
+    notifications: BorrowerNotification[];
+    unreadCount: number;
+    pageInfo: {
+      pageSize: number;
+      hasMore: boolean;
+      nextCursor: string | null;
+    };
+  };
+};
+
+export const notificationService = {
+  getMyNotifications: async () => {
+    const response = await apiClient.get<NotificationsResponse>(
+      "/borrower/notifications",
+      {
+        params: { limit: 50 },
+      },
+    );
+
+    return {
+      notifications: response.data?.data?.notifications ?? [],
+      unreadCount: response.data?.data?.unreadCount ?? 0,
+    };
+  },
+
+  markAsRead: async (notificationId: string) => {
+    const response = await apiClient.put<{
+      success?: boolean;
+      data?: BorrowerNotification;
+    }>(`/borrower/notifications/${notificationId}/read`);
+    return response.data?.data;
+  },
+
+  markAllAsRead: async () => {
+    const response = await apiClient.put<{
+      success?: boolean;
+      data?: { updatedCount: number; unreadCount: number };
+    }>("/borrower/notifications/mark-all-read");
+    return response.data?.data;
+  },
+};

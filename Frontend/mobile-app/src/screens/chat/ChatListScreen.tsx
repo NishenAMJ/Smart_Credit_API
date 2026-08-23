@@ -1,15 +1,4 @@
-/**
- * ChatListScreen.tsx
- * ─────────────────────────────────────────────────────────────────────────────
- * Shows all conversations for the current user.
- *
- * LOCAL-FIRST:
- *   - First renders from local SQLite (instant, works offline)
- *   - Then syncs from backend in background
- *   - Socket 'receiveMessage' event updates the list in real-time
- *
- * @format
- */
+
 
 import React, { useState, useCallback, useEffect } from "react";
 import {
@@ -20,10 +9,10 @@ import {
   StyleSheet,
   TextInput,
   ActivityIndicator,
-  SafeAreaView,
   StatusBar,
   RefreshControl,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from "../../constants";
@@ -61,7 +50,7 @@ export default function ChatListScreen({ navigation }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // ── Load conversations ────────────────────────────────────────────────────
+  //  Load conversations 
 
   const loadConversations = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -100,7 +89,7 @@ export default function ChatListScreen({ navigation }: Props) {
     }, [loadConversations]),
   );
 
-  // ── Real-time updates ─────────────────────────────────────────────────────
+  //  Real-time updates 
 
   useEffect(() => {
     const onMessage = (msg: Message) => {
@@ -125,7 +114,7 @@ export default function ChatListScreen({ navigation }: Props) {
     return () => chatSocket.off("receiveMessage", onMessage);
   }, []);
 
-  // ── Search ────────────────────────────────────────────────────────────────
+  // Search
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
@@ -143,7 +132,7 @@ export default function ChatListScreen({ navigation }: Props) {
     );
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  //  Render 
 
   const renderItem = ({ item }: { item: Conversation }) => (
     <TouchableOpacity

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -13,7 +12,10 @@ import type { AuthenticatedRequest } from '../../../common/types/authenticated-r
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
-import { LoanRequestDecisionResponse } from './loan-requests.dto';
+import {
+  LoanRequestDecisionDto,
+  LoanRequestDecisionResponse,
+} from './loan-requests.dto';
 import { LoanRequestsService } from './loan-requests.service';
 import { PendingRequestsResponse } from './loan-requests.types';
 
@@ -25,7 +27,7 @@ export class LoanRequestsController {
 
   @Get('pending')
   getPendingRequests(
-    @Req() req: AuthenticatedRequest,
+    @Req() request: AuthenticatedRequest,
     @Query('pageSize') pageSize?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
@@ -34,7 +36,7 @@ export class LoanRequestsController {
     @Query('includeAllStatuses') includeAllStatuses?: string,
   ): Promise<PendingRequestsResponse> {
     return this.loanRequestsService.getPendingRequests(
-      req.user.sub,
+      request.user.sub,
       this.toNumber(pageSize) ?? this.toNumber(limit) ?? 30,
       cursor?.trim() || null,
       includeSummary !== 'false',
@@ -43,46 +45,23 @@ export class LoanRequestsController {
     );
   }
 
-  @Post(':requestId/approve')
-  approveRequest(
-    @Req() req: AuthenticatedRequest,
+  @Post(':requestId/decision')
+  decideRequest(
+    @Req() request: AuthenticatedRequest,
     @Param('requestId') requestId: string,
-    @Body() body?: { notes?: string },
+    @Body()
+    body: LoanRequestDecisionDto,
   ): Promise<LoanRequestDecisionResponse> {
-    return this.loanRequestsService.approveRequest(
-      req.user.sub,
-      requestId?.trim(),
-      body?.notes,
-    );
-  }
-
-  @Post(':requestId/reject')
-  rejectRequest(
-    @Req() req: AuthenticatedRequest,
-    @Param('requestId') requestId: string,
-    @Body() body?: { reason?: string },
-  ): Promise<LoanRequestDecisionResponse> {
-    if (!body?.reason || body.reason.trim().length === 0) {
-      throw new BadRequestException('reason is required for rejection.');
-    }
-
-    return this.loanRequestsService.rejectRequest(
-      req.user.sub,
-      requestId?.trim(),
-      body.reason,
-    );
-  }
-
-  @Post(':requestId/review')
-  markUnderReview(
-    @Req() req: AuthenticatedRequest,
-    @Param('requestId') requestId: string,
-    @Body() body?: { notes?: string },
-  ): Promise<LoanRequestDecisionResponse> {
-    return this.loanRequestsService.markUnderReview(
-      req.user.sub,
-      requestId?.trim(),
-      body?.notes,
+    return this.loanRequestsService.decideRequest(
+      request.user.sub,
+      requestId,
+      body?.decision,
+      body?.note,
+      {
+        approvedPrincipalMinor: body?.approvedPrincipalMinor,
+        annualInterestRate: body?.annualInterestRate,
+        approvedTenureMonths: body?.approvedTenureMonths,
+      },
     );
   }
 

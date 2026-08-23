@@ -153,13 +153,13 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
   ];
 
   useEffect(() => {
-    void fetchFeaturedLoans();
+    void fetchAvailableLoans();
   }, []);
 
-  const fetchFeaturedLoans = async () => {
+  const fetchAvailableLoans = async () => {
     try {
       setErrorMessage("");
-      const response = await loanService.getFeaturedLoans();
+      const response = await loanService.getAvailableLoans();
       const loans = response.data ?? [];
 
       if (loans.length === 0) {
@@ -183,12 +183,12 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    void fetchFeaturedLoans();
+    void fetchAvailableLoans();
   }, []);
 
   const handleSearch = async () => {
     if (searchQuery.trim() === "") {
-      void fetchFeaturedLoans();
+      void fetchAvailableLoans();
       return;
     }
 
@@ -314,11 +314,31 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
           >
             <Feather name="bell" size={20} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => navigation.navigate("NearbyLendersMap")}
+          >
             <Feather name="map-pin" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
+
+      <TouchableOpacity
+        style={styles.mapBanner}
+        onPress={() => navigation.navigate("NearbyLendersMap")}
+        activeOpacity={0.9}
+      >
+        <View style={styles.mapBannerIcon}>
+          <Feather name="map-pin" size={18} color="#007AFF" />
+        </View>
+        <View style={styles.mapBannerText}>
+          <Text style={styles.mapBannerTitle}>Find nearby lenders</Text>
+          <Text style={styles.mapBannerSubtitle}>
+            Open the map and sort lenders by distance.
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={20} color="#6B7280" />
+      </TouchableOpacity>
 
       <View style={styles.searchContainer}>
         <TouchableOpacity style={styles.searchIcon} onPress={handleSearch}>
@@ -333,7 +353,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
           onChangeText={(text) => {
             setSearchQuery(text);
             if (text.trim() === "") {
-              void fetchFeaturedLoans();
+              void fetchAvailableLoans();
             }
           }}
           onSubmitEditing={handleSearch}
@@ -345,7 +365,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
             style={styles.filterIcon}
             onPress={() => {
               setSearchQuery("");
-              void fetchFeaturedLoans();
+              void fetchAvailableLoans();
             }}
           >
             <Feather name="x-circle" size={20} color="#9CA3AF" />
@@ -557,10 +577,47 @@ const styles = StyleSheet.create({
   iconButton: {
     marginLeft: 15,
   },
+  mapBanner: {
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 15,
+    marginTop: 14,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+  },
+  mapBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#E8F1FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  mapBannerText: {
+    flex: 1,
+  },
+  mapBannerTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A1A1A",
+  },
+  mapBannerSubtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
   searchContainer: {
     backgroundColor: "#FFFFFF",
     margin: 15,
-    marginTop: 20,
+    marginTop: 12,
     borderRadius: 10,
     flexDirection: "row",
     alignItems: "center",

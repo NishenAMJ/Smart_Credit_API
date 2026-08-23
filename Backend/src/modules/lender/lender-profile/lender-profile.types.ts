@@ -1,5 +1,4 @@
 export interface LenderProfileResponse {
-  id: string;
   lenderId: string;
   fullName: string;
   email: string;
@@ -16,19 +15,16 @@ export interface LenderProfileResponse {
   rating: number | null;
   profilePhotoUrl: string | null;
   updatedAt: string | null;
-  totalLoaned: number;
-  totalReturned: number;
-  totalLoansCompleted: number;
 }
 
 export interface UpdateLenderProfileInput {
-  fullName: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  district: string;
-  businessName: string;
-  responseTimeHours: number;
-  preferredRegions: string[];
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  businessName?: string;
+  responseTimeHours?: number;
+  preferredRegions?: string[];
 }

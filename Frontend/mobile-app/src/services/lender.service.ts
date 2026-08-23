@@ -4,26 +4,20 @@
 
  * Centralised service layer for all Lender screens.
  *
- * Auth pattern mirrors advertisement.service.ts:
- *   - The shared auth layer in api.ts owns the current user id.
- *   - Every request embeds lenderId as a query-param so the backend can scope data
- *   - x-user-id header is also sent by api.ts automatically
+ * The shared auth layer in api.ts owns the access token. Canonical lender
+ * endpoints derive ownership from the verified JWT rather than request input.
  *
  * Backend routes consumed (global prefix: /api):
  *   GET  /dashboard/summary?lenderId=                       → DashboardService.getSummary
  *   GET  /dashboard/borrowers?lenderId=&pageSize=           → DashboardService.getBorrowers
  *   GET  /loan-requests/pending?lenderId=&...               → LoanRequestsService.getPendingRequests
- *   GET  /recent-transactions?lenderId=&pageSize=           → RecentTransactionsService.getTransactions
- *   GET  /recent-transactions/loans/:id?lenderId=           → RecentTransactionsService.getLoanLedger
+ *   GET  /payments?lenderId=&pageSize=                      → PaymentsService.getTransactions
+ *   GET  /payments/loans/:id?lenderId=                      → PaymentsService.getLoanLedger
  *   GET  /analytics/summary?lenderId=&range=                → AnalyticsService.getSummary
  *   GET  /lender-profile/:lenderId                          → LenderProfileService.getProfile
  *   PATCH /lender-profile/:lenderId                         → LenderProfileService.updateProfile
- *   GET  /lender/:lenderId/offers                           → LoanOffersService.getMyOffers
- *   POST  /lender-mobile/offers?lenderId=                   → LoanOffersService.createOffer
- *   PATCH /lender-mobile/offers/:id?lenderId=               → LoanOffersService.updateOffer
- *   POST  /lender-mobile/loan-requests/:id/approve?lenderId → LoanRequestsService.approveRequest
- *   POST  /lender-mobile/loan-requests/:id/reject?lenderId  → LoanRequestsService.rejectRequest
- *   GET  /lender-mobile/payment-reminders?lenderId=         → PaymentRemindersService.getReminders
+ *   POST  /loan-requests/:id/decision                       → LoanRequestsService.decideRequest
+ *   GET  /lender-mobile/payment-reminders                   → PaymentRemindersService.getReminders
  *
  * @format
  */
@@ -36,8 +30,7 @@ export const setLenderId = (_id: string) => {
 
 const getLenderId = (): string => getCurrentUserId();
 
-// Types 
-
+// Types
 
 export interface LenderProfile {
   id: string;
@@ -73,8 +66,7 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
-// DashboardService 
-
+// DashboardService
 
 export const DashboardService = {
   /**
@@ -113,8 +105,7 @@ export const DashboardService = {
   },
 };
 
-// LoanRequestsService 
-
+// LoanRequestsService
 
 export const LoanRequestsService = {
   /**
@@ -140,36 +131,39 @@ export const LoanRequestsService = {
 
   /**
    * Approve a loan request.
-   * POST /api/lender-mobile/loan-requests/:appId/approve?lenderId=
+   * POST /api/loan-requests/:appId/decision
    */
   approveRequest: async (appId: string, notes?: string) => {
-    const lenderId = getLenderId();
-    return api.post(
-      `/lender-mobile/loan-requests/${appId}/approve?lenderId=${lenderId}`,
-      notes ? { notes } : undefined,
-    );
+    return api.post<{
+      requestId: string;
+      status: "converted";
+      updatedAt: string;
+      loanId: string;
+      agreementId: string;
+    }>(`/loan-requests/${appId}/decision`, {
+      decision: "approve",
+      note: notes,
+    });
   },
 
   /**
    * Reject a loan request.
-   * POST /api/lender-mobile/loan-requests/:appId/reject?lenderId=
+   * POST /api/loan-requests/:appId/decision
    */
   rejectRequest: async (appId: string, reason: string) => {
-    const lenderId = getLenderId();
-    return api.post(
-      `/lender-mobile/loan-requests/${appId}/reject?lenderId=${lenderId}`,
-      { reason },
-    );
+    return api.post(`/loan-requests/${appId}/decision`, {
+      decision: "reject",
+      note: reason,
+    });
   },
 };
 
-// RecentTransactionsService 
+// PaymentsService
 
-
-export const RecentTransactionsService = {
+export const PaymentsService = {
   /**
    * Fetch the lender's active loans / recent transactions list.
-   * GET /api/recent-transactions?lenderId=&pageSize=
+   * GET /api/payments?lenderId=&pageSize=
    */
   getTransactions: async (
     opts: {
@@ -183,21 +177,74 @@ export const RecentTransactionsService = {
     if (opts.pageSize) params.append("pageSize", String(opts.pageSize));
     if (opts.cursor) params.append("cursor", opts.cursor);
     if (opts.search) params.append("search", opts.search);
-    return api.get(`/recent-transactions?${params.toString()}`);
+    return api.get(`/payments?${params.toString()}`);
   },
 
   /**
    * Fetch full ledger details for a specific loan.
-   * GET /api/recent-transactions/loans/:loanId?lenderId=
+   * GET /api/payments/loans/:loanId?lenderId=
    */
   getLoanLedger: async (loanId: string) => {
-    const lenderId = getLenderId();
-    return api.get(`/recent-transactions/loans/${loanId}?lenderId=${lenderId}`);
+    return api.get(`/payments/loans/${loanId}`);
+  },
+
+  recordInstallmentPayment: async (
+    loanId: string,
+    installmentId: string,
+    amount: number,
+    note?: string,
+  ) =>
+    api.post(
+      `/payments/loans/${loanId}/installments/${installmentId}/payments`,
+      { amount, note: note?.trim() || null },
+    ),
+};
+
+export interface LenderLoan {
+  id: string;
+  applicationId: string | null;
+  listingId: string | null;
+  borrower: { id: string; fullName: string; email: string };
+  currency: string;
+  principal: number;
+  totalRepayable: number;
+  monthlyInstallment: number;
+  amountPaid: number;
+  remainingBalance: number;
+  annualInterestRate: number;
+  tenureMonths: number;
+  status: string;
+  disbursedAt: string | null;
+  maturityDate: string | null;
+  createdAt: string | null;
+  installmentProgress: {
+    total: number;
+    paid: number;
+    overdue: number;
+    nextDueAt: string | null;
+  };
+}
+
+export const LenderLoansService = {
+  getLoans: async (
+    opts: {
+      pageSize?: number;
+      cursor?: string;
+      status?: string;
+      search?: string;
+    } = {},
+  ): Promise<{ loans: LenderLoan[]; summary: any; pageInfo: any }> => {
+    const params = new URLSearchParams();
+    if (opts.pageSize) params.append("pageSize", String(opts.pageSize));
+    if (opts.cursor) params.append("cursor", opts.cursor);
+    if (opts.status) params.append("status", opts.status);
+    if (opts.search) params.append("search", opts.search);
+    const query = params.toString();
+    return api.get(`/lender/loans${query ? `?${query}` : ""}`);
   },
 };
 
-// AnalyticsService 
-
+// AnalyticsService
 
 export const AnalyticsService = {
   /**
@@ -210,8 +257,7 @@ export const AnalyticsService = {
   },
 };
 
-// LenderProfileService 
-
+// LenderProfileService
 
 export const LenderProfileService = {
   /**
@@ -234,70 +280,12 @@ export const LenderProfileService = {
     return api.patch(`/lender-profile/${lenderId}`, payload);
   },
 
-  /**
-   * Change password.
-   * ⚠️ Backend endpoint not yet implemented. Throws to surface a proper error.
-   */
-  changePassword: async (_payload: ChangePasswordPayload): Promise<void> => {
-    throw new Error(
-      "changePassword endpoint not yet implemented on the backend.",
-    );
+  changePassword: async (payload: ChangePasswordPayload): Promise<void> => {
+    await api.post("/auth/change-password", payload);
   },
 };
 
-// LoanOffersService 
-
-
-export const LoanOffersService = {
-  /**
-   * Fetch this lender's own loan offers.
-   * GET /api/lender/:lenderId/offers
-   */
-  getMyOffers: async (): Promise<{ offers: any[] }> => {
-    const lenderId = getLenderId();
-    return api.get(`/lender/${lenderId}/offers`);
-  },
-
-  /**
-   * Create a new loan offer.
-   * POST /api/lender-mobile/offers?lenderId=
-   */
-  createOffer: async (data: {
-    loanType: string;
-    minAmount: number;
-    maxAmount: number;
-    interestRate: number;
-    tenureMonths: number;
-    active: boolean;
-  }) => {
-    const lenderId = getLenderId();
-    return api.post(`/lender-mobile/offers?lenderId=${lenderId}`, data);
-  },
-
-  /**
-   * Update an existing loan offer.
-   * PATCH /api/lender-mobile/offers/:offerId?lenderId=
-   */
-  updateOffer: async (
-    offerId: string,
-    data: {
-      minAmount?: number;
-      maxAmount?: number;
-      interestRate?: number;
-      tenureMonths?: number;
-      active?: boolean;
-    },
-  ) => {
-    const lenderId = getLenderId();
-    return api.patch(
-      `/lender-mobile/offers/${offerId}?lenderId=${lenderId}`,
-      data,
-    );
-  },
-};
-
-// PaymentRemindersService 
-
+// PaymentRemindersService
 
 export const PaymentRemindersService = {
   /**
@@ -305,7 +293,11 @@ export const PaymentRemindersService = {
    * GET /api/lender-mobile/payment-reminders?lenderId=
    */
   getReminders: async () => {
-    const lenderId = getLenderId();
-    return api.get(`/lender-mobile/payment-reminders?lenderId=${lenderId}`);
+    return api.get(`/lender-mobile/payment-reminders`);
   },
+};
+
+export const QrPaymentService = {
+  recordPayment: async (qrData: string) =>
+    api.post("/lender-mobile/qr-scanner/scan-payment", { qrData }),
 };

@@ -17,7 +17,6 @@ import { Feather } from "@expo/vector-icons";
 import SidebarMenu from "../../components/common/SidebarMenu";
 import { profileService } from "../../api/services/profile.service";
 import { getApiErrorMessage } from "../../api/api-error";
-import { PROFILE_UPDATE_VERIFICATION_CODE } from "../../constants/demo";
 import { useAuth } from "../../context/AuthContext";
 import {
   getScoreColor,
@@ -39,6 +38,7 @@ const EMPTY_EDITABLE_PROFILE = {
   address: "",
   monthlyIncome: "",
   occupation: "",
+  currentPassword: "",
   password: "",
   confirmPassword: "",
 };
@@ -47,7 +47,7 @@ const EMPTY_EDITABLE_PROFILE = {
  * Displays borrower profile details and account-related actions.
  */
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
-  const { signOut } = useAuth();
+  const { signOut, sessionStatus } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [profile, setProfile] = useState<BorrowerProfile | null>(null);
   const [editableProfile, setEditableProfile] = useState(
@@ -69,6 +69,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     address: profileService.formatAddress(response.address),
     monthlyIncome: String(response.monthlyIncome ?? ""),
     occupation: response.occupation || "",
+    currentPassword: "",
     password: "",
     confirmPassword: "",
   });
@@ -158,11 +159,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     editableProfile.newEmail.trim() !== savedEditableProfile.email.trim();
   const passwordChanged = editableProfile.password.trim().length > 0;
   const sensitiveChanged = emailChanged || passwordChanged;
-  const [verificationSent, setVerificationSent] = useState(false);
-  const [verificationCode, setVerificationCode] = useState("");
-  const [verifiedForSensitiveSave, setVerifiedForSensitiveSave] =
-    useState(false);
-
   const financeRows = useMemo(
     () =>
       profile
@@ -219,14 +215,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     value: string,
   ) => {
     setEditableProfile((previous) => ({ ...previous, [field]: value }));
-    if (
-      field === "email" ||
-      field === "newEmail" ||
-      field === "password" ||
-      field === "confirmPassword"
-    ) {
-      setVerifiedForSensitiveSave(false);
-    }
   };
 
   const onStartEditing = () => {
@@ -243,9 +231,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           onPress: () => {
             setEditableProfile(savedEditableProfile);
             setEditing(false);
-            setVerificationSent(false);
-            setVerificationCode("");
-            setVerifiedForSensitiveSave(false);
           },
         },
       ]);
@@ -253,39 +238,12 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     }
 
     setEditing(false);
-    setVerificationSent(false);
-    setVerificationCode("");
-    setVerifiedForSensitiveSave(false);
-  };
-
-  const onSendVerificationCode = () => {
-    setVerificationSent(true);
-    setVerifiedForSensitiveSave(false);
-    setVerificationCode("");
-
-    Alert.alert(
-      "Verification Required",
-      `A verification code was sent. Use ${PROFILE_UPDATE_VERIFICATION_CODE} for this demo.`,
-    );
-  };
-
-  const onVerifySensitiveChanges = () => {
-    if (verificationCode.trim() !== PROFILE_UPDATE_VERIFICATION_CODE) {
-      Alert.alert(
-        "Invalid Code",
-        "Please enter the correct verification code.",
-      );
-      return;
-    }
-
-    setVerifiedForSensitiveSave(true);
-    Alert.alert("Verified", "You can now save your sensitive changes.");
   };
 
   const onSaveChanges = async () => {
     if (!isDirty || saving) return;
-    if (passwordChanged && editableProfile.password.length < 6) {
-      Alert.alert("Weak Password", "Password must be at least 6 characters.");
+    if (passwordChanged && editableProfile.password.length < 8) {
+      Alert.alert("Weak Password", "Password must be at least 8 characters.");
       return;
     }
     if (
@@ -295,10 +253,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       Alert.alert("Password Mismatch", "Please confirm the same password.");
       return;
     }
-    if (sensitiveChanged && !verifiedForSensitiveSave) {
+    if (sensitiveChanged && !editableProfile.currentPassword.trim()) {
       Alert.alert(
-        "Verification Needed",
-        "Please verify before changing email or password.",
+        "Current Password Required",
+        "Enter your current password before changing email or password.",
       );
       return;
     }
@@ -312,6 +270,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         address: editableProfile.address,
         monthlyIncome: editableProfile.monthlyIncome,
         occupation: editableProfile.occupation,
+        currentPassword: sensitiveChanged
+          ? editableProfile.currentPassword
+          : undefined,
         password: passwordChanged ? editableProfile.password : undefined,
       });
       const editable = toEditableProfile(updated);
@@ -319,9 +280,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       setEditableProfile(editable);
       setSavedEditableProfile(editable);
       setEditing(false);
-      setVerificationSent(false);
-      setVerificationCode("");
-      setVerifiedForSensitiveSave(false);
       Alert.alert("Profile Updated", "Your changes were saved successfully.");
     } catch (error) {
       const message = getApiErrorMessage(
@@ -504,15 +462,21 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                         paddingVertical: 4,
                         borderRadius: 4,
                       }}
-                      onPress={() =>
+                      onPress={() => {
+                        if (sessionStatus?.kycStatus === "rejected") {
+                          navigation.navigate("KycResubmission");
+                          return;
+                        }
                         Alert.alert(
-                          "Complete KYC",
-                          "Please log out and log in via the signup flow to complete your KYC submission, or contact support.",
-                        )
-                      }
+                          "KYC under review",
+                          "Your submitted documents are waiting for review.",
+                        );
+                      }}
                     >
                       <Text style={{ color: "#fff", fontSize: 12 }}>
-                        Complete KYC
+                        {sessionStatus?.kycStatus === "rejected"
+                          ? "Re-upload"
+                          : "View status"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -625,8 +589,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 <View style={styles.sensitiveBox}>
                   <Text style={styles.sensitiveTitle}>Security Changes</Text>
                   <Text style={styles.infoNote}>
-                    Changing email or password requires a code sent to your
-                    current email.
+                    Changing email or password requires your current password.
                   </Text>
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Current Email</Text>
@@ -680,50 +643,18 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   </View>
 
                   {sensitiveChanged ? (
-                    <View style={styles.verificationBox}>
-                      <View style={styles.sensitiveNotice}>
-                        <Feather name="shield" size={15} color="#1D4ED8" />
-                        <Text style={styles.sensitiveNoticeText}>
-                          Enter the code sent to {savedEditableProfile.email} to
-                          save these changes.
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.verifyButton}
-                        onPress={onSendVerificationCode}
-                      >
-                        <Text style={styles.verifyButtonText}>
-                          Send Verification Code
-                        </Text>
-                      </TouchableOpacity>
-
-                      {verificationSent ? (
-                        <>
-                          <Text style={styles.inputLabel}>
-                            Verification Code
-                          </Text>
-                          <TextInput
-                            style={styles.input}
-                            value={verificationCode}
-                            onChangeText={setVerificationCode}
-                            placeholder="Enter verification code"
-                            placeholderTextColor="#9CA3AF"
-                            keyboardType="number-pad"
-                          />
-                          <TouchableOpacity
-                            style={styles.confirmButton}
-                            onPress={onVerifySensitiveChanges}
-                          >
-                            <Text style={styles.confirmButtonText}>Verify</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : null}
-
-                      {verifiedForSensitiveSave ? (
-                        <Text style={styles.verifiedText}>
-                          Sensitive changes verified.
-                        </Text>
-                      ) : null}
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Current Password</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={editableProfile.currentPassword}
+                        onChangeText={(value) =>
+                          onChangeEditableField("currentPassword", value)
+                        }
+                        placeholder="Required for email or password changes"
+                        placeholderTextColor="#9CA3AF"
+                        secureTextEntry
+                      />
                     </View>
                   ) : null}
                 </View>
@@ -752,17 +683,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   <TouchableOpacity
                     style={[
                       styles.saveButton,
-                      (!isDirty ||
-                        saving ||
-                        (sensitiveChanged && !verifiedForSensitiveSave)) &&
-                        styles.saveButtonMuted,
+                      (!isDirty || saving) && styles.saveButtonMuted,
                     ]}
                     onPress={() => void onSaveChanges()}
-                    disabled={
-                      !isDirty ||
-                      saving ||
-                      (sensitiveChanged && !verifiedForSensitiveSave)
-                    }
+                    disabled={!isDirty || saving}
                   >
                     <Text style={styles.saveButtonText}>
                       {saving ? "Saving..." : "Save Changes"}
@@ -1118,51 +1042,6 @@ const styles = StyleSheet.create({
   lockedSecurityInput: {
     color: "#6B7280",
     backgroundColor: "#F3F4F6",
-  },
-  sensitiveNotice: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginBottom: 10,
-  },
-  sensitiveNoticeText: {
-    flex: 1,
-    fontSize: 12,
-    color: "#1D4ED8",
-    lineHeight: 17,
-  },
-  verifyButton: {
-    marginTop: 8,
-    backgroundColor: "#EFF6FF",
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  verifyButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1D4ED8",
-  },
-  verificationBox: {
-    marginTop: 12,
-  },
-  verifiedText: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#047857",
-  },
-  confirmButton: {
-    marginTop: 8,
-    backgroundColor: "#DBEAFE",
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  confirmButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1E40AF",
   },
   editActions: {
     flexDirection: "row",

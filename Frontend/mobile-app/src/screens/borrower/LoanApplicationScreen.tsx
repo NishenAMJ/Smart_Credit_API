@@ -11,10 +11,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import {
-  applicationService,
-  createApplication,
-} from "../../api/services/application.service";
+import { createApplication } from "../../api/services/application.service";
 import { getApiErrorMessage } from "../../api/api-error";
 import { profileService } from "../../api/services/profile.service";
 import { navigateToBorrowerTab } from "../../utils/borrowerNavigation";
@@ -237,7 +234,7 @@ export default function LoanApplicationScreen({
 
     try {
       setLoading(true);
-      const createdApplication = await createApplication({
+      await createApplication({
         adId: loan.adId ?? loan.loanId ?? "",
         amount: requestedAmount,
         purpose: normalizedLoanCategory,
@@ -250,11 +247,6 @@ export default function LoanApplicationScreen({
         tenureMonths: duration,
         preferredRepaymentMethod: "qr_payment",
       });
-
-      const requestId = createdApplication?.data?.requestId;
-      if (requestId) {
-        await applicationService.submitApplication(requestId);
-      }
 
       Alert.alert("Success", "Application submitted successfully.", [
         {

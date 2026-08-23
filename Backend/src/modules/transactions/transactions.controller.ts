@@ -11,6 +11,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
+  // Returns a paginated list of admin transaction records.
   @Get()
   async getTransactions(
     @Query('limit') limit?: string,
@@ -22,6 +23,7 @@ export class TransactionsController {
     );
   }
 
+  // Streams transaction updates to the admin UI in real time.
   @Sse('stream')
   streamTransactions(@Query('limit') limit?: string): Observable<{
     data: Awaited<ReturnType<TransactionsService['getTransactions']>>;
@@ -29,6 +31,7 @@ export class TransactionsController {
     return this.transactionsService.streamTransactions(this.parseLimit(limit));
   }
 
+  // Keep the requested page size within a safe range.
   private parseLimit(value?: string): number {
     const limit = Number(value ?? 100);
 

@@ -20,6 +20,8 @@ import {
   type AdminUserRole,
   type AdminUserStatus,
 } from "../../lib/api";
+import { subscribeToAdminChanges } from "../../lib/admin-realtime";
+import { useDebouncedValue } from "../../lib/use-debounced-value";
 import { DEFAULT_USER_SUSPENSION_REASON } from "../../constants/admin-actions";
 import { formatFirestoreDate } from "../../lib/admin-format";
 
@@ -88,7 +90,6 @@ function StatusBadge({ status }: { status: AdminUserStatus }) {
     active: "badge badge-success",
     pending: "badge badge-warning",
     suspended: "badge badge-gray",
-    inactive: "badge badge-gray",
   }[status];
 
   return <span className={className}>{status}</span>;
@@ -144,10 +145,34 @@ function buildSummaryCards(stats: {
   suspendedUsers: number;
 }): SummaryCard[] {
   return [
-    { label: "Total Users", count: stats.totalUsers, color: "#007AFF", bg: "#EFF6FF", icon: Users },
-    { label: "Active", count: stats.activeUsers, color: "#10B981", bg: "#ECFDF5", icon: UserCheck },
-    { label: "Borrowers", count: stats.borrowers, color: "#8B5CF6", bg: "#F5F3FF", icon: Users },
-    { label: "Suspended", count: stats.suspendedUsers, color: "#6B7280", bg: "#F3F4F6", icon: Shield },
+    {
+      label: "Total Users",
+      count: stats.totalUsers,
+      color: "#007AFF",
+      bg: "#EFF6FF",
+      icon: Users,
+    },
+    {
+      label: "Active",
+      count: stats.activeUsers,
+      color: "#10B981",
+      bg: "#ECFDF5",
+      icon: UserCheck,
+    },
+    {
+      label: "Borrowers",
+      count: stats.borrowers,
+      color: "#8B5CF6",
+      bg: "#F5F3FF",
+      icon: Users,
+    },
+    {
+      label: "Suspended",
+      count: stats.suspendedUsers,
+      color: "#6B7280",
+      bg: "#F3F4F6",
+      icon: Shield,
+    },
   ];
 }
 
@@ -156,6 +181,7 @@ function buildSummaryCards(stats: {
 export default function ManageUsers() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [filterStatus, setFilterStatus] = useState<AdminUserStatus | "all">(
     "all",
   );
@@ -185,7 +211,13 @@ export default function ManageUsers() {
       setLoading(true);
       try {
         const [usersResponse, statsResponse] = await Promise.all([
-          getUsers({ limit: pageSize, cursor }),
+          getUsers({
+            limit: pageSize,
+            cursor,
+            search: debouncedSearch,
+            status: filterStatus,
+            role: filterRole,
+          }),
           !cursor ? getUserStats() : Promise.resolve(null),
         ]);
 
@@ -210,7 +242,7 @@ export default function ManageUsers() {
         setLoading(false);
       }
     },
-    [pageSize],
+    [debouncedSearch, filterRole, filterStatus, pageSize],
   );
 
   useEffect(() => {
@@ -220,28 +252,17 @@ export default function ManageUsers() {
   }, [loadUsers]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      const activeCursor =
-        currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
-      void loadUsers(activeCursor);
-    }, 10000);
-
-    return () => window.clearInterval(interval);
+    const activeCursor =
+      currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
+    return subscribeToAdminChanges(
+      ["users"],
+      () => void loadUsers(activeCursor),
+    );
   }, [currentPage, cursorStack, loadUsers]);
 
   const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
-      const searchValue = search.toLowerCase();
-      const matchesSearch =
-        user.name.toLowerCase().includes(searchValue) ||
-        user.email.toLowerCase().includes(searchValue) ||
-        user.id.toLowerCase().includes(searchValue);
-      const matchesStatus =
-        filterStatus === "all" || user.status === filterStatus;
-      const matchesRole = filterRole === "all" || user.role === filterRole;
-      return matchesSearch && matchesStatus && matchesRole;
-    });
-  }, [filterRole, filterStatus, search, users]);
+    return users;
+  }, [users]);
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;
@@ -346,7 +367,7 @@ export default function ManageUsers() {
         </div>
 
         <div className="tabs">
-          {(["all", "active", "pending", "suspended", "inactive"] as const).map(
+          {(["all", "active", "pending", "suspended"] as const).map(
             (status) => (
               <button
                 key={status}

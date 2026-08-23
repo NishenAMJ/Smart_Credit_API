@@ -1,70 +1,39 @@
-import * as seedUtils from '../../../firebase/firestore-seed.utils';
+import { AnalyticsDrilldownService } from './analytics-drilldown.service';
 import { AnalyticsService } from './analytics.service';
-
-function createDoc(id: string, data: Record<string, unknown>) {
-  return {
-    id,
-    data: () => data,
-    get: (field: string) => data[field],
-  } as any;
-}
 
 describe('AnalyticsService', () => {
   it('computes summary from seed-shaped loans and ads', async () => {
-    const db = {
-      collection: jest.fn((name: string) => ({
-        where: jest.fn(function where() {
-          return {
-            where,
-            get: jest.fn().mockResolvedValue({
-              docs:
-                name === 'loans'
-                  ? [
-                      createDoc('loan_1', {
-                        lenderId: 'lender_1',
-                        borrowerId: 'borrower_1',
-                        principalAmount: 50000,
-                        interestRate: 15,
-                        tenureMonths: 12,
-                        status: 'active',
-                        requestId: 'req_1',
-                        createdAt: '2026-04-10T00:00:00.000Z',
-                      }),
-                    ]
-                  : [
-                      createDoc('ad_1', {
-                        lenderId: 'lender_1',
-                        status: 'approved',
-                        expiresAt: '2099-01-01T00:00:00.000Z',
-                      }),
-                    ],
-            }),
-          };
-        }),
-      })),
+    const analyticsData = {
+      loadSummaryContext: jest.fn().mockResolvedValue({
+        loans: [
+          {
+            id: 'loan_1',
+            requestId: 'req_1',
+            borrowerId: 'borrower_1',
+            amount: 50000,
+            interestRate: 15,
+            tenureMonths: 12,
+            remainingAmount: 12000,
+            status: 'active',
+            createdAt: new Date(),
+          },
+        ],
+        ads: [
+          {
+            id: 'ad_1',
+            title: 'Ad',
+            status: 'approved',
+            expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+          },
+        ],
+        requests: [],
+        transactions: [],
+        disputes: [],
+        borrowerScores: [],
+      }),
+      countOverdueLoans: jest.fn().mockResolvedValue(0),
     };
-    const service = new AnalyticsService({ getDb: () => db } as any);
-
-    jest
-      .spyOn(seedUtils, 'computeLoanRemainingAmount')
-      .mockResolvedValue(12000);
-    jest
-      .spyOn(service as any, 'getCountWithFallback')
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0);
-    jest
-      .spyOn(service as any, 'sumRepaymentTransactionsInRange')
-      .mockResolvedValue(0);
-    jest.spyOn(service as any, 'getActiveAdsCount').mockResolvedValue(1);
-    jest
-      .spyOn(service as any, 'getRequestsForLenderByDateRange')
-      .mockResolvedValue([]);
-    jest.spyOn(service as any, 'countOverdueLoans').mockResolvedValue(0);
-    jest
-      .spyOn(service as any, 'getAverageBorrowerCreditScore')
-      .mockResolvedValue(null);
+    const service = new AnalyticsService(analyticsData as any, {} as any);
 
     const result = await service.getSummary('lender_1', '30d');
 
@@ -74,35 +43,35 @@ describe('AnalyticsService', () => {
   });
 
   it('paginates drilldown results with page info', async () => {
-    const service = new AnalyticsService({ getDb: () => ({}) } as any);
-    jest.spyOn(service as any, 'loadAnalyticsContext').mockResolvedValue({
-      loans: Array.from({ length: 11 }, (_, index) => ({
-        id: `loan_${index + 1}`,
-        borrowerId: `borrower_${index + 1}`,
-        amount: 20000 + index * 1000,
-        interestRate: 12,
-        tenureMonths: 10,
-        remainingAmount: 14000 - index * 100,
-        status: 'active',
-        createdAt: new Date(
-          `2026-04-${String(21 - index).padStart(2, '0')}T00:00:00.000Z`,
+    const analyticsData = {
+      loadAnalyticsContext: jest.fn().mockResolvedValue({
+        loans: Array.from({ length: 11 }, (_, index) => ({
+          id: `loan_${index + 1}`,
+          borrowerId: `borrower_${index + 1}`,
+          amount: 20000 + index * 1000,
+          interestRate: 12,
+          tenureMonths: 10,
+          remainingAmount: 14000 - index * 100,
+          status: 'active',
+          createdAt: new Date(
+            `2026-04-${String(21 - index).padStart(2, '0')}T00:00:00.000Z`,
+          ),
+        })),
+        ads: [],
+        requests: [],
+        transactions: [],
+        disputes: [],
+        borrowerNameMap: new Map(
+          Array.from({ length: 11 }, (_, index) => [
+            `borrower_${index + 1}`,
+            `Borrower ${index + 1}`,
+          ]),
         ),
-      })),
-      ads: [],
-      requests: [],
-      transactions: [],
-      disputes: [],
-      borrowerNameMap: new Map(
-        Array.from({ length: 11 }, (_, index) => [
-          `borrower_${index + 1}`,
-          `Borrower ${index + 1}`,
-        ]),
-      ),
-      loanMap: new Map(),
-    });
-    jest
-      .spyOn(service as any, 'findOverdueLoanIds')
-      .mockResolvedValue(new Set());
+        loanMap: new Map(),
+      }),
+      findOverdueLoanIds: jest.fn().mockResolvedValue(new Set()),
+    };
+    const service = new AnalyticsDrilldownService(analyticsData as any);
 
     const result = await service.getDrilldown(
       'lender_1',

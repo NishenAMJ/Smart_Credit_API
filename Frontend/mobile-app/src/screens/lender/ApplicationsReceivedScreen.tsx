@@ -15,7 +15,7 @@ import { LoanRequestsService } from "../../services/lender.service";
 
 export default function ApplicationsReceivedScreen({ navigation }: any) {
   const [filter, setFilter] = useState<
-    "all" | "pending" | "approved" | "rejected"
+    "all" | "submitted" | "under_review" | "converted" | "rejected"
   >("all");
   const [allApps, setAllApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,9 +42,11 @@ export default function ApplicationsReceivedScreen({ navigation }: any) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending":
+      case "submitted":
         return COLORS.warning;
-      case "approved":
+      case "under_review":
+        return COLORS.primary;
+      case "converted":
         return COLORS.success;
       case "rejected":
         return COLORS.danger;
@@ -78,7 +80,7 @@ export default function ApplicationsReceivedScreen({ navigation }: any) {
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.filters}>
-          {(["all", "pending", "approved", "rejected"] as const).map((f) => (
+          {(["all", "submitted", "under_review", "converted", "rejected"] as const).map((f) => (
             <TouchableOpacity
               key={f}
               style={[styles.btn, filter === f && styles.btnActive]}
@@ -87,7 +89,9 @@ export default function ApplicationsReceivedScreen({ navigation }: any) {
               <Text
                 style={[styles.btnText, filter === f && styles.btnTextActive]}
               >
-                {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+                {f === "all"
+                  ? "All"
+                  : f.replace("_", " ").replace(/^./, (c) => c.toUpperCase())}
               </Text>
             </TouchableOpacity>
           ))}
@@ -102,10 +106,13 @@ export default function ApplicationsReceivedScreen({ navigation }: any) {
         ) : (
           filtered.map((app, index) => (
             <TouchableOpacity
-              key={app.id ?? index}
+              key={app.requestId ?? index}
               style={commonStyles.card}
               onPress={() =>
-                navigation.push("ReviewApplication", { appId: app.id })
+                navigation.push("ReviewApplication", {
+                  appId: app.requestId,
+                  app,
+                })
               }
             >
               <View style={commonStyles.rowSpaceBetween}>
@@ -113,18 +120,20 @@ export default function ApplicationsReceivedScreen({ navigation }: any) {
                   <Text style={commonStyles.sectionTitle}>
                     {app.borrowerName ?? app.borrower}
                   </Text>
-                  <Text style={commonStyles.textSecondary}>{app.id}</Text>
+                  <Text style={commonStyles.textSecondary}>
+                    Application ...{String(app.requestId ?? "").slice(-6)}
+                  </Text>
                 </View>
                 <View
                   style={[
                     styles.badge,
                     {
-                      backgroundColor: getStatusColor(app.status ?? "pending"),
+                      backgroundColor: getStatusColor(app.status ?? "submitted"),
                     },
                   ]}
                 >
                   <Text style={styles.badgeText}>
-                    {(app.status ?? "pending").toUpperCase()}
+                    {(app.status ?? "submitted").replace("_", " ").toUpperCase()}
                   </Text>
                 </View>
               </View>
@@ -147,16 +156,16 @@ export default function ApplicationsReceivedScreen({ navigation }: any) {
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={commonStyles.textSecondary}>ROI</Text>
                   <Text style={commonStyles.textPrimary}>
-                    {app.interestRate ?? app.roi ?? "--"}%
+                    {app.suggestedInterestRate ?? "--"}%
                   </Text>
                 </View>
               </View>
 
               <Text style={[commonStyles.textSecondary, { marginTop: 12 }]}>
                 Applied:{" "}
-                {app.appliedAt
-                  ? new Date(app.appliedAt).toLocaleDateString()
-                  : (app.date ?? "")}
+                {app.createdAt
+                  ? new Date(app.createdAt).toLocaleDateString()
+                  : "--"}
               </Text>
             </TouchableOpacity>
           ))

@@ -1,20 +1,25 @@
 /** @format */
 
 export type LoanStatus =
+  | "pending_disbursement"
   | "active"
   | "completed"
   | "defaulted"
   | "overdue"
-  | "cancelled";
+  | "cancelled"
+  | "unknown";
 
 export type ApplicationStatus =
   | "draft"
+  | "submitted"
   | "pending"
   | "under_review"
   | "approved"
   | "rejected"
   | "cancelled"
-  | "funded";
+  | "withdrawn"
+  | "funded"
+  | "converted";
 
 export type PaymentStatus = "completed" | "pending" | "failed" | string;
 
@@ -85,15 +90,24 @@ export interface BorrowerRepayment {
   paidAt?: string;
   transactionReference?: string;
   paymentProofUrl?: string;
+  receiptDocumentId?: string;
   paymentMethod?: string;
   type?: string;
   timestamp?: string;
   lenderName?: string;
+  verificationStatus?: string;
+  statusLabel?: string;
+  statusDetail?: string;
+  installmentId?: string;
+  installmentNumber?: number;
+  paidAmount?: number;
+  totalInstallmentAmount?: number;
 }
 
 export interface BorrowerApplication {
   applicationId?: string;
   requestId?: string;
+  convertedLoanId?: string | null;
   adId?: string;
   status?: ApplicationStatus;
   createdAt?: string;

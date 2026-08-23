@@ -1,4 +1,17 @@
 import { useEffect, useState, type FormEvent } from "react";
+import {
+  BadgeCheck,
+  Building2,
+  Clock3,
+  Mail,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  Star,
+  UserRound,
+  WalletCards,
+  X,
+} from "lucide-react";
 import type { LenderSession } from "../../lib/lender-session";
 import {
   fetchLenderProfile,
@@ -78,7 +91,7 @@ export default function LenderProfileModal({
         setIsLoading(true);
         setError(null);
         setSuccessMessage(null);
-        const loadedProfile = await fetchLenderProfile();
+        const loadedProfile = await fetchLenderProfile(session.lenderId);
 
         if (isMounted) {
           setProfile(loadedProfile);
@@ -134,6 +147,15 @@ export default function LenderProfileModal({
     return null;
   }
 
+  const profileInitial = (
+    profile?.businessName ||
+    profile?.fullName ||
+    session.displayName ||
+    "L"
+  )
+    .slice(0, 1)
+    .toUpperCase();
+
   function updateField<Key extends keyof ProfileFormState>(
     key: Key,
     value: ProfileFormState[Key],
@@ -155,25 +177,23 @@ export default function LenderProfileModal({
       return;
     }
 
-    const nextProfile = {
-      fullName: formState.fullName.trim(),
-      email: formState.email.trim(),
-      phone: formState.phone.trim(),
-      address: formState.address.trim(),
-      city: formState.city.trim(),
-      district: formState.district.trim(),
-      businessName: formState.businessName.trim(),
-      responseTimeHours: Number(formState.responseTimeHours),
-      preferredRegions: formState.preferredRegions
-        .split(",")
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0),
-    };
-
     try {
       setIsSaving(true);
       setError(null);
-      const updatedProfile = await updateLenderProfile(nextProfile);
+      const updatedProfile = await updateLenderProfile(session.lenderId, {
+        fullName: formState.fullName,
+        email: formState.email,
+        phone: formState.phone,
+        address: formState.address,
+        city: formState.city,
+        district: formState.district,
+        businessName: formState.businessName,
+        responseTimeHours: Number(formState.responseTimeHours),
+        preferredRegions: formState.preferredRegions
+          .split(",")
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0),
+      });
 
       setProfile(updatedProfile);
       setFormState(toFormState(updatedProfile));
@@ -203,28 +223,31 @@ export default function LenderProfileModal({
         aria-labelledby="lender-profile-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="borrower-modal__header">
-          <div>
-            <p className="eyebrow">Lender profile</p>
-            <h2 className="section-title" id="lender-profile-title">
-              Edit your profile
-            </h2>
-            <p className="section-subtitle">
-              Update the business details borrowers and internal workflows rely
-              on.
-            </p>
+        <header className="lender-profile-modal__header">
+          <div className="lender-profile-modal__heading">
+            <span
+              className="lender-profile-modal__heading-icon"
+              aria-hidden="true"
+            >
+              <UserRound size={20} />
+            </span>
+            <div>
+              <p className="eyebrow">Account settings</p>
+              <h2 id="lender-profile-title">Lender profile</h2>
+              <p>Keep your account and business information accurate.</p>
+            </div>
           </div>
           <button
             type="button"
-            className="borrower-modal__close"
+            className="lender-profile-modal__close"
             aria-label="Close profile editor"
             onClick={onClose}
           >
-            X
+            <X size={20} />
           </button>
-        </div>
+        </header>
 
-        <div className="borrower-modal__body">
+        <div className="lender-profile-modal__body">
           {isLoading ? (
             <div className="borrower-modal__state">Loading profile...</div>
           ) : error && !formState ? (
@@ -232,194 +255,250 @@ export default function LenderProfileModal({
               {error}
             </div>
           ) : profile && formState ? (
-            <div className="borrower-modal__content">
-              <section className="lender-profile-summary">
-                <article className="borrower-detail-card">
-                  <p className="borrower-detail-card__label">KYC Status</p>
-                  <p className="borrower-detail-card__value">
-                    {formatLabel(profile.kycStatus)}
-                  </p>
-                </article>
-                <article className="borrower-detail-card">
-                  <p className="borrower-detail-card__label">
-                    Available Capital
-                  </p>
-                  <p className="borrower-detail-card__value">
-                    {formatCurrency(profile.availableCapital)}
-                  </p>
-                </article>
-                <article className="borrower-detail-card">
-                  <p className="borrower-detail-card__label">Rating</p>
-                  <p className="borrower-detail-card__value">
-                    {profile.rating !== null
-                      ? profile.rating.toFixed(1)
-                      : "Not available"}
-                  </p>
-                </article>
-                <article className="borrower-detail-card">
-                  <p className="borrower-detail-card__label">Registration No</p>
-                  <p className="borrower-detail-card__value">
-                    {profile.businessRegistrationNo ?? "Not available"}
-                  </p>
-                </article>
-              </section>
-
-              {successMessage ? (
-                <p className="create-ad-banner create-ad-banner--primary">
-                  {successMessage}
-                </p>
-              ) : null}
-              {error ? (
-                <p className="create-ad-banner create-ad-banner--error">
-                  {error}
-                </p>
-              ) : null}
-
-              <form className="lender-profile-form" onSubmit={handleSubmit}>
-                <div className="create-ad-form-grid">
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">Full Name</span>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formState.fullName}
-                      required
-                      onChange={(event) =>
-                        updateField("fullName", event.target.value)
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Business Name
-                    </span>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formState.businessName}
-                      required
-                      onChange={(event) =>
-                        updateField("businessName", event.target.value)
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">Email</span>
-                    <input
-                      className="input"
-                      type="email"
-                      value={formState.email}
-                      required
-                      onChange={(event) =>
-                        updateField("email", event.target.value)
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">Phone</span>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formState.phone}
-                      onChange={(event) =>
-                        updateField("phone", event.target.value)
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field create-ad-field--full">
-                    <span className="create-ad-field__label">Address</span>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formState.address}
-                      onChange={(event) =>
-                        updateField("address", event.target.value)
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">City</span>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formState.city}
-                      required
-                      onChange={(event) =>
-                        updateField("city", event.target.value)
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">District</span>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formState.district}
-                      required
-                      onChange={(event) =>
-                        updateField("district", event.target.value)
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Response Time (hours)
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      min="1"
-                      max="72"
-                      value={formState.responseTimeHours}
-                      required
-                      onChange={(event) =>
-                        updateField("responseTimeHours", event.target.value)
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field create-ad-field--full">
-                    <span className="create-ad-field__label">
-                      Preferred Regions
-                    </span>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formState.preferredRegions}
-                      onChange={(event) =>
-                        updateField("preferredRegions", event.target.value)
-                      }
-                      placeholder="Colombo, Kandy, Galle"
-                    />
-                  </label>
+            <form className="lender-profile-form" onSubmit={handleSubmit}>
+              <aside className="lender-profile-overview">
+                <div className="lender-profile-identity">
+                  <div
+                    className="lender-profile-identity__avatar"
+                    aria-hidden="true"
+                  >
+                    {profileInitial}
+                  </div>
+                  <div>
+                    <h3>{profile.businessName || profile.fullName}</h3>
+                    <p>{profile.email}</p>
+                  </div>
                 </div>
+
+                <div className="lender-profile-verification">
+                  <ShieldCheck size={18} aria-hidden="true" />
+                  <div>
+                    <span>Verification status</span>
+                    <strong>{formatLabel(profile.kycStatus)}</strong>
+                  </div>
+                </div>
+
+                <dl className="lender-profile-facts">
+                  <div>
+                    <dt>
+                      <WalletCards size={17} /> Available capital
+                    </dt>
+                    <dd>{formatCurrency(profile.availableCapital)}</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      <Star size={17} /> Account rating
+                    </dt>
+                    <dd>
+                      {profile.rating !== null
+                        ? `${profile.rating.toFixed(1)} / 5`
+                        : "Not available"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>
+                      <BadgeCheck size={17} /> Registration
+                    </dt>
+                    <dd>{profile.businessRegistrationNo ?? "Not available"}</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      <Clock3 size={17} /> Response target
+                    </dt>
+                    <dd>{profile.responseTimeHours} hours</dd>
+                  </div>
+                </dl>
+
+                <p className="lender-profile-overview__note">
+                  These details support borrower communication and lender
+                  account verification.
+                </p>
+              </aside>
+
+              <div className="lender-profile-editor">
+                {successMessage ? (
+                  <div className="lender-profile-notice lender-profile-notice--success">
+                    <BadgeCheck size={18} /> {successMessage}
+                  </div>
+                ) : null}
+                {error ? (
+                  <div className="lender-profile-notice lender-profile-notice--error">
+                    {error}
+                  </div>
+                ) : null}
+
+                <section className="lender-profile-section">
+                  <div className="lender-profile-section__heading">
+                    <span>
+                      <UserRound size={18} />
+                    </span>
+                    <div>
+                      <h3>Account information</h3>
+                      <p>Your primary identity and contact details.</p>
+                    </div>
+                  </div>
+                  <div className="lender-profile-fields">
+                    <label className="lender-profile-field">
+                      <span>Full name</span>
+                      <input
+                        className="input"
+                        type="text"
+                        autoComplete="name"
+                        required
+                        value={formState.fullName}
+                        onChange={(event) =>
+                          updateField("fullName", event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="lender-profile-field">
+                      <span>Email address</span>
+                      <input
+                        className="input"
+                        type="email"
+                        autoComplete="email"
+                        required
+                        value={formState.email}
+                        onChange={(event) =>
+                          updateField("email", event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="lender-profile-field lender-profile-field--full">
+                      <span>Phone number</span>
+                      <input
+                        className="input"
+                        type="tel"
+                        autoComplete="tel"
+                        value={formState.phone}
+                        onChange={(event) =>
+                          updateField("phone", event.target.value)
+                        }
+                      />
+                    </label>
+                  </div>
+                </section>
+
+                <section className="lender-profile-section">
+                  <div className="lender-profile-section__heading">
+                    <span>
+                      <Building2 size={18} />
+                    </span>
+                    <div>
+                      <h3>Business details</h3>
+                      <p>Information shown throughout your lender workspace.</p>
+                    </div>
+                  </div>
+                  <div className="lender-profile-fields">
+                    <label className="lender-profile-field lender-profile-field--full">
+                      <span>Business name</span>
+                      <input
+                        className="input"
+                        type="text"
+                        autoComplete="organization"
+                        value={formState.businessName}
+                        onChange={(event) =>
+                          updateField("businessName", event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="lender-profile-field lender-profile-field--full">
+                      <span>Business address</span>
+                      <input
+                        className="input"
+                        type="text"
+                        autoComplete="street-address"
+                        value={formState.address}
+                        onChange={(event) =>
+                          updateField("address", event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="lender-profile-field">
+                      <span>City</span>
+                      <input
+                        className="input"
+                        type="text"
+                        autoComplete="address-level2"
+                        value={formState.city}
+                        onChange={(event) =>
+                          updateField("city", event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="lender-profile-field">
+                      <span>District</span>
+                      <input
+                        className="input"
+                        type="text"
+                        autoComplete="address-level1"
+                        value={formState.district}
+                        onChange={(event) =>
+                          updateField("district", event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="lender-profile-field">
+                      <span>Response time (hours)</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min="1"
+                        max="72"
+                        value={formState.responseTimeHours}
+                        onChange={(event) =>
+                          updateField("responseTimeHours", event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="lender-profile-field">
+                      <span>Preferred regions</span>
+                      <input
+                        className="input"
+                        type="text"
+                        value={formState.preferredRegions}
+                        onChange={(event) =>
+                          updateField("preferredRegions", event.target.value)
+                        }
+                        placeholder="Colombo, Kandy, Galle"
+                      />
+                    </label>
+                  </div>
+                </section>
 
                 <div className="lender-profile-form__actions">
-                  <button
-                    type="button"
-                    className="create-ad-button create-ad-button--ghost"
-                    onClick={() => setFormState(toFormState(profile))}
-                    disabled={isSaving}
-                  >
-                    Reset Changes
-                  </button>
-                  <button
-                    type="submit"
-                    className="create-ad-button create-ad-button--primary"
-                    disabled={isSaving}
-                  >
-                    {isSaving ? "Saving..." : "Save Profile"}
-                  </button>
+                  <p>
+                    <Mail size={16} /> Changes update your lender account
+                    profile.
+                  </p>
+                  <div>
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      onClick={() => setFormState(toFormState(profile))}
+                      disabled={isSaving}
+                    >
+                      <RotateCcw size={16} /> Reset
+                    </button>
+                    <button
+                      type="submit"
+                      className="button button-primary"
+                      disabled={isSaving}
+                    >
+                      <Save size={16} />
+                      {isSaving ? "Saving..." : "Save changes"}
+                    </button>
+                  </div>
                 </div>
-              </form>
-            </div>
+              </div>
+            </form>
           ) : null}
         </div>
       </section>

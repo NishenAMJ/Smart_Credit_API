@@ -7,7 +7,6 @@ import { getUserId } from "../../utils/auth.storage";
 import type { BorrowerLoan, LoanStatus } from "../../types/borrower";
 
 const FALLBACK_LENDER_NAME = "Lender";
-const ACTIVE_LOAN_STATUS: LoanStatus = "active";
 
 type LoanListResponse = {
   success?: boolean;
@@ -43,7 +42,7 @@ function normalizeLoan(loan: Partial<BorrowerLoan>): BorrowerLoan {
         ? 0
         : (loan.totalRepayable ?? principalAmount)),
     nextDueDate: loan.nextDueDate,
-    isFeatured: loan.isFeatured ?? loan.status === ACTIVE_LOAN_STATUS,
+    isFeatured: loan.isFeatured === true,
   };
 }
 
@@ -126,15 +125,11 @@ export const loanService = {
   },
 
   getAvailableLoans: async () => {
-    const borrowerId = await getUserId();
-    if (!borrowerId)
+    if (!(await getUserId()))
       throw new Error("User session expired. Please log in again.");
 
     const response = await apiClient.get<LoanListResponse>(
-      ENDPOINTS.loans.filter,
-      {
-        params: { borrowerId },
-      },
+      ENDPOINTS.loans.search,
     );
     return {
       ...response.data,

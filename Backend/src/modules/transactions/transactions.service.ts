@@ -5,16 +5,23 @@ import {
   QuerySnapshot,
   Timestamp,
 } from 'firebase-admin/firestore';
-import { Observable } from 'rxjs';
+import { map, Observable, shareReplay } from 'rxjs';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
 
 @Injectable()
 export class TransactionsService {
   private static readonly MAX_PAGE_SIZE = 100;
+  private static readonly USER_CACHE_TTL_MS = 5 * 60_000;
+  private sharedStream?: Observable<TransactionsResponse>;
+  private readonly userCache = new Map<
+    string,
+    { value: UserSummary | null; expiresAt: number }
+  >();
 
   constructor(private readonly firebaseService: FirebaseService) {}
 
+  // Fetch a page of transactions for the admin table.
   async getTransactions(
     limit = 25,
     cursor?: string,
@@ -45,48 +52,70 @@ export class TransactionsService {
     }
   }
 
+  // Keep sending transaction updates whenever the collection changes.
   streamTransactions(limit = 100): Observable<{ data: TransactionsResponse }> {
-    return new Observable((subscriber) => {
-      const query = this.firebaseService.db
-        .collection('transactions')
-        .orderBy('createdAt', 'desc')
-        .limit(limit);
+    if (!this.sharedStream) {
+      this.sharedStream = new Observable<TransactionsResponse>((subscriber) => {
+        const query = this.firebaseService.db
+          .collection('transactions')
+          .orderBy('createdAt', 'desc')
+          .limit(TransactionsService.MAX_PAGE_SIZE);
 
-      const unsubscribe = query.onSnapshot(
-        async (snapshot) => {
-          try {
-            subscriber.next({
-              data: await this.buildTransactionsResponse(snapshot),
-            });
-          } catch (error) {
-            subscriber.next({
-              data: {
-                success: false,
-                count: 0,
-                totalAmount: 0,
-                transactions: [],
-                error: this.getErrorMessage(error),
+        const unsubscribe = query.onSnapshot(
+          (snapshot) => {
+            void this.buildTransactionsResponse(snapshot).then(
+              (response) => subscriber.next(response),
+              (error: unknown) => {
+                subscriber.next({
+                  success: false,
+                  count: 0,
+                  totalAmount: 0,
+                  transactions: [],
+                  error: this.getErrorMessage(error),
+                });
               },
-            });
-          }
-        },
-        (error) => {
-          subscriber.next({
-            data: {
+            );
+          },
+          (error) => {
+            subscriber.next({
               success: false,
               count: 0,
               totalAmount: 0,
               transactions: [],
               error: this.getErrorMessage(error),
-            },
-          });
-        },
-      );
+            });
+          },
+        );
 
-      return () => unsubscribe();
-    });
+        return () => unsubscribe();
+      }).pipe(shareReplay({ bufferSize: 1, refCount: true }));
+    }
+
+    const pageSize = Math.min(limit, TransactionsService.MAX_PAGE_SIZE);
+    return this.sharedStream.pipe(
+      map((response) => ({ data: this.limitResponse(response, pageSize) })),
+    );
   }
 
+  private limitResponse(
+    response: TransactionsResponse,
+    limit: number,
+  ): TransactionsResponse {
+    const transactions = response.transactions.slice(0, limit);
+    return {
+      ...response,
+      count: transactions.length,
+      transactions,
+      totalAmount: transactions.reduce((sum, item) => sum + item.amount, 0),
+      hasMore: response.transactions.length > limit,
+      nextCursor:
+        response.transactions.length > limit
+          ? transactions[transactions.length - 1]?.id
+          : undefined,
+    };
+  }
+
+  // Build the final response object for one transaction page.
   private async buildTransactionsResponse(
     snapshot: QuerySnapshot,
     limit = snapshot.size,
@@ -112,6 +141,7 @@ export class TransactionsService {
     };
   }
 
+  // Load related users so lender and borrower names can be shown.
   private async getUsersById(
     docs: Array<{ data(): DocumentData }>,
   ): Promise<Record<string, UserSummary>> {
@@ -119,9 +149,15 @@ export class TransactionsService {
 
     docs.forEach((doc) => {
       const transaction = doc.data();
-      if (typeof transaction.lenderId === 'string')
+      if (
+        typeof transaction.lenderId === 'string' &&
+        !this.asString(transaction.lenderName)
+      )
         ids.add(transaction.lenderId);
-      if (typeof transaction.borrowerId === 'string')
+      if (
+        typeof transaction.borrowerId === 'string' &&
+        !this.asString(transaction.borrowerName)
+      )
         ids.add(transaction.borrowerId);
     });
 
@@ -129,27 +165,45 @@ export class TransactionsService {
       return {};
     }
 
-    const refs: Array<DocumentReference<DocumentData>> = [...ids].map((id) =>
+    const now = Date.now();
+    const users: Record<string, UserSummary> = {};
+    const missing = [...ids].filter((id) => {
+      const cached = this.userCache.get(id);
+      if (!cached || cached.expiresAt <= now) return true;
+      if (cached.value) users[id] = cached.value;
+      return false;
+    });
+    if (!missing.length) return users;
+
+    const refs: Array<DocumentReference<DocumentData>> = missing.map((id) =>
       this.firebaseService.db.collection('users').doc(id),
     );
     const userDocs = await this.firebaseService.db.getAll(...refs);
-
-    return userDocs.reduce<Record<string, UserSummary>>((users, doc) => {
+    userDocs.forEach((doc) => {
       if (!doc.exists) {
-        return users;
+        this.userCache.set(doc.id, {
+          value: null,
+          expiresAt: now + TransactionsService.USER_CACHE_TTL_MS,
+        });
+        return;
       }
 
       const user = doc.data() ?? {};
-      users[doc.id] = {
+      const summary = {
         id: doc.id,
         email: typeof user.email === 'string' ? user.email : undefined,
         name: this.getUserName(user, doc.id),
       };
-
-      return users;
-    }, {});
+      users[doc.id] = summary;
+      this.userCache.set(doc.id, {
+        value: summary,
+        expiresAt: now + TransactionsService.USER_CACHE_TTL_MS,
+      });
+    });
+    return users;
   }
 
+  // Convert one Firestore transaction document into a response row.
   private toTransactionRecord(
     id: string,
     transaction: DocumentData,
@@ -173,8 +227,14 @@ export class TransactionsService {
         this.asString(transaction.borrowerName) ?? borrower?.name ?? borrowerId,
       borrowerEmail:
         this.asString(transaction.borrowerEmail) ?? borrower?.email,
-      amount: this.asNumber(transaction.amount),
-      platformFee: this.asNumber(transaction.platformFee ?? transaction.fee),
+      amount:
+        typeof transaction.amountMinor === 'number'
+          ? transaction.amountMinor / 100
+          : this.asNumber(transaction.amount),
+      platformFee:
+        typeof transaction.platformFeeMinor === 'number'
+          ? transaction.platformFeeMinor / 100
+          : this.asNumber(transaction.platformFee ?? transaction.fee),
       paymentType:
         this.asString(transaction.paymentType) ??
         this.asString(transaction.type) ??
@@ -187,6 +247,7 @@ export class TransactionsService {
     };
   }
 
+  // Decide which status should be shown in the admin list.
   private getTransactionStatus(transaction: DocumentData): TransactionStatus {
     const status = this.asString(transaction.status);
 
@@ -197,6 +258,7 @@ export class TransactionsService {
     return transaction.verifiedByLender === true ? 'completed' : 'pending';
   }
 
+  // Pick the best available display name for a user.
   private getUserName(user: DocumentData, fallback: string): string {
     const fullName = this.asString(user.fullName);
     const firstName = this.asString(user.firstName);
@@ -213,15 +275,18 @@ export class TransactionsService {
     return this.asString(user.email) ?? fallback;
   }
 
+  // Safely convert any value into a number.
   private asNumber(value: unknown): number {
     const numberValue = Number(value ?? 0);
     return Number.isFinite(numberValue) ? numberValue : 0;
   }
 
+  // Safely convert any value into a trimmed string.
   private asString(value: unknown): string | undefined {
     return typeof value === 'string' && value.trim() ? value.trim() : undefined;
   }
 
+  // Convert Firestore timestamps or date-like values into ISO strings.
   private toIsoDate(value: unknown): string | undefined {
     if (!value) {
       return undefined;
@@ -250,6 +315,7 @@ export class TransactionsService {
     return undefined;
   }
 
+  // Turn any thrown error into a readable SSE fallback message.
   private getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
   }

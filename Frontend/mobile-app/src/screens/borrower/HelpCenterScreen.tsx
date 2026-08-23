@@ -13,22 +13,23 @@ import { Feather } from "@expo/vector-icons";
 import {
   helpCenterCategories,
   helpCenterFaqs,
+  type HelpCategory,
 } from "../../constants/supportContent";
+import { COLORS } from "../../constants/colors";
+import { SPACING } from "../../constants/spacing";
+import { BORDER_RADIUS } from "../../constants/borderRadius";
 import type { BorrowerNavigation } from "../../types/navigation";
 
 type HelpCenterScreenProps = {
   navigation: BorrowerNavigation;
 };
 
-/**
- * Shows borrower help center resources and support topics.
- */
 export default function HelpCenterScreen({
   navigation,
 }: HelpCenterScreenProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<
-    "All" | "Borrower" | "Lender" | "Technical"
+    "All" | HelpCategory
   >("All");
   const [expandedFaqId, setExpandedFaqId] = useState<string | null>(null);
 
@@ -36,53 +37,63 @@ export default function HelpCenterScreen({
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     return helpCenterFaqs.filter((faq) => {
-      const categoryMatch =
+      const categoryMatches =
         selectedCategory === "All" || faq.category === selectedCategory;
-
-      if (!categoryMatch) {
-        return false;
-      }
-
-      if (!normalizedQuery) {
-        return true;
-      }
-
-      return (
+      const searchMatches =
+        !normalizedQuery ||
         faq.question.toLowerCase().includes(normalizedQuery) ||
-        faq.answer.toLowerCase().includes(normalizedQuery)
-      );
+        faq.answer.toLowerCase().includes(normalizedQuery);
+      return categoryMatches && searchMatches;
     });
   }, [searchQuery, selectedCategory]);
-
-  const onToggleFaq = (faqId: string) => {
-    setExpandedFaqId((current) => (current === faqId ? null : faqId));
-  };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Help Center</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Feather name="arrow-left" size={22} color={COLORS.surface} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Help Center</Text>
       </View>
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        <View style={styles.intro}>
+          <Text style={styles.introTitle}>Find an answer</Text>
+          <Text style={styles.introText}>
+            Search borrower guidance for loans, payments, and your account.
+          </Text>
+        </View>
+
         <View style={styles.searchContainer}>
-          <Feather name="search" size={18} color="#6B7280" />
+          <Feather name="search" size={19} color="#667085" />
           <TextInput
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search for help topics..."
-            placeholderTextColor="#9CA3AF"
+            placeholder="Search help topics"
+            placeholderTextColor="#98A2B3"
+            returnKeyType="search"
           />
+          {searchQuery ? (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={() => setSearchQuery("")}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <Feather name="x" size={18} color="#667085" />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <ScrollView
@@ -100,6 +111,8 @@ export default function HelpCenterScreen({
                   isActive && styles.categoryChipActive,
                 ]}
                 onPress={() => setSelectedCategory(category)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
               >
                 <Text
                   style={[
@@ -114,55 +127,85 @@ export default function HelpCenterScreen({
           })}
         </ScrollView>
 
-        <View style={styles.faqCard}>
-          {filteredFaqs.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Feather name="help-circle" size={30} color="#9CA3AF" />
-              <Text style={styles.emptyStateTitle}>No matching FAQ found</Text>
-              <Text style={styles.emptyStateText}>
-                Try another keyword or open Support chat for help.
-              </Text>
-            </View>
-          ) : (
-            filteredFaqs.map((faq) => {
-              const isExpanded = expandedFaqId === faq.id;
+        <View style={styles.resultHeader}>
+          <Text style={styles.resultTitle}>Frequently asked questions</Text>
+          <Text style={styles.resultCount}>{filteredFaqs.length}</Text>
+        </View>
 
+        {filteredFaqs.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Feather name="search" size={24} color="#667085" />
+            </View>
+            <Text style={styles.emptyStateTitle}>No matching answer</Text>
+            <Text style={styles.emptyStateText}>
+              Try a different keyword or send the support team a message.
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyAction}
+              onPress={() => navigation.navigate("ContactSupport")}
+            >
+              <Text style={styles.emptyActionText}>Contact support</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.faqList}>
+            {filteredFaqs.map((faq) => {
+              const isExpanded = expandedFaqId === faq.id;
               return (
                 <TouchableOpacity
                   key={faq.id}
-                  style={styles.faqItem}
-                  onPress={() => onToggleFaq(faq.id)}
+                  style={[styles.faqItem, isExpanded && styles.faqItemExpanded]}
+                  onPress={() =>
+                    setExpandedFaqId((current) =>
+                      current === faq.id ? null : faq.id,
+                    )
+                  }
+                  activeOpacity={0.84}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isExpanded }}
                 >
                   <View style={styles.faqHeader}>
-                    <View style={styles.faqHeaderLeft}>
+                    <View style={styles.faqHeaderCopy}>
                       <Text style={styles.faqCategory}>{faq.category}</Text>
                       <Text style={styles.faqQuestion}>{faq.question}</Text>
                     </View>
-                    <Feather
-                      name={isExpanded ? "chevron-up" : "chevron-down"}
-                      size={18}
-                      color="#6B7280"
-                    />
+                    <View style={styles.chevronWrap}>
+                      <Feather
+                        name={isExpanded ? "chevron-up" : "chevron-down"}
+                        size={18}
+                        color="#667085"
+                      />
+                    </View>
                   </View>
-
                   {isExpanded ? (
                     <Text style={styles.faqAnswer}>{faq.answer}</Text>
                   ) : null}
                 </TouchableOpacity>
               );
-            })
-          )}
-        </View>
+            })}
+          </View>
+        )}
 
-        <TouchableOpacity
-          style={styles.contactButton}
-          onPress={() => navigation.navigate("ContactSupport")}
-        >
-          <Feather name="message-circle" size={16} color="#FFFFFF" />
-          <Text style={styles.contactButtonText}>
-            Still need help? Contact Support
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.contactCard}>
+          <View style={styles.contactIcon}>
+            <Feather name="message-square" size={20} color={COLORS.primary} />
+          </View>
+          <View style={styles.contactCopy}>
+            <Text style={styles.contactTitle}>Still need help?</Text>
+            <Text style={styles.contactText}>
+              Send the support team the details of your issue.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.contactButton}
+            onPress={() => navigation.navigate("ContactSupport")}
+            accessibilityRole="button"
+            accessibilityLabel="Contact support"
+          >
+            <Feather name="arrow-right" size={18} color={COLORS.surface} />
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
@@ -171,148 +214,260 @@ export default function HelpCenterScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: "#007AFF",
+    minHeight: 107,
     paddingTop: 50,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
+    paddingBottom: 12,
+    paddingHorizontal: SPACING.md,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    backgroundColor: COLORS.primary,
   },
-  headerLeft: {
-    flexDirection: "row",
+  backButton: {
+    width: 44,
+    height: 44,
     alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 22,
   },
   headerTitle: {
+    marginLeft: SPACING.xs,
+    color: COLORS.surface,
     fontSize: 18,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    marginLeft: 15,
+    fontWeight: "700",
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 26,
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xxl,
+  },
+  intro: {
+    marginBottom: SPACING.lg,
+  },
+  introTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  introText: {
+    marginTop: 4,
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
   },
   searchContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    minHeight: 50,
+    paddingLeft: SPACING.md,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: BORDER_RADIUS.medium,
+    backgroundColor: COLORS.surface,
   },
   searchInput: {
-    marginLeft: 8,
+    minHeight: 48,
     flex: 1,
+    paddingHorizontal: SPACING.sm,
+    color: COLORS.textPrimary,
     fontSize: 14,
-    color: "#111827",
+  },
+  clearButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   chipRow: {
-    paddingVertical: 4,
-    paddingRight: 6,
-    marginBottom: 12,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.lg,
+    paddingRight: SPACING.sm,
+    gap: SPACING.sm,
   },
   categoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#E5E7EB",
-    marginRight: 8,
+    minHeight: 40,
+    paddingHorizontal: SPACING.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
   },
   categoryChipActive: {
-    backgroundColor: "#DBEAFE",
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
   },
   categoryChipText: {
+    color: COLORS.textSecondary,
     fontSize: 12,
     fontWeight: "600",
-    color: "#374151",
   },
   categoryChipTextActive: {
-    color: "#1D4ED8",
+    color: COLORS.surface,
   },
-  faqCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+  resultHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.md,
+  },
+  resultTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  resultCount: {
+    minWidth: 26,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    overflow: "hidden",
+    borderRadius: 13,
+    backgroundColor: "#E7EEF5",
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  faqList: {
+    gap: SPACING.sm,
   },
   faqItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-    paddingVertical: 12,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.medium,
+    backgroundColor: COLORS.surface,
+  },
+  faqItemExpanded: {
+    borderColor: "#B8CCE0",
+    backgroundColor: "#FBFCFE",
   },
   faqHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
   },
-  faqHeaderLeft: {
+  faqHeaderCopy: {
     flex: 1,
-    marginRight: 10,
+    marginRight: SPACING.sm,
   },
   faqCategory: {
-    fontSize: 11,
-    color: "#2563EB",
-    fontWeight: "700",
     marginBottom: 4,
+    color: COLORS.primary,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   faqQuestion: {
+    color: COLORS.textPrimary,
     fontSize: 14,
-    color: "#111827",
     fontWeight: "600",
-    lineHeight: 19,
+    lineHeight: 20,
+  },
+  chevronWrap: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "#F2F4F7",
   },
   faqAnswer: {
-    marginTop: 8,
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    color: COLORS.textSecondary,
     fontSize: 13,
-    color: "#6B7280",
-    lineHeight: 19,
+    lineHeight: 20,
   },
   emptyState: {
     alignItems: "center",
-    paddingVertical: 26,
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.large,
+    backgroundColor: COLORS.surface,
   },
-  emptyStateTitle: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  emptyStateText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "#6B7280",
-    textAlign: "center",
-  },
-  contactButton: {
-    marginTop: 14,
-    backgroundColor: "#007AFF",
-    borderRadius: 10,
-    paddingVertical: 12,
+  emptyIcon: {
+    width: 48,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
+    borderRadius: 24,
+    backgroundColor: "#F2F4F7",
   },
-  contactButtonText: {
-    marginLeft: 6,
-    color: "#FFFFFF",
+  emptyStateTitle: {
+    marginTop: SPACING.md,
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  emptyStateText: {
+    marginTop: 5,
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  emptyAction: {
+    minHeight: 44,
+    marginTop: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: BORDER_RADIUS.medium,
+    backgroundColor: "#E7EEF5",
+  },
+  emptyActionText: {
+    color: COLORS.primary,
     fontSize: 13,
     fontWeight: "700",
+  },
+  contactCard: {
+    marginTop: SPACING.xl,
+    padding: SPACING.md,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BORDER_RADIUS.large,
+    backgroundColor: "#EAF0F5",
+  },
+  contactIcon: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: COLORS.surface,
+  },
+  contactCopy: {
+    flex: 1,
+    marginHorizontal: SPACING.md,
+  },
+  contactTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  contactText: {
+    marginTop: 3,
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  contactButton: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+    backgroundColor: COLORS.primary,
   },
 });

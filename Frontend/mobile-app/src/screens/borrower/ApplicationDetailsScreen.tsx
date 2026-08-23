@@ -34,7 +34,7 @@ const STATUS_STEPS: {
   { key: "pending", label: "Submitted", icon: "send" },
   { key: "under_review", label: "Under Review", icon: "eye" },
   { key: "approved", label: "Approved", icon: "check-circle" },
-  { key: "funded", label: "Funded", icon: "dollar-sign" },
+  { key: "converted", label: "Agreement Created", icon: "file-text" },
 ];
 
 const STATUS_COLOR: Record<string, string> = {
@@ -42,6 +42,7 @@ const STATUS_COLOR: Record<string, string> = {
   under_review: "#3B82F6",
   approved: "#10B981",
   funded: "#059669",
+  converted: "#059669",
   rejected: "#EF4444",
   cancelled: "#6B7280",
 };
@@ -164,6 +165,22 @@ export default function ApplicationDetailsScreen({
           ) : null}
         </View>
 
+        {status === "converted" && application?.convertedLoanId ? (
+          <TouchableOpacity
+            style={styles.agreementButton}
+            onPress={() =>
+              navigation.navigate("LoanAgreement", {
+                initialLoanId: application.convertedLoanId ?? undefined,
+              })
+            }
+          >
+            <Feather name="file-text" size={18} color="#FFFFFF" />
+            <Text style={styles.agreementButtonText}>
+              Review and sign agreement
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
         {/* Status Timeline */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Application Timeline</Text>
@@ -246,6 +263,17 @@ const styles = StyleSheet.create({
   backButton: { width: 40, justifyContent: "center" },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#FFFFFF" },
   scrollContent: { padding: SPACING.lg, paddingBottom: 60 },
+  agreementButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: SPACING.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  agreementButtonText: { color: "#FFFFFF", fontWeight: "700" },
   statusBadgeCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,

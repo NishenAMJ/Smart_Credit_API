@@ -1,5 +1,6 @@
 export interface AdminAuthResponse {
   accessToken: string;
+  availableRoles: Array<"admin" | "borrower" | "lender">;
   user: {
     uid: string;
     email: string;

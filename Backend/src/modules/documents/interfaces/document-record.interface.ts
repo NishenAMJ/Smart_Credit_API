@@ -1,4 +1,8 @@
-export type DocumentCategory = 'kyc' | 'agreement';
+export type DocumentCategory =
+  | 'kyc'
+  | 'agreement'
+  | 'dispute_evidence'
+  | 'payment_receipt';
 export type DocumentStatus =
   | 'pending_review'
   | 'approved'
@@ -10,7 +14,13 @@ export type DocumentStatus =
 export type DocumentSource = 'user_upload' | 'system_generated';
 
 /** The type of entity this document is linked to. */
-export type DocumentRelatedEntityType = 'user' | 'loan' | 'legal_document';
+export type DocumentRelatedEntityType =
+  | 'user'
+  | 'loan'
+  | 'ad_boost'
+  | 'legal_document'
+  | 'loan_agreement'
+  | 'dispute';
 
 export type ReviewInfo = {
   reviewedAt?: unknown;
@@ -28,6 +38,10 @@ export type DeleteInfo = {
 export interface DocumentRecord {
   id: string;
   userId: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  userKycStatus?: string;
   category: DocumentCategory;
   documentType: string;
   originalFilename: string;
@@ -55,6 +69,9 @@ export interface DocumentRecord {
   createdAt: unknown;
   updatedAt: unknown;
   deletedAt?: unknown;
+  reviewerId?: string;
+  reviewTimestamp?: unknown;
+  reviewNotes?: string;
   review?: ReviewInfo;
   deletion?: DeleteInfo;
 }

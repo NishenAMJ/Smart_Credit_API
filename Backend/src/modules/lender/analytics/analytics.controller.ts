@@ -26,23 +26,23 @@ export class AnalyticsController {
 
   @Get('summary')
   getSummary(
-    @Req() req: AuthenticatedRequest,
+    @Req() request: AuthenticatedRequest,
     @Query('range', new DefaultValuePipe('90d')) range?: string,
   ): Promise<AnalyticsSummaryResponse> {
-    return this.analyticsService.getSummary(req.user.sub, range);
+    return this.analyticsService.getSummary(request.user.sub, range);
   }
 
   @Get('overview')
   getOverview(
-    @Req() req: AuthenticatedRequest,
+    @Req() request: AuthenticatedRequest,
     @Query('range', new DefaultValuePipe('90d')) range?: string,
   ): Promise<AnalyticsOverviewResponse> {
-    return this.analyticsService.getOverview(req.user.sub, range);
+    return this.analyticsService.getOverview(request.user.sub, range);
   }
 
   @Get('drilldown')
   getDrilldown(
-    @Req() req: AuthenticatedRequest,
+    @Req() request: AuthenticatedRequest,
     @Query('type') type?: string,
     @Query('range', new DefaultValuePipe('90d')) range?: string,
     @Query('pageSize') pageSize?: string,
@@ -54,7 +54,7 @@ export class AnalyticsController {
     }
 
     return this.analyticsService.getDrilldown(
-      req.user.sub,
+      request.user.sub,
       type,
       range,
       this.toNumber(pageSize) ?? this.toNumber(limit) ?? 30,

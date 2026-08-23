@@ -1,13 +1,32 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  BellRing,
+  Check,
+  CircleAlert,
+  Clock3,
+  LogOut,
+  RefreshCw,
+  ShieldCheck,
+  Smartphone,
+  UploadCloud,
+  UserRound,
+} from "lucide-react";
 import type { LenderSession } from "../lib/lender-session";
+import {
+  fetchLenderProfile,
+  type LenderProfile,
+} from "../lib/lender-profile-api";
 import {
   fetchLenderSettings,
   updateLenderSettings,
-  type DefaultAnalyticsRange,
-  type DefaultLandingPage,
   type LenderSettings,
   type LenderSettingsNotifications,
 } from "../lib/lender-settings-api";
+import {
+  fetchMyKycSubmission,
+  resubmitLenderKyc,
+  type LenderKycSubmission,
+} from "../lib/lender-kyc-api";
 
 type SettingsPageProps = {
   session: LenderSession;
@@ -15,122 +34,85 @@ type SettingsPageProps = {
   onOpenProfile: () => void;
 };
 
-type SettingsFormState = {
-  notifications: LenderSettingsNotifications;
-  lendingDefaults: {
-    defaultInterestRate: string;
-    defaultMaxTenureMonths: string;
-    defaultMinAmount: string;
-    defaultMaxAmount: string;
-    preferredPurposes: string;
-    preferredRegions: string;
-    defaultResponseTimeHours: string;
-  };
-  workspace: {
-    defaultLandingPage: DefaultLandingPage;
-    defaultAnalyticsRange: DefaultAnalyticsRange;
-    pendingRequestsPageSize: string;
-    borrowerTablePageSize: string;
-  };
-};
-
 const notificationPreferences = [
   {
-    title: "New loan requests",
-    description:
-      "Alert this lender when a borrower request enters the pipeline.",
-    inAppKey: "inAppNewRequests",
-    emailKey: "emailNewRequests",
+    title: "Loan requests",
+    description: "New applications and changes to their review status.",
+    icon: UserRound,
+    inAppKeys: ["inAppNewRequests", "inAppStatusUpdates"],
   },
   {
-    title: "Repayment transactions",
-    description: "Notify when lender-owned loans receive repayment activity.",
-    inAppKey: "inAppTransactions",
-    emailKey: "emailTransactions",
+    title: "Payments",
+    description: "Received repayments and overdue installment warnings.",
+    icon: Check,
+    inAppKeys: ["inAppTransactions", "inAppOverdues"],
   },
   {
-    title: "Request status updates",
-    description: "Notify when borrower requests move between review stages.",
-    inAppKey: "inAppStatusUpdates",
-    emailKey: "emailStatusUpdates",
+    title: "Advertisements",
+    description: "Reminders when an active advertisement is about to expire.",
+    icon: BellRing,
+    inAppKeys: ["inAppAdExpiry"],
   },
   {
-    title: "Overdue payment alerts",
-    description: "Highlight repayment stress in the active loan portfolio.",
-    inAppKey: "inAppOverdues",
-    emailKey: "emailOverdues",
+    title: "Disputes",
+    description: "Updates that require attention on an open dispute case.",
+    icon: ShieldCheck,
+    inAppKeys: ["inAppDisputes"],
   },
-  {
-    title: "Ad expiry reminders",
-    description: "Remind the lender when published ads are close to expiring.",
-    inAppKey: "inAppAdExpiry",
-    emailKey: "emailAdExpiry",
-  },
-  {
-    title: "Dispute alerts",
-    description: "Flag open disputes so lender support can respond quickly.",
-    inAppKey: "inAppDisputes",
-    emailKey: "emailDisputes",
-  },
-] as const satisfies Array<{
-  title: string;
-  description: string;
-  inAppKey: keyof LenderSettingsNotifications;
-  emailKey: keyof LenderSettingsNotifications;
-}>;
+] as const;
 
-function toFormState(settings: LenderSettings): SettingsFormState {
-  return {
-    notifications: { ...settings.notifications },
-    lendingDefaults: {
-      defaultInterestRate: String(settings.lendingDefaults.defaultInterestRate),
-      defaultMaxTenureMonths: String(
-        settings.lendingDefaults.defaultMaxTenureMonths,
-      ),
-      defaultMinAmount: String(settings.lendingDefaults.defaultMinAmount),
-      defaultMaxAmount: String(settings.lendingDefaults.defaultMaxAmount),
-      preferredPurposes: settings.lendingDefaults.preferredPurposes.join(", "),
-      preferredRegions: settings.lendingDefaults.preferredRegions.join(", "),
-      defaultResponseTimeHours: String(
-        settings.lendingDefaults.defaultResponseTimeHours,
-      ),
-    },
-    workspace: {
-      defaultLandingPage: settings.workspace.defaultLandingPage,
-      defaultAnalyticsRange: settings.workspace.defaultAnalyticsRange,
-      pendingRequestsPageSize: String(
-        settings.workspace.pendingRequestsPageSize,
-      ),
-      borrowerTablePageSize: String(settings.workspace.borrowerTablePageSize),
-    },
-  };
-}
+type PreferenceKey = keyof LenderSettingsNotifications;
 
-function splitList(value: string): string[] {
-  return value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-}
-
-function formatDate(value: string | null): string {
-  if (!value) {
-    return "Not updated yet";
-  }
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "Not updated yet";
-  }
-
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "Not updated yet";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not updated yet";
   return new Intl.DateTimeFormat("en-LK", {
     year: "numeric",
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(parsed);
+  }).format(date);
+}
+
+function titleCase(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function allEnabled(
+  notifications: LenderSettingsNotifications,
+  keys: readonly PreferenceKey[],
+): boolean {
+  return keys.every((key) => notifications[key]);
+}
+
+function fileToDataUrl(file: File, imagesOnly = false): Promise<string> {
+  const allowedTypes = imagesOnly
+    ? ["image/jpeg", "image/png", "image/webp"]
+    : ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error(
+      imagesOnly
+        ? "The selfie must be a JPG, PNG, or WEBP image."
+        : "KYC documents must be PDF, JPG, PNG, or WEBP files.",
+    );
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error("Each KYC file must be 10 MB or smaller.");
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("The selected file could not be read."));
+    reader.onerror = () =>
+      reject(new Error("The selected file could not be read."));
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function SettingsPage({
@@ -139,624 +121,476 @@ export default function SettingsPage({
   onOpenProfile,
 }: SettingsPageProps) {
   const [settings, setSettings] = useState<LenderSettings | null>(null);
-  const [formState, setFormState] = useState<SettingsFormState | null>(null);
+  const [notifications, setNotifications] =
+    useState<LenderSettingsNotifications | null>(null);
+  const [profile, setProfile] = useState<LenderProfile | null>(null);
+  const [kycSubmission, setKycSubmission] =
+    useState<LenderKycSubmission | null>(null);
+  const [kycFront, setKycFront] = useState<File | null>(null);
+  const [kycBack, setKycBack] = useState<File | null>(null);
+  const [kycSelfie, setKycSelfie] = useState<File | null>(null);
+  const [isResubmittingKyc, setIsResubmittingKyc] = useState(false);
+  const [kycError, setKycError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [profileWarning, setProfileWarning] = useState<string | null>(null);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+
+  async function loadPage() {
+    setIsLoading(true);
+    setError(null);
+    setProfileWarning(null);
+
+    const [settingsResult, profileResult, kycResult] = await Promise.allSettled(
+      [
+        fetchLenderSettings(session.lenderId),
+        fetchLenderProfile(session.lenderId),
+        fetchMyKycSubmission(),
+      ],
+    );
+
+    if (settingsResult.status === "fulfilled") {
+      setSettings(settingsResult.value);
+      setNotifications({ ...settingsResult.value.notifications });
+    } else {
+      setError(
+        settingsResult.reason instanceof Error
+          ? settingsResult.reason.message
+          : "Failed to load notification settings.",
+      );
+    }
+
+    if (profileResult.status === "fulfilled") {
+      setProfile(profileResult.value);
+    } else {
+      setProfileWarning("Profile details are temporarily unavailable.");
+    }
+
+    if (kycResult.status === "fulfilled") {
+      setKycSubmission(kycResult.value.submission);
+    }
+
+    setIsLoading(false);
+  }
 
   useEffect(() => {
-    let isMounted = true;
-
-    const loadSettings = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        setSuccessMessage(null);
-        const loadedSettings = await fetchLenderSettings();
-
-        if (isMounted) {
-          setSettings(loadedSettings);
-          setFormState(toFormState(loadedSettings));
-        }
-      } catch (loadError) {
-        if (isMounted) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load lender settings.",
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void loadSettings();
-
-    return () => {
-      isMounted = false;
-    };
+    void loadPage();
+    // The lender ID is the identity boundary for both requests.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.lenderId]);
 
   useEffect(() => {
-    if (!successMessage) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => setSuccessMessage(null), 2800);
+    if (!savedMessage) return;
+    const timeout = window.setTimeout(() => setSavedMessage(null), 3000);
     return () => window.clearTimeout(timeout);
-  }, [successMessage]);
+  }, [savedMessage]);
 
-  function updateNotification(
-    key: keyof LenderSettingsNotifications,
-    value: boolean,
-  ) {
-    setFormState((current) =>
-      current
-        ? {
-            ...current,
-            notifications: {
-              ...current.notifications,
-              [key]: value,
-            },
-          }
-        : current,
-    );
-  }
+  const isDirty = useMemo(
+    () =>
+      Boolean(
+        settings &&
+        notifications &&
+        JSON.stringify(settings.notifications) !==
+          JSON.stringify(notifications),
+      ),
+    [notifications, settings],
+  );
 
-  function updateLendingField<
-    Key extends keyof SettingsFormState["lendingDefaults"],
-  >(key: Key, value: SettingsFormState["lendingDefaults"][Key]) {
-    setFormState((current) =>
-      current
-        ? {
-            ...current,
-            lendingDefaults: {
-              ...current.lendingDefaults,
-              [key]: value,
-            },
-          }
-        : current,
-    );
-  }
-
-  function updateWorkspaceField<
-    Key extends keyof SettingsFormState["workspace"],
-  >(key: Key, value: SettingsFormState["workspace"][Key]) {
-    setFormState((current) =>
-      current
-        ? {
-            ...current,
-            workspace: {
-              ...current.workspace,
-              [key]: value,
-            },
-          }
-        : current,
-    );
+  function updateChannel(keys: readonly PreferenceKey[], enabled: boolean) {
+    setNotifications((current) => {
+      if (!current) return current;
+      const next = { ...current };
+      keys.forEach((key) => {
+        next[key] = enabled;
+      });
+      return next;
+    });
+    setSavedMessage(null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!formState) {
-      return;
-    }
+    if (!notifications || !isDirty) return;
 
     try {
       setIsSaving(true);
       setError(null);
-      const updatedSettings = await updateLenderSettings({
-        notifications: formState.notifications,
-        lendingDefaults: {
-          defaultInterestRate: Number(
-            formState.lendingDefaults.defaultInterestRate,
-          ),
-          defaultMaxTenureMonths: Number(
-            formState.lendingDefaults.defaultMaxTenureMonths,
-          ),
-          defaultMinAmount: Number(formState.lendingDefaults.defaultMinAmount),
-          defaultMaxAmount: Number(formState.lendingDefaults.defaultMaxAmount),
-          preferredPurposes: splitList(
-            formState.lendingDefaults.preferredPurposes,
-          ),
-          preferredRegions: splitList(
-            formState.lendingDefaults.preferredRegions,
-          ),
-          defaultResponseTimeHours: Number(
-            formState.lendingDefaults.defaultResponseTimeHours,
-          ),
-        },
-        workspace: {
-          defaultLandingPage: formState.workspace.defaultLandingPage,
-          defaultAnalyticsRange: formState.workspace.defaultAnalyticsRange,
-          pendingRequestsPageSize: Number(
-            formState.workspace.pendingRequestsPageSize,
-          ),
-          borrowerTablePageSize: Number(
-            formState.workspace.borrowerTablePageSize,
-          ),
-        },
+      const updated = await updateLenderSettings(session.lenderId, {
+        notifications,
       });
-
-      setSettings(updatedSettings);
-      setFormState(toFormState(updatedSettings));
-      setSuccessMessage("Settings saved successfully.");
+      setSettings(updated);
+      setNotifications({ ...updated.notifications });
+      setSavedMessage("Notification preferences saved.");
     } catch (saveError) {
       setError(
         saveError instanceof Error
           ? saveError.message
-          : "Failed to save lender settings.",
+          : "Failed to save notification preferences.",
       );
     } finally {
       setIsSaving(false);
     }
   }
 
-  function handleReset() {
-    if (!settings) {
+  async function handleKycResubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setKycError(null);
+
+    if (!kycFront || !kycBack) {
+      setKycError("Select replacement files for both sides of your ID.");
       return;
     }
 
-    setFormState(toFormState(settings));
-    setError(null);
-    setSuccessMessage("Changes reset to the last saved version.");
+    try {
+      setIsResubmittingKyc(true);
+      const [documentFrontUrl, documentBackUrl, selfieUrl] = await Promise.all([
+        fileToDataUrl(kycFront),
+        fileToDataUrl(kycBack),
+        kycSelfie ? fileToDataUrl(kycSelfie, true) : Promise.resolve(undefined),
+      ]);
+      const response = await resubmitLenderKyc({
+        documentFrontUrl,
+        documentBackUrl,
+        ...(selfieUrl ? { selfieUrl } : {}),
+      });
+      setProfile((current) =>
+        current ? { ...current, kycStatus: response.kycStatus } : current,
+      );
+      setKycSubmission((current) =>
+        current ? { ...current, status: response.kycStatus } : current,
+      );
+      setKycFront(null);
+      setKycBack(null);
+      setKycSelfie(null);
+      setSavedMessage("KYC documents resubmitted for admin review.");
+    } catch (resubmitError) {
+      setKycError(
+        resubmitError instanceof Error
+          ? resubmitError.message
+          : "KYC resubmission failed.",
+      );
+    } finally {
+      setIsResubmittingKyc(false);
+    }
   }
 
+  const displayName =
+    profile?.businessName || profile?.fullName || session.displayName;
+  const kycStatus = profile?.kycStatus || "unknown";
+
   return (
-    <section className="dashboard-panel">
-      <header className="page-header">
+    <section className="dashboard-panel settings-workspace">
+      <header className="page-header settings-workspace__header">
         <div>
-          <p className="eyebrow">Lender preferences</p>
           <h1 className="page-title">Settings</h1>
           <p className="page-subtitle">
-            Manage lender preferences, workspace defaults, and alert behavior
-            without changing your main business profile.
-          </p>
-          <p className="dashboard-context-pill">
-            Signed in as {session.displayName} - {session.lenderId}
+            Manage notification preferences and account access.
           </p>
         </div>
+        <button
+          type="button"
+          className="settings-refresh-button"
+          onClick={() => void loadPage()}
+          disabled={isLoading || isSaving}
+          aria-label="Reload settings"
+          title="Reload settings"
+        >
+          <RefreshCw size={17} className={isLoading ? "is-spinning" : ""} />
+        </button>
       </header>
 
-      {isLoading ? (
-        <section className="card loading-card">
-          <p>Loading settings...</p>
-        </section>
-      ) : error && !formState ? (
-        <section className="card error-card">
-          <h2>Settings are not available yet</h2>
-          <p>{error}</p>
-          <p>
-            Check the lender settings API, Firebase connection, and whether the
-            lender record exists in Firestore.
-          </p>
-        </section>
-      ) : formState ? (
-        <form className="settings-form" onSubmit={handleSubmit}>
-          {successMessage ? (
-            <p className="create-ad-banner create-ad-banner--primary">
-              {successMessage}
-            </p>
-          ) : null}
-          {error ? (
-            <p className="create-ad-banner create-ad-banner--error">{error}</p>
-          ) : null}
-
-          <section className="settings-layout">
-            <div className="settings-main-column">
-              <article className="card settings-card">
-                <div className="settings-card__header">
-                  <div>
-                    <h2 className="section-title">Notification Preferences</h2>
-                    <p className="section-subtitle">
-                      Choose how lender alerts should appear while email
-                      delivery stays preference-only for now.
-                    </p>
-                  </div>
-                  <p className="settings-card__meta">
-                    Last updated {formatDate(settings?.updatedAt ?? null)}
-                  </p>
-                </div>
-
-                <div className="settings-toggle-list">
-                  {notificationPreferences.map((preference) => (
-                    <article
-                      className="settings-toggle-row"
-                      key={preference.title}
-                    >
-                      <div>
-                        <h3 className="settings-toggle-row__title">
-                          {preference.title}
-                        </h3>
-                        <p className="settings-toggle-row__description">
-                          {preference.description}
-                        </p>
-                      </div>
-
-                      <div className="settings-toggle-row__controls">
-                        <label className="settings-channel-toggle">
-                          <input
-                            className="settings-channel-toggle__control"
-                            type="checkbox"
-                            checked={
-                              formState.notifications[preference.inAppKey]
-                            }
-                            onChange={(event) =>
-                              updateNotification(
-                                preference.inAppKey,
-                                event.target.checked,
-                              )
-                            }
-                          />
-                          <span>In-app</span>
-                        </label>
-
-                        <label className="settings-channel-toggle">
-                          <input
-                            className="settings-channel-toggle__control"
-                            type="checkbox"
-                            checked={
-                              formState.notifications[preference.emailKey]
-                            }
-                            onChange={(event) =>
-                              updateNotification(
-                                preference.emailKey,
-                                event.target.checked,
-                              )
-                            }
-                          />
-                          <span>Email</span>
-                        </label>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </article>
-
-              <article className="card settings-card">
-                <div className="settings-card__header">
-                  <div>
-                    <h2 className="section-title">Lending Defaults</h2>
-                    <p className="section-subtitle">
-                      Save the offer terms you want ready when ad creation and
-                      lender workflows start using these defaults.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="create-ad-form-grid">
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Default interest rate %
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={formState.lendingDefaults.defaultInterestRate}
-                      onChange={(event) =>
-                        updateLendingField(
-                          "defaultInterestRate",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Default maximum tenure
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      min="1"
-                      value={formState.lendingDefaults.defaultMaxTenureMonths}
-                      onChange={(event) =>
-                        updateLendingField(
-                          "defaultMaxTenureMonths",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Default minimum amount
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      min="0"
-                      value={formState.lendingDefaults.defaultMinAmount}
-                      onChange={(event) =>
-                        updateLendingField(
-                          "defaultMinAmount",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Default maximum amount
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      min="0"
-                      value={formState.lendingDefaults.defaultMaxAmount}
-                      onChange={(event) =>
-                        updateLendingField(
-                          "defaultMaxAmount",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field create-ad-field--full">
-                    <span className="create-ad-field__label">
-                      Preferred purposes
-                    </span>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formState.lendingDefaults.preferredPurposes}
-                      onChange={(event) =>
-                        updateLendingField(
-                          "preferredPurposes",
-                          event.target.value,
-                        )
-                      }
-                      placeholder="Working capital, Education, Medical"
-                    />
-                  </label>
-
-                  <label className="create-ad-field create-ad-field--full">
-                    <span className="create-ad-field__label">
-                      Preferred regions
-                    </span>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formState.lendingDefaults.preferredRegions}
-                      onChange={(event) =>
-                        updateLendingField(
-                          "preferredRegions",
-                          event.target.value,
-                        )
-                      }
-                      placeholder="Colombo, Kandy, Galle"
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Default response time (hours)
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      min="1"
-                      max="72"
-                      value={formState.lendingDefaults.defaultResponseTimeHours}
-                      onChange={(event) =>
-                        updateLendingField(
-                          "defaultResponseTimeHours",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-                </div>
-              </article>
-
-              <article className="card settings-card">
-                <div className="settings-card__header">
-                  <div>
-                    <h2 className="section-title">Workspace Preferences</h2>
-                    <p className="section-subtitle">
-                      Set the lender workspace defaults that future modules will
-                      use for navigation and table behavior.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="create-ad-form-grid">
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Default landing page
-                    </span>
-                    <select
-                      className="pending-requests-select__control"
-                      value={formState.workspace.defaultLandingPage}
-                      onChange={(event) =>
-                        updateWorkspaceField(
-                          "defaultLandingPage",
-                          event.target.value as DefaultLandingPage,
-                        )
-                      }
-                    >
-                      <option value="dashboard">Dashboard</option>
-                      <option value="analytics">Analytics</option>
-                    </select>
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Default analytics range
-                    </span>
-                    <select
-                      className="pending-requests-select__control"
-                      value={formState.workspace.defaultAnalyticsRange}
-                      onChange={(event) =>
-                        updateWorkspaceField(
-                          "defaultAnalyticsRange",
-                          event.target.value as DefaultAnalyticsRange,
-                        )
-                      }
-                    >
-                      <option value="30d">30 Days</option>
-                      <option value="90d">90 Days</option>
-                      <option value="365d">12 Months</option>
-                    </select>
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Pending requests page size
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={formState.workspace.pendingRequestsPageSize}
-                      onChange={(event) =>
-                        updateWorkspaceField(
-                          "pendingRequestsPageSize",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-
-                  <label className="create-ad-field">
-                    <span className="create-ad-field__label">
-                      Borrower table page size
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={formState.workspace.borrowerTablePageSize}
-                      onChange={(event) =>
-                        updateWorkspaceField(
-                          "borrowerTablePageSize",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-                </div>
-              </article>
-            </div>
-
-            <aside className="settings-side-column">
-              <article className="card settings-card settings-card--compact">
-                <div className="settings-card__header">
-                  <div>
-                    <h2 className="section-title">Session And Access</h2>
-                    <p className="section-subtitle">
-                      Temporary auth is active now. Stronger security controls
-                      can plug in later without replacing these preferences.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="settings-session-list">
-                  <div className="settings-session-item">
-                    <span className="settings-session-item__label">
-                      Lender ID
-                    </span>
-                    <strong>{session.lenderId}</strong>
-                  </div>
-                  <div className="settings-session-item">
-                    <span className="settings-session-item__label">
-                      Display name
-                    </span>
-                    <strong>{session.displayName}</strong>
-                  </div>
-                  <div className="settings-session-item">
-                    <span className="settings-session-item__label">Email</span>
-                    <strong>
-                      {session.email || "No email in temporary session"}
-                    </strong>
-                  </div>
-                </div>
-
-                <p className="settings-side-note">
-                  Business identity fields stay in the sidebar profile editor so
-                  settings can stay focused on lender preferences.
-                </p>
-
-                <div className="settings-side-actions">
-                  <button
-                    type="button"
-                    className="create-ad-button"
-                    onClick={onOpenProfile}
-                  >
-                    Open Profile Editor
-                  </button>
-                  <button
-                    type="button"
-                    className="create-ad-button create-ad-button--ghost"
-                    onClick={onLogout}
-                  >
-                    Log Out
-                  </button>
-                </div>
-              </article>
-
-              <article className="card settings-card settings-card--muted">
-                <div className="settings-card__header">
-                  <div>
-                    <h2 className="section-title">Danger Zone</h2>
-                    <p className="section-subtitle">
-                      Reserved for future high-impact account controls.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="settings-danger-list">
-                  <p>
-                    Data export, lender deactivation, and destructive workspace
-                    actions will be added here after real auth and approval
-                    flows are in place.
-                  </p>
-                  <button type="button" className="create-ad-button" disabled>
-                    Export Data Soon
-                  </button>
-                  <button
-                    type="button"
-                    className="create-ad-button create-ad-button--ghost"
-                    disabled
-                  >
-                    Deactivate Account Soon
-                  </button>
-                </div>
-              </article>
-            </aside>
-          </section>
-
-          <div className="settings-actions">
-            <button
-              type="button"
-              className="create-ad-button create-ad-button--ghost"
-              onClick={handleReset}
-              disabled={isSaving}
-            >
-              Reset Changes
-            </button>
-            <button
-              type="submit"
-              className="create-ad-button create-ad-button--primary"
-              disabled={isSaving}
-            >
-              {isSaving ? "Saving..." : "Save Settings"}
-            </button>
-          </div>
-        </form>
+      {error ? (
+        <div
+          className="settings-feedback settings-feedback--error"
+          role="alert"
+        >
+          <CircleAlert size={18} />
+          <span>{error}</span>
+        </div>
       ) : null}
+      {savedMessage ? (
+        <div
+          className="settings-feedback settings-feedback--success"
+          role="status"
+        >
+          <Check size={18} />
+          <span>{savedMessage}</span>
+        </div>
+      ) : null}
+
+      {isLoading && !notifications ? (
+        <section className="card loading-card">
+          <p>Loading your settings...</p>
+        </section>
+      ) : (
+        <div className="settings-workspace__grid">
+          <main className="settings-workspace__main">
+            {kycStatus === "rejected" ? (
+              <form
+                className="settings-panel settings-kyc-resubmit"
+                onSubmit={handleKycResubmit}
+              >
+                <div className="settings-panel__header">
+                  <div>
+                    <span className="settings-panel__eyebrow">
+                      Verification required
+                    </span>
+                    <h2>Resubmit KYC</h2>
+                    <p>Replace the rejected identity files for a new review.</p>
+                  </div>
+                  <ShieldCheck size={21} aria-hidden="true" />
+                </div>
+
+                {kycSubmission?.reviewNotes ? (
+                  <div className="settings-kyc-review-note">
+                    <CircleAlert size={17} aria-hidden="true" />
+                    <div>
+                      <strong>Admin review note</strong>
+                      <p>{kycSubmission.reviewNotes}</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {kycError ? (
+                  <div
+                    className="settings-feedback settings-feedback--error settings-kyc-error"
+                    role="alert"
+                  >
+                    <CircleAlert size={17} />
+                    <span>{kycError}</span>
+                  </div>
+                ) : null}
+
+                <div className="settings-kyc-fields">
+                  <label>
+                    <span>ID front</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      required
+                      disabled={isResubmittingKyc}
+                      onChange={(event) =>
+                        setKycFront(event.target.files?.[0] ?? null)
+                      }
+                    />
+                    <small>
+                      {kycFront?.name || "PDF or image, up to 10 MB"}
+                    </small>
+                  </label>
+                  <label>
+                    <span>ID back</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      required
+                      disabled={isResubmittingKyc}
+                      onChange={(event) =>
+                        setKycBack(event.target.files?.[0] ?? null)
+                      }
+                    />
+                    <small>
+                      {kycBack?.name || "PDF or image, up to 10 MB"}
+                    </small>
+                  </label>
+                  <label>
+                    <span>New selfie with ID (optional)</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={isResubmittingKyc}
+                      onChange={(event) =>
+                        setKycSelfie(event.target.files?.[0] ?? null)
+                      }
+                    />
+                    <small>{kycSelfie?.name || "JPG, PNG, or WEBP"}</small>
+                  </label>
+                </div>
+
+                <div className="settings-kyc-actions">
+                  <span>
+                    New files are securely sent to the admin review queue.
+                  </span>
+                  <button
+                    type="submit"
+                    className="settings-primary-button"
+                    disabled={isResubmittingKyc}
+                  >
+                    <UploadCloud size={17} />
+                    {isResubmittingKyc ? "Submitting..." : "Resubmit KYC"}
+                  </button>
+                </div>
+              </form>
+            ) : null}
+
+            <form className="settings-panel" onSubmit={handleSubmit}>
+              <div className="settings-panel__header">
+                <div>
+                  <h2>Notifications</h2>
+                  <p>
+                    Control which important lender activities appear in your
+                    notification inbox.
+                  </p>
+                </div>
+                <div className="settings-channel-legend" aria-hidden="true">
+                  <span>
+                    <Smartphone size={15} /> In-app
+                  </span>
+                </div>
+              </div>
+
+              {notifications ? (
+                <div className="settings-preference-list">
+                  {notificationPreferences.map((preference) => {
+                    const Icon = preference.icon;
+                    const inAppEnabled = allEnabled(
+                      notifications,
+                      preference.inAppKeys,
+                    );
+                    return (
+                      <div
+                        className="settings-preference-row"
+                        key={preference.title}
+                      >
+                        <span
+                          className="settings-preference-row__icon"
+                          aria-hidden="true"
+                        >
+                          <Icon size={18} />
+                        </span>
+                        <div className="settings-preference-row__copy">
+                          <h3>{preference.title}</h3>
+                          <p>{preference.description}</p>
+                        </div>
+                        <div className="settings-preference-row__channels">
+                          <label
+                            className="settings-switch"
+                            title={`${preference.title} in-app alerts`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={inAppEnabled}
+                              onChange={(event) =>
+                                updateChannel(
+                                  preference.inAppKeys,
+                                  event.target.checked,
+                                )
+                              }
+                            />
+                            <span
+                              className="settings-switch__track"
+                              aria-hidden="true"
+                            />
+                            <span className="settings-switch__mobile-label">
+                              In-app
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="settings-inline-empty">
+                  Notification preferences could not be loaded. Use reload to
+                  try again.
+                </div>
+              )}
+
+              <div className="settings-save-row">
+                <span>
+                  {isDirty
+                    ? "You have unsaved changes."
+                    : "Preferences are up to date."}
+                </span>
+                <div>
+                  <button
+                    type="button"
+                    className="settings-secondary-button"
+                    disabled={!isDirty || isSaving}
+                    onClick={() =>
+                      settings &&
+                      setNotifications({ ...settings.notifications })
+                    }
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="settings-primary-button"
+                    disabled={!isDirty || isSaving}
+                  >
+                    {isSaving ? "Saving..." : "Save preferences"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </main>
+
+          <aside className="settings-workspace__side">
+            <section className="settings-panel settings-account-card">
+              <div className="settings-account-card__top">
+                <div
+                  className="settings-account-card__avatar"
+                  aria-hidden="true"
+                >
+                  {displayName.trim().charAt(0).toUpperCase() || "L"}
+                </div>
+                <div className="settings-account-card__identity">
+                  <span>Lender account</span>
+                  <h2>{displayName}</h2>
+                  <p>
+                    {profile?.email || session.email || "Email not provided"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="settings-account-card__security">
+                <ShieldCheck size={18} aria-hidden="true" />
+                <div>
+                  <strong>
+                    {kycStatus === "unknown"
+                      ? "KYC status unavailable"
+                      : `KYC ${titleCase(kycStatus)}`}
+                  </strong>
+                  <span>
+                    <Clock3 size={13} aria-hidden="true" /> Profile updated{" "}
+                    {formatDate(profile?.updatedAt)}
+                  </span>
+                </div>
+              </div>
+
+              {profileWarning ? (
+                <p className="settings-profile-warning">{profileWarning}</p>
+              ) : null}
+
+              <button
+                type="button"
+                className="settings-primary-button"
+                onClick={onOpenProfile}
+              >
+                <UserRound size={17} />
+                Edit profile
+              </button>
+            </section>
+
+            <section className="settings-panel settings-session-card">
+              <div>
+                <h2>Sign out</h2>
+                <p>End the current lender session on this device.</p>
+              </div>
+              <button
+                type="button"
+                className="settings-logout-button"
+                onClick={onLogout}
+              >
+                <LogOut size={17} />
+                Log out
+              </button>
+            </section>
+          </aside>
+        </div>
+      )}
     </section>
   );
 }

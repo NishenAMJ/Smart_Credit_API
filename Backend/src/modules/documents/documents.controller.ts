@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -30,6 +31,8 @@ const SIGNED_URL_TTL_SECONDS = 300;
 @Controller('documents')
 @UseGuards(JwtAuthGuard)
 export class DocumentsController {
+  private readonly logger = new Logger(DocumentsController.name);
+
   constructor(
     private readonly documentsService: DocumentsService,
     private readonly mediaService: MediaService,
@@ -52,8 +55,12 @@ export class DocumentsController {
     const userId = req.user.sub;
     const category = body.category;
 
-    if (!['kyc', 'agreement'].includes(category)) {
-      throw new BadRequestException('category must be "kyc" or "agreement".');
+    if (
+      !['kyc', 'agreement', 'dispute_evidence', 'payment_receipt'].includes(
+        category,
+      )
+    ) {
+      throw new BadRequestException('Unsupported document category.');
     }
 
     // Derive a stable publicId from the fileName (strip extension, sanitise).
@@ -126,21 +133,43 @@ export class DocumentsController {
     );
 
     if (duplicate) {
+      if (body.category === 'dispute_evidence') {
+        if (duplicate.cloudinaryPublicId !== body.publicId) {
+          try {
+            await this.mediaService.deleteAsset(
+              body.publicId,
+              verified.resourceType as 'image' | 'raw',
+              verified.deliveryType as 'upload' | 'authenticated',
+            );
+          } catch (error) {
+            this.logger.warn(
+              `Could not remove redundant dispute evidence upload ${body.publicId}. ${error instanceof Error ? error.message : ''}`.trim(),
+            );
+          }
+        }
+
+        return {
+          message: 'Existing evidence document reused successfully.',
+          documentId: duplicate.id,
+          status: duplicate.status,
+        };
+      }
+
       throw new BadRequestException(
         `A document with the same file content already exists (id: ${duplicate.id}).`,
       );
     }
 
     const uploadedMedia = {
-      assetId: body.assetId,
-      publicId: body.publicId,
-      version: body.version,
-      format: body.format,
-      bytes: body.bytes,
-      resourceType: body.resourceType,
-      deliveryType: body.deliveryType,
-      secureUrl: body.secureUrl,
-      uploadedAt: new Date().toISOString(),
+      assetId: verified.assetId,
+      publicId: verified.publicId,
+      version: verified.version,
+      format: verified.format,
+      bytes: verified.bytes,
+      resourceType: verified.resourceType,
+      deliveryType: verified.deliveryType,
+      secureUrl: verified.secureUrl,
+      uploadedAt: verified.uploadedAt,
     };
 
     const record = await this.documentsService.createRecord({
@@ -151,7 +180,9 @@ export class DocumentsController {
       mimeType: body.mimeType,
       fileHash: body.fileHash,
       source: 'user_upload',
-      relatedEntityType: body.relatedEntityType as DocumentRelatedEntityType | undefined,
+      relatedEntityType: body.relatedEntityType as
+        | DocumentRelatedEntityType
+        | undefined,
       relatedEntityId: body.relatedEntityId,
       displayName: body.displayName,
       uploadedMedia,
@@ -189,10 +220,39 @@ export class DocumentsController {
     }
 
     // Ownership check – admins bypass.
-    if (role !== 'admin' && document.userId !== requesterId) {
-      throw new ForbiddenException(
-        'You do not have access to this document.',
+    let hasDisputeAccess = false;
+    let hasPaymentReceiptAccess = false;
+    if (
+      role !== 'admin' &&
+      document.category === 'dispute_evidence' &&
+      document.relatedEntityType === 'dispute' &&
+      document.relatedEntityId
+    ) {
+      hasDisputeAccess = await this.documentsService.canAccessDisputeEvidence(
+        document.relatedEntityId,
+        requesterId,
       );
+    }
+    if (
+      role === 'lender' &&
+      document.category === 'payment_receipt' &&
+      document.relatedEntityType === 'loan' &&
+      document.relatedEntityId
+    ) {
+      hasPaymentReceiptAccess =
+        await this.documentsService.canLenderAccessLoanDocument(
+          document.relatedEntityId,
+          requesterId,
+        );
+    }
+
+    if (
+      role !== 'admin' &&
+      document.userId !== requesterId &&
+      !hasDisputeAccess &&
+      !hasPaymentReceiptAccess
+    ) {
+      throw new ForbiddenException('You do not have access to this document.');
     }
 
     const expiresAt = new Date(
@@ -207,6 +267,19 @@ export class DocumentsController {
       format: document.format,
     });
 
-    return { documentId, accessUrl, expiresAt };
+    return {
+      documentId,
+      accessUrl,
+      expiresAt,
+      fileName:
+        document.displayName ||
+        document.originalFilename ||
+        `document-${documentId}`,
+      mimeType:
+        document.mimeType ||
+        (document.format?.toLowerCase() === 'pdf'
+          ? 'application/pdf'
+          : 'application/octet-stream'),
+    };
   }
 }

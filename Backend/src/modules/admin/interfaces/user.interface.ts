@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'borrower' | 'lender';
 
-export type UserStatus = 'active' | 'suspended' | 'pending' | 'inactive';
+export type UserStatus = 'active' | 'suspended' | 'pending';
 
 export type FirestoreTimestampLike = {
   toDate?: () => Date;
@@ -11,6 +11,10 @@ export interface User {
   id: string;
   email: string;
   role: UserRole | UserRole[];
+  roles?: UserRole[];
+  primaryRole?: UserRole;
+  accountStatus?: UserStatus;
+  searchTokens?: string[];
   status?: UserStatus;
   uid?: string;
   fullName?: string;

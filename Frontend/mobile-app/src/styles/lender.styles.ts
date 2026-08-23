@@ -1,6 +1,6 @@
 /** @format */
 
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform, StatusBar } from "react-native";
 
 import { COLORS as BASE_COLORS } from "../constants/colors";
 import { BORDER_RADIUS, SHADOWS, SPACING } from "./chat.styles";
@@ -21,22 +21,39 @@ export const COLORS = {
 
 export { BORDER_RADIUS, SHADOWS, SPACING, BASE_TYPOGRAPHY as TYPOGRAPHY };
 
+// ── Status bar height ─────────────────────────────────
+// Android needs manual status bar offset; iOS is handled by SafeAreaView
+const STATUS_BAR_HEIGHT =
+  Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) : 0;
+
 export const commonStyles = StyleSheet.create({
+  // ── Safe container ────────────────────────────────
+  // Adds top padding for Android status bar
+  // iOS SafeAreaView handles this automatically
   safe: {
     flex: 1,
     backgroundColor: COLORS.background,
+    paddingTop: STATUS_BAR_HEIGHT,
   },
 
+  // ── Scroll content ────────────────────────────────
+  // Extra paddingBottom so content never hides behind
+  // the bottom nav bar or home indicator
   scrollContainer: {
     flex: 1,
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
+    paddingBottom: 100, // clears bottom tab bar + home indicator
   },
 
+  // ── Header bar ────────────────────────────────────
   header: {
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+    // Subtle bottom border so it separates from content
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
 
   headerFlexRow: {

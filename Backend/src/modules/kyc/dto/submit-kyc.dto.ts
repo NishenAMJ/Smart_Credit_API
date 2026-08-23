@@ -1,78 +1,114 @@
 import {
+  IsDateString,
   IsEmail,
-  IsNotEmpty,
   IsIn,
   IsOptional,
   IsString,
 } from 'class-validator';
 
 export class SubmitKycDto {
+  @IsOptional()
   @IsString()
   @IsIn(['borrower', 'lender'])
-  role: 'borrower' | 'lender';
+  role?: 'borrower' | 'lender';
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  fullName: string;
+  fullName?: string;
 
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  phoneNumber: string;
+  phoneNumber?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  nic: string;
+  nic?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  birthDate: string;
+  documentType?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  passwordHash: string;
+  documentNumber?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  nicFrontDocumentId: string;
+  issuingCountry?: string;
 
-  @IsString()
-  @IsNotEmpty()
-  nicBackDocumentId: string;
+  @IsOptional()
+  @IsDateString()
+  expiryDate?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  addressProofNumber: string;
+  birthDate?: string;
 
+  // Accepted only for backwards-compatible validation. Authentication owns
+  // password hashes and the KYC service deliberately ignores this field.
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  addressProofDocumentId: string;
+  passwordHash?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  bankAccountNumber: string;
+  nicFrontDataUrl?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  bankName: string;
+  nicBackDataUrl?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  branchCode: string;
+  documentFrontUrl?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  accountType: string;
+  documentBackUrl?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  bankDocumentId: string;
+  addressProofNumber?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  profilePhotoUrl: string; // This should now be the final secure URL or an asset ID
+  addressProofDataUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  bankAccountNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  branchCode?: string;
+
+  @IsOptional()
+  @IsString()
+  accountType?: string;
+
+  @IsOptional()
+  @IsString()
+  bankDocumentDataUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  profilePhotoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  profilePictureUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  selfieUrl?: string;
 
   @IsOptional()
   userId?: string;
