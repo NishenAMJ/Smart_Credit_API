@@ -244,7 +244,7 @@ export default function Sidebar() {
           <div style={S.adminAvatar}>A</div>
           <div>
             <div style={S.adminName}>Admin</div>
-            <div style={S.adminRole}>Super Admin</div>
+            <div style={S.adminRole}>Administrator</div>
           </div>
         </div>
 

@@ -124,7 +124,7 @@ export default function Analytics() {
     return [
       { label: "Borrowers", value: usersReport.borrowers },
       { label: "Lenders", value: usersReport.lenders },
-      { label: "Admins", value: usersReport.usersByRole.admin },
+      { label: "Administrator", value: usersReport.usersByRole.admin },
     ];
   }, [usersReport]);
 
