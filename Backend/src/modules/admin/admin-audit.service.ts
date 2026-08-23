@@ -71,7 +71,9 @@ export class AdminAuditService {
       const snapshot = await query.limit(pageSize + 1).get();
       const hasMore = snapshot.size > pageSize;
       const pageDocs = snapshot.docs.slice(0, pageSize);
-      const pageLogs = pageDocs.map((doc) => this.mapStoredAudit(doc));
+      const pageLogs = await this.enrichAuditLogs(
+        pageDocs.map((doc) => this.mapStoredAudit(doc)),
+      );
 
       return {
         success: true,
@@ -96,12 +98,15 @@ export class AdminAuditService {
       data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
     return {
       id: doc.id,
+      action,
       actionType,
       description:
         String(metadata.description ?? metadata.reason ?? '').trim() ||
         action.replaceAll('.', ' '),
       performedBy: String(data.actorUserId ?? data.actorRole ?? 'System'),
+      actorId: String(data.actorUserId ?? ''),
       targetName: String(data.entityId ?? 'System'),
+      targetId: String(data.entityId ?? ''),
       targetType: this.mapTargetType(data.entityType),
       dateTime: this.formatDate(data.createdAt),
       severity:
@@ -110,7 +115,77 @@ export class AdminAuditService {
           : action.includes('approve') || action.includes('activate')
             ? 'success'
             : 'info',
+      before: data.before ?? null,
+      after: data.after ?? null,
+      metadata,
+      ipAddress:
+        typeof metadata.ipAddress === 'string' ? metadata.ipAddress : undefined,
+      sessionId:
+        typeof metadata.sessionId === 'string' ? metadata.sessionId : undefined,
     };
+  }
+
+  private async enrichAuditLogs(logs: AuditLogEntry[]) {
+    if (typeof this.firebaseService.db.getAll !== 'function') return logs;
+    const actorIds = [...new Set(logs.map((log) => log.actorId).filter(Boolean))];
+    const targets = logs.filter(
+      (log) => log.targetId && ['user', 'ad', 'boost', 'dispute', 'transaction'].includes(log.targetType),
+    );
+    const targetCollection: Record<string, string> = {
+      user: 'users',
+      ad: 'loanListings',
+      boost: 'adBoostRequests',
+      dispute: 'disputes',
+      transaction: 'transactions',
+    };
+    const [actors, targetDocs] = await Promise.all([
+      actorIds.length
+        ? this.firebaseService.db.getAll(
+            ...actorIds.map((id) => this.firebaseService.db.collection('users').doc(id)),
+          )
+        : Promise.resolve([]),
+      targets.length
+        ? this.firebaseService.db.getAll(
+            ...targets.map((log) =>
+              this.firebaseService.db.collection(targetCollection[log.targetType]).doc(log.targetId),
+            ),
+          )
+        : Promise.resolve([]),
+    ]);
+    const actorNames = new Map(
+      actors.map((doc) => [doc.id, this.displayName(doc.data() ?? {}, doc.id)]),
+    );
+    const targetNames = new Map<string, string>();
+    targetDocs.forEach((doc, index) => {
+      const log = targets[index];
+      const data = doc.data() ?? {};
+      const name =
+        log.targetType === 'user'
+          ? this.displayName(data, doc.id)
+          : String(
+              data.title ??
+                data.subject ??
+                data.planName ??
+                data.note ??
+                data.disputeCode ??
+                doc.id,
+            );
+      targetNames.set(`${log.targetType}:${log.targetId}`, name);
+    });
+    return logs.map((log) => ({
+      ...log,
+      performedBy: actorNames.get(log.actorId) ?? log.performedBy,
+      targetName:
+        targetNames.get(`${log.targetType}:${log.targetId}`) ?? log.targetName,
+    }));
+  }
+
+  private displayName(data: FirebaseFirestore.DocumentData, fallback: string) {
+    return (
+      String(data.fullName ?? '').trim() ||
+      [data.firstName, data.lastName].filter(Boolean).join(' ').trim() ||
+      String(data.email ?? fallback)
+    );
   }
 
   private mapStoredAction(action: string): AuditLogEntry['actionType'] {
@@ -125,10 +200,11 @@ export class AdminAuditService {
   }
 
   private mapTargetType(value: unknown): AuditLogEntry['targetType'] {
-    return ['user', 'ad', 'dispute', 'transaction', 'report'].includes(
-      String(value),
+    const normalized = String(value) === 'ad_boost' ? 'boost' : String(value);
+    return ['user', 'ad', 'boost', 'dispute', 'transaction', 'report'].includes(
+      normalized,
     )
-      ? (String(value) as AuditLogEntry['targetType'])
+      ? (normalized as AuditLogEntry['targetType'])
       : 'system';
   }
 }

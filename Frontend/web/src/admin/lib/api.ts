@@ -407,6 +407,7 @@ export interface AdStatsResponse {
 
 export interface AuditLogEntry {
   id: string;
+  action: string;
   actionType:
     | "kyc_approved"
     | "kyc_rejected"
@@ -418,10 +419,17 @@ export interface AuditLogEntry {
     | "system_event";
   description: string;
   performedBy: string;
+  actorId: string;
   targetName: string;
-  targetType: AuditTargetType;
+  targetId: string;
+  targetType: AuditTargetType | "boost";
   dateTime: string;
   severity: AuditSeverity;
+  before: unknown;
+  after: unknown;
+  metadata: Record<string, unknown>;
+  ipAddress?: string;
+  sessionId?: string;
 }
 
 export interface AuditLogsResponse {
