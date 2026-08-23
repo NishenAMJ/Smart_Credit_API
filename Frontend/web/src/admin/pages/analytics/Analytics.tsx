@@ -97,7 +97,7 @@ export default function Analytics() {
       icon: Activity,
       color: "#F59E0B",
       bg: "#FFFBEB",
-      to: "/transactions",
+      to: "/admin/transactions",
     },
   ];
 
