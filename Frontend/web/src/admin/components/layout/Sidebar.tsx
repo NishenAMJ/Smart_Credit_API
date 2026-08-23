@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { to: "/admin/disputes", icon: MessageSquareWarning, label: "Disputes" },
   { to: "/admin/analytics", icon: BarChart2, label: "Analytics" },
   { to: "/admin/transactions", icon: ReceiptText, label: "Transactions" },
-  { to: "/admin/boost-payments", icon: Rocket, label: "Boost Payments" },
+  { to: "/admin/boost-payments", icon: Rocket, label: "Ad Boosts" },
   { to: "/admin/agreements", icon: FileText, label: "Agreements" },
   { to: "/admin/audit-logs", icon: ScrollText, label: "Audit Logs" },
   { to: "/admin/settings", icon: Settings, label: "Settings" },
