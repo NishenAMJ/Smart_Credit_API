@@ -6,7 +6,8 @@ export type AdBoostStatus =
   | 'approved'
   | 'rejected'
   | 'cancelled'
-  | 'expired';
+  | 'expired'
+  | 'chargeback_review';
 
 export interface AdBoostPlan {
   id: string;

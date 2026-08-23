@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   FlatList,
   Alert,
+  AppState,
   Linking,
   StyleSheet,
   Text,
@@ -94,6 +95,63 @@ export default function PaymentsScreen({
   const [paymentProof, setPaymentProof] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [activePayHereOrderId, setActivePayHereOrderId] = useState<
+    string | null
+  >(null);
+
+  const checkPayHereStatus = useCallback(async () => {
+    if (!activePayHereOrderId) return;
+    try {
+      const order =
+        await paymentService.getPayHereOrderStatus(activePayHereOrderId);
+      if (["initiated", "pending", "processing"].includes(order.status)) {
+        return;
+      }
+      setActivePayHereOrderId(null);
+      await fetchPayments();
+      if (order.status === "completed") {
+        Alert.alert(
+          "Payment confirmed",
+          "Your installment has been paid successfully.",
+        );
+      } else if (order.status === "charged_back") {
+        Alert.alert(
+          "Payment under review",
+          "PayHere reported a chargeback. Card payments are paused while support reviews it.",
+        );
+      } else if (order.status === "processing_failed") {
+        Alert.alert(
+          "Confirmation delayed",
+          "PayHere received the payment, but Smart Credit is still confirming it. Please contact support if this continues.",
+        );
+      } else {
+        Alert.alert(
+          "Payment not completed",
+          order.status === "expired"
+            ? "The PayHere checkout expired. You can safely start a new payment."
+            : "The PayHere payment was cancelled or failed. No installment was recorded.",
+        );
+      }
+    } catch (err) {
+      console.error(
+        "PayHere status error:",
+        getApiErrorMessage(err, "Unable to confirm payment status."),
+      );
+    }
+  }, [activePayHereOrderId]);
+
+  useEffect(() => {
+    if (!activePayHereOrderId) return;
+    void checkPayHereStatus();
+    const interval = setInterval(() => void checkPayHereStatus(), 4000);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void checkPayHereStatus();
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [activePayHereOrderId, checkPayHereStatus]);
 
   const pickReceiptImage = async () => {
     try {
@@ -368,14 +426,13 @@ export default function PaymentsScreen({
                 loanId,
                 amount,
               });
-
+              setActivePayHereOrderId(checkout.orderId);
               await Linking.openURL(checkout.paymentPageUrl);
 
               Alert.alert(
                 "PayHere checkout opened",
-                "Complete the payment in PayHere, then return here and refresh your payments.",
+                "Complete the payment in PayHere, then return here. Smart Credit will confirm it automatically.",
               );
-              void fetchPayments();
             } catch (err) {
               const message = getApiErrorMessage(
                 err,

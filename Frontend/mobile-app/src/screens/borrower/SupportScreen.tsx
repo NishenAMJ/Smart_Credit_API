@@ -36,11 +36,6 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
       case "contact-support":
         navigation.navigate("ContactSupport");
         break;
-      case "request-call":
-        navigation.navigate("ContactSupport", {
-          initialCategory: "call_request",
-        });
-        break;
       case "raise-dispute":
         navigation.navigate("Disputes");
         break;

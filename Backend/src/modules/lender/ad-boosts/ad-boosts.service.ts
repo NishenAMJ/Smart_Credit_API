@@ -2,14 +2,17 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash, randomUUID } from 'crypto';
-import { Timestamp } from 'firebase-admin/firestore';
+import { randomUUID } from 'crypto';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { PayHereService } from '../../../common/payhere/payhere.service';
+import type { PayHereNotification } from '../../../common/payhere/payhere.types';
 import { writeAuditLog } from '../../../common/audit/write-audit-log';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { LenderNotificationWriterService } from '../lender-notifications/lender-notification-writer.service';
@@ -20,25 +23,17 @@ import {
 } from './ad-boosts.types';
 import { RoleNotificationService } from '../../../common/notifications/role-notification.service';
 
-type PayHereNotification = {
-  merchant_id?: string;
-  order_id?: string;
-  payment_id?: string;
-  payhere_amount?: string;
-  payhere_currency?: string;
-  status_code?: string;
-  md5sig?: string;
-};
-
 @Injectable()
-export class AdBoostsService {
+export class AdBoostsService implements OnModuleInit, OnModuleDestroy {
   private readonly boostsCollection = 'adBoostRequests';
   private readonly ordersCollection = 'adBoostPayHerePayments';
+  private reconciliationTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly configService: ConfigService,
     private readonly notificationWriter: LenderNotificationWriterService,
+    private readonly payHere: PayHereService,
     @Optional() private readonly roleNotifications?: RoleNotificationService,
   ) {}
 
@@ -105,6 +100,19 @@ export class AdBoostsService {
       throw new ServiceUnavailableException(
         'Bank-transfer boost payments are temporarily unavailable because the platform bank account is not configured.',
       );
+    }
+    if (input.paymentMethod === 'card') {
+      const profile = (
+        await this.db.collection('users').doc(lenderId).get()
+      ).data();
+      if (
+        !String(profile?.email ?? '').trim() ||
+        !String(profile?.phone ?? '').trim()
+      ) {
+        throw new BadRequestException(
+          'A verified email address and phone number are required for card payments.',
+        );
+      }
     }
 
     const listingRef = this.db.collection('loanListings').doc(input.listingId);
@@ -469,37 +477,51 @@ export class AdBoostsService {
   }
 
   async handlePayHereNotification(payload: PayHereNotification) {
-    const merchantId = this.configService.get<string>('PAYHERE_MERCHANT_ID');
-    if (
-      !merchantId ||
-      payload.merchant_id !== merchantId ||
-      !payload.order_id ||
-      !this.validNotification(payload)
-    ) {
-      throw new BadRequestException('Invalid PayHere notification.');
-    }
+    const notification = this.payHere.verifyNotification(payload);
     const orderRef = this.db
       .collection(this.ordersCollection)
-      .doc(payload.order_id);
+      .doc(notification.orderId);
     const orderSnapshot = await orderRef.get();
     if (!orderSnapshot.exists) {
       throw new BadRequestException('PayHere order not found.');
     }
     const order = orderSnapshot.data() ?? {};
     if (
-      this.formatAmount(Number(payload.payhere_amount)) !==
-        this.formatAmount(Number(order.amount)) ||
-      payload.payhere_currency !== order.currency
+      notification.amountMinor !==
+        Number(order.amountMinor ?? this.payHere.toMinor(Number(order.amount))) ||
+      notification.currency !== order.currency
     ) {
       throw new BadRequestException(
         'PayHere payment details do not match.',
       );
     }
-    if (order.status === 'completed') {
+    const eventRef = this.db
+      .collection('payherePaymentEvents')
+      .doc(`${notification.orderId}_${notification.eventId}`);
+    if ((await eventRef.get()).exists) {
       return { accepted: true, alreadyProcessed: true };
     }
-    if (String(payload.status_code) !== '2') {
-      const failedStatus = this.mapPayHereStatus(String(payload.status_code));
+    if (notification.status === 'charged_back') {
+      await this.freezeBoostChargeback(orderRef, order, notification.sanitized);
+      await eventRef.set({
+        ...notification.sanitized,
+        eventId: notification.eventId,
+        source: 'callback',
+        receivedAt: Timestamp.now(),
+      });
+      return { accepted: true, completed: false, status: 'charged_back' };
+    }
+    if (order.status === 'completed') {
+      await eventRef.set({
+        ...notification.sanitized,
+        eventId: notification.eventId,
+        source: 'callback',
+        receivedAt: Timestamp.now(),
+      });
+      return { accepted: true, alreadyProcessed: true };
+    }
+    if (notification.status !== 'completed') {
+      const failedStatus = notification.status;
       await this.db.runTransaction(async (transaction) => {
         const boostRef = this.db
           .collection(this.boostsCollection)
@@ -508,10 +530,18 @@ export class AdBoostsService {
         const now = Timestamp.now();
         transaction.update(orderRef, {
           status: failedStatus,
-          notification: payload,
+          payherePaymentId: notification.paymentId,
+          lastNotification: notification.sanitized,
+          ...(failedStatus === 'pending'
+            ? {}
+            : { payment: FieldValue.delete() }),
           updatedAt: now,
         });
-        if (boostSnapshot.exists && boostSnapshot.get('status') === 'payment_pending') {
+        if (
+          failedStatus !== 'pending' &&
+          boostSnapshot.exists &&
+          boostSnapshot.get('status') === 'payment_pending'
+        ) {
           transaction.update(boostRef, {
             status: failedStatus === 'cancelled' ? 'cancelled' : 'rejected',
             rejectionReason:
@@ -537,6 +567,12 @@ export class AdBoostsService {
             },
           );
         }
+      });
+      await eventRef.set({
+        ...notification.sanitized,
+        eventId: notification.eventId,
+        source: 'callback',
+        receivedAt: Timestamp.now(),
       });
       return { accepted: true, completed: false };
     }
@@ -564,14 +600,21 @@ export class AdBoostsService {
         boostRef,
         boost,
         null,
-        payload.payment_id ?? payload.order_id!,
+        notification.paymentId ?? notification.orderId,
       );
       transaction.update(orderRef, {
         status: 'completed',
-        payherePaymentId: payload.payment_id ?? null,
-        notification: payload,
+        payherePaymentId: notification.paymentId,
+        lastNotification: notification.sanitized,
+        payment: FieldValue.delete(),
         completedAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
+      });
+      transaction.set(eventRef, {
+        ...notification.sanitized,
+        eventId: notification.eventId,
+        source: 'callback',
+        receivedAt: Timestamp.now(),
       });
     });
     await this.notify(String(order.lenderId), String(order.boostId), true);
@@ -587,6 +630,21 @@ export class AdBoostsService {
       throw new NotFoundException('PayHere order not found.');
     }
     const data = snapshot.data() ?? {};
+    if (
+      !['initiated', 'pending'].includes(String(data.status)) ||
+      (this.toDate(data.expiresAt)?.getTime() ?? 0) <= Date.now()
+    ) {
+      if (['initiated', 'pending'].includes(String(data.status))) {
+        await snapshot.ref.update({
+          status: 'expired',
+          expiredAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      }
+      throw new BadRequestException(
+        'This PayHere checkout has expired or is no longer active.',
+      );
+    }
     const payment = data.payment as Record<string, string>;
     const inputs = Object.entries(payment)
       .map(
@@ -601,41 +659,248 @@ export class AdBoostsService {
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Boost payment</title></head><body><main><h1>${success ? 'Payment submitted' : 'Payment cancelled'}</h1><p>${success ? 'Your boost will appear after PayHere confirms the payment.' : 'Your advertisement remains active without a boost.'}</p></main></body></html>`;
   }
 
+  onModuleInit() {
+    if (!this.payHere.reconciliationEnabled()) return;
+    this.reconciliationTimer = setInterval(
+      () =>
+        void this.reconcilePendingOrders().catch((error) =>
+          this.payHere.logReconciliationError('scheduled-boost-scan', error),
+        ),
+      5 * 60_000,
+    );
+    this.reconciliationTimer.unref();
+  }
+
+  onModuleDestroy() {
+    if (this.reconciliationTimer) clearInterval(this.reconciliationTimer);
+  }
+
+  private async freezeBoostChargeback(
+    orderRef: FirebaseFirestore.DocumentReference,
+    order: FirebaseFirestore.DocumentData,
+    notification: Record<string, string | null>,
+  ) {
+    const now = Timestamp.now();
+    const disputeId = `payhere_boost_chargeback_${String(order.orderId)}`;
+    // Firestore expects a promise-returning callback; this phase only queues
+    // atomic writes, so it has no asynchronous read to await.
+    // eslint-disable-next-line @typescript-eslint/require-await
+    await this.db.runTransaction(async (transaction) => {
+      transaction.update(orderRef, {
+        status: 'charged_back',
+        lastNotification: notification,
+        chargedBackAt: now,
+        payment: FieldValue.delete(),
+        updatedAt: now,
+      });
+      transaction.set(
+        this.db.collection(this.boostsCollection).doc(String(order.boostId)),
+        {
+          status: 'chargeback_review',
+          rejectionReason: 'PayHere reported a chargeback. Administrative review is required.',
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+      transaction.set(
+        this.db.collection('loanListings').doc(String(order.listingId)),
+        {
+          boostStatus: 'chargeback_review',
+          activeBoostId: null,
+          isBoosted: false,
+          boostEndsAt: now,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+      transaction.set(
+        this.db.collection('transactions').doc(String(order.transactionId)),
+        { providerStatus: 'charged_back', riskStatus: 'under_review', updatedAt: now },
+        { merge: true },
+      );
+      transaction.set(
+        this.db.collection('disputes').doc(disputeId),
+        {
+          id: disputeId,
+          disputeId,
+          disputeCode: `PHB-${String(order.orderId)}`,
+          loanId: null,
+          transactionId: String(order.transactionId),
+          installmentId: null,
+          complainantId: 'system',
+          complainantRole: 'lender',
+          respondentId: '',
+          respondentRole: 'borrower',
+          borrowerId: '',
+          lenderId: String(order.lenderId),
+          borrowerName: '',
+          lenderName: '',
+          category: 'payment',
+          subject: 'Advertisement boost chargeback requires review',
+          description: `PayHere reported a chargeback for boost ${String(order.boostId)}.`,
+          desiredOutcome: 'An administrator must review the provider payment before any financial adjustment.',
+          disputedAmountMinor: Number(order.amountMinor),
+          currency: String(order.currency),
+          evidenceDocumentIds: [],
+          status: 'under_review',
+          priority: 'critical',
+          assignedAdminId: null,
+          resolution: null,
+          acknowledgements: {},
+          reopenCount: 0,
+          responseRequestedFrom: null,
+          source: 'payhere',
+          createdAt: now,
+          updatedAt: now,
+          resolvedAt: null,
+          closedAt: null,
+        },
+        { merge: true },
+      );
+    });
+    await this.roleNotifications?.createAdmin({
+      eventType: 'payhere_boost_chargeback',
+      eventId: String(order.orderId),
+      category: 'boost_payment',
+      title: 'PayHere boost chargeback requires review',
+      message: 'A paid advertisement boost was stopped after a PayHere chargeback.',
+      severity: 'critical',
+      entityType: 'adBoost',
+      entityId: String(order.boostId),
+      actionLabel: 'Review dispute',
+      actionTarget: '/admin/disputes',
+      metadata: { disputeId },
+    }).catch(() => undefined);
+  }
+
+  private async reconcilePendingOrders() {
+    const snapshot = await this.db
+      .collection(this.ordersCollection)
+      .where('status', 'in', ['initiated', 'pending', 'processing_failed'])
+      .limit(100)
+      .get();
+    for (const document of snapshot.docs) {
+      const order = document.data() ?? {};
+      const lastChecked = this.toDate(order.lastReconciledAt)?.getTime() ?? 0;
+      if (Date.now() - lastChecked < 2 * 60_000) continue;
+      await document.ref.set({ lastReconciledAt: Timestamp.now() }, { merge: true });
+      try {
+        const payment = await this.payHere.retrievePayment(document.id);
+        if (!payment) {
+          if ((this.toDate(order.expiresAt)?.getTime() ?? 0) <= Date.now()) {
+            const boostRef = this.db
+              .collection(this.boostsCollection)
+              .doc(String(order.boostId));
+            await this.db.runTransaction(async (transaction) => {
+              const boostSnapshot = await transaction.get(boostRef);
+              const now = Timestamp.now();
+              transaction.update(document.ref, {
+                status: 'expired',
+                payment: FieldValue.delete(),
+                expiredAt: now,
+                updatedAt: now,
+              });
+              if (
+                boostSnapshot.exists &&
+                boostSnapshot.get('status') === 'payment_pending'
+              ) {
+                transaction.update(boostRef, {
+                  status: 'expired',
+                  rejectionReason: 'Card payment checkout expired.',
+                  updatedAt: now,
+                });
+                transaction.update(
+                  this.db
+                    .collection('transactions')
+                    .doc(String(order.transactionId)),
+                  { status: 'failed', updatedAt: now },
+                );
+                transaction.update(
+                  this.db
+                    .collection('loanListings')
+                    .doc(String(order.listingId)),
+                  {
+                    boostStatus: 'expired',
+                    activeBoostId: null,
+                    isBoosted: false,
+                    boostPaymentExpiresAt: null,
+                    updatedAt: now,
+                  },
+                );
+              }
+            });
+          }
+          continue;
+        }
+        if (
+          payment.amountMinor !== Number(order.amountMinor) ||
+          payment.currency !== order.currency
+        ) {
+          throw new Error('Retrieved PayHere payment details do not match the boost order.');
+        }
+        if (payment.status === 'CHARGEBACKED' || payment.status.startsWith('REFUND')) {
+          await this.freezeBoostChargeback(document.ref, order, {
+            orderId: document.id,
+            paymentId: payment.paymentId,
+            amount: this.payHere.formatMinor(payment.amountMinor),
+            currency: payment.currency,
+            statusCode: payment.status,
+          });
+          continue;
+        }
+        if (payment.status !== 'RECEIVED' || order.status === 'completed') continue;
+        const boostRef = this.db.collection(this.boostsCollection).doc(String(order.boostId));
+        await this.db.runTransaction(async (transaction) => {
+          const boostSnapshot = await transaction.get(boostRef);
+          if (!boostSnapshot.exists) throw new Error('Boost request not found.');
+          const boost = boostSnapshot.data() ?? {};
+          if (boost.status !== 'approved') {
+            this.activate(transaction, boostRef, boost, null, payment.paymentId);
+          }
+          transaction.update(document.ref, {
+            status: 'completed',
+            payherePaymentId: payment.paymentId,
+            reconciledAt: Timestamp.now(),
+            completedAt: Timestamp.now(),
+            payment: FieldValue.delete(),
+            updatedAt: Timestamp.now(),
+          });
+        });
+        await this.notify(String(order.lenderId), String(order.boostId), true);
+      } catch (error) {
+        this.payHere.logReconciliationError(document.id, error);
+      }
+    }
+  }
+
   private async createCardOrder(
     boost: AdBoostResponse,
     requestBaseUrl: string,
   ) {
-    const merchantId = this.configService.get<string>('PAYHERE_MERCHANT_ID');
-    const merchantSecret = this.configService.get<string>(
-      'PAYHERE_MERCHANT_SECRET',
-    );
-    if (!merchantId || !merchantSecret) {
-      throw new InternalServerErrorException(
-        'PayHere is not configured on the server.',
-      );
-    }
     const user = await this.db.collection('users').doc(boost.lenderId).get();
     const profile = user.data() ?? {};
+    if (!String(profile.email ?? '').trim() || !String(profile.phone ?? '').trim()) {
+      throw new BadRequestException(
+        'A verified email address and phone number are required for card payments.',
+      );
+    }
     const orderId = `PHB-${Date.now()}-${randomUUID().slice(0, 8)}`;
-    const amount = this.formatAmount(boost.plan.amountMinor / 100);
-    const baseUrl = this.publicBaseUrl(requestBaseUrl);
-    const checkoutUrl =
-      this.configService.get<string>('PAYHERE_CHECKOUT_URL') ??
-      (this.isSandbox()
-        ? 'https://sandbox.payhere.lk/pay/checkout'
-        : 'https://www.payhere.lk/pay/checkout');
+    const amount = this.payHere.formatMinor(boost.plan.amountMinor);
+    const baseUrl = this.payHere.publicBaseUrl(requestBaseUrl);
+    const checkoutUrl = this.payHere.checkoutUrl();
+    const urls = this.payHere.urls('lender-ad-boosts', requestBaseUrl);
     const names = String(profile.fullName ?? 'Smart Credit Lender')
       .trim()
       .split(/\s+/);
     const payment = {
-      merchant_id: merchantId,
-      return_url: `${baseUrl}/api/lender-ad-boosts/payhere/result/success`,
-      cancel_url: `${baseUrl}/api/lender-ad-boosts/payhere/result/cancelled`,
-      notify_url: `${baseUrl}/api/lender-ad-boosts/payhere/notify`,
+      merchant_id: this.payHere.merchantId(),
+      return_url: urls.returnUrl,
+      cancel_url: urls.cancelUrl,
+      notify_url: urls.notifyUrl,
       first_name: names[0] || 'Smart',
       last_name: names.slice(1).join(' ') || 'Lender',
-      email: String(profile.email ?? 'lender@smartcredit.local'),
-      phone: String(profile.phone ?? '0770000000'),
+      email: String(profile.email).trim(),
+      phone: String(profile.phone).trim(),
       address: 'N/A',
       city: String(profile.city ?? 'Colombo'),
       country:
@@ -646,12 +911,7 @@ export class AdBoostsService {
       amount,
       custom_1: boost.lenderId,
       custom_2: boost.boostId,
-      hash: this.checkoutHash(
-        merchantId,
-        orderId,
-        amount,
-        boost.plan.currency,
-      ),
+      hash: this.payHere.checkoutHash(orderId, amount, boost.plan.currency),
     };
     await this.db.collection(this.ordersCollection).doc(orderId).set({
       orderId,
@@ -660,15 +920,19 @@ export class AdBoostsService {
       lenderId: boost.lenderId,
       transactionId: boost.transactionId,
       amount: boost.plan.amountMinor / 100,
+      amountMinor: boost.plan.amountMinor,
       currency: boost.plan.currency,
       status: 'initiated',
       checkoutUrl,
       payment,
+      expiresAt: Timestamp.fromMillis(Date.now() + 30 * 60_000),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
     return {
       orderId,
+      status: 'initiated',
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
       paymentPageUrl: `${baseUrl}/api/lender-ad-boosts/payhere/checkout/${orderId}`,
     };
   }
@@ -815,54 +1079,6 @@ export class AdBoostsService {
   }
   private iso(value: unknown) {
     return this.toDate(value)?.toISOString() ?? null;
-  }
-  private md5(value: string) {
-    return createHash('md5').update(value).digest('hex');
-  }
-  private formatAmount(value: number) {
-    return Number(value).toFixed(2);
-  }
-  private checkoutHash(
-    merchantId: string,
-    orderId: string,
-    amount: string,
-    currency: string,
-  ) {
-    const secret =
-      this.configService.get<string>('PAYHERE_MERCHANT_SECRET') ?? '';
-    return this.md5(
-      `${merchantId}${orderId}${amount}${currency}${this.md5(secret).toUpperCase()}`,
-    ).toUpperCase();
-  }
-  private validNotification(payload: PayHereNotification) {
-    const secret =
-      this.configService.get<string>('PAYHERE_MERCHANT_SECRET') ?? '';
-    const expected = this.md5(
-      `${payload.merchant_id ?? ''}${payload.order_id ?? ''}${payload.payhere_amount ?? ''}${payload.payhere_currency ?? ''}${payload.status_code ?? ''}${this.md5(secret).toUpperCase()}`,
-    ).toUpperCase();
-    return expected === String(payload.md5sig ?? '').toUpperCase();
-  }
-  private isSandbox() {
-    return ['true', '1', 'yes', 'sandbox'].includes(
-      String(this.configService.get<string>('PAYHERE_SANDBOX') ?? '')
-        .trim()
-        .toLowerCase(),
-    );
-  }
-  private publicBaseUrl(requestBaseUrl: string) {
-    return (
-      this.configService.get<string>('PAYHERE_PUBLIC_BASE_URL') ??
-      this.configService.get<string>('PUBLIC_API_BASE_URL') ??
-      requestBaseUrl
-    )
-      .replace(/\/api\/?$/, '')
-      .replace(/\/$/, '');
-  }
-  private mapPayHereStatus(code: string) {
-    if (code === '0') return 'pending';
-    if (code === '-1') return 'cancelled';
-    if (code === '-3') return 'charged_back';
-    return 'failed';
   }
   private escape(value: string) {
     return value

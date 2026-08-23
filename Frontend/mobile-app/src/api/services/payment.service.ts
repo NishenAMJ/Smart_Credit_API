@@ -24,7 +24,26 @@ export interface InitiatePayHerePayload {
 export interface PayHereCheckoutSession {
   orderId: string;
   paymentPageUrl: string;
-  checkoutUrl: string;
+  status: PayHereOrderStatus;
+  expiresAt: string;
+}
+
+export type PayHereOrderStatus =
+  | "initiated"
+  | "pending"
+  | "processing"
+  | "completed"
+  | "cancelled"
+  | "failed"
+  | "charged_back"
+  | "expired"
+  | "processing_failed";
+
+export interface PayHereOrderStatusResponse {
+  orderId: string;
+  status: PayHereOrderStatus;
+  expiresAt: string | null;
+  repaymentId: string | null;
 }
 
 type RepaymentListResponse = {
@@ -156,6 +175,19 @@ export const paymentService = {
       throw new Error("PayHere checkout could not be started.");
     }
 
+    return response.data.data;
+  },
+
+  getPayHereOrderStatus: async (
+    orderId: string,
+  ): Promise<PayHereOrderStatusResponse> => {
+    const response = await apiClient.get<{
+      success?: boolean;
+      data?: PayHereOrderStatusResponse;
+    }>(ENDPOINTS.repayments.payHereStatus(orderId));
+    if (!response.data?.data) {
+      throw new Error("PayHere payment status could not be loaded.");
+    }
     return response.data.data;
   },
 
