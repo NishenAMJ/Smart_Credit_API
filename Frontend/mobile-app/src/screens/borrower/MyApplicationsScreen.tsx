@@ -15,6 +15,7 @@ import { Feather } from "@expo/vector-icons";
 import { getApiErrorMessage } from "../../api/api-error";
 import { applicationService } from "../../api/services/application.service";
 import ApplicationCard from "../../components/borrower/ApplicationCard";
+import { chatSocket } from "../../services/socketService";
 import type { BorrowerApplication } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
 
@@ -41,6 +42,17 @@ export default function MyApplicationsScreen({
       void fetchApplications();
     }, []),
   );
+
+  React.useEffect(() => {
+    const refreshApplications = () => void fetchApplications();
+    chatSocket.on("agreementChanged", refreshApplications);
+    chatSocket.on("socketConnected", refreshApplications);
+
+    return () => {
+      chatSocket.off("agreementChanged", refreshApplications);
+      chatSocket.off("socketConnected", refreshApplications);
+    };
+  }, []);
 
   const fetchApplications = async () => {
     try {
@@ -76,6 +88,18 @@ export default function MyApplicationsScreen({
         ["pending", "submitted", "under_review"].includes(
           String(app.status ?? "").toLowerCase(),
         ),
+      );
+    }
+
+    if (activeFilter === "approved") {
+      return applications.filter(
+        (app) =>
+          Boolean(app.convertedLoanId) ||
+          ["approved", "accepted", "funded", "converted"].includes(
+            String(app.status ?? "")
+              .trim()
+              .toLowerCase(),
+          ),
       );
     }
 

@@ -45,15 +45,19 @@ export default function ApplicationCard({
   };
 
   const statusColor = getStatusColor(displayStatus);
+  const statusLabel =
+    displayStatus === "under_review"
+      ? "UNDER REVIEW"
+      : displayStatus === "converted"
+        ? "APPROVED"
+        : displayStatus.toUpperCase() || "UNKNOWN";
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
       <View style={styles.header}>
         <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
           <Text style={[styles.statusText, { color: statusColor.text }]}>
-            {displayStatus === "under_review"
-              ? "UNDER REVIEW"
-              : displayStatus.toUpperCase() || "UNKNOWN"}
+            {statusLabel}
           </Text>
         </View>
         <Text style={styles.date}>

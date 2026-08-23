@@ -37,8 +37,9 @@ function normalizeApplication(
   },
 ): BorrowerApplication {
   const rawStatus = String(application.status ?? "").toLowerCase();
-  const normalizedStatus =
-    rawStatus === "open" || rawStatus === "pending"
+  const normalizedStatus = application.convertedLoanId
+    ? "converted"
+    : rawStatus === "open" || rawStatus === "pending"
       ? "submitted"
       : rawStatus === "accepted"
         ? "approved"

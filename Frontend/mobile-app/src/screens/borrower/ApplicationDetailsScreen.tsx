@@ -31,20 +31,21 @@ const STATUS_STEPS: {
   label: string;
   icon: string;
 }[] = [
-  { key: "pending", label: "Submitted", icon: "send" },
+  { key: "draft", label: "Draft", icon: "edit-3" },
+  { key: "submitted", label: "Submitted", icon: "send" },
   { key: "under_review", label: "Under Review", icon: "eye" },
   { key: "approved", label: "Approved", icon: "check-circle" },
   { key: "converted", label: "Agreement Created", icon: "file-text" },
 ];
 
 const STATUS_COLOR: Record<string, string> = {
-  pending: "#F59E0B",
+  draft: "#6B7280",
+  submitted: "#F59E0B",
   under_review: "#3B82F6",
   approved: "#10B981",
-  funded: "#059669",
   converted: "#059669",
   rejected: "#EF4444",
-  cancelled: "#6B7280",
+  withdrawn: "#6B7280",
 };
 
 function getStatusLabel(status?: string) {
@@ -64,11 +65,17 @@ export default function ApplicationDetailsScreen({
   const application = route.params?.application;
   const rawStatus = String(application?.status ?? "").toLowerCase();
   const status =
-    rawStatus === "draft" || rawStatus === "open" || rawStatus === "pending"
-      ? "under_review"
-      : rawStatus || "under_review";
+    rawStatus === "open" || rawStatus === "pending"
+      ? "submitted"
+      : rawStatus === "accepted"
+        ? "approved"
+        : rawStatus === "funded"
+          ? "converted"
+          : rawStatus === "cancelled"
+            ? "withdrawn"
+            : rawStatus || "submitted";
   const currentStep = getCurrentStepIndex(status);
-  const isRejected = status === "rejected" || status === "cancelled";
+  const isClosed = status === "rejected" || status === "withdrawn";
   const statusColor = STATUS_COLOR[status] ?? "#9CA3AF";
 
   const formatDate = (dateStr?: string) => {
@@ -185,7 +192,7 @@ export default function ApplicationDetailsScreen({
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Application Timeline</Text>
 
-          {isRejected ? (
+          {isClosed ? (
             <View style={styles.rejectedBanner}>
               <Feather name="x-circle" size={20} color="#EF4444" />
               <Text style={styles.rejectedText}>
