@@ -40,6 +40,8 @@ AI_ASSISTANT_ENABLED=true
 AI_PROVIDER=gemini
 GEMINI_API_KEY=your_server_side_key
 GEMINI_MODEL=gemini-flash-latest
+GEMINI_REASONING_EFFORT=low
+GEMINI_MAX_TOKENS=2048
 ```
 
 Never expose provider API keys through frontend environment variables.

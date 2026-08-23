@@ -29,33 +29,22 @@
   font-weight: 600;
 }
 
-.agreement-portfolio-card__signatures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.agreement-portfolio-card__signature {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 9px;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.agreement-portfolio-card__signature--complete {
-  background: #ecfdf5;
-  color: #047857;
-}
-
 .agreement-portfolio-card__footer {
   width: 100%;
   margin-top: auto;
+}
+
+.agreement-portfolio-card__attention {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agreement-portfolio-card__attention--required {
+  color: #b45309;
 }
 
 .lender-agreements__state {
