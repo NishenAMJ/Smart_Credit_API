@@ -3,8 +3,13 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Check,
+  Download,
   Eye,
+  ExternalLink,
   FileCheck2,
+  FileText,
+  LoaderCircle,
+  LockKeyhole,
   RefreshCw,
   Search,
   X,
@@ -23,6 +28,8 @@ import {
 } from '../lib/recent-transactions-api'
 
 const PAGE_SIZE = 15
+
+type ReceiptPreview = Awaited<ReturnType<typeof fetchReceiptAccess>>
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', {
   style: 'currency',
@@ -94,6 +101,11 @@ export default function RecentTransactionsPage({
     null,
   )
   const [rejectionReason, setRejectionReason] = useState('')
+  const [openingReceiptId, setOpeningReceiptId] = useState<string | null>(null)
+  const [receiptPreview, setReceiptPreview] = useState<ReceiptPreview | null>(
+    null,
+  )
+  const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false)
   const activeCursor = pageCursors[currentPage - 1] ?? null
 
   useEffect(() => {
@@ -182,17 +194,59 @@ export default function RecentTransactionsPage({
     }
   }, [reloadVersion, session.lenderId])
 
+  useEffect(() => {
+    if (!receiptPreview) return
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setReceiptPreview(null)
+    }
+
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [receiptPreview])
+
   async function openReceipt(documentId: string) {
     try {
+      setOpeningReceiptId(documentId)
       setReceiptError(null)
       const access = await fetchReceiptAccess(documentId)
-      window.open(access.accessUrl, '_blank', 'noopener,noreferrer')
+      setReceiptPreview(access)
     } catch (openError) {
       setReceiptError(
         openError instanceof Error
           ? openError.message
           : 'Failed to open receipt.',
       )
+    } finally {
+      setOpeningReceiptId(null)
+    }
+  }
+
+  async function downloadReceipt() {
+    if (!receiptPreview) return
+
+    try {
+      setIsDownloadingReceipt(true)
+      setReceiptError(null)
+      const response = await fetch(receiptPreview.accessUrl)
+      if (!response.ok) throw new Error('Failed to download the receipt.')
+
+      const objectUrl = URL.createObjectURL(await response.blob())
+      const anchor = document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = receiptPreview.fileName || 'bank-transfer-receipt'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(objectUrl)
+    } catch (downloadError) {
+      setReceiptError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : 'Failed to download the receipt.',
+      )
+    } finally {
+      setIsDownloadingReceipt(false)
     }
   }
 
@@ -298,11 +352,21 @@ export default function RecentTransactionsPage({
                     <button
                       type="button"
                       className="receipt-action-button"
+                      disabled={
+                        openingReceiptId === submission.receiptDocumentId
+                      }
                       onClick={() =>
                         void openReceipt(submission.receiptDocumentId)
                       }
                     >
-                      <Eye size={15} /> View
+                      {openingReceiptId === submission.receiptDocumentId ? (
+                        <LoaderCircle className="receipt-loading-icon" size={15} />
+                      ) : (
+                        <Eye size={15} />
+                      )}
+                      {openingReceiptId === submission.receiptDocumentId
+                        ? 'Opening...'
+                        : 'View'}
                     </button>
                     <button
                       type="button"
@@ -556,6 +620,93 @@ export default function RecentTransactionsPage({
           </div>
         </section>
       </section>
+
+      {receiptPreview ? (
+        <div
+          className="dispute-evidence-preview-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setReceiptPreview(null)
+          }}
+        >
+          <section
+            className="dispute-evidence-preview receipt-document-preview"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="receipt-preview-title"
+          >
+            <header className="dispute-evidence-preview__header">
+              <div className="dispute-evidence-preview__identity">
+                <span className="dispute-evidence-preview__file-icon">
+                  <FileText size={20} />
+                </span>
+                <div>
+                  <span>Bank transfer receipt</span>
+                  <h2 id="receipt-preview-title">
+                    {receiptPreview.fileName || 'Receipt file'}
+                  </h2>
+                  <small>Temporary authenticated preview</small>
+                </div>
+              </div>
+              <div className="dispute-evidence-preview__actions">
+                <button
+                  type="button"
+                  className="dispute-evidence-toolbar-button"
+                  disabled={isDownloadingReceipt}
+                  onClick={() => void downloadReceipt()}
+                >
+                  {isDownloadingReceipt ? (
+                    <LoaderCircle className="receipt-loading-icon" size={17} />
+                  ) : (
+                    <Download size={17} />
+                  )}
+                  <span>
+                    {isDownloadingReceipt ? 'Downloading...' : 'Download'}
+                  </span>
+                </button>
+                <a
+                  className="dispute-evidence-toolbar-button"
+                  href={receiptPreview.accessUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Open receipt in a new tab"
+                >
+                  <ExternalLink size={17} />
+                  <span>Open original</span>
+                </a>
+                <button
+                  type="button"
+                  className="dispute-evidence-toolbar-button dispute-evidence-toolbar-button--close"
+                  aria-label="Close receipt preview"
+                  onClick={() => setReceiptPreview(null)}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </header>
+            <div className="dispute-evidence-preview__body">
+              {receiptPreview.mimeType.toLowerCase().includes('pdf') ||
+              receiptPreview.fileName.toLowerCase().endsWith('.pdf') ? (
+                <iframe
+                  src={receiptPreview.accessUrl}
+                  title={receiptPreview.fileName || 'Bank transfer receipt PDF'}
+                />
+              ) : (
+                <img
+                  src={receiptPreview.accessUrl}
+                  alt={receiptPreview.fileName || 'Bank transfer receipt'}
+                />
+              )}
+            </div>
+            <footer className="dispute-evidence-preview__footer">
+              <span>
+                <LockKeyhole size={14} /> Secure temporary access
+              </span>
+              <span>Press Esc to close</span>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       {selectedBorrowerId ? (
         <BorrowerSidePanel

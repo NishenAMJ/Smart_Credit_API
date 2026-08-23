@@ -3346,6 +3346,21 @@
   opacity: 0.5;
 }
 
+.receipt-loading-icon {
+  animation: receipt-loading-spin 0.8s linear infinite;
+}
+
+.receipt-document-preview .dispute-evidence-toolbar-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+@keyframes receipt-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .receipt-reject-form {
   grid-column: 1 / -1;
   display: grid;
