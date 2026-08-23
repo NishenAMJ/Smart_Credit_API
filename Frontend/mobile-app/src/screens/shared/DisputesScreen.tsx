@@ -25,6 +25,57 @@ import { COLORS } from "../../constants/colors";
 
 const categories = ["payment", "loan_terms", "fraud", "conduct", "other"];
 
+const statusLabels: Record<string, string> = {
+  open: "Submitted",
+  under_review: "Under review",
+  awaiting_response: "Your response is needed",
+  escalated: "Escalated for review",
+  resolved: "Resolved",
+  closed: "Closed",
+};
+
+const eventLabels: Record<string, string> = {
+  created: "Dispute submitted",
+  review_started: "Review started",
+  comment: "New message",
+  information_requested: "Information requested",
+  escalated: "Escalated for review",
+  resolved: "Dispute resolved",
+  reopened: "Dispute reopened",
+  acknowledged: "Resolution acknowledged",
+  closed: "Dispute closed",
+};
+
+function friendlyStatus(status: string) {
+  return statusLabels[status] ?? status.replace(/_/g, " ");
+}
+
+function friendlyEvent(type: string) {
+  return eventLabels[type] ?? type.replace(/_/g, " ");
+}
+
+function friendlyEventMessage(event: DisputeEvent) {
+  if (event.type === "information_requested")
+    return event.message.replace(/^(both|complainant|respondent):\s*/i, "");
+  return event.message;
+}
+
+function friendlyActor(role: string) {
+  if (role === "admin") return "Smart Credit support";
+  if (role === "system") return "System update";
+  if (role === "borrower") return "Borrower";
+  if (role === "lender") return "Lender";
+  return "Participant";
+}
+
+function friendlyError(error: unknown, fallback: string) {
+  const message = (
+    error as { response?: { data?: { message?: unknown } }; message?: string }
+  )?.response?.data?.message;
+  if (typeof message === "string" && message.trim()) return message;
+  return fallback;
+}
+
 export default function DisputesScreen({ navigation }: any) {
   const [items, setItems] = useState<Dispute[]>([]);
   const [loans, setLoans] = useState<EligibleLoan[]>([]);
@@ -69,18 +120,44 @@ export default function DisputesScreen({ navigation }: any) {
         !current || eligible.some((loan) => loan.id === current) ? current : "",
       );
     }
-    const failure = [casesResult, loansResult].find(
-      (result) => result.status === "rejected",
-    );
-    if (failure?.status === "rejected") {
-      const reason = failure.reason as { message?: string };
-      Alert.alert("Disputes", reason?.message ?? "Failed to load disputes.");
+    if (casesResult.status === "rejected") {
+      Alert.alert(
+        "Unable to load disputes",
+        friendlyError(
+          casesResult.reason,
+          "Please check your connection and try again.",
+        ),
+      );
+    }
+  }, []);
+
+  const openDispute = useCallback(async (item: Dispute) => {
+    setSelected(item);
+    try {
+      const [current, timeline] = await Promise.all([
+        disputesService.get(item.id),
+        disputesService.events(item.id),
+      ]);
+      setSelected(current);
+      setEvents(timeline);
+    } catch (error) {
+      Alert.alert(
+        "Unable to open dispute",
+        friendlyError(error, "Please check your connection and try again."),
+      );
     }
   }, []);
 
   useEffect(() => {
     void load();
-    const changed = () => void load();
+    const changed = (payload?: { disputeId?: string }) => {
+      void load();
+      if (
+        selected &&
+        (!payload?.disputeId || payload.disputeId === selected.id)
+      )
+        void openDispute(selected);
+    };
     const connected = () => void load();
     chatSocket.on("disputeChanged", changed);
     chatSocket.on("socketConnected", connected);
@@ -88,13 +165,13 @@ export default function DisputesScreen({ navigation }: any) {
       chatSocket.off("disputeChanged", changed);
       chatSocket.off("socketConnected", connected);
     };
-  }, [load]);
+  }, [load, openDispute, selected?.id]);
 
   useEffect(() => {
     setMessage("");
     setMessageEvidence([]);
     setReopenReason("");
-    if (selected) void disputesService.events(selected.id).then(setEvents);
+    setEvents([]);
   }, [selected?.id]);
 
   async function submit() {
@@ -140,7 +217,10 @@ export default function DisputesScreen({ navigation }: any) {
       setEvidence([]);
       await load();
     } catch (error: any) {
-      Alert.alert("Unable to submit", error?.message ?? "Please try again.");
+      Alert.alert(
+        "Unable to submit",
+        friendlyError(error, "Please try again."),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -162,7 +242,10 @@ export default function DisputesScreen({ navigation }: any) {
       await load();
       setEvents(await disputesService.events(selected.id));
     } catch (error: any) {
-      Alert.alert("Unable to reply", error?.message ?? "Please try again.");
+      Alert.alert(
+        "Unable to send response",
+        friendlyError(error, "Please try again."),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -177,7 +260,10 @@ export default function DisputesScreen({ navigation }: any) {
       await load();
       setEvents(await disputesService.events(selected.id));
     } catch (error: any) {
-      Alert.alert("Unable to reopen", error?.message ?? "Please try again.");
+      Alert.alert(
+        "Unable to reopen",
+        friendlyError(error, "Please try again."),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -200,13 +286,11 @@ export default function DisputesScreen({ navigation }: any) {
             <TouchableOpacity
               key={item.id}
               style={styles.card}
-              onPress={() => setSelected(item)}
+              onPress={() => void openDispute(item)}
             >
               <View style={styles.row}>
                 <Text style={styles.title}>{item.subject}</Text>
-                <Text style={styles.status}>
-                  {item.status.replace(/_/g, " ")}
-                </Text>
+                <Text style={styles.status}>{friendlyStatus(item.status)}</Text>
               </View>
               {item.loanId ? (
                 <Text style={styles.muted}>
@@ -349,10 +433,7 @@ export default function DisputesScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[
-                styles.primary,
-                submitting && styles.disabled,
-              ]}
+              style={[styles.primary, submitting && styles.disabled]}
               disabled={submitting}
               onPress={() => void submit()}
             >
@@ -379,7 +460,7 @@ export default function DisputesScreen({ navigation }: any) {
                 <View style={styles.card}>
                   <Text style={styles.title}>{selected.subject}</Text>
                   <Text style={styles.status}>
-                    {selected.status.replace(/_/g, " ")}
+                    {friendlyStatus(selected.status)}
                   </Text>
                   <Text>{selected.description}</Text>
                   <Text style={styles.label}>Desired outcome</Text>
@@ -445,10 +526,12 @@ export default function DisputesScreen({ navigation }: any) {
                 {events.map((event) => (
                   <View key={event.id} style={styles.card}>
                     <Text style={styles.title}>
-                      {event.type.replace(/_/g, " ")}
+                      {friendlyEvent(event.type)}
                     </Text>
-                    <Text>{event.message}</Text>
-                    <Text style={styles.muted}>{event.actorRole}</Text>
+                    <Text>{friendlyEventMessage(event)}</Text>
+                    <Text style={styles.muted}>
+                      {friendlyActor(event.actorRole)}
+                    </Text>
                     {event.documentIds.map((documentId) => (
                       <TouchableOpacity
                         key={documentId}
@@ -466,8 +549,21 @@ export default function DisputesScreen({ navigation }: any) {
                 ))}
                 {selected.status === "awaiting_response" ? (
                   <>
+                    <View style={styles.responseNotice}>
+                      <Feather
+                        name="message-circle"
+                        size={18}
+                        color="#1D4ED8"
+                      />
+                      <Text style={styles.responseNoticeText}>
+                        Smart Credit support needs more information from you.
+                        Add your response below.
+                      </Text>
+                    </View>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, styles.area]}
+                      multiline
+                      textAlignVertical="top"
                       placeholder="Reply to the admin's information request"
                       value={message}
                       onChangeText={setMessage}
@@ -507,9 +603,9 @@ export default function DisputesScreen({ navigation }: any) {
                   </>
                 ) : selected.status !== "resolved" &&
                   selected.status !== "closed" ? (
-                  <Text style={styles.muted}>
-                    Messages and attachments are enabled when the admin requests
-                    more information.
+                  <Text style={styles.helpText}>
+                    No response is required from you right now. We will enable
+                    replies if more information is needed.
                   </Text>
                 ) : null}
               </ScrollView>
@@ -582,6 +678,24 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: "#fff", fontWeight: "700" },
   disabled: { opacity: 0.5 },
+  responseNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+  },
+  responseNoticeText: { flex: 1, color: "#1E3A8A", lineHeight: 20 },
+  helpText: {
+    color: "#6B7280",
+    lineHeight: 20,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
+  },
   secondary: {
     backgroundColor: "#E5E7EB",
     padding: 13,

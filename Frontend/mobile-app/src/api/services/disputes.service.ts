@@ -35,6 +35,7 @@ export type DisputeEvent = {
   actorRole: string;
   message: string;
   documentIds: string[];
+  createdAt?: string | { _seconds?: number; seconds?: number };
 };
 export type EligibleLoan = {
   id: string;
@@ -61,6 +62,10 @@ export const disputesService = {
     return (
       await apiClient.get<{ events: DisputeEvent[] }>(`/disputes/${id}/events`)
     ).data.events;
+  },
+  async get(id: string) {
+    return (await apiClient.get<{ dispute: Dispute }>(`/disputes/${id}`)).data
+      .dispute;
   },
   async create(body: Record<string, unknown>) {
     return (await apiClient.post<{ dispute: Dispute }>("/disputes", body)).data
@@ -101,9 +106,7 @@ export async function uploadDisputeEvidence(
       documentType: "case_evidence",
       fileName: asset.name,
       contentType: mimeType,
-      ...(loanId
-        ? { relatedEntityType: "loan", relatedEntityId: loanId }
-        : {}),
+      ...(loanId ? { relatedEntityType: "loan", relatedEntityId: loanId } : {}),
     })
   ).data;
   const form = new FormData();
