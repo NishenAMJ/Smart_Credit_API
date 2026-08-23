@@ -52,6 +52,16 @@ export class GeminiProvider implements AiAssistantProvider {
     const model =
       this.configService.get<string>('GEMINI_MODEL')?.trim() ||
       'gemini-flash-latest';
+    const reasoningEffort =
+      this.configService.get<string>('GEMINI_REASONING_EFFORT')?.trim() ||
+      'low';
+    const configuredMaxTokens = Number(
+      this.configService.get<string>('GEMINI_MAX_TOKENS'),
+    );
+    const maxTokens =
+      Number.isFinite(configuredMaxTokens) && configuredMaxTokens >= 700
+        ? Math.min(configuredMaxTokens, 8192)
+        : 2048;
     const messages: GeminiMessage[] = [
       { role: 'system', content: request.instructions },
       ...request.messages.map((message) => ({
@@ -75,7 +85,8 @@ export class GeminiProvider implements AiAssistantProvider {
         messages,
         tools,
         tool_choice: 'auto',
-        max_tokens: 700,
+        reasoning_effort: reasoningEffort,
+        max_tokens: maxTokens,
       });
       const assistant = response.choices?.[0]?.message;
       const calls = (assistant?.tool_calls ?? []).filter(

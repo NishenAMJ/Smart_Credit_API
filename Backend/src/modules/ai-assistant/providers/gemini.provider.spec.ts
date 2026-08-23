@@ -90,7 +90,11 @@ describe('GeminiProvider', () => {
     const requestBody = (fetchMock.mock.calls[1][1] as RequestInit).body;
     const secondRequest = JSON.parse(requestBody as string) as {
       messages: Array<{ role: string; tool_call_id?: string }>;
+      reasoning_effort: string;
+      max_tokens: number;
     };
+    expect(secondRequest.reasoning_effort).toBe('low');
+    expect(secondRequest.max_tokens).toBe(2048);
     expect(secondRequest.messages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ role: 'system' }),

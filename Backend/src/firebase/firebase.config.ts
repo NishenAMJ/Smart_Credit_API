@@ -45,7 +45,7 @@ function parseServiceAccountJson(): ServiceAccount | null {
   return JSON.parse(serviceAccountJson) as ServiceAccount;
 }
 
-function resolveServiceAccountPath(): string {
+function resolveServiceAccountPath(): string | null {
   const explicitPath =
     process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
     process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -71,9 +71,7 @@ function resolveServiceAccountPath(): string {
     }
   }
 
-  throw new Error(
-    'Firebase service account not found. Tried: ' + candidateNames.join(', '),
-  );
+  return null;
 }
 
 export function isFirebaseEmulatorEnabled(): boolean {
@@ -92,7 +90,7 @@ export function getFirebaseProjectId(): string {
   );
 }
 
-export function loadFirebaseConfig(): ServiceAccount {
+export function loadFirebaseConfig(): ServiceAccount | null {
   const serviceAccountFromEnv = parseEnvServiceAccount();
 
   if (serviceAccountFromEnv) {
@@ -105,23 +103,14 @@ export function loadFirebaseConfig(): ServiceAccount {
     return serviceAccountFromJson;
   }
 
-  try {
-    const serviceAccountPath = resolveServiceAccountPath();
+  const serviceAccountPath = resolveServiceAccountPath();
+  if (serviceAccountPath) {
     return JSON.parse(
       fs.readFileSync(serviceAccountPath, 'utf8'),
     ) as ServiceAccount;
-  } catch (error) {
-    console.error(
-      error instanceof Error
-        ? error.message
-        : 'Failed to load Firebase service account.',
-    );
-
-    return {
-      projectId: process.env.FIREBASE_PROJECT_ID || 'undefined',
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL || 'undefined',
-      privateKey:
-        process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n') || 'undefined',
-    };
   }
+
+  // Cloud Run should normally authenticate through its attached service
+  // identity (Application Default Credentials), not a private-key file.
+  return null;
 }

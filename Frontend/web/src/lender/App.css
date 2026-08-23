@@ -3346,6 +3346,21 @@
   opacity: 0.5;
 }
 
+.receipt-loading-icon {
+  animation: receipt-loading-spin 0.8s linear infinite;
+}
+
+.receipt-document-preview .dispute-evidence-toolbar-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+@keyframes receipt-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .receipt-reject-form {
   grid-column: 1 / -1;
   display: grid;
@@ -5279,9 +5294,9 @@
 .lender-ad-card {
   display: grid;
   align-content: start;
-  gap: var(--spacing-4);
+  gap: 14px;
   min-width: 0;
-  padding: 18px;
+  padding: 16px;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
   background: #ffffff;
@@ -5297,19 +5312,38 @@
 }
 
 .lender-ad-card__header,
-.lender-ad-card__date,
 .lender-ad-card__actions {
   display: flex;
   align-items: center;
 }
 
-.lender-ad-card__header,
-.lender-ad-card__actions {
+.lender-ad-card__header {
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--spacing-3);
 }
 
+.lender-ad-card__identity {
+  min-width: 0;
+}
+
+.lender-ad-card__identity h3,
+.lender-ad-card__identity p {
+  margin: 0;
+}
+
+.lender-ad-card__identity h3 {
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-15);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .lender-ad-status {
+  flex: 0 0 auto;
   padding: 6px 9px;
   border-radius: var(--radius-round);
   background: #f1f5f9;
@@ -5330,55 +5364,50 @@
   color: #c2410c;
 }
 
-.lender-ad-card__date {
-  gap: 6px;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-11);
-}
-
-.lender-ad-card__content {
-  min-height: 116px;
-}
-
-.lender-ad-card__content h3,
-.lender-ad-card__content p {
-  margin: 0;
-}
-
 .lender-ad-card__audience {
+  overflow: hidden;
   color: #2563eb;
   font-size: 10px;
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.lender-ad-card__amount {
+  min-width: 0;
+  padding: 12px 13px;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.lender-ad-card__amount span,
+.lender-ad-card__amount strong {
+  display: block;
+}
+
+.lender-ad-card__amount span {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
 }
 
-.lender-ad-card__content h3 {
-  margin-top: 7px;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-16);
-  line-height: 1.35;
-}
-
-.lender-ad-card__description {
-  display: -webkit-box;
-  margin-top: 9px !important;
+.lender-ad-card__amount strong {
+  margin-top: 5px;
   overflow: hidden;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-12);
-  line-height: 1.55;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lender-ad-card__terms {
   display: grid;
-  grid-template-columns: 1.35fr 0.8fr 0.9fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--spacing-3);
   margin: 0;
-  padding: 13px;
-  border-radius: 12px;
-  background: #f8fafc;
 }
 
 .lender-ad-card__terms div {
@@ -5391,9 +5420,6 @@
 }
 
 .lender-ad-card__terms dt {
-  display: flex;
-  align-items: center;
-  gap: 5px;
   color: var(--color-text-secondary);
   font-size: 10px;
 }
@@ -5407,16 +5433,21 @@
 }
 
 .lender-ad-card__actions {
+  flex-wrap: wrap;
+  gap: 8px;
   padding-top: var(--spacing-3);
   border-top: 1px solid var(--color-border);
 }
 
 .lender-ad-card__actions .button {
-  gap: 7px;
-  min-height: 40px;
+  gap: 6px;
+  min-height: 36px;
+  padding-inline: 11px;
+  font-size: var(--font-size-11);
 }
 
-.lender-ad-card__actions > p {
+.lender-ad-card__next-state {
+  flex: 1 1 180px;
   margin: 0;
   color: #9a3412;
   font-size: var(--font-size-11);
@@ -5440,17 +5471,12 @@
 }
 
 @media (max-width: 620px) {
-  .lender-ad-card__terms {
-    grid-template-columns: 1fr;
-  }
-
   .lender-ad-card__actions {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
   }
 
   .lender-ad-card__actions .button {
-    width: 100%;
+    flex: 1 1 auto;
   }
 }
 
@@ -6116,6 +6142,69 @@
   gap: var(--spacing-3);
 }
 
+.loan-installment-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+  gap: 8px;
+}
+
+.loan-installment-tile {
+  display: grid;
+  min-height: 68px;
+  place-items: center;
+  gap: 3px;
+  padding: 9px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: #f8fafc;
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.loan-installment-tile strong {
+  font-size: var(--font-size-16);
+  line-height: 1;
+}
+
+.loan-installment-tile span {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.loan-installment-tile--paid,
+.loan-installment-tile--waived {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.loan-installment-tile--overdue {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.loan-installment-tile:hover,
+.loan-installment-tile:focus-visible,
+.loan-installment-tile--selected {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+  transform: none;
+}
+
+.loan-installment-record--expanded {
+  margin-top: 2px;
+}
+
+.loan-installment-hint {
+  margin: 0;
+  padding: 4px 2px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+}
+
 .loan-details-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -6208,7 +6297,7 @@
 
 .portfolio-loan-card {
   min-width: 0;
-  padding: 16px;
+  padding: 14px;
   border: 1px solid var(--color-border);
   border-radius: 16px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
@@ -6272,9 +6361,9 @@
 .portfolio-loan-card__details {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 16px 0;
-  padding: 14px 0;
+  gap: 10px;
+  margin: 12px 0 10px;
+  padding: 10px 0;
   border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
 }
@@ -6301,6 +6390,11 @@
 
 .portfolio-loan-card__footer {
   align-items: center;
+}
+
+.portfolio-loan-card__hint {
+  color: var(--color-text-secondary);
+  font-size: 11px;
 }
 
 .portfolio-loan-card__payments {

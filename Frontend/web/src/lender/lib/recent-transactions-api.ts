@@ -281,5 +281,11 @@ export async function fetchReceiptAccess(documentId: string) {
   if (!response.ok) {
     return parseError(response, 'Failed to open the receipt.')
   }
-  return response.json() as Promise<{ accessUrl: string; expiresAt: string }>
+  return response.json() as Promise<{
+    documentId: string
+    accessUrl: string
+    expiresAt: string
+    fileName: string
+    mimeType: string
+  }>
 }

@@ -202,6 +202,35 @@ export class BorrowerPaymentsService implements OnModuleInit, OnModuleDestroy {
         };
       },
     );
+    const latestRejectedByInstallment = new Map<string, PaymentRecord>();
+    for (const repayment of enrichedRepayments) {
+      if (
+        this.toOptionalString(repayment.status).toLowerCase() !== 'rejected'
+      ) {
+        continue;
+      }
+      const key = `${this.toOptionalString(repayment.loanId)}:${this.toOptionalString(repayment.installmentId)}`;
+      if (key !== ':' && !latestRejectedByInstallment.has(key)) {
+        latestRejectedByInstallment.set(key, repayment);
+      }
+    }
+    const actionableUpcomingPayments = upcomingPayments.map((payment) => {
+      const rejected = latestRejectedByInstallment.get(
+        `${payment.loanId}:${payment.installmentId ?? ''}`,
+      );
+      if (!rejected) return payment;
+
+      const reason = this.toOptionalString(rejected.rejectionReason);
+      return {
+        ...payment,
+        status: 'RETRY_REQUIRED',
+        verificationStatus: 'rejected',
+        statusLabel: 'Receipt rejected',
+        statusDetail: reason
+          ? `Lender response: ${reason}. Upload a corrected receipt to retry.`
+          : 'The lender rejected the receipt. Upload a corrected receipt to retry.',
+      };
+    });
     const installmentsAwaitingReview = new Set(
       enrichedRepayments
         .filter(
@@ -214,7 +243,7 @@ export class BorrowerPaymentsService implements OnModuleInit, OnModuleDestroy {
             `${this.toOptionalString(repayment.loanId)}:${this.toOptionalString(repayment.installmentId)}`,
         ),
     );
-    const payableUpcomingPayments = upcomingPayments.filter(
+    const payableUpcomingPayments = actionableUpcomingPayments.filter(
       (payment) =>
         !installmentsAwaitingReview.has(
           `${payment.loanId}:${payment.installmentId ?? ''}`,
