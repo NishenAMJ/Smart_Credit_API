@@ -239,10 +239,16 @@ export class TransactionsService {
         this.asString(transaction.paymentType) ??
         this.asString(transaction.type) ??
         'manual',
+      paymentMethod: this.asString(transaction.paymentMethod),
+      externalReference:
+        this.asString(transaction.externalReference) ??
+        this.asString(transaction.transactionReference),
       status: this.getTransactionStatus(transaction),
       verifiedByLender: transaction.verifiedByLender === true,
       createdAt: this.toIsoDate(transaction.createdAt),
-      paidAt: this.toIsoDate(transaction.paidAt),
+      paidAt:
+        this.toIsoDate(transaction.paidAt) ??
+        this.toIsoDate(transaction.completedAt),
       updatedAt: this.toIsoDate(transaction.updatedAt),
     };
   }
@@ -342,6 +348,8 @@ export interface TransactionRecord {
   amount: number;
   platformFee: number;
   paymentType: string;
+  paymentMethod?: string;
+  externalReference?: string;
   status: TransactionStatus;
   verifiedByLender: boolean;
   createdAt?: string;

@@ -344,9 +344,58 @@ export class AdBoostsService {
       query = query.where('status', '==', status);
     }
     const snapshot = await query.get();
-    return this.sortBoosts(
+    const boosts = this.sortBoosts(
       snapshot.docs.map((doc) => this.mapBoost(doc.id, doc.data())),
     );
+    const userIds = [
+      ...new Set(
+        boosts
+          .flatMap((boost) => [boost.lenderId, boost.reviewedByAdminId])
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const listingIds = [
+      ...new Set(boosts.map((boost) => boost.listingId).filter(Boolean)),
+    ];
+    const [userDocs, listingDocs] = await Promise.all([
+      userIds.length
+        ? this.db.getAll(
+            ...userIds.map((id) => this.db.collection('users').doc(id)),
+          )
+        : Promise.resolve([]),
+      listingIds.length
+        ? this.db.getAll(
+            ...listingIds.map((id) =>
+              this.db.collection('loanListings').doc(id),
+            ),
+          )
+        : Promise.resolve([]),
+    ]);
+    const names = new Map(
+      userDocs.map((doc) => {
+        const user = doc.data() ?? {};
+        const name =
+          String(user.fullName ?? '').trim() ||
+          [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+          doc.id;
+        return [doc.id, name];
+      }),
+    );
+    const listingTitles = new Map(
+      listingDocs.map((doc) => [
+        doc.id,
+        String(doc.get('title') ?? doc.get('purpose') ?? 'Advertisement'),
+      ]),
+    );
+    return boosts.map((boost) => ({
+      ...boost,
+      lenderName: names.get(boost.lenderId) ?? boost.lenderId,
+      reviewedByAdminName: boost.reviewedByAdminId
+        ? names.get(boost.reviewedByAdminId) ?? boost.reviewedByAdminId
+        : undefined,
+      listingTitle:
+        listingTitles.get(boost.listingId) ?? 'Advertisement',
+    }));
   }
 
   async decideBankPayment(
@@ -744,6 +793,9 @@ export class AdBoostsService {
       createdAt: this.iso(data.createdAt),
       submittedAt: this.iso(data.submittedAt),
       reviewedAt: this.iso(data.reviewedAt),
+      reviewedByAdminId: data.reviewedByAdminId
+        ? String(data.reviewedByAdminId)
+        : null,
     };
   }
 

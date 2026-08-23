@@ -325,6 +325,8 @@ export interface AdminTransaction {
   amount: number;
   platformFee: number;
   paymentType: string;
+  paymentMethod?: string;
+  externalReference?: string;
   status: string;
   verifiedByLender: boolean;
   createdAt?: string;
@@ -909,6 +911,7 @@ export type AdminAdBoost = {
   boostId: string;
   listingId: string;
   lenderId: string;
+  lenderName?: string;
   status: string;
   paymentMethod: "bank_transfer" | "card";
   transactionId: string;
@@ -917,6 +920,10 @@ export type AdminAdBoost = {
   rejectionReason: string | null;
   createdAt: string | null;
   submittedAt: string | null;
+  reviewedAt: string | null;
+  reviewedByAdminId: string | null;
+  reviewedByAdminName?: string;
+  listingTitle?: string;
   startsAt: string | null;
   endsAt: string | null;
   plan: {
