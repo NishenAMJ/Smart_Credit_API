@@ -363,9 +363,6 @@ export default function BorrowerSidePanel({
                         status={loan.status}
                         principal={loan.amount}
                         remaining={loan.remainingAmount}
-                        interestRate={loan.interestRate}
-                        tenureMonths={loan.tenureMonths}
-                        createdAt={loan.createdAt}
                         onOpen={() => openLoan(loan)}
                       />
                     ))

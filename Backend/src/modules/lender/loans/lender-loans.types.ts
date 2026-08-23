@@ -19,12 +19,6 @@ export interface LenderLoanItem {
   disbursedAt: string | null;
   maturityDate: string | null;
   createdAt: string | null;
-  installmentProgress: {
-    total: number;
-    paid: number;
-    overdue: number;
-    nextDueAt: string | null;
-  };
 }
 
 export interface LenderLoansResponse {

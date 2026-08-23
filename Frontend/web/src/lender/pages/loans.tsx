@@ -216,11 +216,7 @@ export default function LoansPage({
                   status={loan.status}
                   principal={loan.principal}
                   remaining={loan.remainingBalance}
-                  interestRate={loan.annualInterestRate}
-                  tenureMonths={loan.tenureMonths}
-                  createdAt={loan.createdAt}
                   monthlyInstallment={loan.monthlyInstallment}
-                  installmentProgress={loan.installmentProgress}
                   onOpen={() =>
                     setSelectedLoan({
                       loanId: loan.id,
@@ -229,13 +225,6 @@ export default function LoansPage({
                     })
                   }
                   onOpenBorrower={() => setSelectedBorrowerId(loan.borrower.id)}
-                  onOpenPayments={() =>
-                    setSelectedLoan({
-                      loanId: loan.id,
-                      borrowerName: loan.borrower.fullName,
-                      showPayments: true,
-                    })
-                  }
                 />
               ))}
             </div>

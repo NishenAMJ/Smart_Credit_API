@@ -6131,6 +6131,69 @@
   gap: var(--spacing-3);
 }
 
+.loan-installment-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+  gap: 8px;
+}
+
+.loan-installment-tile {
+  display: grid;
+  min-height: 68px;
+  place-items: center;
+  gap: 3px;
+  padding: 9px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: #f8fafc;
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.loan-installment-tile strong {
+  font-size: var(--font-size-16);
+  line-height: 1;
+}
+
+.loan-installment-tile span {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.loan-installment-tile--paid,
+.loan-installment-tile--waived {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.loan-installment-tile--overdue {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.loan-installment-tile:hover,
+.loan-installment-tile:focus-visible,
+.loan-installment-tile--selected {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+  transform: none;
+}
+
+.loan-installment-record--expanded {
+  margin-top: 2px;
+}
+
+.loan-installment-hint {
+  margin: 0;
+  padding: 4px 2px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+}
+
 .loan-details-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -6223,7 +6286,7 @@
 
 .portfolio-loan-card {
   min-width: 0;
-  padding: 16px;
+  padding: 14px;
   border: 1px solid var(--color-border);
   border-radius: 16px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
@@ -6287,9 +6350,9 @@
 .portfolio-loan-card__details {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 16px 0;
-  padding: 14px 0;
+  gap: 10px;
+  margin: 12px 0 10px;
+  padding: 10px 0;
   border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
 }
@@ -6316,6 +6379,11 @@
 
 .portfolio-loan-card__footer {
   align-items: center;
+}
+
+.portfolio-loan-card__hint {
+  color: var(--color-text-secondary);
+  font-size: 11px;
 }
 
 .portfolio-loan-card__payments {
