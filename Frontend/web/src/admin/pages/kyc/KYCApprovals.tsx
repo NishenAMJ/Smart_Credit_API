@@ -5,7 +5,15 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { Check, Eye, RefreshCw, Search, X } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  RefreshCw,
+  Search,
+  X,
+} from "lucide-react";
 import {
   approveKyc,
   getKycDocumentAccess,
@@ -61,6 +69,8 @@ type KycRow = {
   rejectionReason?: string;
   accessUrl?: string;
 };
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
 type KycSubmissionRow = {
   id: string;
@@ -171,6 +181,8 @@ export default function KYCApprovals() {
   const [records, setRecords] = useState<KycRow[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<KycStatusFilter>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -292,6 +304,20 @@ export default function KYCApprovals() {
         .includes(q);
     });
   }, [search, statusFilter, submissions]);
+
+  // ADMIN: Paginate KYC reviews - show only the selected page after filtering.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const paginatedSubmissions = filtered.slice(pageStart, pageStart + pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   async function openPreview(record: KycRow) {
     setSelectedRecord(record);
@@ -456,7 +482,7 @@ export default function KYCApprovals() {
                 </td>
               </tr>
             ) : (
-              filtered.map((submission) => (
+              paginatedSubmissions.map((submission) => (
                 <tr
                   key={submission.id}
                   className={`kyc-review-row${
@@ -518,6 +544,54 @@ export default function KYCApprovals() {
             )}
           </tbody>
         </table>
+        {/* ADMIN: Paginate KYC reviews - same controls used by Lender Ads. */}
+        <div style={S.paginationBar}>
+          <div style={S.paginationInfo}>
+            <span style={{ fontSize: 13, color: "#6B7280" }}>
+              Showing {filtered.length > 0 ? pageStart + 1 : 0}–
+              {Math.min(pageStart + pageSize, filtered.length)} of{" "}
+              {filtered.length}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
+              <select
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                style={S.pageSizeSelect}
+                aria-label="Rows per page"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={S.paginationButtons}>
+            <button
+              style={paginationButtonStyle(currentPage <= 1)}
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              disabled={currentPage <= 1 || loading || refreshing}
+              title="Previous page"
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+            <span style={S.pageIndicator}>Page {currentPage}</span>
+            <button
+              style={paginationButtonStyle(currentPage >= totalPages)}
+              onClick={() =>
+                setPage((value) => Math.min(totalPages, value + 1))
+              }
+              disabled={currentPage >= totalPages || loading || refreshing}
+              title="Next page"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {selectedSubmission && (
@@ -805,6 +879,24 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
+function paginationButtonStyle(disabled: boolean): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "6px 14px",
+    borderRadius: 8,
+    border: "1.5px solid #E5E7EB",
+    background: disabled ? "#F9FAFB" : "#FFFFFF",
+    color: disabled ? "#D1D5DB" : "#374151",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: disabled ? "not-allowed" : "pointer",
+    transition: "all 0.15s",
+    fontFamily: "inherit",
+  };
+}
+
 const S: Record<string, CSSProperties> = {
   errorCard: {
     marginBottom: 16,
@@ -849,6 +941,44 @@ const S: Record<string, CSSProperties> = {
     textAlign: "center",
     padding: 40,
     color: "#6B7280",
+  },
+  paginationBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 16px",
+    borderTop: "1px solid #F3F4F6",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  paginationInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
+  pageSizeSelect: {
+    padding: "4px 8px",
+    borderRadius: 6,
+    border: "1.5px solid #E5E7EB",
+    fontSize: 13,
+    color: "#374151",
+    background: "#FFFFFF",
+    cursor: "pointer",
+    outline: "none",
+    fontFamily: "inherit",
+  },
+  paginationButtons: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  pageIndicator: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#374151",
+    padding: "6px 12px",
+    background: "#F3F4F6",
+    borderRadius: 8,
   },
   reviewTable: {
     width: "100%",
