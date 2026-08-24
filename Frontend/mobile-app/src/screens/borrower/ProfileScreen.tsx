@@ -244,6 +244,34 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
   const onSaveChanges = async () => {
     if (!isDirty || saving) return;
+    if (!editableProfile.fullName.trim()) {
+      Alert.alert("Name Required", "Full name cannot be empty.");
+      return;
+    }
+    if (
+      emailChanged &&
+      !/^\S+@\S+\.\S+$/.test(editableProfile.newEmail.trim())
+    ) {
+      Alert.alert("Invalid Email", "Enter a valid email address.");
+      return;
+    }
+    const phoneDigits = editableProfile.phone.replace(/\D/g, "");
+    if (![9, 10, 11].includes(phoneDigits.length)) {
+      Alert.alert("Invalid Phone", "Enter a valid Sri Lankan phone number.");
+      return;
+    }
+    const normalizedIncome = editableProfile.monthlyIncome.trim();
+    if (
+      normalizedIncome &&
+      (!/^\d+(?:\.\d{1,2})?$/.test(normalizedIncome) ||
+        !Number.isFinite(Number(normalizedIncome)))
+    ) {
+      Alert.alert(
+        "Invalid Income",
+        "Monthly income must be a non-negative amount with up to two decimals.",
+      );
+      return;
+    }
     if (passwordChanged && editableProfile.password.length < 8) {
       Alert.alert("Weak Password", "Password must be at least 8 characters.");
       return;

@@ -111,6 +111,12 @@ export class AuthService {
           : null,
       kycStatus: 'not_submitted',
       accountStatus: 'active',
+      ...(registerDto.acceptedTerms === true && registerDto.termsVersion
+        ? {
+            termsAcceptedAt: now,
+            termsVersion: registerDto.termsVersion,
+          }
+        : {}),
       searchTokens: buildSearchTokens([
         userRef.id,
         registerDto.fullName,
@@ -169,6 +175,7 @@ export class AuthService {
     }
 
     await this.repairMissingCanonicalRoles(user);
+    this.assertSinglePublicRole(user.roles);
 
     const activeRole = this.resolveLoginRole(user, loginDto.role);
 
@@ -342,6 +349,7 @@ export class AuthService {
     activeRole: UserRole,
   ): Promise<SessionResponseDto> {
     const user = await this.getRequiredUser(userId);
+    this.assertSinglePublicRole(user.roles);
     const roles = this.getRoles(user.roles);
     const resolvedRole = roles.includes(activeRole) ? activeRole : roles[0];
 
@@ -506,6 +514,15 @@ export class AuthService {
     // Administrator accounts are intentionally exclusive. Only borrower and
     // lender roles may coexist on the same account.
     return uniqueRoles.includes('admin') ? ['admin'] : uniqueRoles;
+  }
+
+  private assertSinglePublicRole(role: UserDocument['roles']): void {
+    const roles = this.getRoles(role);
+    if (roles.includes('borrower') && roles.includes('lender')) {
+      throw new UnauthorizedException(
+        'This account has conflicting borrower and lender roles. Contact support to retain one role.',
+      );
+    }
   }
 
   private async repairMissingCanonicalRoles(user: UserDocument): Promise<void> {

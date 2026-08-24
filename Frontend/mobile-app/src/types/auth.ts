@@ -26,6 +26,8 @@ export type RegisterPayload = {
   address: RegistrationAddress;
   password: string;
   role: MobileRole;
+  acceptedTerms: true;
+  termsVersion: "registration_terms_v1";
 };
 
 export type RegistrationAddress = {

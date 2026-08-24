@@ -17,13 +17,14 @@ export class MakeRepaymentDto {
   loanId!: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   borrowerId!: string;
 
-  @IsNumber()
+  @IsNumber({ allowInfinity: false, allowNaN: false, maxDecimalPlaces: 2 })
   @Min(1)
   amount!: number; // LKR
 
+  @IsOptional()
   @IsEnum(RepaymentMethod)
   paymentMethod!: RepaymentMethod;
 

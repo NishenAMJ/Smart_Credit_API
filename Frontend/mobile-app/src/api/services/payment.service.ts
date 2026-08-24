@@ -75,6 +75,9 @@ export const paymentService = {
     asset: ImagePickerAsset,
     loanId: string,
   ): Promise<string> => {
+    if (typeof asset.fileSize === "number" && asset.fileSize > 5 * 1024 * 1024) {
+      throw new Error("Payment receipt must be 5 MB or smaller.");
+    }
     const fileName = asset.fileName || `payment-receipt-${Date.now()}.jpg`;
     const mimeType = asset.mimeType || "image/jpeg";
     const intent = (

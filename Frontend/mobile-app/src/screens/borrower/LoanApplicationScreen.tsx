@@ -46,6 +46,11 @@ export default function LoanApplicationScreen({
     () => Number(loan?.maxAmount ?? loan?.amount ?? 0),
     [loan?.amount, loan?.maxAmount],
   );
+  const minimumTenureMonths = Math.max(3, Number(loan?.minTenureMonths ?? 3));
+  const maximumTenureMonths = Math.min(
+    60,
+    Number(loan?.maxTenureMonths ?? 60),
+  );
 
   const [loanAmount, setLoanAmount] = useState(String(minimumLoanAmount));
   const [employmentStatus, setEmploymentStatus] =
@@ -65,7 +70,6 @@ export default function LoanApplicationScreen({
   const [kycVerified, setKycVerified] = useState(false);
   const [hasProfileEmploymentStatus, setHasProfileEmploymentStatus] =
     useState(false);
-  const [hasProfileMonthlyIncome, setHasProfileMonthlyIncome] = useState(false);
 
   useEffect(() => {
     setLoanAmount(String(minimumLoanAmount));
@@ -86,7 +90,6 @@ export default function LoanApplicationScreen({
           }
           if (profile.monthlyIncome) {
             setMonthlyIncome(String(profile.monthlyIncome));
-            setHasProfileMonthlyIncome(true);
           }
         }
       } catch (error) {
@@ -188,17 +191,26 @@ export default function LoanApplicationScreen({
       return;
     }
 
-    // Monthly income is required only if not prefilled from profile
-    if (!hasProfileMonthlyIncome && !isValidAmount(monthlyIncome)) {
+    if (!isValidAmount(monthlyIncome)) {
+      Alert.alert("Invalid income", "Please enter a valid monthly income.");
+      return;
+    }
+    const parsedMonthlyIncome = Number(monthlyIncome);
+    if (!Number.isFinite(parsedMonthlyIncome) || parsedMonthlyIncome < 0) {
       Alert.alert("Invalid income", "Please enter a valid monthly income.");
       return;
     }
 
-    const duration = Number.parseInt(repaymentDuration, 10);
-    if (!Number.isFinite(duration) || duration <= 0) {
+    const duration = Number(repaymentDuration);
+    if (
+      !/^\d+$/.test(repaymentDuration.trim()) ||
+      !Number.isInteger(duration) ||
+      duration < minimumTenureMonths ||
+      duration > maximumTenureMonths
+    ) {
       Alert.alert(
         "Invalid repayment duration",
-        "Please enter duration in months.",
+        `Duration must be a whole number between ${minimumTenureMonths} and ${maximumTenureMonths} months.`,
       );
       return;
     }
@@ -208,7 +220,11 @@ export default function LoanApplicationScreen({
 
     if (hasPreferredRate) {
       const preferredRate = Number.parseFloat(normalizedPreferredRate);
-      if (Number.isNaN(preferredRate)) {
+      if (
+        !Number.isFinite(preferredRate) ||
+        preferredRate <= 0 ||
+        preferredRate > 100
+      ) {
         Alert.alert(
           "Invalid preferred rate",
           "Please enter a valid preferred interest rate.",
@@ -248,6 +264,11 @@ export default function LoanApplicationScreen({
         ].join(" | "),
         tenureMonths: duration,
         preferredRepaymentMethod: "qr_payment",
+        employmentStatus: employmentStatus.trim(),
+        monthlyIncome: parsedMonthlyIncome,
+        preferredInterestRate: hasPreferredRate
+          ? Number(normalizedPreferredRate)
+          : undefined,
       });
 
       Alert.alert("Success", "Application submitted successfully.", [

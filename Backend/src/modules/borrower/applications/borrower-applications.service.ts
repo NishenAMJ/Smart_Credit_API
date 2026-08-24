@@ -165,6 +165,9 @@ export class BorrowerApplicationsService {
       requestedPurpose: plainDto.loanPurpose,
       preferredRepaymentMethod: plainDto.preferredRepaymentMethod,
       purposeDescription: plainDto.purposeDescription ?? '',
+      employmentStatus: plainDto.employmentStatus ?? '',
+      monthlyIncome: plainDto.monthlyIncome ?? 0,
+      preferredInterestRate: plainDto.preferredInterestRate ?? null,
       status: shouldSubmit
         ? LoanApplicationStatus.PENDING
         : LoanApplicationStatus.DRAFT,

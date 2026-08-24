@@ -533,6 +533,34 @@ export class KycService {
       authenticatedUserId ?? dto.userId ?? this.db.collection('users').doc().id;
 
     try {
+      const documentNumber = (dto.documentNumber ?? dto.nic)?.trim();
+      if (dto.documentType === 'national_id' && documentNumber) {
+        const normalizedNic = documentNumber.toUpperCase();
+        if (!/^(?:\d{9}[VX]|\d{12})$/.test(normalizedNic)) {
+          throw new BadRequestException(
+            'National ID must contain 12 digits or 9 digits followed by V/X.',
+          );
+        }
+      }
+      if (
+        dto.documentType &&
+        dto.documentType !== 'national_id' &&
+        documentNumber &&
+        !/^[A-Za-z0-9-]{5,30}$/.test(documentNumber)
+      ) {
+        throw new BadRequestException(
+          'Document number contains invalid characters.',
+        );
+      }
+      if (dto.expiryDate) {
+        const expiryTime = Date.parse(dto.expiryDate);
+        if (!Number.isFinite(expiryTime) || expiryTime <= Date.now()) {
+          throw new BadRequestException(
+            'Identity document expiry date must be in the future.',
+          );
+        }
+      }
+
       this.mediaService.ensureCloudinaryConfigured();
 
       const userRef = this.db.collection('users').doc(userId);

@@ -273,10 +273,17 @@ export class BorrowerPaymentsService implements OnModuleInit, OnModuleDestroy {
     receiptDocumentId?: string;
     borrowerId: string;
   }) {
+    const amount = Number(payload.amount);
+    if (!Number.isFinite(amount)) {
+      throw new BadRequestException(
+        'Repayment amount must be a finite number.',
+      );
+    }
+
     return this.borrowerService.makeRepayment({
       loanId: payload.loanId,
       borrowerId: payload.borrowerId,
-      amount: Number(payload.amount),
+      amount,
       paymentMethod: payload.paymentMethod ?? RepaymentMethod.QR_PAYMENT,
       transactionReference: payload.transactionReference,
       paymentProofUrl: payload.paymentProofUrl,

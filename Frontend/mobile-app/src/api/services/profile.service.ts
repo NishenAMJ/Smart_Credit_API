@@ -76,36 +76,41 @@ export const profileService = {
         } else if (digits.length === 9) {
           phone = `+94${digits}`;
         } else {
-          // Cannot normalise — skip instead of sending invalid value
-          console.warn(
-            "[ProfileService] Phone skipped (invalid format):",
-            trimmed,
-          );
-          phone = undefined;
+          throw new Error("Enter a valid Sri Lankan phone number.");
         }
       }
     }
 
     // --- Address: only send if we have all required fields ---
     const current = await profileService.getMyProfile();
-    const line1 = data.address?.trim() || current.address?.line1 || "";
+    const enteredAddress = data.address?.trim() || "";
+    const currentFormattedAddress = formatAddress(current.address);
+    const line1 =
+      enteredAddress && enteredAddress !== currentFormattedAddress
+        ? enteredAddress
+        : current.address?.line1 || "";
     const city = current.address?.city || "Colombo";
     const district = current.address?.district || "Colombo";
     const province = current.address?.province || "Western";
     const address = line1 ? { line1, city, district, province } : undefined;
 
     const payload: Record<string, unknown> = {};
-    if (data.fullName) payload.fullName = data.fullName;
+    if (data.fullName !== undefined) payload.fullName = data.fullName.trim();
     if (data.email) payload.email = data.email.trim();
     if (data.currentPassword) payload.currentPassword = data.currentPassword;
     if (data.password) payload.password = data.password;
     if (phone) payload.phone = phone;
     if (address) payload.address = address;
-    if (data.monthlyIncome) {
-      const income = Number(data.monthlyIncome.replace(/[^0-9.]/g, ""));
-      if (!isNaN(income)) payload.monthlyIncome = income;
+    if (data.monthlyIncome !== undefined) {
+      const rawIncome = data.monthlyIncome.replace(/[^0-9.]/g, "");
+      const income = rawIncome ? Number(rawIncome) : 0;
+      if (!Number.isFinite(income) || income < 0) {
+        throw new Error("Monthly income must be a valid non-negative amount.");
+      }
+      payload.monthlyIncome = income;
     }
-    if (data.occupation) payload.occupation = data.occupation;
+    if (data.occupation !== undefined)
+      payload.occupation = data.occupation.trim();
 
     try {
       const response = await apiClient.put(

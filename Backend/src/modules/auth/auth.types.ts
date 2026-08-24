@@ -49,6 +49,8 @@ export type UserDocument = {
   } | null;
   kycStatus: KycStatus;
   accountStatus: AccountStatus;
+  termsAcceptedAt?: Timestamp;
+  termsVersion?: 'registration_terms_v1';
   createdAt: Timestamp;
   updatedAt: Timestamp;
   lastLoginAt: Timestamp | null;

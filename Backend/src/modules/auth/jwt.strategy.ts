@@ -37,7 +37,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (user.accountStatus && user.accountStatus !== 'active') {
       throw new UnauthorizedException('This account is not active.');
     }
-    if (!hasRole(user.roles ?? user.role, payload.role)) {
+    const storedRoles = user.roles ?? user.role;
+    if (
+      !hasRole(storedRoles, 'admin') &&
+      hasRole(storedRoles, 'borrower') &&
+      hasRole(storedRoles, 'lender')
+    ) {
+      throw new UnauthorizedException(
+        'This account has conflicting borrower and lender roles.',
+      );
+    }
+    if (!hasRole(storedRoles, payload.role)) {
       throw new UnauthorizedException(
         'This role is no longer available for the account.',
       );

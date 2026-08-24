@@ -8,6 +8,7 @@ import {
   Query,
   Req,
   UseGuards,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
@@ -15,11 +16,11 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { resolveAuthenticatedBorrowerId } from '../shared/borrower-request.utils';
-import { RepaymentMethod } from '../applications/dto/loan-application.dto';
 import { BorrowerPaymentsService } from './borrower-payments.service';
 import { GenerateQrDto } from './dto/generate-qr.dto';
 import { VerifyQrDto } from './dto/verify-qr.dto';
 import { InitiatePayHereDto } from './dto/initiate-payhere.dto';
+import { MakeRepaymentDto } from './dto/make-repayment.dto';
 
 @Controller('borrower')
 export class BorrowerPaymentsController {
@@ -47,16 +48,14 @@ export class BorrowerPaymentsController {
   @Roles('borrower')
   async createPayment(
     @Req() req: AuthenticatedRequest,
-    @Body()
-    payload: {
-      loanId: string;
-      amount?: number;
-      paymentMethod?: RepaymentMethod;
-      transactionReference?: string;
-      paymentProofUrl?: string;
-      receiptDocumentId?: string;
-      borrowerId?: string;
-    },
+    @Body(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    payload: MakeRepaymentDto,
     @Query('borrowerId') borrowerId?: string,
   ) {
     return {

@@ -11,6 +11,8 @@ import {
   Query,
   Req,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   LoanApplicationStatus,
@@ -27,6 +29,13 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 @Controller('borrower/applications')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('borrower')
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }),
+)
 export class BorrowerApplicationsController {
   constructor(
     private readonly borrowerApplicationsService: BorrowerApplicationsService,
@@ -80,6 +89,9 @@ export class BorrowerApplicationsController {
           tenureMonths: Number(payload.tenureMonths),
           preferredRepaymentMethod:
             payload.preferredRepaymentMethod ?? RepaymentMethod.QR_PAYMENT,
+          employmentStatus: payload.employmentStatus,
+          monthlyIncome: payload.monthlyIncome,
+          preferredInterestRate: payload.preferredInterestRate,
         },
         { submitImmediately: true },
       ),

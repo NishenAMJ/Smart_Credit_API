@@ -1,10 +1,12 @@
 import {
+  Equals,
   IsEmail,
   IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
+  ValidateIf,
   MaxLength,
   MinLength,
   ValidateNested,
@@ -72,4 +74,13 @@ export class RegisterDto {
     message: 'Role must be either borrower or lender.',
   })
   role!: (typeof PUBLIC_USER_ROLES)[number];
+
+  @ValidateIf((dto: RegisterDto) => dto.role === 'borrower')
+  @Equals(true, { message: 'You must accept the registration terms.' })
+  acceptedTerms?: boolean;
+
+  @ValidateIf((dto: RegisterDto) => dto.role === 'borrower')
+  @IsString()
+  @IsIn(['registration_terms_v1'])
+  termsVersion?: 'registration_terms_v1';
 }

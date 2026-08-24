@@ -36,6 +36,7 @@ export type UploadedMedia = {
   secureUrl: string;
   originalFilename?: string;
   folder?: string;
+  contentHash?: string;
   uploadedAt: string;
 };
 

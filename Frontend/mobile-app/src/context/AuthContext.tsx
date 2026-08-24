@@ -34,21 +34,13 @@ import type {
   DashboardResponse,
   KycSubmission,
   LoginPayload,
-  MobileRole,
-  RegistrationAddress,
+  RegisterPayload,
   SessionResponse,
   SubmitKycPayload,
 } from "../types/auth";
 
 type SignUpPayload = {
-  account: {
-    fullName: string;
-    email: string;
-    phone: string;
-    address: RegistrationAddress;
-    password: string;
-    role: MobileRole;
-  };
+  account: RegisterPayload;
   kyc: SubmitKycPayload;
   location?: {
     latitude: number;

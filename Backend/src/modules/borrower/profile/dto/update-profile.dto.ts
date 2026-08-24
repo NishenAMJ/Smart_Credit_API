@@ -7,6 +7,8 @@ import {
   ValidateNested,
   Min,
   MinLength,
+  MaxLength,
+  IsNotEmpty,
   Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -17,6 +19,8 @@ import { AddressDto } from './create-profile.dto';
  */
 export class UpdateBorrowerProfileDto {
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
   @IsOptional()
   fullName?: string;
 
@@ -46,15 +50,18 @@ export class UpdateBorrowerProfileDto {
   address?: AddressDto;
 
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
   @IsOptional()
   employmentStatus?: string;
 
-  @IsNumber()
+  @IsNumber({ allowInfinity: false, allowNaN: false, maxDecimalPlaces: 2 })
   @Min(0)
   @IsOptional()
   monthlyIncome?: number;
 
   @IsString()
+  @MaxLength(120)
   @IsOptional()
   occupation?: string;
 }

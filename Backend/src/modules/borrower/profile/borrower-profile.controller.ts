@@ -9,6 +9,7 @@ import {
   Put,
   Req,
   UseGuards,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -31,7 +32,14 @@ export class BorrowerProfileController {
   @HttpCode(HttpStatus.CREATED)
   async createProfile(
     @Req() req: AuthenticatedRequest,
-    @Body() dto: CreateBorrowerProfileDto,
+    @Body(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: CreateBorrowerProfileDto,
   ) {
     return this.borrowerProfileService.createProfile({
       ...dto,
@@ -53,7 +61,14 @@ export class BorrowerProfileController {
   async updateProfile(
     @Req() req: AuthenticatedRequest,
     @Param('userId') userId: string,
-    @Body() dto: UpdateBorrowerProfileDto,
+    @Body(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: UpdateBorrowerProfileDto,
   ) {
     return this.borrowerProfileService.updateProfile(
       resolveAuthenticatedBorrowerId(req.user.sub, userId),

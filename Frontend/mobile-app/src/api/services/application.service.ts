@@ -24,6 +24,9 @@ export interface CreateApplicationPayload {
   preferredRepaymentMethod?: "bank_transfer" | "qr_payment" | "card";
   collateralDetails?: string[];
   additionalNotes?: string;
+  employmentStatus: string;
+  monthlyIncome: number;
+  preferredInterestRate?: number;
 }
 
 function normalizeApplication(
@@ -201,6 +204,9 @@ export async function createApplication(payload: {
   description?: string;
   tenureMonths?: number;
   preferredRepaymentMethod?: "bank_transfer" | "qr_payment" | "card";
+  employmentStatus: string;
+  monthlyIncome: number;
+  preferredInterestRate?: number;
 }) {
   return applicationService.createApplication({
     adId: payload.adId,
@@ -209,5 +215,8 @@ export async function createApplication(payload: {
     description: payload.description,
     tenureMonths: payload.tenureMonths ?? 12,
     preferredRepaymentMethod: payload.preferredRepaymentMethod,
+    employmentStatus: payload.employmentStatus,
+    monthlyIncome: payload.monthlyIncome,
+    preferredInterestRate: payload.preferredInterestRate,
   });
 }

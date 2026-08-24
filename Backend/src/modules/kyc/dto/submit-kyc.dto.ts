@@ -4,6 +4,9 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  IsNotEmpty,
+  MaxLength,
+  Matches,
 } from 'class-validator';
 
 export class SubmitKycDto {
@@ -14,6 +17,8 @@ export class SubmitKycDto {
 
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
   fullName?: string;
 
   @IsOptional()
@@ -22,22 +27,28 @@ export class SubmitKycDto {
 
   @IsOptional()
   @IsString()
+  @Matches(/^\+?[0-9()\-\s]{9,20}$/)
   phoneNumber?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(20)
   nic?: string;
 
   @IsOptional()
   @IsString()
+  @IsIn(['national_id', 'passport', 'driving_license'])
   documentType?: string;
 
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(30)
   documentNumber?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   issuingCountry?: string;
 
   @IsOptional()
@@ -45,7 +56,7 @@ export class SubmitKycDto {
   expiryDate?: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
   birthDate?: string;
 
   // Accepted only for backwards-compatible validation. Authentication owns

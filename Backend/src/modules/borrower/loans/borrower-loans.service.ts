@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   BORROWER_FILTER_LIMITS,
   BORROWER_FLOW,
 } from '../shared/borrower.constants';
 import { LoanStatus } from '../types/borrower.types';
 import { BorrowerService } from '../core/borrower.service';
+import { FilterLoansDto } from './dto/filter-loans.dto';
 
 @Injectable()
 export class BorrowerLoansService {
@@ -48,7 +49,7 @@ export class BorrowerLoansService {
     return this.borrowerService.getLoanById(loanId, borrowerId);
   }
 
-  async filterLoans(borrowerId: string, filters: Record<string, unknown>) {
+  async filterLoans(borrowerId: string, filters: FilterLoansDto) {
     const loans = await this.borrowerService.getLoans(borrowerId);
     const minAmount = Number(
       filters.minAmount ?? BORROWER_FILTER_LIMITS.MIN_AMOUNT,
@@ -57,13 +58,32 @@ export class BorrowerLoansService {
       filters.maxAmount ?? BORROWER_FILTER_LIMITS.MAX_AMOUNT,
     );
     const status = String(filters.status ?? '').toLowerCase();
+    const minInterestRate = filters.minInterestRate ?? 0;
+    const maxInterestRate = filters.maxInterestRate ?? 100;
+    const minDuration = filters.minDuration ?? 1;
+    const maxDuration = filters.maxDuration ?? Number.MAX_SAFE_INTEGER;
+
+    if (
+      minAmount > maxAmount ||
+      minInterestRate > maxInterestRate ||
+      minDuration > maxDuration
+    ) {
+      throw new BadRequestException(
+        'Minimum filter values cannot exceed maximum values.',
+      );
+    }
 
     return loans.filter((loan) => {
       const amountMatch =
         loan.principalAmount >= minAmount && loan.principalAmount <= maxAmount;
       const statusMatch = status ? loan.status === status : true;
+      const interestMatch =
+        loan.interestRate >= minInterestRate &&
+        loan.interestRate <= maxInterestRate;
+      const durationMatch =
+        loan.tenureMonths >= minDuration && loan.tenureMonths <= maxDuration;
 
-      return amountMatch && statusMatch;
+      return amountMatch && statusMatch && interestMatch && durationMatch;
     });
   }
 }

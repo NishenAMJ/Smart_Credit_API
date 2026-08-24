@@ -27,6 +27,9 @@ async function pickAsDataUrl() {
   });
   if (result.canceled || !result.assets[0]) return null;
   const asset = result.assets[0];
+  if (typeof asset.size === "number" && asset.size > 10 * 1024 * 1024) {
+    throw new Error("KYC files must be 10 MB or smaller.");
+  }
   const response = await fetch(asset.uri);
   const blob = await response.blob();
   const dataUrl = await new Promise<string>((resolve, reject) => {

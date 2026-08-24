@@ -122,6 +122,8 @@ describe('Identity and KYC workflows (e2e)', () => {
       address: testAddress,
       password: 'Password123!',
       role: 'borrower',
+      acceptedTerms: true,
+      termsVersion: 'registration_terms_v1',
     };
 
     const registration = await request(app.getHttpServer())
@@ -216,6 +218,8 @@ describe('Identity and KYC workflows (e2e)', () => {
       address: testAddress,
       password: 'Password123!',
       role: 'borrower',
+      acceptedTerms: true,
+      termsVersion: 'registration_terms_v1',
     };
     const registration = await request(app.getHttpServer())
       .post('/api/auth/register')
@@ -289,6 +293,8 @@ describe('Identity and KYC workflows (e2e)', () => {
       address: testAddress,
       password: 'Password123!',
       role: 'borrower',
+      acceptedTerms: true,
+      termsVersion: 'registration_terms_v1',
     };
     const registration = await request(app.getHttpServer())
       .post('/api/auth/register')
@@ -408,6 +414,8 @@ describe('Identity and KYC workflows (e2e)', () => {
       address: testAddress,
       password: 'Password123!',
       role: 'borrower',
+      acceptedTerms: true,
+      termsVersion: 'registration_terms_v1',
     };
     const registration = await request(app.getHttpServer())
       .post('/api/auth/register')
@@ -486,6 +494,8 @@ describe('Identity and KYC workflows (e2e)', () => {
       address: testAddress,
       password: 'Password123!',
       role: 'borrower',
+      acceptedTerms: true,
+      termsVersion: 'registration_terms_v1',
     };
     const lender = {
       fullName: 'Lifecycle Lender',

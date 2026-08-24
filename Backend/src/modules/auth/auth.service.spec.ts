@@ -286,39 +286,20 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('logs in by email and updates last login metadata', async () => {
+  it('rejects legacy accounts that contain both borrower and lender roles', async () => {
     const user = buildUser({
       roles: ['borrower', 'lender'],
     });
     queueQueryResult(user);
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-    const response = await service.login({
-      identifier: 'NIMAL@example.com',
-      password: 'SmartPass123',
-    });
-
-    expect(jwtService.sign).toHaveBeenCalledWith({
-      sub: user.userId,
-      email: user.email,
-      role: 'borrower',
-    });
-    expect(existingDocRefs.get(user.userId)?.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        lastLoginAt: expect.any(Object),
-        updatedAt: expect.any(Object),
+    await expect(
+      service.login({
+        identifier: 'NIMAL@example.com',
+        password: 'SmartPass123',
       }),
-    );
-    expect(response).toEqual(
-      expect.objectContaining({
-        accessToken: 'signed-jwt',
-        availableRoles: ['borrower', 'lender'],
-        user: expect.objectContaining({
-          uid: user.userId,
-          role: 'borrower',
-        }),
-      }),
-    );
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(jwtService.sign).not.toHaveBeenCalled();
   });
 
   it('repairs a missing canonical roles array from a valid primary role during login', async () => {
@@ -478,7 +459,7 @@ describe('AuthService', () => {
 
   it('uses the requested role when it is allowed for the account', async () => {
     const user = buildUser({
-      roles: ['borrower', 'lender'],
+      roles: ['lender'],
     });
     queueQueryResult(user);
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
@@ -495,7 +476,7 @@ describe('AuthService', () => {
       role: 'lender',
     });
     expect(response.user.role).toBe('lender');
-    expect(response.availableRoles).toEqual(['borrower', 'lender']);
+    expect(response.availableRoles).toEqual(['lender']);
   });
 
   it('returns the stored session status and falls back to the first available role', async () => {

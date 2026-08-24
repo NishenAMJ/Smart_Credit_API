@@ -10,6 +10,8 @@ import {
   Post,
   Req,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
@@ -17,10 +19,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DocumentsService } from './documents.service';
 import { MediaService } from '../media/media.service';
 import type { DocumentRelatedEntityType } from './interfaces/document-record.interface';
-import type {
+import {
   CompleteUploadDto,
-  DocumentAccessResponseDto,
   InitUploadDto,
+} from './dto/documents.dto';
+import type {
+  DocumentAccessResponseDto,
   InitUploadResponseDto,
   CompleteUploadResponseDto,
 } from './dto/documents.dto';
@@ -30,6 +34,13 @@ const SIGNED_URL_TTL_SECONDS = 300;
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard)
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }),
+)
 export class DocumentsController {
   private readonly logger = new Logger(DocumentsController.name);
 
@@ -61,6 +72,17 @@ export class DocumentsController {
       )
     ) {
       throw new BadRequestException('Unsupported document category.');
+    }
+    if (
+      category === 'payment_receipt' &&
+      !['image/jpeg', 'image/png', 'image/webp'].includes(body.contentType)
+    ) {
+      throw new BadRequestException('Payment receipts must be image files.');
+    }
+    if (Boolean(body.relatedEntityId) !== Boolean(body.relatedEntityType)) {
+      throw new BadRequestException(
+        'Related entity ID and type must be provided together.',
+      );
     }
 
     // Derive a stable publicId from the fileName (strip extension, sanitise).
@@ -112,6 +134,25 @@ export class DocumentsController {
 
     const userId = req.user.sub;
 
+    const expectedPrefix = `documents/${userId}/${body.category}/`;
+    if (!body.publicId.startsWith(expectedPrefix)) {
+      throw new BadRequestException(
+        'The uploaded asset does not belong to this user and category.',
+      );
+    }
+    if (Boolean(body.relatedEntityId) !== Boolean(body.relatedEntityType)) {
+      throw new BadRequestException(
+        'Related entity ID and type must be provided together.',
+      );
+    }
+    if (
+      body.category === 'payment_receipt' &&
+      (!['image/jpeg', 'image/png', 'image/webp'].includes(body.mimeType) ||
+        body.resourceType !== 'image')
+    ) {
+      throw new BadRequestException('Payment receipts must be image files.');
+    }
+
     // Verify the asset actually exists on Cloudinary before trusting client data.
     const verified = await this.mediaService.verifyCloudinaryAsset(
       body.publicId,
@@ -124,11 +165,27 @@ export class DocumentsController {
         'Cloudinary asset not found. Complete the upload before calling this endpoint.',
       );
     }
+    if (verified.assetId !== body.assetId) {
+      throw new BadRequestException('Cloudinary asset metadata does not match.');
+    }
+    const maximumBytes =
+      body.category === 'payment_receipt'
+        ? 5 * 1024 * 1024
+        : 10 * 1024 * 1024;
+    if (verified.bytes <= 0 || verified.bytes > maximumBytes) {
+      throw new BadRequestException(
+        `Document exceeds the ${maximumBytes / 1024 / 1024} MB upload limit.`,
+      );
+    }
+
+    // Prefer Cloudinary's server-verified content ETag. The client hash remains
+    // a compatibility fallback for providers that do not return an ETag.
+    const fileHash = verified.contentHash ?? body.fileHash;
 
     // Duplicate-hash guard.
     const duplicate = await this.documentsService.findDuplicate(
       userId,
-      body.fileHash,
+      fileHash,
       body.category,
     );
 
@@ -178,7 +235,7 @@ export class DocumentsController {
       documentType: body.documentType,
       originalFilename: body.originalFilename,
       mimeType: body.mimeType,
-      fileHash: body.fileHash,
+      fileHash,
       source: 'user_upload',
       relatedEntityType: body.relatedEntityType as
         | DocumentRelatedEntityType

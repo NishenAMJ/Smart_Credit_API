@@ -6,6 +6,8 @@ import {
   Post,
   Req,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { KycService } from './kyc.service';
 import { SubmitKycDto } from './dto/submit-kyc.dto';
@@ -16,6 +18,13 @@ import type { AuthenticatedRequest } from '../../common/types/authenticated-requ
 import { ResubmitKycDto } from './dto/resubmit-kyc.dto';
 
 @Controller('kyc')
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }),
+)
 export class KycMobileController {
   constructor(private readonly kycService: KycService) {}
 

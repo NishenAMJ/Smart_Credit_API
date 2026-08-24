@@ -7,6 +7,8 @@ import {
   Query,
   Req,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -15,10 +17,18 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { resolveAuthenticatedBorrowerId } from '../shared/borrower-request.utils';
 import { LoanStatus } from '../types/borrower.types';
 import { BorrowerLoansService } from './borrower-loans.service';
+import { FilterLoansDto } from './dto/filter-loans.dto';
 
 @Controller('borrower/loans')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('borrower')
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }),
+)
 export class BorrowerLoansController {
   constructor(private readonly borrowerLoansService: BorrowerLoansService) {}
 
@@ -71,7 +81,7 @@ export class BorrowerLoansController {
   @Post('filter')
   async filterLoans(
     @Req() req: AuthenticatedRequest,
-    @Body() filters: Record<string, unknown>,
+    @Body() filters: FilterLoansDto,
     @Query('borrowerId') borrowerId?: string,
   ) {
     return {

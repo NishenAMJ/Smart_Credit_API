@@ -584,6 +584,18 @@ export class BorrowerService {
 
     const profileData = doc.data() ?? {};
     const userData = userDoc.data() ?? {};
+    const nestedBorrowerProfile =
+      profileData.borrowerProfile &&
+      typeof profileData.borrowerProfile === 'object' &&
+      !Array.isArray(profileData.borrowerProfile)
+        ? (profileData.borrowerProfile as Record<string, unknown>)
+        : {};
+    const nestedKycDetails =
+      profileData.kycDetails &&
+      typeof profileData.kycDetails === 'object' &&
+      !Array.isArray(profileData.kycDetails)
+        ? (profileData.kycDetails as Record<string, unknown>)
+        : {};
     const pickProfileImageUrl = (...values: unknown[]): string => {
       const value = values.find(
         (item) => typeof item === 'string' && item.trim().length > 0,
@@ -593,6 +605,7 @@ export class BorrowerService {
     };
     const photoURL = pickProfileImageUrl(
       profileData.photoURL,
+      profileData.photoUrl,
       profileData.profilePictureUrl,
       profileData.profilePicUrl,
       profileData.profilePhotoUrl,
@@ -600,6 +613,7 @@ export class BorrowerService {
       profileData.imageUrl,
       profileData.avatarUrl,
       userData.photoURL,
+      userData.photoUrl,
       userData.profilePictureUrl,
       userData.profilePicUrl,
       userData.profilePhotoUrl,
@@ -607,10 +621,34 @@ export class BorrowerService {
       userData.imageUrl,
       userData.avatarUrl,
     );
+    const rootMonthlyIncome = this.toNumber(profileData.monthlyIncome, NaN);
+    const nestedMonthlyIncomeMinor = this.toNumber(
+      nestedBorrowerProfile.monthlyIncomeMinor,
+      NaN,
+    );
+    const monthlyIncome = Number.isFinite(rootMonthlyIncome)
+      ? rootMonthlyIncome
+      : Number.isFinite(nestedMonthlyIncomeMinor)
+        ? this.roundMoney(nestedMonthlyIncomeMinor / 100)
+        : 0;
 
     return {
       userId: doc.id,
       ...profileData,
+      dateOfBirth:
+        profileData.dateOfBirth ?? nestedBorrowerProfile.dateOfBirth ?? '',
+      nic:
+        profileData.nic ??
+        nestedBorrowerProfile.nic ??
+        nestedKycDetails.documentNumber ??
+        '',
+      employmentStatus:
+        profileData.employmentStatus ??
+        nestedBorrowerProfile.employmentStatus ??
+        '',
+      occupation:
+        profileData.occupation ?? nestedBorrowerProfile.occupation ?? '',
+      monthlyIncome,
       // The users record is the canonical KYC review state. Derive this value
       // at read time so an approved account never remains pending in mobile.
       kycVerified: userData.kycStatus === 'approved',
@@ -641,7 +679,19 @@ export class BorrowerService {
     const plainDto = this.removeUndefinedDeep(
       instanceToPlain(dto) as UpdateBorrowerProfileDto,
     );
-    const { password, currentPassword, ...profileUpdateDto } = plainDto;
+    const { password, currentPassword } = plainDto;
+    // Keep this allowlist at the persistence boundary as defense in depth.
+    // UpdateBorrowerProfileDto shares the `users` document with authorization
+    // fields, so unknown request properties must never be spread into Firestore.
+    const profileUpdateDto = this.removeUndefinedDeep({
+      fullName: plainDto.fullName,
+      email: plainDto.email,
+      phone: plainDto.phone,
+      address: plainDto.address,
+      employmentStatus: plainDto.employmentStatus,
+      monthlyIncome: plainDto.monthlyIncome,
+      occupation: plainDto.occupation,
+    });
     const existing = doc.data() ?? {};
     const requestedEmail = profileUpdateDto.email?.trim().toLowerCase();
     const emailChanged =
@@ -690,10 +740,22 @@ export class BorrowerService {
       profileUpdateDto.email = requestedEmail;
     }
 
-    const updateData = {
+    const updateData: Record<string, unknown> = {
       ...profileUpdateDto,
       updatedAt: FieldValue.serverTimestamp(),
     };
+    if (profileUpdateDto.occupation !== undefined) {
+      updateData['borrowerProfile.occupation'] = profileUpdateDto.occupation;
+    }
+    if (profileUpdateDto.employmentStatus !== undefined) {
+      updateData['borrowerProfile.employmentStatus'] =
+        profileUpdateDto.employmentStatus;
+    }
+    if (profileUpdateDto.monthlyIncome !== undefined) {
+      updateData['borrowerProfile.monthlyIncomeMinor'] = Math.round(
+        profileUpdateDto.monthlyIncome * 100,
+      );
+    }
     const batch = this.db.batch();
     batch.update(doc.ref, updateData);
     if (passwordHash) {
@@ -976,6 +1038,11 @@ export class BorrowerService {
     if (loan.status === LoanStatus.UNKNOWN) {
       throw new BadRequestException(
         'Repayments are unavailable for this loan status.',
+      );
+    }
+    if (!Number.isFinite(dto.amount)) {
+      throw new BadRequestException(
+        'Repayment amount must be a finite number.',
       );
     }
     if (dto.amount <= 0) {

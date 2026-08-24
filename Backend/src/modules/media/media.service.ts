@@ -267,6 +267,7 @@ export class MediaService {
         resourceType,
         deliveryType,
         secureUrl: `https://mock-cloudinary.test/${encodeURIComponent(publicId)}`,
+        contentHash: createHash('sha256').update(publicId).digest('hex'),
         uploadedAt: new Date().toISOString(),
       };
     }
@@ -324,6 +325,10 @@ export class MediaService {
           ? payload.original_filename
           : undefined,
       folder: typeof payload.folder === 'string' ? payload.folder : undefined,
+      contentHash:
+        typeof payload.etag === 'string' && payload.etag.trim()
+          ? payload.etag.trim().toLowerCase()
+          : undefined,
       uploadedAt: new Date().toISOString(),
     };
   }

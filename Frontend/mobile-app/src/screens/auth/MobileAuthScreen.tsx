@@ -215,6 +215,11 @@ export default function MobileAuthScreen() {
       setFieldError("Phone number is required.");
       return false;
     }
+    const normalizedPhone = registerForm.phone.replace(/[\s()-]/g, "");
+    if (!/^(?:\+94|0)?[1-9][0-9]{8}$/.test(normalizedPhone)) {
+      setFieldError("Enter a valid Sri Lankan phone number.");
+      return false;
+    }
 
     if (
       !registerForm.address.line1.trim() ||
@@ -252,6 +257,31 @@ export default function MobileAuthScreen() {
         `Full name on the ID and ${currentDocumentLabel} number are required.`,
       );
       return false;
+    }
+
+    const documentNumber = registerForm.kyc.documentNumber
+      .trim()
+      .toUpperCase();
+    if (
+      registerForm.kyc.documentType === "national_id" &&
+      !/^(?:\d{9}[VX]|\d{12})$/.test(documentNumber)
+    ) {
+      setFieldError("NIC must contain 12 digits or 9 digits followed by V/X.");
+      return false;
+    }
+    if (
+      registerForm.kyc.documentType !== "national_id" &&
+      !/^[A-Z0-9-]{5,30}$/.test(documentNumber)
+    ) {
+      setFieldError("Enter a valid passport or driving licence number.");
+      return false;
+    }
+    if (registerForm.kyc.expiryDate?.trim()) {
+      const expiryTime = Date.parse(registerForm.kyc.expiryDate.trim());
+      if (!Number.isFinite(expiryTime) || expiryTime <= Date.now()) {
+        setFieldError("Document expiry date must be a future date (YYYY-MM-DD).");
+        return false;
+      }
     }
 
     if (
@@ -324,6 +354,9 @@ export default function MobileAuthScreen() {
       }
 
       const asset = result.assets[0];
+      if (typeof asset.size === "number" && asset.size > 10 * 1024 * 1024) {
+        throw new Error(`${label} must be 10 MB or smaller.`);
+      }
       const dataUrl = await convertFileUriToDataUrl(asset.uri);
 
       setRegisterForm((current) => ({
@@ -371,6 +404,8 @@ export default function MobileAuthScreen() {
           },
           password: registerForm.password,
           role: accountRole,
+          acceptedTerms: true,
+          termsVersion: "registration_terms_v1",
         },
         kyc: {
           ...registerForm.kyc,

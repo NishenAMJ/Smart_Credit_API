@@ -21,6 +21,8 @@ describe('BorrowerService', () => {
   const mockDoc = jest.fn();
   const mockUpdate = jest.fn();
   const mockSet = jest.fn();
+  const mockBatchUpdate = jest.fn();
+  const mockBatchCommit = jest.fn();
 
   // Support for .where().where().get() chaining
   const mockQuery = {
@@ -47,6 +49,10 @@ describe('BorrowerService', () => {
   const mockFirebaseService = {
     db: {
       collection: mockCollection,
+      batch: jest.fn().mockReturnValue({
+        update: mockBatchUpdate,
+        commit: mockBatchCommit,
+      }),
     },
   };
 
@@ -88,6 +94,165 @@ describe('BorrowerService', () => {
    */
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  describe('getProfile', () => {
+    it('maps legacy nested borrower fields into the canonical profile response', async () => {
+      const profileData = {
+        fullName: 'Nimal Perera',
+        email: 'nimal@example.com',
+        phone: '+94771234567',
+        photoUrl: 'https://example.com/avatar.jpg',
+        borrowerProfile: {
+          dateOfBirth: '1994-06-15',
+          occupation: 'Engineer',
+          employmentStatus: 'employed',
+          monthlyIncomeMinor: 8_500_000,
+        },
+        kycDetails: { documentNumber: '941234567V' },
+        kycStatus: 'approved',
+      };
+      mockGet
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          data: () => profileData,
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          data: () => profileData,
+        });
+
+      const result = await service.getProfile('borrower_1');
+
+      expect(result).toMatchObject({
+        userId: 'borrower_1',
+        dateOfBirth: '1994-06-15',
+        nic: '941234567V',
+        occupation: 'Engineer',
+        employmentStatus: 'employed',
+        monthlyIncome: 85_000,
+        kycVerified: true,
+        photoURL: 'https://example.com/avatar.jpg',
+      });
+    });
+
+    it('prefers current root profile values over legacy nested values', async () => {
+      const profileData = {
+        dateOfBirth: '1995-01-02',
+        nic: '950020001V',
+        occupation: 'Accountant',
+        monthlyIncome: 120_000,
+        borrowerProfile: {
+          dateOfBirth: '1990-01-01',
+          occupation: 'Legacy occupation',
+          monthlyIncomeMinor: 5_000_000,
+        },
+      };
+      mockGet
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          data: () => profileData,
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          data: () => profileData,
+        });
+
+      const result = await service.getProfile('borrower_1');
+
+      expect(result).toMatchObject({
+        dateOfBirth: '1995-01-02',
+        nic: '950020001V',
+        occupation: 'Accountant',
+        monthlyIncome: 120_000,
+      });
+    });
+
+    it('keeps canonical and nested borrower fields in sync when updated', async () => {
+      const docRef = { path: 'users/borrower_1' };
+      const updatedProfile = {
+        occupation: 'Engineer',
+        monthlyIncome: 85_000,
+        borrowerProfile: {
+          occupation: 'Engineer',
+          monthlyIncomeMinor: 8_500_000,
+        },
+      };
+      mockBatchCommit.mockResolvedValueOnce(undefined);
+      mockGet
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          ref: docRef,
+          data: () => ({ email: 'borrower@example.com' }),
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          data: () => updatedProfile,
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          data: () => updatedProfile,
+        });
+
+      const result = await service.updateProfile('borrower_1', {
+        occupation: 'Engineer',
+        monthlyIncome: 85_000,
+      });
+
+      expect(mockBatchUpdate).toHaveBeenCalledWith(
+        docRef,
+        expect.objectContaining({
+          occupation: 'Engineer',
+          monthlyIncome: 85_000,
+          'borrowerProfile.occupation': 'Engineer',
+          'borrowerProfile.monthlyIncomeMinor': 8_500_000,
+        }),
+      );
+      expect(result).toMatchObject({
+        occupation: 'Engineer',
+        monthlyIncome: 85_000,
+      });
+    });
+
+    it('never persists unknown authorization fields from profile updates', async () => {
+      const docRef = { path: 'users/borrower_1' };
+      mockBatchCommit.mockResolvedValueOnce(undefined);
+      mockGet
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          ref: docRef,
+          data: () => ({ email: 'borrower@example.com', roles: ['borrower'] }),
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          data: () => ({ email: 'borrower@example.com', roles: ['borrower'] }),
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          id: 'borrower_1',
+          data: () => ({ email: 'borrower@example.com', roles: ['borrower'] }),
+        });
+
+      await service.updateProfile(
+        'borrower_1',
+        { fullName: 'Nimal Perera', roles: ['admin'] } as any,
+      );
+
+      expect(mockBatchUpdate).toHaveBeenCalledWith(
+        docRef,
+        expect.objectContaining({ fullName: 'Nimal Perera' }),
+      );
+      expect(mockBatchUpdate.mock.calls[0]?.[1]).not.toHaveProperty('roles');
+    });
   });
 
   describe('getLoanById', () => {

@@ -3,7 +3,7 @@ import { RepaymentMethod } from '../applications/dto/loan-application.dto';
 import { BorrowerService } from '../core/borrower.service';
 import { createHash } from 'crypto';
 import { PayHereService } from '../../../common/payhere/payhere.service';
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
 type BorrowerPaymentsServiceMock = jest.Mocked<
   Pick<BorrowerService, 'makeRepayment' | 'generateQrToken' | 'verifyQrToken'>
@@ -59,6 +59,20 @@ describe('BorrowerPaymentsService', () => {
       expect.objectContaining({ receiptDocumentId: 'receipt-1' }),
     );
   });
+
+  it.each([undefined, 'not-a-number', Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects a non-finite repayment amount: %p',
+    (amount) => {
+      expect(() =>
+        service.makePayment({
+          loanId: 'loan-1',
+          borrowerId: 'borrower-1',
+          amount,
+        }),
+      ).toThrow(BadRequestException);
+      expect(borrowerService.makeRepayment).not.toHaveBeenCalled();
+    },
+  );
 
   it('marks the payable installment for retry after a receipt rejection', async () => {
     const borrowerPayments = {

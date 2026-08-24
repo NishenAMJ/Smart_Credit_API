@@ -86,6 +86,23 @@ export class CreateLoanApplicationDto {
   @IsString()
   @IsOptional()
   additionalNotes?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  @IsOptional()
+  employmentStatus?: string;
+
+  @IsNumber({ allowInfinity: false, allowNaN: false, maxDecimalPlaces: 2 })
+  @Min(0)
+  @IsOptional()
+  monthlyIncome?: number;
+
+  @IsNumber({ allowInfinity: false, allowNaN: false, maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(100)
+  @IsOptional()
+  preferredInterestRate?: number;
 }
 
 /**
@@ -156,6 +173,21 @@ export class CreateLoanApplicationRequestDto {
   @IsString()
   @IsOptional()
   borrowerId?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  employmentStatus!: string;
+
+  @IsNumber({ allowInfinity: false, allowNaN: false, maxDecimalPlaces: 2 })
+  @Min(0)
+  monthlyIncome!: number;
+
+  @IsNumber({ allowInfinity: false, allowNaN: false, maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(100)
+  @IsOptional()
+  preferredInterestRate?: number;
 }
 
 export class UpdateLoanApplicationRequestDto {

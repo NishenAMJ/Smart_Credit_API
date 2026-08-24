@@ -43,6 +43,11 @@ describe('JwtStrategy', () => {
     [false, undefined, 'deleted account'],
     [true, { roles: ['borrower'], accountStatus: 'suspended' }, 'suspension'],
     [true, { roles: ['lender'], accountStatus: 'active' }, 'removed role'],
+    [
+      true,
+      { roles: ['borrower', 'lender'], accountStatus: 'active' },
+      'conflicting roles',
+    ],
   ])('rejects a stale token after %s (%s)', async (exists, data) => {
     get.mockResolvedValue({ exists, data: () => data });
     const strategy = new JwtStrategy(config as never, firebase as never);
