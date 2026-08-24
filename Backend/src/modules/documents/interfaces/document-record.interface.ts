@@ -17,6 +17,7 @@ export type DocumentSource = 'user_upload' | 'system_generated';
 export type DocumentRelatedEntityType =
   | 'user'
   | 'loan'
+  | 'ad_boost'
   | 'legal_document'
   | 'loan_agreement'
   | 'dispute';

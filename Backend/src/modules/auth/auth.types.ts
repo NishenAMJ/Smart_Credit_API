@@ -7,6 +7,23 @@ export type PublicUserRole = (typeof PUBLIC_USER_ROLES)[number];
 export type KycStatus = 'not_submitted' | 'pending' | 'approved' | 'rejected';
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'closed';
 
+export type UserAddress = {
+  line1: string;
+  line2?: string;
+  city: string;
+  district: string;
+  province: string;
+};
+
+export type UserKycDetails = {
+  documentType: string;
+  documentNumber: string;
+  fullName: string;
+  issuingCountry?: string;
+  expiryDate?: string;
+  submittedAt: Timestamp;
+};
+
 export type UserDocument = {
   userId: string;
   roles: UserRole[];
@@ -16,6 +33,8 @@ export type UserDocument = {
   photoUrl: string | null;
   phone: string;
   email: string;
+  address?: UserAddress | string;
+  kycDetails?: UserKycDetails;
   borrowerProfile: {
     dateOfBirth: Timestamp | null;
     occupation: string | null;

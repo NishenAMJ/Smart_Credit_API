@@ -3,9 +3,12 @@ import {
   BadgeCheck,
   Ban,
   CalendarDays,
+  CreditCard,
   Eye,
+  Landmark,
   Percent,
   Plus,
+  Rocket,
   Timer,
   X,
 } from "lucide-react";
@@ -14,6 +17,11 @@ import type { LenderView } from "../components/common/LenderSidebar";
 import CreateAdPage from "./create-ad";
 import {
   fetchLenderAdsPage,
+  createAdBoost,
+  fetchAdBoostPlans,
+  submitBoostReceipt,
+  uploadBoostReceipt,
+  type AdBoostPlan,
   type LenderAd,
   type LenderAdsListResponse,
 } from "../lib/lender-ads-api";
@@ -101,11 +109,13 @@ function AdvertisementCard({
   canReviewRequests,
   onPreview,
   onReviewRequests,
+  onBoost,
 }: {
   ad: LenderAd;
   canReviewRequests: boolean;
   onPreview: () => void;
   onReviewRequests: () => void;
+  onBoost: () => void;
 }) {
   return (
     <article className="lender-ad-card">
@@ -158,13 +168,24 @@ function AdvertisementCard({
           <Eye size={16} /> Preview
         </button>
         {canReviewRequests ? (
-          <button
-            type="button"
-            className="button button-primary"
-            onClick={onReviewRequests}
-          >
-            View borrower requests
-          </button>
+          <>
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={onReviewRequests}
+            >
+              View borrower requests
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={onBoost}
+              disabled={ad.isBoosted || ["payment_pending", "pending_verification"].includes(ad.boostStatus ?? "")}
+            >
+              <Rocket size={16} />
+              {ad.isBoosted ? "Boost active" : ad.boostStatus === "pending_verification" ? "Payment pending" : "Boost"}
+            </button>
+          </>
         ) : (
           <p>
             {ad.status === "pending_review"
@@ -187,6 +208,7 @@ function AdvertisementSection({
   canReviewRequests,
   onPreview,
   onReviewRequests,
+  onBoost,
   onLoadMore,
 }: {
   title: string;
@@ -198,6 +220,7 @@ function AdvertisementSection({
   canReviewRequests: boolean;
   onPreview: (ad: LenderAd) => void;
   onReviewRequests: (ad: LenderAd) => void;
+  onBoost: (ad: LenderAd) => void;
   onLoadMore: () => void;
 }) {
   return (
@@ -225,6 +248,7 @@ function AdvertisementSection({
               canReviewRequests={canReviewRequests}
               onPreview={() => onPreview(ad)}
               onReviewRequests={() => onReviewRequests(ad)}
+              onBoost={() => onBoost(ad)}
             />
           ))}
         </div>
@@ -351,6 +375,108 @@ function AdvertisementPreview({
   );
 }
 
+function BoostAdDialog({
+  ad,
+  onClose,
+  onComplete,
+}: {
+  ad: LenderAd;
+  onClose: () => void;
+  onComplete: (message: string) => void;
+}) {
+  const [plans, setPlans] = useState<AdBoostPlan[]>([]);
+  const [bankAccount, setBankAccount] = useState<Record<string, string>>({});
+  const [planId, setPlanId] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "bank_transfer">("card");
+  const [receipt, setReceipt] = useState<File | null>(null);
+  const [bankReference, setBankReference] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingBoostId, setPendingBoostId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchAdBoostPlans()
+      .then((result) => {
+        setPlans(result.plans);
+        setPlanId(result.plans[0]?.id ?? "");
+        setBankAccount(result.bankAccount);
+      })
+      .catch((failure) => setError(failure instanceof Error ? failure.message : "Failed to load boost plans."));
+  }, []);
+
+  const selectedPlan = plans.find((plan) => plan.id === planId);
+
+  async function submit() {
+    if (!selectedPlan) return;
+    if (paymentMethod === "bank_transfer" && (!receipt || !bankReference.trim())) {
+      setError("Select a receipt and enter the bank reference.");
+      return;
+    }
+    try {
+      setBusy(true);
+      setError(null);
+      const boost = pendingBoostId
+        ? { boostId: pendingBoostId }
+        : await createAdBoost({ listingId: ad.id, planId, paymentMethod });
+      if (paymentMethod === "card") {
+        if (!("checkout" in boost) || !boost.checkout?.paymentPageUrl) throw new Error("Card checkout could not be started.");
+        window.location.assign(boost.checkout.paymentPageUrl);
+        return;
+      }
+      setPendingBoostId(boost.boostId);
+      const uploaded = await uploadBoostReceipt(receipt!, boost.boostId);
+      await submitBoostReceipt(boost.boostId, uploaded.documentId, bankReference.trim());
+      onComplete("Boost payment submitted for administrator verification.");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Failed to submit boost payment.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="borrower-modal__backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="borrower-modal pending-request-modal" role="dialog" aria-modal="true" aria-labelledby="boost-ad-title">
+        <header className="borrower-modal__header">
+          <div>
+            <p className="eyebrow">Optional promotion</p>
+            <h2 className="section-title" id="boost-ad-title">Boost {ad.title}</h2>
+            <p className="section-subtitle">Your ad stays active even if you do not purchase a boost.</p>
+          </div>
+          <button type="button" className="borrower-modal__close" onClick={onClose} aria-label="Close boost dialog"><X size={18} /></button>
+        </header>
+        <div className="borrower-modal__body">
+          {error ? <div className="sms-alert sms-alert--error" role="alert">{error}</div> : null}
+          <div className="create-ad-form-grid">
+            <label className="create-ad-field create-ad-field--full">
+              <span className="create-ad-field__label">Boost plan</span>
+              <select className="input" value={planId} onChange={(event) => setPlanId(event.target.value)}>
+                {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - LKR {(plan.amountMinor / 100).toLocaleString()}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="tabs">
+            <button type="button" className={`tab ${paymentMethod === "card" ? "active" : ""}`} onClick={() => setPaymentMethod("card")}><CreditCard size={16} /> Card</button>
+            <button type="button" className={`tab ${paymentMethod === "bank_transfer" ? "active" : ""}`} onClick={() => setPaymentMethod("bank_transfer")}><Landmark size={16} /> Bank transfer</button>
+          </div>
+          {paymentMethod === "bank_transfer" ? (
+            <div className="create-ad-form-grid">
+              <p className="create-ad-field create-ad-field--full">
+                Pay {selectedPlan ? `LKR ${(selectedPlan.amountMinor / 100).toLocaleString()}` : "the plan fee"} to {bankAccount.bankName || "the platform bank account"}, {bankAccount.accountName} {bankAccount.accountNumber} {bankAccount.branch}.
+              </p>
+              <label className="create-ad-field"><span className="create-ad-field__label">Bank reference</span><input className="input" value={bankReference} onChange={(event) => setBankReference(event.target.value)} /></label>
+              <label className="create-ad-field"><span className="create-ad-field__label">Payment receipt</span><input className="input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setReceipt(event.target.files?.[0] ?? null)} /></label>
+            </div>
+          ) : null}
+        </div>
+        <footer className="borrower-modal__footer">
+          <button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Not now</button>
+          <button type="button" className="button button-primary" onClick={() => void submit()} disabled={busy || !selectedPlan}>{busy ? "Processing..." : paymentMethod === "card" ? "Pay securely" : "Submit payment"}</button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 export default function ActiveAdsRequestsPage({
   session,
   onOpenAgreement,
@@ -366,6 +492,7 @@ export default function ActiveAdsRequestsPage({
     useState<AdStatusGroup | null>(null);
   const [adsError, setAdsError] = useState<string | null>(null);
   const [previewAd, setPreviewAd] = useState<LenderAd | null>(null);
+  const [boostAd, setBoostAd] = useState<LenderAd | null>(null);
   const [selectedAd, setSelectedAd] = useState<LenderAd | null>(null);
   const [requestsResponse, setRequestsResponse] =
     useState<PendingRequestsResponse | null>(null);
@@ -377,6 +504,7 @@ export default function ActiveAdsRequestsPage({
   );
   const [isCreateAdOpen, setIsCreateAdOpen] = useState(false);
   const [adsRefreshKey, setAdsRefreshKey] = useState(0);
+  const [adsNotice, setAdsNotice] = useState<string | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(
     null,
   );
@@ -420,16 +548,23 @@ export default function ActiveAdsRequestsPage({
   }, [session.lenderId, adsRefreshKey]);
 
   useEffect(() => {
-    if (!isCreateAdOpen && !selectedAd && !previewAd) return;
+    if (!isCreateAdOpen && !selectedAd && !previewAd && !boostAd) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (previewAd) setPreviewAd(null);
+      if (boostAd) setBoostAd(null);
+      else if (previewAd) setPreviewAd(null);
       else if (isCreateAdOpen) setIsCreateAdOpen(false);
       else setSelectedAd(null);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isCreateAdOpen, previewAd, selectedAd]);
+  }, [boostAd, isCreateAdOpen, previewAd, selectedAd]);
+
+  useEffect(() => {
+    if (!adsNotice) return;
+    const timer = window.setTimeout(() => setAdsNotice(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [adsNotice]);
 
   useEffect(() => {
     if (!selectedAd) return;
@@ -566,6 +701,14 @@ export default function ActiveAdsRequestsPage({
           {adsError}
         </div>
       ) : null}
+      {adsNotice ? (
+        <div
+          className="create-ad-banner create-ad-banner--primary"
+          role="status"
+        >
+          {adsNotice}
+        </div>
+      ) : null}
 
       <AdvertisementSection
         title="Active advertisements"
@@ -577,6 +720,7 @@ export default function ActiveAdsRequestsPage({
         canReviewRequests
         onPreview={setPreviewAd}
         onReviewRequests={setSelectedAd}
+        onBoost={setBoostAd}
         onLoadMore={() => void handleLoadMore("active")}
       />
       <AdvertisementSection
@@ -589,6 +733,7 @@ export default function ActiveAdsRequestsPage({
         canReviewRequests={false}
         onPreview={setPreviewAd}
         onReviewRequests={() => undefined}
+        onBoost={() => undefined}
         onLoadMore={() => void handleLoadMore("pending_review")}
       />
       <AdvertisementSection
@@ -601,6 +746,7 @@ export default function ActiveAdsRequestsPage({
         canReviewRequests={false}
         onPreview={setPreviewAd}
         onReviewRequests={() => undefined}
+        onBoost={() => undefined}
         onLoadMore={() => void handleLoadMore("inactive")}
       />
 
@@ -609,6 +755,18 @@ export default function ActiveAdsRequestsPage({
           ad={previewAd}
           session={session}
           onClose={() => setPreviewAd(null)}
+        />
+      ) : null}
+
+      {boostAd ? (
+        <BoostAdDialog
+          ad={boostAd}
+          onClose={() => setBoostAd(null)}
+          onComplete={(message) => {
+            setBoostAd(null);
+            setAdsNotice(message);
+            setAdsRefreshKey((value) => value + 1);
+          }}
         />
       ) : null}
 
@@ -803,7 +961,13 @@ export default function ActiveAdsRequestsPage({
               <CreateAdPage
                 session={session}
                 embedded
-                onPublished={() => setAdsRefreshKey((value) => value + 1)}
+                onPublished={() => {
+                  setIsCreateAdOpen(false);
+                  setAdsNotice(
+                    "Advertisement submitted successfully and sent for admin review.",
+                  );
+                  setAdsRefreshKey((value) => value + 1);
+                }}
               />
             </div>
           </section>

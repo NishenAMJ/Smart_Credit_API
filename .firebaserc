@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "mortgage-fe410"
+    "default": "mortgage-fe410",
+    "test": "smart-credit-test"
   }
 }

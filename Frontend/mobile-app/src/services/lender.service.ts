@@ -30,8 +30,7 @@ export const setLenderId = (_id: string) => {
 
 const getLenderId = (): string => getCurrentUserId();
 
-// Types 
-
+// Types
 
 export interface LenderProfile {
   id: string;
@@ -67,8 +66,7 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
-// DashboardService 
-
+// DashboardService
 
 export const DashboardService = {
   /**
@@ -107,8 +105,7 @@ export const DashboardService = {
   },
 };
 
-// LoanRequestsService 
-
+// LoanRequestsService
 
 export const LoanRequestsService = {
   /**
@@ -161,8 +158,7 @@ export const LoanRequestsService = {
   },
 };
 
-// PaymentsService 
-
+// PaymentsService
 
 export const PaymentsService = {
   /**
@@ -230,12 +226,14 @@ export interface LenderLoan {
 }
 
 export const LenderLoansService = {
-  getLoans: async (opts: {
-    pageSize?: number;
-    cursor?: string;
-    status?: string;
-    search?: string;
-  } = {}): Promise<{ loans: LenderLoan[]; summary: any; pageInfo: any }> => {
+  getLoans: async (
+    opts: {
+      pageSize?: number;
+      cursor?: string;
+      status?: string;
+      search?: string;
+    } = {},
+  ): Promise<{ loans: LenderLoan[]; summary: any; pageInfo: any }> => {
     const params = new URLSearchParams();
     if (opts.pageSize) params.append("pageSize", String(opts.pageSize));
     if (opts.cursor) params.append("cursor", opts.cursor);
@@ -246,8 +244,7 @@ export const LenderLoansService = {
   },
 };
 
-// AnalyticsService 
-
+// AnalyticsService
 
 export const AnalyticsService = {
   /**
@@ -260,8 +257,7 @@ export const AnalyticsService = {
   },
 };
 
-// LenderProfileService 
-
+// LenderProfileService
 
 export const LenderProfileService = {
   /**
@@ -284,19 +280,12 @@ export const LenderProfileService = {
     return api.patch(`/lender-profile/${lenderId}`, payload);
   },
 
-  /**
-   * Change password.
-   * ⚠️ Backend endpoint not yet implemented. Throws to surface a proper error.
-   */
-  changePassword: async (_payload: ChangePasswordPayload): Promise<void> => {
-    throw new Error(
-      "changePassword endpoint not yet implemented on the backend.",
-    );
+  changePassword: async (payload: ChangePasswordPayload): Promise<void> => {
+    await api.post("/auth/change-password", payload);
   },
 };
 
-// PaymentRemindersService 
-
+// PaymentRemindersService
 
 export const PaymentRemindersService = {
   /**

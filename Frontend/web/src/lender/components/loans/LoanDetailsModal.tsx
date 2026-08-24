@@ -31,6 +31,7 @@ type PaymentFormState = {
   amount: string;
   paidAt: string;
   note: string;
+  paymentMethod: "bank_transfer" | "cash" | "card" | "qr";
   isSaving: boolean;
   error: string | null;
   success: string | null;
@@ -61,6 +62,7 @@ function createEmptyPaymentForm(): PaymentFormState {
     amount: "",
     paidAt: getLocalDateValue(),
     note: "",
+    paymentMethod: "bank_transfer",
     isSaving: false,
     error: null,
     success: null,
@@ -189,6 +191,7 @@ export default function LoanDetailsModal({
       amount: String(getOutstanding(installment)),
       paidAt: getLocalDateValue(),
       note: "",
+      paymentMethod: "bank_transfer",
       isSaving: false,
       error: null,
       success: null,
@@ -221,6 +224,7 @@ export default function LoanDetailsModal({
           amount,
           paidAt: paymentForm.paidAt,
           note: paymentForm.note,
+          paymentMethod: paymentForm.paymentMethod,
         },
       );
 
@@ -436,9 +440,19 @@ export default function LoanDetailsModal({
 
                           {isFormOpen ? (
                             <div className="loan-payment-form">
-                              <div className="create-ad-form-grid">
-                                <label className="create-ad-field">
-                                  <span className="create-ad-field__label">
+                              <div className="loan-payment-form__heading">
+                                <div>
+                                  <strong>Record installment payment</strong>
+                                  <span>
+                                    Confirm the received amount and payment
+                                    details.
+                                  </span>
+                                </div>
+                                <span>Installment {index + 1}</span>
+                              </div>
+                              <div className="loan-payment-form__grid">
+                                <label className="loan-payment-field">
+                                  <span className="loan-payment-field__label">
                                     Payment amount
                                   </span>
                                   <input
@@ -447,12 +461,9 @@ export default function LoanDetailsModal({
                                     value={paymentForm.amount}
                                     readOnly
                                   />
-                                  <span className="dashboard-table__subcopy">
-                                    Installments are settled once and in full.
-                                  </span>
                                 </label>
-                                <label className="create-ad-field">
-                                  <span className="create-ad-field__label">
+                                <label className="loan-payment-field">
+                                  <span className="loan-payment-field__label">
                                     Payment date
                                   </span>
                                   <input
@@ -468,8 +479,35 @@ export default function LoanDetailsModal({
                                     }
                                   />
                                 </label>
-                                <label className="create-ad-field create-ad-field--full">
-                                  <span className="create-ad-field__label">
+                                <label className="loan-payment-field">
+                                  <span className="loan-payment-field__label">
+                                    Payment method
+                                  </span>
+                                  <select
+                                    className="input"
+                                    value={paymentForm.paymentMethod}
+                                    onChange={(event) =>
+                                      setPaymentForm((current) => ({
+                                        ...current,
+                                        paymentMethod: event.target.value as
+                                          | "bank_transfer"
+                                          | "cash"
+                                          | "card"
+                                          | "qr",
+                                        error: null,
+                                      }))
+                                    }
+                                  >
+                                    <option value="bank_transfer">
+                                      Bank transfer
+                                    </option>
+                                    <option value="cash">Cash</option>
+                                    <option value="card">Card</option>
+                                    <option value="qr">QR payment</option>
+                                  </select>
+                                </label>
+                                <label className="loan-payment-field loan-payment-field--full">
+                                  <span className="loan-payment-field__label">
                                     Note
                                   </span>
                                   <textarea
@@ -487,6 +525,11 @@ export default function LoanDetailsModal({
                                   />
                                 </label>
                               </div>
+
+                              <p className="loan-payment-form__note">
+                                The installment is recorded once and settled in
+                                full.
+                              </p>
 
                               {paymentForm.error ? (
                                 <p className="create-ad-banner create-ad-banner--error">

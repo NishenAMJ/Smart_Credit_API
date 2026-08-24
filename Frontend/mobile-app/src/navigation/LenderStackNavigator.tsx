@@ -23,6 +23,7 @@ import TermsConditionsScreen from "../screens/lender/TermsConditionsScreen";
 import SupportScreen from "../screens/lender/SupportScreen";
 import AiAssistantScreen from "../screens/shared/AiAssistantScreen";
 import DisputesScreen from "../screens/shared/DisputesScreen";
+import KycResubmissionScreen from "../screens/borrower/KycResubmissionScreen";
 
 // Use require to bypass module resolution issues
 const CollectionHistoryScreen =
@@ -46,6 +47,8 @@ export default function LenderStackNavigator() {
 
       {/* Screens without bottom bar (modal-style navigation) */}
       <Stack.Screen name="LenderProfile" component={LenderProfileScreen} />
+      <Stack.Screen name="LenderKyc" component={LenderKycScreen} />
+      <Stack.Screen name="KycResubmission" component={KycResubmissionScreen} />
       <Stack.Screen name="MyBorrowers" component={MyBorrowersScreen} />
       <Stack.Screen name="BorrowerMap" component={BorrowerMapScreen} />
       <Stack.Screen name="BorrowerDetail" component={BorrowerDetailScreen} />
@@ -81,7 +84,6 @@ export default function LenderStackNavigator() {
       <Stack.Screen name="EditAd" component={EditAdScreen} />
       <Stack.Screen name="AdAnalytics" component={AdAnalyticsScreen} />
       <Stack.Screen name="BoostAd" component={BoostAdScreen} />
-      <Stack.Screen name="LenderKyc" component={LenderKycScreen} />
       <Stack.Screen name="AgreementsList" component={AgreementsListScreen} />
       <Stack.Screen name="LoanAgreement">
         {(props) => <LegalAgreementScreen {...props} role="lender" />}

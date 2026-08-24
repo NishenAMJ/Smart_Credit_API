@@ -18,7 +18,12 @@ export interface KycDocument {
   fileSize?: number;
   documentUrl?: string;
   status: 'pending' | 'approved' | 'rejected';
-  documentStatus?: 'pending_review' | 'approved' | 'rejected' | 'expired' | 'deleted';
+  documentStatus?:
+    | 'pending_review'
+    | 'approved'
+    | 'rejected'
+    | 'expired'
+    | 'deleted';
   submittedAt: any;
   reviewedAt?: any;
   reviewedBy?: string;
@@ -27,4 +32,32 @@ export interface KycDocument {
   reviewNotes?: string;
   rejectionReason?: string;
   notes?: string;
+  applicant?: {
+    fullName: string;
+    email: string;
+    phone: string;
+    role?: 'borrower' | 'lender';
+    address?: {
+      line1: string;
+      line2?: string;
+      city: string;
+      district: string;
+      province: string;
+    };
+  };
+  identityDetails?: {
+    documentType: string;
+    documentNumber: string;
+    fullName: string;
+    issuingCountry?: string;
+    expiryDate?: string;
+  };
+  location?: {
+    latitude: number;
+    longitude: number;
+    city?: string;
+    district?: string;
+    visibility: 'hidden' | 'approximate' | 'exact';
+    updatedAt?: any;
+  };
 }

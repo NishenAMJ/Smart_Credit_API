@@ -59,12 +59,14 @@ npm run firestore:indexes:check
 npm run firestore:indexes:deploy
 ```
 
-The same definition is mirrored at
-[`../operations/firestore/firestore.indexes.json`](../operations/firestore/firestore.indexes.json) for script users. The
-index command uses the Firebase service account from `.env`; that account needs
-Firestore index-management permission. Index creation is asynchronous, so wait
-until Firebase reports that the indexes are ready before testing dashboards or
-the AI assistant.
+The canonical definition is the tracked
+[`../../../firestore.indexes.json`](../../../firestore.indexes.json) file at the
+repository root. The script in `operations/firestore/` reads that manifest
+directly, so seed users and Firebase CLI deployments always use the same index
+definitions. The index command uses the Firebase service account from `.env`;
+that account needs Firestore index-management permission. Index creation is
+asynchronous, so wait until Firebase reports that the indexes are ready before
+testing dashboards or the AI assistant.
 
 Grant that service account the `Cloud Datastore Index Admin`
 (`roles/datastore.indexAdmin`) role. Alternatively, authenticate Firebase CLI

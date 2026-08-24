@@ -12,7 +12,9 @@ export class BorrowerLoansService {
 
   async getFeaturedLoans() {
     const ads = await this.borrowerService.getActiveLoanAds();
-    return ads.slice(0, BORROWER_FLOW.FEATURED_LOAN_LIMIT);
+    return ads
+      .filter((ad) => ad.isFeatured === true)
+      .slice(0, BORROWER_FLOW.FEATURED_LOAN_LIMIT);
   }
 
   async searchLoans(keyword = '') {

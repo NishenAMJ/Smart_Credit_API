@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   BellRing,
-  Building2,
   Check,
-  ChevronRight,
   CircleAlert,
   Clock3,
   LogOut,
-  MessageSquareText,
   RefreshCw,
   ShieldCheck,
   Smartphone,
   UserRound,
 } from "lucide-react";
-import type { LenderView } from "../components/common/LenderSidebar";
 import type { LenderSession } from "../lib/lender-session";
 import {
   fetchLenderProfile,
@@ -30,7 +26,6 @@ type SettingsPageProps = {
   session: LenderSession;
   onLogout: () => void;
   onOpenProfile: () => void;
-  onNavigate: (view: LenderView) => void;
 };
 
 const notificationPreferences = [
@@ -90,7 +85,6 @@ export default function SettingsPage({
   session,
   onLogout,
   onOpenProfile,
-  onNavigate,
 }: SettingsPageProps) {
   const [settings, setSettings] = useState<LenderSettings | null>(null);
   const [notifications, setNotifications] =
@@ -199,10 +193,9 @@ export default function SettingsPage({
     <section className="dashboard-panel settings-workspace">
       <header className="page-header settings-workspace__header">
         <div>
-          <p className="eyebrow">Account controls</p>
           <h1 className="page-title">Settings</h1>
           <p className="page-subtitle">
-            Manage your account, alerts, communications, and active session.
+            Manage notification preferences and account access.
           </p>
         </div>
         <button
@@ -243,58 +236,13 @@ export default function SettingsPage({
       ) : (
         <div className="settings-workspace__grid">
           <main className="settings-workspace__main">
-            <section className="settings-panel settings-profile-summary">
-              <div className="settings-profile-summary__identity">
-                <div
-                  className="settings-profile-summary__avatar"
-                  aria-hidden="true"
-                >
-                  {displayName.trim().charAt(0).toUpperCase() || "L"}
-                </div>
-                <div>
-                  <span className="settings-panel__eyebrow">
-                    Lender account
-                  </span>
-                  <h2>{displayName}</h2>
-                  <p>
-                    {profile?.email || session.email || "Email not provided"}
-                  </p>
-                </div>
-              </div>
-              <div className="settings-profile-summary__meta">
-                <span
-                  className={`settings-kyc-badge settings-kyc-badge--${kycStatus.toLowerCase()}`}
-                >
-                  <ShieldCheck size={15} />
-                  {kycStatus === "unknown"
-                    ? "KYC unavailable"
-                    : `KYC ${titleCase(kycStatus)}`}
-                </span>
-                <span>
-                  <Clock3 size={15} />
-                  Profile updated {formatDate(profile?.updatedAt)}
-                </span>
-              </div>
-              {profileWarning ? (
-                <p className="settings-profile-warning">{profileWarning}</p>
-              ) : null}
-              <button
-                type="button"
-                className="settings-primary-button"
-                onClick={onOpenProfile}
-              >
-                <UserRound size={17} />
-                Edit profile
-              </button>
-            </section>
-
             <form className="settings-panel" onSubmit={handleSubmit}>
               <div className="settings-panel__header">
                 <div>
-                  <span className="settings-panel__eyebrow">Preferences</span>
                   <h2>Notifications</h2>
                   <p>
-                    Choose how Smart Credit alerts you about important activity.
+                    Control which important lender activities appear in your
+                    notification inbox.
                   </p>
                 </div>
                 <div className="settings-channel-legend" aria-hidden="true">
@@ -393,75 +341,56 @@ export default function SettingsPage({
           </main>
 
           <aside className="settings-workspace__side">
-            <section className="settings-panel settings-quick-links">
-              <div className="settings-panel__header">
-                <div>
-                  <span className="settings-panel__eyebrow">Communication</span>
-                  <h2>Message controls</h2>
+            <section className="settings-panel settings-account-card">
+              <div className="settings-account-card__top">
+                <div
+                  className="settings-account-card__avatar"
+                  aria-hidden="true"
+                >
+                  {displayName.trim().charAt(0).toUpperCase() || "L"}
+                </div>
+                <div className="settings-account-card__identity">
+                  <span>Lender account</span>
+                  <h2>{displayName}</h2>
+                  <p>
+                    {profile?.email || session.email || "Email not provided"}
+                  </p>
                 </div>
               </div>
-              <button type="button" onClick={() => onNavigate("notifications")}>
-                <span className="settings-quick-links__icon">
-                  <BellRing size={18} />
-                </span>
-                <span>
-                  <strong>Notification inbox</strong>
-                  <small>Review alerts and unread activity</small>
-                </span>
-                <ChevronRight size={17} />
-              </button>
-              <button type="button" onClick={() => onNavigate("sms")}>
-                <span className="settings-quick-links__icon">
-                  <MessageSquareText size={18} />
-                </span>
-                <span>
-                  <strong>SMS messages</strong>
-                  <small>Manage payment messages and sending</small>
-                </span>
-                <ChevronRight size={17} />
-              </button>
-            </section>
 
-            <section className="settings-panel settings-account-details">
-              <div className="settings-panel__header">
+              <div className="settings-account-card__security">
+                <ShieldCheck size={18} aria-hidden="true" />
                 <div>
-                  <span className="settings-panel__eyebrow">
-                    Business details
+                  <strong>
+                    {kycStatus === "unknown"
+                      ? "KYC status unavailable"
+                      : `KYC ${titleCase(kycStatus)}`}
+                  </strong>
+                  <span>
+                    <Clock3 size={13} aria-hidden="true" /> Profile updated{" "}
+                    {formatDate(profile?.updatedAt)}
                   </span>
-                  <h2>Account overview</h2>
                 </div>
               </div>
-              <dl>
-                <div>
-                  <dt>
-                    <Building2 size={15} /> Business
-                  </dt>
-                  <dd>{profile?.businessName || "Not provided"}</dd>
-                </div>
-                <div>
-                  <dt>Registration</dt>
-                  <dd>{profile?.businessRegistrationNo || "Not provided"}</dd>
-                </div>
-                <div>
-                  <dt>Phone</dt>
-                  <dd>{profile?.phone || "Not provided"}</dd>
-                </div>
-                <div>
-                  <dt>Location</dt>
-                  <dd>
-                    {[profile?.city, profile?.district]
-                      .filter(Boolean)
-                      .join(", ") || "Not provided"}
-                  </dd>
-                </div>
-              </dl>
+
+              {profileWarning ? (
+                <p className="settings-profile-warning">{profileWarning}</p>
+              ) : null}
+
+              <button
+                type="button"
+                className="settings-primary-button"
+                onClick={onOpenProfile}
+              >
+                <UserRound size={17} />
+                Edit profile
+              </button>
             </section>
 
             <section className="settings-panel settings-session-card">
               <div>
-                <span className="settings-panel__eyebrow">Security</span>
-                <h2>Current session</h2>
-                <p>You are signed in as {session.email || displayName}.</p>
+                <h2>Sign out</h2>
+                <p>End the current lender session on this device.</p>
               </div>
               <button
                 type="button"
@@ -469,7 +398,7 @@ export default function SettingsPage({
                 onClick={onLogout}
               >
                 <LogOut size={17} />
-                Log out securely
+                Log out
               </button>
             </section>
           </aside>

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 import { removeUndefinedDeep } from '../../common/remove-undefined.deep';
 import { FirebaseService } from '../../firebase/firebase.service';
@@ -84,7 +84,7 @@ export class DocumentsService {
         ? this.collection.doc(input.id)
         : this.collection.doc();
 
-      const timestamp = admin.firestore.FieldValue.serverTimestamp();
+      const timestamp = FieldValue.serverTimestamp();
       const record: DocumentRecord = {
         id: docRef.id,
         userId: input.userId,
@@ -251,9 +251,9 @@ export class DocumentsService {
     try {
       await this.collection.doc(documentId).update({
         status,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         review: {
-          reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+          reviewedAt: FieldValue.serverTimestamp(),
           reviewedBy: review.reviewedBy ?? null,
           notes: review.notes ?? '',
           rejectionReason: review.rejectionReason ?? '',
@@ -269,10 +269,10 @@ export class DocumentsService {
     try {
       await this.collection.doc(documentId).update({
         status: 'deleted',
-        deletedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        deletedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         deletion: {
-          deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+          deletedAt: FieldValue.serverTimestamp(),
           deletedBy: deletedBy ?? null,
           reason: reason ?? '',
         },
@@ -329,7 +329,7 @@ export class DocumentsService {
         fileSize: uploadedMedia.bytes,
         fileHash,
         uploadStatus: 'uploaded',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     } catch (error) {
       rethrowFirebaseError(

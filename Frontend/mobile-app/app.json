@@ -11,7 +11,6 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-
     "android": {
       "package": "com.vibecodex.smartcredit",
       "usesCleartextTraffic": true,
@@ -25,19 +24,12 @@
       "predictiveBackGestureEnabled": false
     },
     "ios": {
+      "bundleIdentifier": "com.vibecodex.smartcredit",
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Allow Smart Credit+ to use your location to find nearby lenders and borrowers."
       }
     },
-    "plugins": [
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "Allow Smart Credit+ to use your location to find nearby lenders and borrowers."
-        }
-      ]
-    ],
     "androidNavigationBar": {
       "backgroundColor": "#ffffff",
       "barStyle": "dark-content"

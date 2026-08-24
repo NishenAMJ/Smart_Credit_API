@@ -3,7 +3,7 @@ import type {
   SharedLegalDocument,
 } from "../../legal/types";
 import { API_BASE_URL, getAuthHeaders } from "./api-config";
-import { io } from "socket.io-client";
+import { createLenderRealtimeConnection } from "./lender-realtime";
 
 type DocumentResponse = {
   message?: string;
@@ -11,9 +11,9 @@ type DocumentResponse = {
 };
 
 async function readJson<T>(response: Response): Promise<T> {
-  const body = (await response.json().catch(() => null)) as
-    | { message?: string }
-    | null;
+  const body = (await response.json().catch(() => null)) as {
+    message?: string;
+  } | null;
   if (!response.ok) {
     throw new Error(body?.message ?? "Agreement request failed.");
   }
@@ -116,13 +116,9 @@ export function subscribeToAgreementChanges(
   token: string,
   onChange: () => void,
 ) {
-  const socket = io(API_BASE_URL.replace(/\/api\/?$/, ""), {
-    transports: ["websocket"],
-    auth: { token: `Bearer ${token}` },
-  });
+  const connection = createLenderRealtimeConnection(token);
+  const { socket } = connection;
   socket.on("agreement:changed", onChange);
   socket.io.on("reconnect", onChange);
-  return () => {
-    socket.disconnect();
-  };
+  return connection.disconnect;
 }

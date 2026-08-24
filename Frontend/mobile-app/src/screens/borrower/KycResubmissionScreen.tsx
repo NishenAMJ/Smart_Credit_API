@@ -16,9 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import { resubmitKyc } from "../../api/services/auth.service";
 import { getApiErrorMessage } from "../../api/api-error";
 import { useAuth } from "../../context/AuthContext";
-import type { BorrowerNavigation } from "../../types/navigation";
-
-type Props = { navigation: BorrowerNavigation };
+type Props = { navigation: { goBack: () => void } };
 type FileField = "documentFrontUrl" | "documentBackUrl" | "selfieUrl";
 
 async function pickAsDataUrl() {

@@ -19,6 +19,7 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { PaymentsResponse } from './payments.types';
 import type {
   LoanLedgerDetailsResponse,
+  PaymentActivityFilter,
   RecordInstallmentPaymentInput,
   ReceiptVerificationDecisionInput,
 } from './payments.types';
@@ -68,6 +69,7 @@ export class PaymentsController {
     @Query('includeSearchCount') includeSearchCount?: string,
     @Query('search') search?: string,
     @Query('date') date?: string,
+    @Query('activity') activity?: string,
   ): Promise<PaymentsResponse> {
     return this.paymentsService.getPayments(
       req.user.sub,
@@ -77,7 +79,22 @@ export class PaymentsController {
       includeSearchCount !== 'false',
       search?.trim() || null,
       date?.trim() || null,
+      this.toActivityFilter(activity),
     );
+  }
+
+  private toActivityFilter(value?: string): PaymentActivityFilter {
+    const normalized = value?.trim().toLowerCase() || 'payment';
+    if (
+      normalized !== 'all' &&
+      normalized !== 'payment' &&
+      normalized !== 'disbursement'
+    ) {
+      throw new BadRequestException(
+        'activity must be all, payment, or disbursement.',
+      );
+    }
+    return normalized;
   }
 
   @Get('export')

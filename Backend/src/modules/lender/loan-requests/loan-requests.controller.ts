@@ -12,7 +12,10 @@ import type { AuthenticatedRequest } from '../../../common/types/authenticated-r
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
-import { LoanRequestDecisionResponse } from './loan-requests.dto';
+import {
+  LoanRequestDecisionDto,
+  LoanRequestDecisionResponse,
+} from './loan-requests.dto';
 import { LoanRequestsService } from './loan-requests.service';
 import { PendingRequestsResponse } from './loan-requests.types';
 
@@ -47,13 +50,7 @@ export class LoanRequestsController {
     @Req() request: AuthenticatedRequest,
     @Param('requestId') requestId: string,
     @Body()
-    body: {
-      decision?: 'approve' | 'reject';
-      note?: string;
-      approvedPrincipalMinor?: number;
-      annualInterestRate?: number;
-      approvedTenureMonths?: number;
-    },
+    body: LoanRequestDecisionDto,
   ): Promise<LoanRequestDecisionResponse> {
     return this.loanRequestsService.decideRequest(
       request.user.sub,

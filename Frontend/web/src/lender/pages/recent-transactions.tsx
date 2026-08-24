@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Check, Eye, FileCheck2, RefreshCw, X } from 'lucide-react'
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Check,
+  Eye,
+  FileCheck2,
+  RefreshCw,
+  Search,
+  X,
+} from 'lucide-react'
 import BorrowerSidePanel from '../components/borrowers/BorrowerSidePanel'
 import PaymentCsvExport from '../components/payments/PaymentCsvExport'
 import type { LenderSession } from '../lib/lender-session'
@@ -65,6 +74,9 @@ export default function RecentTransactionsPage({
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [activity, setActivity] = useState<'all' | 'payment' | 'disbursement'>(
+    'payment',
+  )
   const [reloadVersion, setReloadVersion] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
@@ -90,7 +102,14 @@ export default function RecentTransactionsPage({
     setResponse(null)
     setSearchQuery('')
     setDebouncedSearchQuery('')
+    setActivity('payment')
   }, [session.lenderId])
+
+  useEffect(() => {
+    setCurrentPage(1)
+    setPageCursors([null])
+    setResponse(null)
+  }, [activity])
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -116,6 +135,7 @@ export default function RecentTransactionsPage({
           includeSummary: false,
           includeSearchCount: false,
           search: debouncedSearchQuery,
+          activity,
         })
 
         if (isMounted) setResponse(data)
@@ -136,7 +156,13 @@ export default function RecentTransactionsPage({
     return () => {
       isMounted = false
     }
-  }, [activeCursor, debouncedSearchQuery, reloadVersion, session.lenderId])
+  }, [
+    activeCursor,
+    activity,
+    debouncedSearchQuery,
+    reloadVersion,
+    session.lenderId,
+  ])
 
   useEffect(() => {
     let mounted = true
@@ -228,8 +254,8 @@ export default function RecentTransactionsPage({
             <p className="eyebrow">Lender cash flow</p>
             <h1 className="page-title">Payments</h1>
             <p className="page-subtitle">
-              Read-only history of completed repayments received for your loans.
-              Record new payments from the Loans page.
+              Review completed borrower payments and loan disbursements. Record
+              new payments from the Loans page.
             </p>
           </div>
           <PaymentCsvExport />
@@ -346,24 +372,53 @@ export default function RecentTransactionsPage({
           )}
         </section>
 
-        <section className="card pending-requests-card">
+        <section className="card pending-requests-card payment-activity-card">
           <div className="borrowers-toolbar">
             <div>
-              <h2 className="section-title">Payment History</h2>
+              <h2 className="section-title">Payment activity</h2>
               <p className="section-subtitle">
-                Each row represents one payment—not a duplicate loan record.
+                Choose whether to review received payments, disbursements, or
+                both.
               </p>
             </div>
 
-            <div className="pending-requests-toolbar__controls">
-              <label className="search-field">
-                <span className="search-field__icon" aria-hidden="true">
-                  Search
-                </span>
+            <div className="pending-requests-toolbar__controls payment-activity-toolbar">
+              <div
+                className="payment-activity-filter"
+                role="group"
+                aria-label="Filter payment activity"
+              >
+                <button
+                  type="button"
+                  className={activity === 'all' ? 'is-active' : ''}
+                  aria-pressed={activity === 'all'}
+                  onClick={() => setActivity('all')}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={activity === 'payment' ? 'is-active' : ''}
+                  aria-pressed={activity === 'payment'}
+                  onClick={() => setActivity('payment')}
+                >
+                  <ArrowDownLeft size={14} /> Payments
+                </button>
+                <button
+                  type="button"
+                  className={activity === 'disbursement' ? 'is-active' : ''}
+                  aria-pressed={activity === 'disbursement'}
+                  onClick={() => setActivity('disbursement')}
+                >
+                  <ArrowUpRight size={14} /> Disbursements
+                </button>
+              </div>
+              <label className="payment-activity-search">
+                <Search size={16} aria-hidden="true" />
+                <span className="sr-only">Search payment activity</span>
                 <input
-                  className="input"
                   type="search"
-                  placeholder="Borrower, payment or installment"
+                  placeholder="Search activity"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   aria-describedby="payments-search-status"
@@ -437,7 +492,11 @@ export default function RecentTransactionsPage({
                           {payment.borrowerName}
                         </button>
                       </td>
-                      <td>{formatInstallmentLabel(payment.installmentId)}</td>
+                      <td>
+                        {payment.type === 'disbursement'
+                          ? 'Not applicable'
+                          : formatInstallmentLabel(payment.installmentId)}
+                      </td>
                       <td>
                         <strong>{formatCurrency(payment.amount)}</strong>
                       </td>
@@ -456,8 +515,12 @@ export default function RecentTransactionsPage({
                   <tr>
                     <td className="table-empty" colSpan={6}>
                       {debouncedSearchQuery
-                        ? 'No payments match the current search.'
-                        : 'No completed payments are available yet.'}
+                        ? 'No activity matches the current search.'
+                        : activity === 'payment'
+                          ? 'No completed payments are available yet.'
+                          : activity === 'disbursement'
+                            ? 'No completed disbursements are available yet.'
+                            : 'No payment activity is available yet.'}
                     </td>
                   </tr>
                 )}
@@ -469,7 +532,7 @@ export default function RecentTransactionsPage({
             <p>
               {isLoading
                 ? 'Loading the payment list...'
-                : `Showing ${visibleStart}-${visibleEnd} payments on page ${currentPage}.`}
+                : `Showing ${visibleStart}-${visibleEnd} records on page ${currentPage}.`}
             </p>
             <div className="pagination">
               <button

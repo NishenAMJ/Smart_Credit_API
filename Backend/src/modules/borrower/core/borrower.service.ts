@@ -5,6 +5,7 @@ import {
   ConflictException,
   ForbiddenException,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -27,11 +28,7 @@ import {
   BORROWER_MONEY,
 } from '../shared/borrower.constants';
 import { CreditScoreService } from '../credit-score/credit-score.service';
-import { randomBytes, scrypt } from 'crypto';
-import { promisify } from 'util';
-
-// Promisified async version of scrypt — avoids blocking the event loop.
-const scryptAsync = promisify(scrypt);
+import * as bcrypt from 'bcrypt';
 
 type TimestampLike =
   | FirebaseFirestore.Timestamp
@@ -426,7 +423,9 @@ export class BorrowerService {
       preferredPurposes: Array.isArray(data.purposeCategories)
         ? data.purposeCategories
         : data.preferredPurposes,
-      isFeatured: data.status === 'active',
+      isFeatured:
+        data.isBoosted === true &&
+        (this.toDate(data.boostEndsAt)?.getTime() ?? 0) > Date.now(),
     };
   }
 
@@ -626,10 +625,7 @@ export class BorrowerService {
     } as BorrowerProfile;
   }
 
-  /**
-   * Updates editable profile fields and syncs name and email to the users collection.
-   * Hashes and salts a new password if one was provided.
-   */
+  /** Updates profile data and canonical credentials in one atomic batch. */
   async updateProfile(
     userId: string,
     dto: UpdateBorrowerProfileDto,
@@ -645,38 +641,69 @@ export class BorrowerService {
     const plainDto = this.removeUndefinedDeep(
       instanceToPlain(dto) as UpdateBorrowerProfileDto,
     );
-    const { password, ...profileUpdateDto } = plainDto;
+    const { password, currentPassword, ...profileUpdateDto } = plainDto;
+    const existing = doc.data() ?? {};
+    const requestedEmail = profileUpdateDto.email?.trim().toLowerCase();
+    const emailChanged =
+      Boolean(requestedEmail) && requestedEmail !== existing.email;
+    if (requestedEmail) profileUpdateDto.email = requestedEmail;
+    let passwordHash: string | null = null;
+
+    if (password || emailChanged) {
+      if (!currentPassword) {
+        throw new UnauthorizedException(
+          'Current password is required for email or password changes.',
+        );
+      }
+      const credentials = await this.db
+        .collection('authCredentials')
+        .doc(userId)
+        .get();
+      if (
+        !credentials.exists ||
+        !(await bcrypt.compare(
+          currentPassword,
+          String(credentials.get('passwordHash') ?? ''),
+        ))
+      ) {
+        throw new UnauthorizedException('Current password is incorrect.');
+      }
+      if (password === currentPassword) {
+        throw new BadRequestException(
+          'New password must be different from the current password.',
+        );
+      }
+      if (password) passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    if (emailChanged && requestedEmail) {
+      const duplicate = await this.db
+        .collection(this.USERS_COL)
+        .where('email', '==', requestedEmail)
+        .limit(1)
+        .get();
+      if (duplicate.docs.some((candidate) => candidate.id !== userId)) {
+        throw new ConflictException(
+          'An account with that email already exists.',
+        );
+      }
+      profileUpdateDto.email = requestedEmail;
+    }
+
     const updateData = {
       ...profileUpdateDto,
       updatedAt: FieldValue.serverTimestamp(),
     };
-
-    await this.db.collection(this.BORROWERS_COL).doc(userId).update(updateData);
-
-    // Sync to 'users' collection if name changed
-    const userUpdate: Record<string, any> = {};
-    if (dto.fullName) userUpdate.fullName = dto.fullName;
-    if (dto.email) userUpdate.email = dto.email;
-    if (password) {
-      const passwordSalt = randomBytes(16).toString('hex');
-      // scryptAsync is the non-blocking version — scryptSync would stall the event loop.
-      userUpdate.passwordSalt = passwordSalt;
-      userUpdate.passwordHash = (
-        (await scryptAsync(password, passwordSalt, 64)) as Buffer
-      ).toString('hex');
-      userUpdate.passwordUpdatedAt = FieldValue.serverTimestamp();
+    const batch = this.db.batch();
+    batch.update(doc.ref, updateData);
+    if (passwordHash) {
+      batch.update(this.db.collection('authCredentials').doc(userId), {
+        passwordHash,
+        passwordChangedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
     }
-
-    if (Object.keys(userUpdate).length > 0) {
-      try {
-        await this.db.collection('users').doc(userId).update(userUpdate);
-      } catch (e) {
-        // Ignore if user doc doesn't exist or isn't updatable
-        console.warn(
-          `[BorrowerService] Could not sync to users collection: ${e}`,
-        );
-      }
-    }
+    await batch.commit();
 
     return this.getProfile(userId);
   }
@@ -714,15 +741,46 @@ export class BorrowerService {
       .where('status', '==', 'active')
       .get();
 
+    const now = Date.now();
+    const expiredBoosts = snapshot.docs.filter((doc) => {
+      const data = doc.data();
+      return (
+        data.isBoosted === true &&
+        (this.toDate(data.boostEndsAt)?.getTime() ?? 0) <= now
+      );
+    });
+    if (expiredBoosts.length > 0) {
+      const batch = this.db.batch();
+      expiredBoosts.forEach((doc) => {
+        const activeBoostId = doc.get('activeBoostId');
+        batch.update(doc.ref, {
+          isBoosted: false,
+          boostStatus: 'expired',
+          activeBoostId: null,
+          updatedAt: Timestamp.now(),
+        });
+        if (typeof activeBoostId === 'string' && activeBoostId) {
+          batch.update(this.db.collection('adBoostRequests').doc(activeBoostId), {
+            status: 'expired',
+            updatedAt: Timestamp.now(),
+          });
+        }
+      });
+      await batch.commit();
+    }
+
     const ads = snapshot.docs.map((doc) =>
       this.normalizeAdDocument(doc.data(), doc.id),
     );
 
-    return ads.sort(
-      (a, b) =>
+    return ads.sort((a, b) => {
+      const featuredDifference = Number(b.isFeatured) - Number(a.isFeatured);
+      return (
+        featuredDifference ||
         this.timestampToMillis(b.createdAt as TimestampLike) -
-        this.timestampToMillis(a.createdAt as TimestampLike),
-    );
+          this.timestampToMillis(a.createdAt as TimestampLike)
+      );
+    });
   }
 
   /**
@@ -1208,7 +1266,7 @@ export class BorrowerService {
   /**
    * Verifies signed QR token integrity and marks nonce as used.
    */
-  async verifyQrToken(token: string, consume = true) {
+  async verifyQrToken(token: string, consume = true, allowUsed = false) {
     let payload: QrTokenPayload;
 
     try {
@@ -1234,18 +1292,19 @@ export class BorrowerService {
           | { used?: boolean; expiresAt?: number }
           | undefined;
 
-        if (nonceData?.used) {
+        if (nonceData?.used && !allowUsed) {
           throw new BadRequestException('QR code has already been used.');
         }
 
         if (
+          !nonceData?.used &&
           typeof nonceData?.expiresAt === 'number' &&
           nonceData.expiresAt < Date.now()
         ) {
           throw new BadRequestException('QR code is expired.');
         }
 
-        if (markUsed) {
+        if (markUsed && !nonceData?.used) {
           tx.update(nonceRef, {
             used: true,
             usedAt: FieldValue.serverTimestamp(),

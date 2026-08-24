@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
   Optional,
 } from '@nestjs/common';
-import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { rethrowFirebaseError } from '../../common/firebase-error';
 import { User, UserRole, UserStatus } from './interfaces/user.interface';
@@ -313,9 +313,9 @@ export class AdminService {
       await userRef.update({
         status: 'suspended',
         accountStatus: 'suspended',
-        suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+        suspendedAt: FieldValue.serverTimestamp(),
         suspensionReason: reason || 'No reason provided',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
       this.cache.invalidate('admin:users:');
       await writeAuditLog(this.db, {
@@ -359,10 +359,10 @@ export class AdminService {
       await userRef.update({
         status: 'active',
         accountStatus: 'active',
-        activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        suspendedAt: admin.firestore.FieldValue.delete(),
-        suspensionReason: admin.firestore.FieldValue.delete(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        activatedAt: FieldValue.serverTimestamp(),
+        suspendedAt: FieldValue.delete(),
+        suspensionReason: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
       this.cache.invalidate('admin:users:');
       await writeAuditLog(this.db, {

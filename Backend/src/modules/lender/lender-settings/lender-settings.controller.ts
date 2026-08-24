@@ -1,4 +1,18 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { resolveAuthenticatedLenderId } from '../lender-request.utils';
 import { LenderSettingsService } from './lender-settings.service';
 import {
   AnalyticsRangeKey,
@@ -12,27 +26,35 @@ import {
 
 type UpdateLenderSettingsBody = {
   notifications?: Partial<Record<keyof LenderSettingsNotifications, unknown>>;
-  lendingDefaults?: Partial<Record<keyof LenderSettingsLendingDefaults, unknown>>;
+  lendingDefaults?: Partial<
+    Record<keyof LenderSettingsLendingDefaults, unknown>
+  >;
   workspace?: Partial<Record<keyof LenderSettingsWorkspace, unknown>>;
 };
 
 @Controller('lender-settings')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('lender')
 export class LenderSettingsController {
   constructor(private readonly lenderSettingsService: LenderSettingsService) {}
 
   @Get(':lenderId')
   getSettings(
+    @Req() req: AuthenticatedRequest,
     @Param('lenderId') lenderId: string,
   ): Promise<LenderSettingsResponse> {
     if (!lenderId.trim()) {
       throw new BadRequestException('lenderId is required.');
     }
 
-    return this.lenderSettingsService.getSettings(lenderId.trim());
+    return this.lenderSettingsService.getSettings(
+      resolveAuthenticatedLenderId(req.user.sub, lenderId),
+    );
   }
 
   @Patch(':lenderId')
   updateSettings(
+    @Req() req: AuthenticatedRequest,
     @Param('lenderId') lenderId: string,
     @Body() body: UpdateLenderSettingsBody,
   ): Promise<LenderSettingsResponse> {
@@ -41,12 +63,14 @@ export class LenderSettingsController {
     }
 
     return this.lenderSettingsService.updateSettings(
-      lenderId.trim(),
+      resolveAuthenticatedLenderId(req.user.sub, lenderId),
       this.toUpdateInput(body),
     );
   }
 
-  private toUpdateInput(body: UpdateLenderSettingsBody): UpdateLenderSettingsInput {
+  private toUpdateInput(
+    body: UpdateLenderSettingsBody,
+  ): UpdateLenderSettingsInput {
     return {
       notifications: body.notifications
         ? {
@@ -167,7 +191,9 @@ export class LenderSettingsController {
 
   private toOptionalStringArray(value: unknown): string[] | undefined {
     if (Array.isArray(value)) {
-      return value.filter((entry): entry is string => typeof entry === 'string');
+      return value.filter(
+        (entry): entry is string => typeof entry === 'string',
+      );
     }
 
     if (typeof value === 'string') {
@@ -180,12 +206,8 @@ export class LenderSettingsController {
     return undefined;
   }
 
-  private toOptionalLandingPage(
-    value: unknown,
-  ): LenderLandingPage | undefined {
-    return value === 'dashboard' || value === 'analytics'
-      ? value
-      : undefined;
+  private toOptionalLandingPage(value: unknown): LenderLandingPage | undefined {
+    return value === 'dashboard' || value === 'analytics' ? value : undefined;
   }
 
   private toOptionalAnalyticsRange(

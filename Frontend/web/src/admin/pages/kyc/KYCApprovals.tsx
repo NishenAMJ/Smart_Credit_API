@@ -22,6 +22,29 @@ type KycRow = {
   fullName: string;
   email: string;
   phone: string;
+  role: string;
+  address?: {
+    line1: string;
+    line2?: string;
+    city: string;
+    district: string;
+    province: string;
+  };
+  identityDetails: {
+    documentType: string;
+    documentNumber: string;
+    fullName: string;
+    issuingCountry?: string;
+    expiryDate?: string;
+  };
+  location?: {
+    latitude: number;
+    longitude: number;
+    city?: string;
+    district?: string;
+    visibility: "hidden" | "approximate" | "exact";
+    updatedAt?: unknown;
+  };
   documentType: string;
   originalFilename: string;
   status: "pending" | "approved" | "rejected";
@@ -39,6 +62,10 @@ type KycSubmissionRow = {
   fullName: string;
   email: string;
   phone: string;
+  role: string;
+  address?: KycRow["address"];
+  identityDetails: KycRow["identityDetails"];
+  location?: KycRow["location"];
   uploadedAt: string;
   status: KycRow["status"];
   userKycStatus: string;
@@ -49,9 +76,18 @@ function mapDocument(document: KycDocument): KycRow {
   return {
     id: document.id,
     userId: document.userId,
-    fullName: document.fullName || "Unknown user",
-    email: document.email || "N/A",
-    phone: document.phone || "N/A",
+    fullName:
+      document.applicant?.fullName || document.fullName || "Unknown user",
+    email: document.applicant?.email || document.email || "Not provided",
+    phone: document.applicant?.phone || document.phone || "Not provided",
+    role: document.applicant?.role || "Not provided",
+    address: document.applicant?.address,
+    identityDetails: document.identityDetails ?? {
+      documentType: "Not provided",
+      documentNumber: "Not provided",
+      fullName: "Not provided",
+    },
+    location: document.location,
     documentType: document.documentType,
     originalFilename: document.originalFilename || "Unknown file",
     status: document.status,
@@ -76,6 +112,23 @@ function statusClass(status: KycRow["status"]) {
 
 function formatLabel(value: string) {
   return value.replace(/_/g, " ");
+}
+
+function formatAddress(address?: KycRow["address"]) {
+  if (!address) return "Not provided";
+  return [
+    address.line1,
+    address.line2,
+    address.city,
+    address.district,
+    address.province,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function normalizeComparableName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 export default function KYCApprovals() {
@@ -140,6 +193,10 @@ export default function KYCApprovals() {
         fullName: first.fullName,
         email: first.email,
         phone: first.phone,
+        role: first.role,
+        address: first.address,
+        identityDetails: first.identityDetails,
+        location: first.location,
         uploadedAt: first.uploadedAt,
         status: first.status,
         userKycStatus: first.userKycStatus,
@@ -156,6 +213,12 @@ export default function KYCApprovals() {
         submission.userId,
         submission.email,
         submission.phone,
+        submission.role,
+        submission.identityDetails.fullName,
+        submission.identityDetails.documentNumber,
+        submission.address?.line1,
+        submission.address?.city,
+        submission.address?.district,
         submission.userKycStatus,
         ...submission.documents.flatMap((document) => [
           document.documentType,
@@ -433,6 +496,153 @@ export default function KYCApprovals() {
               </div>
             )}
 
+            {selectedSubmission && (
+              <div style={S.reviewSections}>
+                {selectedSubmission.identityDetails.fullName !==
+                  "Not provided" &&
+                normalizeComparableName(selectedSubmission.fullName) !==
+                  normalizeComparableName(
+                    selectedSubmission.identityDetails.fullName,
+                  ) ? (
+                  <div style={S.mismatchAlert} role="alert">
+                    <strong>Names require attention</strong>
+                    <span>
+                      The account name and name entered from the identity
+                      document do not match exactly. Compare both against the
+                      uploaded files before deciding.
+                    </span>
+                  </div>
+                ) : null}
+
+                <section style={S.reviewSection}>
+                  <div style={S.reviewSectionHeader}>
+                    <div>
+                      <h4 style={S.reviewSectionTitle}>Account information</h4>
+                      <p style={S.reviewSectionCopy}>
+                        Details entered when this account was created.
+                      </p>
+                    </div>
+                    <span style={S.reviewSectionTag}>User input</span>
+                  </div>
+                  <div style={S.detailGrid}>
+                    <Detail
+                      label="Account name"
+                      value={selectedSubmission.fullName}
+                    />
+                    <Detail
+                      label="Role"
+                      value={formatLabel(selectedSubmission.role)}
+                    />
+                    <Detail label="Email" value={selectedSubmission.email} />
+                    <Detail label="Phone" value={selectedSubmission.phone} />
+                  </div>
+                </section>
+
+                <section style={S.reviewSection}>
+                  <div style={S.reviewSectionHeader}>
+                    <div>
+                      <h4 style={S.reviewSectionTitle}>Identity details</h4>
+                      <p style={S.reviewSectionCopy}>
+                        Values supplied by the applicant for document review.
+                      </p>
+                    </div>
+                    <span style={S.reviewSectionTag}>Compare with files</span>
+                  </div>
+                  <div style={S.detailGrid}>
+                    <Detail
+                      label="Name on identity document"
+                      value={selectedSubmission.identityDetails.fullName}
+                    />
+                    <Detail
+                      label="Identity document type"
+                      value={formatLabel(
+                        selectedSubmission.identityDetails.documentType,
+                      )}
+                    />
+                    <Detail
+                      label="Document number"
+                      value={selectedSubmission.identityDetails.documentNumber}
+                    />
+                    <Detail
+                      label="Issuing country"
+                      value={
+                        selectedSubmission.identityDetails.issuingCountry ||
+                        "Not provided"
+                      }
+                    />
+                    <Detail
+                      label="Expiry date"
+                      value={
+                        selectedSubmission.identityDetails.expiryDate ||
+                        "Not provided"
+                      }
+                    />
+                  </div>
+                </section>
+
+                <section style={S.reviewSection}>
+                  <div style={S.reviewSectionHeader}>
+                    <div>
+                      <h4 style={S.reviewSectionTitle}>
+                        Registered address and location
+                      </h4>
+                      <p style={S.reviewSectionCopy}>
+                        Address is required; GPS remains permission-based.
+                      </p>
+                    </div>
+                    <span style={S.reviewSectionTag}>Location</span>
+                  </div>
+                  <div style={S.detailGrid}>
+                    <Detail
+                      label="Registered address"
+                      value={formatAddress(selectedSubmission.address)}
+                    />
+                    <Detail
+                      label="Map visibility"
+                      value={
+                        selectedSubmission.location
+                          ? formatLabel(selectedSubmission.location.visibility)
+                          : "Not shared"
+                      }
+                    />
+                    <Detail
+                      label="Coordinates"
+                      value={
+                        selectedSubmission.location
+                          ? `${selectedSubmission.location.latitude.toFixed(6)}, ${selectedSubmission.location.longitude.toFixed(6)}`
+                          : "Not provided"
+                      }
+                    />
+                    <Detail
+                      label="Location updated"
+                      value={
+                        selectedSubmission.location?.updatedAt
+                          ? formatFirestoreDate(
+                              selectedSubmission.location.updatedAt,
+                            )
+                          : "Not provided"
+                      }
+                    />
+                  </div>
+                  {selectedSubmission.location ? (
+                    <a
+                      href={`https://www.google.com/maps?q=${selectedSubmission.location.latitude},${selectedSubmission.location.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={S.mapLink}
+                    >
+                      Open location in Google Maps
+                    </a>
+                  ) : (
+                    <p style={S.locationNotice}>
+                      This user has not granted location permission yet and will
+                      not appear on maps until a location is saved.
+                    </p>
+                  )}
+                </section>
+              </div>
+            )}
+
             <div style={S.detailGrid}>
               <Detail label="User" value={selectedRecord.fullName} />
               <Detail label="User ID" value={selectedRecord.userId} />
@@ -605,6 +815,69 @@ const S: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     gap: 8,
     marginBottom: 16,
+  },
+  reviewSections: {
+    display: "grid",
+    gap: 16,
+    marginBottom: 18,
+  },
+  reviewSection: {
+    border: "1px solid #DCE6F1",
+    borderRadius: 16,
+    padding: 16,
+    background: "#FFFFFF",
+  },
+  reviewSectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 16,
+    marginBottom: 14,
+  },
+  reviewSectionTitle: {
+    margin: 0,
+    color: "#0F172A",
+    fontSize: 16,
+    fontWeight: 700,
+  },
+  reviewSectionCopy: {
+    margin: "4px 0 0",
+    color: "#64748B",
+    fontSize: 13,
+  },
+  reviewSectionTag: {
+    borderRadius: 999,
+    padding: "5px 9px",
+    background: "#EAF2FF",
+    color: "#1D4ED8",
+    fontSize: 11,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  },
+  mismatchAlert: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    border: "1px solid #F59E0B",
+    borderRadius: 14,
+    padding: 14,
+    background: "#FFFBEB",
+    color: "#92400E",
+    fontSize: 13,
+  },
+  mapLink: {
+    display: "inline-flex",
+    marginTop: 2,
+    color: "#2563EB",
+    fontSize: 13,
+    fontWeight: 700,
+    textDecoration: "none",
+  },
+  locationNotice: {
+    margin: 0,
+    color: "#92400E",
+    fontSize: 13,
+    lineHeight: 1.5,
   },
   detailGrid: {
     display: "grid",

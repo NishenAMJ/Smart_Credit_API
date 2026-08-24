@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsNumber,
   IsEnum,
+  IsEmail,
   ValidateNested,
   Min,
   MinLength,
@@ -19,14 +20,18 @@ export class UpdateBorrowerProfileDto {
   @IsOptional()
   fullName?: string;
 
-  @IsString()
+  @IsEmail()
   @IsOptional()
   email?: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   @IsOptional()
   password?: string;
+
+  @IsString()
+  @IsOptional()
+  currentPassword?: string;
 
   @IsString()
   @IsOptional()

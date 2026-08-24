@@ -1,15 +1,16 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { app } from 'firebase-admin';
+import { Injectable, Inject, OnModuleDestroy } from '@nestjs/common';
+import { deleteApp } from 'firebase-admin/app';
+import type { App } from 'firebase-admin/app';
 import { getFirestore, Firestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import type { Bucket } from '@google-cloud/storage';
 
 @Injectable()
-export class FirebaseService {
+export class FirebaseService implements OnModuleDestroy {
   public db: Firestore;
   public bucket: Bucket;
 
-  constructor(@Inject('FIREBASE_APP') private firebaseApp: app.App) {
+  constructor(@Inject('FIREBASE_APP') private firebaseApp: App) {
     this.db = getFirestore(this.firebaseApp);
     this.bucket = getStorage(this.firebaseApp).bucket();
   }
@@ -33,5 +34,9 @@ export class FirebaseService {
 
   getDb(): Firestore {
     return this.db;
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await deleteApp(this.firebaseApp);
   }
 }

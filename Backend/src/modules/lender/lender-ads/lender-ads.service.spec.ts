@@ -1,5 +1,9 @@
 import * as firestoreQueryUtils from '../../../firebase/firestore-query.utils';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  normalizeLenderAdStatusFilter,
+  validateCreateLenderAdInput,
+} from './lender-ad.validation';
 import { LenderAdsService } from './lender-ads.service';
 
 function createDoc(id: string, data: Record<string, unknown>) {
@@ -121,10 +125,8 @@ describe('LenderAdsService', () => {
   });
 
   it('rejects an invalid response-time value before writing an ad', async () => {
-    const service = new LenderAdsService({} as any, {} as any, {} as any);
-
     expect(() =>
-      (service as any).validateCreateInput({
+      validateCreateLenderAdInput({
         headline: 'Responsible business lending',
         minAmount: 100000,
         maxAmount: 500000,
@@ -273,9 +275,7 @@ describe('LenderAdsService', () => {
   });
 
   it('maps the inactive filter to every non-public advertisement status', () => {
-    const service = new LenderAdsService({} as any, {} as any, {} as any);
-
-    expect((service as any).normalizeStatusFilter('inactive')).toEqual([
+    expect(normalizeLenderAdStatusFilter('inactive')).toEqual([
       'draft',
       'paused',
       'rejected',
@@ -285,10 +285,8 @@ describe('LenderAdsService', () => {
   });
 
   it('rejects unsupported advertisement status filters', () => {
-    const service = new LenderAdsService({} as any, {} as any, {} as any);
-
-    expect(() =>
-      (service as any).normalizeStatusFilter('not-a-status'),
-    ).toThrow(BadRequestException);
+    expect(() => normalizeLenderAdStatusFilter('not-a-status')).toThrow(
+      BadRequestException,
+    );
   });
 });

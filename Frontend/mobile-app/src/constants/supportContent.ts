@@ -1,22 +1,19 @@
 /** @format */
 
-export type SupportConversation = {
-  id: string;
-  lenderName: string;
-  lastMessage: string;
-  lastSeen: string;
-  unreadCount: number;
-  isOnline: boolean;
-};
+export type SupportQuickActionId =
+  | "help-center"
+  | "contact-support"
+  | "request-call"
+  | "raise-dispute";
 
 export type SupportQuickAction = {
-  id: string;
+  id: SupportQuickActionId;
   title: string;
   subtitle: string;
-  icon: "help-circle" | "phone-call" | "file-text";
+  icon: "help-circle" | "message-square" | "phone-call" | "alert-circle";
 };
 
-export type HelpCategory = "Borrower" | "Lender" | "Technical";
+export type HelpCategory = "Loans" | "Payments" | "Account" | "Technical";
 
 export type HelpFaq = {
   id: string;
@@ -25,102 +22,96 @@ export type HelpFaq = {
   answer: string;
 };
 
-export const supportConversations: SupportConversation[] = [
-  {
-    id: "conv-1",
-    lenderName: "People's Micro Finance",
-    lastMessage: "Please upload your salary slip to continue approval.",
-    lastSeen: "2m ago",
-    unreadCount: 2,
-    isOnline: true,
-  },
-  {
-    id: "conv-2",
-    lenderName: "City Trust Lending",
-    lastMessage: "We can offer a revised plan with a 12-month tenure.",
-    lastSeen: "14m ago",
-    unreadCount: 0,
-    isOnline: false,
-  },
-  {
-    id: "conv-3",
-    lenderName: "Rapid Loan Hub",
-    lastMessage: "Your loan has moved to final verification.",
-    lastSeen: "1h ago",
-    unreadCount: 1,
-    isOnline: true,
-  },
-];
-
 export const supportQuickActions: SupportQuickAction[] = [
   {
-    id: "qa-1",
+    id: "help-center",
     title: "Help Center",
-    subtitle: "Browse verified answers and guides",
+    subtitle: "Find answers and guidance",
     icon: "help-circle",
   },
   {
-    id: "qa-2",
+    id: "contact-support",
+    title: "Contact Support",
+    subtitle: "Send a support request",
+    icon: "message-square",
+  },
+  {
+    id: "request-call",
     title: "Request a Call",
-    subtitle: "Get a callback from support agent",
+    subtitle: "Ask the team to call you",
     icon: "phone-call",
   },
   {
-    id: "qa-3",
+    id: "raise-dispute",
     title: "Raise Dispute",
-    subtitle: "Report repayment or statement issue",
-    icon: "file-text",
+    subtitle: "Report a loan or payment issue",
+    icon: "alert-circle",
   },
 ];
 
 export const helpCenterCategories: Array<"All" | HelpCategory> = [
   "All",
-  "Borrower",
-  "Lender",
+  "Loans",
+  "Payments",
+  "Account",
   "Technical",
 ];
 
 export const helpCenterFaqs: HelpFaq[] = [
   {
-    id: "faq-1",
-    category: "Borrower",
-    question: "How is my credit score calculated?",
+    id: "faq-loan-application",
+    category: "Loans",
+    question: "Why can't I apply for a loan listing?",
     answer:
-      "Your score is calculated from repayment consistency, income patterns, and account activity. Paying on time improves your score.",
+      "Your borrower account must have approved KYC before you can submit a loan application. Check your KYC status from your profile and resubmit documents if a review was rejected.",
   },
   {
-    id: "faq-2",
-    category: "Borrower",
-    question: "What happens if I miss a payment?",
+    id: "faq-application-status",
+    category: "Loans",
+    question: "Where can I check my loan application?",
     answer:
-      "The installment is marked overdue and reminders are sent. Repeated missed payments may reduce your credit score and restrict future loan access.",
+      "Open My Applications to see whether a request is submitted, under review, approved, rejected, or converted into a loan.",
   },
   {
-    id: "faq-3",
-    category: "Lender",
-    question: "How do I withdraw my earnings?",
+    id: "faq-agreement",
+    category: "Loans",
+    question: "How do I review and sign an agreement?",
     answer:
-      "Open your lender wallet, choose Withdraw, select a linked bank account, and confirm. Processing is typically completed within 1-2 business days.",
+      "Open Agreements, select the agreement linked to your loan, review the terms carefully, then enter your legal name and provide consent before signing.",
   },
   {
-    id: "faq-4",
-    category: "Lender",
-    question: "What is the risk of default?",
+    id: "faq-receipt-review",
+    category: "Payments",
+    question: "Why is my bank-transfer receipt still pending?",
     answer:
-      "Default risk depends on borrower profile and repayment history. Use credit score, KYC status, and repayment trends before approving a loan.",
+      "A submitted bank-transfer receipt remains pending until the lender reviews it. You can follow its status from Payments and raise a dispute if the result is incorrect.",
   },
   {
-    id: "faq-5",
+    id: "faq-overdue",
+    category: "Payments",
+    question: "What happens when an installment is overdue?",
+    answer:
+      "The installment remains outstanding and the loan may be marked overdue. Contact your lender or support promptly if you believe the payment status is wrong.",
+  },
+  {
+    id: "faq-kyc",
+    category: "Account",
+    question: "How do I resolve a rejected KYC review?",
+    answer:
+      "Open your profile to read the rejection reason, then use the KYC resubmission option to provide corrected, clear documents.",
+  },
+  {
+    id: "faq-location",
+    category: "Account",
+    question: "How is my location used?",
+    answer:
+      "Location permission is optional. When enabled, the app saves an approximate borrower location to support nearby-lender features. You can continue using the app without granting it.",
+  },
+  {
+    id: "faq-technical",
     category: "Technical",
-    question: "How can I reset my password?",
+    question: "What should I include in a technical support request?",
     answer:
-      "Go to Login, tap Forgot Password, enter your registered email or phone, and follow the verification instructions.",
-  },
-  {
-    id: "faq-6",
-    category: "Technical",
-    question: "How does QR payment verification work?",
-    answer:
-      "After scanning and paying, the transaction receipt is matched with your loan installment. If verification is delayed, submit the receipt from Support.",
+      "Describe what you tried, the screen where it happened, and the exact error message. Do not include passwords, access tokens, bank PINs, or other secrets.",
   },
 ];

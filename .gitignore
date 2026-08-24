@@ -28,5 +28,6 @@ firebase-service-account*.json
 firebase.json
 firestore.rules
 firestore.indexes.json
+!Backend/scripts/operations/firestore/firestore.indexes.json
 Backend/seed-mock-data.js
 package-lock.json

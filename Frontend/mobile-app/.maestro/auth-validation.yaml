@@ -1,0 +1,15 @@
+appId: com.vibecodex.smartcredit
+name: Authentication validation smoke test
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Sign in"
+- tapOn:
+    id: auth-sign-in
+- assertVisible: "Please enter your email or phone together with your password."
+- tapOn:
+    id: auth-mode-create-account
+- assertVisible: "Borrower account setup"
+- assertVisible: "Step 1/2"

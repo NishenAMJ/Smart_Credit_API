@@ -105,6 +105,7 @@ export default function DailyCollectionPage({
           includeSummary: true,
           includeSearchCount: false,
           date: selectedDate,
+          activity: 'payment',
         })
 
         if (isMounted) setResponse(data)

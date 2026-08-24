@@ -6,6 +6,7 @@ import {
   loginWithRole,
   registerPublicUser,
   submitKyc,
+  updateRegistrationLocation,
   type PublicSignupRole,
   type SubmitKycPayload,
 } from "../../lib/api";
@@ -64,6 +65,13 @@ const initialRegisterForm = {
   password: "",
   confirmPassword: "",
   role: "lender" as PublicSignupRole,
+  address: {
+    line1: "",
+    line2: "",
+    city: "",
+    district: "",
+    province: "",
+  },
   kyc: initialKycForm,
 };
 
@@ -130,6 +138,12 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
   const [infoMessage, setInfoMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [roleOptions, setRoleOptions] = useState<SelectableRole[]>([]);
+  const [capturedLocation, setCapturedLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationMessage, setLocationMessage] = useState("");
 
   const registerRoleLabel = "lender";
 
@@ -235,6 +249,19 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
       nextErrors.phone = "Phone is required.";
     }
 
+    if (!registerForm.address.line1.trim()) {
+      nextErrors.addressLine1 = "Street address is required.";
+    }
+    if (!registerForm.address.city.trim()) {
+      nextErrors.city = "City is required.";
+    }
+    if (!registerForm.address.district.trim()) {
+      nextErrors.district = "District is required.";
+    }
+    if (!registerForm.address.province.trim()) {
+      nextErrors.province = "Province is required.";
+    }
+
     if (!registerForm.password.trim()) {
       nextErrors.password = "Password is required.";
     } else if (registerForm.password.length < 8) {
@@ -286,6 +313,36 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
     }
 
     setRegisterStep("kyc");
+  }
+
+  function handleCaptureLocation() {
+    setLocationMessage("");
+    if (!navigator.geolocation) {
+      setLocationMessage(
+        "Location is unavailable in this browser. You can continue and enable it later.",
+      );
+      return;
+    }
+
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCapturedLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setLocationMessage("Current location captured for map visibility.");
+        setLocationLoading(false);
+      },
+      () => {
+        setCapturedLocation(null);
+        setLocationMessage(
+          "Location permission was denied. You can continue and enable it later.",
+        );
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 60_000 },
+    );
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -391,6 +448,15 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
           fullName: registerForm.fullName.trim(),
           email: registerForm.email.trim(),
           phone: registerForm.phone.trim(),
+          address: {
+            line1: registerForm.address.line1.trim(),
+            ...(registerForm.address.line2.trim()
+              ? { line2: registerForm.address.line2.trim() }
+              : {}),
+            city: registerForm.address.city.trim(),
+            district: registerForm.address.district.trim(),
+            province: registerForm.address.province.trim(),
+          },
           password: registerForm.password,
           role: "lender",
         });
@@ -425,6 +491,21 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
         throw loginError;
       }
 
+      if (capturedLocation) {
+        try {
+          await updateRegistrationLocation(authResponse.accessToken, {
+            ...capturedLocation,
+            city: registerForm.address.city.trim(),
+            district: registerForm.address.district.trim(),
+            visibility: "exact",
+          });
+        } catch {
+          window.alert(
+            "Your account was saved, but the map location could not be updated. You can enable it later from the map.",
+          );
+        }
+      }
+
       await submitKyc(authResponse.accessToken, {
         documentType: registerForm.kyc.documentType,
         documentNumber: registerForm.kyc.documentNumber.trim(),
@@ -446,6 +527,8 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
 
       setRegisterForm(initialRegisterForm);
       setUploadStatus({});
+      setCapturedLocation(null);
+      setLocationMessage("");
       setRegisterStep("account");
       setLoginIdentifier(nextSession.user.email);
       setLoginPassword("");
@@ -790,6 +873,121 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                           </small>
                         ) : null}
                       </label>
+
+                      <div className="shared-auth-section-head">
+                        <strong>Registered address</strong>
+                        <span>
+                          This address is shown to the KYC reviewer. GPS is
+                          optional and only controls map visibility.
+                        </span>
+                      </div>
+
+                      <label className="shared-auth-field">
+                        <span>Street address</span>
+                        <input
+                          autoComplete="address-line1"
+                          value={registerForm.address.line1}
+                          onChange={(event) =>
+                            setRegisterForm((current) => ({
+                              ...current,
+                              address: {
+                                ...current.address,
+                                line1: event.target.value,
+                              },
+                            }))
+                          }
+                          placeholder="10 Main Street"
+                          disabled={loading}
+                        />
+                        {fieldErrors.addressLine1 ? (
+                          <small className="shared-auth-error-text">
+                            {fieldErrors.addressLine1}
+                          </small>
+                        ) : null}
+                      </label>
+
+                      <label className="shared-auth-field">
+                        <span>Address line 2 (optional)</span>
+                        <input
+                          autoComplete="address-line2"
+                          value={registerForm.address.line2}
+                          onChange={(event) =>
+                            setRegisterForm((current) => ({
+                              ...current,
+                              address: {
+                                ...current.address,
+                                line2: event.target.value,
+                              },
+                            }))
+                          }
+                          placeholder="Apartment, building, or landmark"
+                          disabled={loading}
+                        />
+                      </label>
+
+                      <div className="shared-auth-grid two-column">
+                        {(
+                          [
+                            ["City", "city", "Colombo"],
+                            ["District", "district", "Colombo"],
+                            ["Province", "province", "Western"],
+                          ] as const
+                        ).map(([label, key, placeholder]) => (
+                          <label className="shared-auth-field" key={key}>
+                            <span>{label}</span>
+                            <input
+                              autoComplete={
+                                key === "city"
+                                  ? "address-level2"
+                                  : "address-level1"
+                              }
+                              value={registerForm.address[key]}
+                              onChange={(event) =>
+                                setRegisterForm((current) => ({
+                                  ...current,
+                                  address: {
+                                    ...current.address,
+                                    [key]: event.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder={placeholder}
+                              disabled={loading}
+                            />
+                            {fieldErrors[key] ? (
+                              <small className="shared-auth-error-text">
+                                {fieldErrors[key]}
+                              </small>
+                            ) : null}
+                          </label>
+                        ))}
+                      </div>
+
+                      <div className="shared-auth-action-row">
+                        <button
+                          type="button"
+                          className="shared-auth-secondary"
+                          onClick={handleCaptureLocation}
+                          disabled={loading || locationLoading}
+                        >
+                          {locationLoading
+                            ? "Capturing location..."
+                            : capturedLocation
+                              ? "Refresh current location"
+                              : "Use current location"}
+                        </button>
+                        {locationMessage ? (
+                          <small
+                            className={
+                              capturedLocation
+                                ? "shared-auth-success-text"
+                                : "shared-auth-error-text"
+                            }
+                          >
+                            {locationMessage}
+                          </small>
+                        ) : null}
+                      </div>
 
                       <div className="shared-auth-grid two-column">
                         <label className="shared-auth-field">

@@ -9,7 +9,6 @@ import { BorrowerCreditScoreModule } from './credit-score/credit-score.module';
 import { BorrowerProfileModule } from './profile/borrower-profile.module';
 import { BorrowerLoansModule } from './loans/borrower-loans.module';
 import { BorrowerPaymentsModule } from './payments/borrower-payments.module';
-import { BorrowerChatModule } from './chat/borrower-chat.module';
 
 /**
  * Registers borrower HTTP routes and business services.
@@ -25,7 +24,6 @@ import { BorrowerChatModule } from './chat/borrower-chat.module';
     BorrowerProfileModule,
     BorrowerLoansModule,
     BorrowerPaymentsModule,
-    BorrowerChatModule,
   ],
   controllers: [],
   providers: [],
@@ -39,8 +37,6 @@ import { BorrowerChatModule } from './chat/borrower-chat.module';
     BorrowerProfileModule,
     BorrowerLoansModule,
     BorrowerPaymentsModule,
-    BorrowerChatModule,
   ],
 })
 export class BorrowerModule {}
-

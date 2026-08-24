@@ -98,9 +98,26 @@ export interface AdminSignupRequest {
   fullName: string;
   email: string;
   phone: string;
+  address: RegistrationAddress;
   password: string;
   role: PublicSignupRole;
 }
+
+export type RegistrationAddress = {
+  line1: string;
+  line2?: string;
+  city: string;
+  district: string;
+  province: string;
+};
+
+export type RegistrationLocation = {
+  latitude: number;
+  longitude: number;
+  city?: string;
+  district?: string;
+  visibility?: "hidden" | "approximate" | "exact";
+};
 
 export interface AdminUser {
   id: string;
@@ -174,6 +191,24 @@ export interface KycDocument {
   rejectionReason?: string;
   notes?: string;
   userKycStatus?: string;
+  applicant?: {
+    fullName: string;
+    email: string;
+    phone: string;
+    role?: "borrower" | "lender";
+    address?: RegistrationAddress;
+  };
+  identityDetails?: {
+    documentType: string;
+    documentNumber: string;
+    fullName: string;
+    issuingCountry?: string;
+    expiryDate?: string;
+  };
+  location?: RegistrationLocation & {
+    visibility: "hidden" | "approximate" | "exact";
+    updatedAt?: FirestoreTimestamp;
+  };
 }
 
 export interface KycPendingResponse {
@@ -508,6 +543,17 @@ export function registerPublicUser(payload: AdminSignupRequest) {
   });
 }
 
+export function updateRegistrationLocation(
+  accessToken: string,
+  payload: RegistrationLocation,
+) {
+  return apiRequest<{ success: boolean }>("/location/me", {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function submitKyc(accessToken: string, payload: SubmitKycPayload) {
   return apiRequest<{
     message: string;
@@ -763,19 +809,6 @@ export function rejectAd(adId: string, reason = DEFAULT_AD_REJECTION_REASON) {
   });
 }
 
-// Allows admins to reopen or reverse moderation after borrower complaints.
-export function updateAdStatus(
-  adId: string,
-  status: Extract<AdStatus, "pending" | "approved" | "rejected">,
-  options: { reason?: string; notes?: string } = {},
-) {
-  return apiRequest(`/admin/ads/${adId}/status`, {
-    method: "PATCH",
-    auth: true,
-    body: JSON.stringify({ status, ...options }),
-  });
-}
-
 // Keeps audit pages isolated from raw request details.
 export function getAuditLogs(params?: CursorQueryParams) {
   const searchParams = new URLSearchParams();
@@ -857,6 +890,58 @@ export function changeDisputePriority(
     auth: true,
     body: JSON.stringify({ priority, reason }),
   });
+}
+
+export type AdminAdBoost = {
+  boostId: string;
+  listingId: string;
+  lenderId: string;
+  status: string;
+  paymentMethod: "bank_transfer" | "card";
+  transactionId: string;
+  receiptDocumentId: string | null;
+  bankReference: string | null;
+  rejectionReason: string | null;
+  createdAt: string | null;
+  submittedAt: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  plan: {
+    id: string;
+    name: string;
+    durationDays: number;
+    amountMinor: number;
+    currency: "LKR";
+  };
+};
+
+export function getAdBoosts(status = "all") {
+  return apiRequest<AdminAdBoost[]>(
+    `/admin/ad-boosts?status=${encodeURIComponent(status)}`,
+    { auth: true },
+  );
+}
+
+export function decideAdBoostPayment(
+  boostId: string,
+  approved: boolean,
+  reason?: string,
+) {
+  return apiRequest<AdminAdBoost>(
+    `/admin/ad-boosts/${encodeURIComponent(boostId)}/decision`,
+    {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ approved, reason }),
+    },
+  );
+}
+
+export function getAdBoostReceiptAccess(documentId: string) {
+  return apiRequest<{ documentId: string; accessUrl: string; expiresAt: string }>(
+    `/documents/${encodeURIComponent(documentId)}/access`,
+    { auth: true },
+  );
 }
 
 export function addAdminDisputeComment(

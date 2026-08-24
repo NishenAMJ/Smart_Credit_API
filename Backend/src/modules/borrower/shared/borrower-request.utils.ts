@@ -1,13 +1,16 @@
-import { BadRequestException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 
-export function resolveBorrowerId(borrowerId?: string): string {
-  const trimmed = borrowerId?.trim();
+export function resolveAuthenticatedBorrowerId(
+  authenticatedUserId: string,
+  requestedBorrowerId?: string,
+): string {
+  const requested = requestedBorrowerId?.trim();
 
-  if (!trimmed) {
-    throw new BadRequestException(
-      'Borrower identification is required for this operation.',
+  if (requested && requested !== authenticatedUserId) {
+    throw new ForbiddenException(
+      'You can only access your own borrower workspace.',
     );
   }
 
-  return trimmed;
+  return authenticatedUserId;
 }

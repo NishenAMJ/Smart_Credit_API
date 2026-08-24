@@ -113,7 +113,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     this.userSockets.get(userId)!.add(client.id);
 
-    await this.users.setOnlineStatus(userId, true);
+    void this.updatePresenceSafely(userId, true);
     this.server.emit('userOnline', { userId, isOnline: true });
 
     this.logger.log(
@@ -132,7 +132,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     if (!sockets || sockets.size === 0) {
       this.userSockets.delete(userId);
-      await this.users.setOnlineStatus(userId, false);
+      void this.updatePresenceSafely(userId, false);
       this.server.emit('userOnline', { userId, isOnline: false });
     }
 
@@ -272,6 +272,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private deliverToUser(userId: string, event: string, data: any): boolean {
     return this.emitToUser(userId, event, data);
+  }
+
+  private async updatePresenceSafely(
+    userId: string,
+    isOnline: boolean,
+  ): Promise<void> {
+    try {
+      await this.users.setOnlineStatus(userId, isOnline);
+    } catch (error) {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String(error.code)
+          : 'unknown';
+      this.logger.warn(
+        `Could not mark user ${userId} ${isOnline ? 'online' : 'offline'} (Firestore code: ${code}). Chat will continue without a presence update.`,
+      );
+    }
   }
 
   private async flushOfflineQueue(userId: string, client: Socket) {

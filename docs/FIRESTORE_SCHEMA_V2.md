@@ -15,6 +15,7 @@ The NestJS backend is the only business-data gateway. Client Firestore rules den
 | `loans`                                   | Immutable agreed terms and current balance        | Application, listing, lender, borrower                  |
 | `loans/{loanId}/installments`             | One document per monthly settlement               | Parent loan and optional repayment transaction          |
 | `transactions`                            | Immutable disbursement/repayment/fee ledger       | Loan, installment, listing and participants             |
+| `adBoostRequests`                         | Optional paid ad-promotion request and review      | Listing, lender, transaction and optional receipt       |
 | `disputes`                                | Admin-managed cases                               | Loan, optional installment/transaction and participants |
 | `disputes/{disputeId}/events`             | Append-only dispute timeline                      | Parent dispute and actor                                |
 | `notifications`                           | Unified role-independent alerts                   | Recipient user and related entity                       |

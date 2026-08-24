@@ -1,8 +1,17 @@
-import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { resolveAuthenticatedLenderId } from '../lender-request.utils';
 import { LenderProfileService } from './lender-profile.service';
 import {
   LenderProfileResponse,
@@ -28,23 +37,30 @@ export class LenderProfileController {
   constructor(private readonly lenderProfileService: LenderProfileService) {}
 
   @Get(':lenderId')
-  getProfile(@Req() request: AuthenticatedRequest): Promise<LenderProfileResponse> {
-    return this.lenderProfileService.getProfile(request.user.sub);
+  getProfile(
+    @Req() request: AuthenticatedRequest,
+    @Param('lenderId') lenderId: string,
+  ): Promise<LenderProfileResponse> {
+    return this.lenderProfileService.getProfile(
+      resolveAuthenticatedLenderId(request.user.sub, lenderId),
+    );
   }
 
   @Patch(':lenderId')
   updateProfile(
     @Req() request: AuthenticatedRequest,
-    @Param('lenderId') _lenderId: string,
+    @Param('lenderId') lenderId: string,
     @Body() body: UpdateLenderProfileBody,
   ): Promise<LenderProfileResponse> {
     return this.lenderProfileService.updateProfile(
-      request.user.sub,
+      resolveAuthenticatedLenderId(request.user.sub, lenderId),
       this.toUpdateInput(body),
     );
   }
 
-  private toUpdateInput(body: UpdateLenderProfileBody): UpdateLenderProfileInput {
+  private toUpdateInput(
+    body: UpdateLenderProfileBody,
+  ): UpdateLenderProfileInput {
     return {
       fullName: typeof body.fullName === 'string' ? body.fullName : undefined,
       email: typeof body.email === 'string' ? body.email : undefined,

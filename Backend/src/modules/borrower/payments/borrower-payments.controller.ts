@@ -7,9 +7,14 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { resolveBorrowerId } from '../shared/borrower-request.utils';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { resolveAuthenticatedBorrowerId } from '../shared/borrower-request.utils';
 import { RepaymentMethod } from '../applications/dto/loan-application.dto';
 import { BorrowerPaymentsService } from './borrower-payments.service';
 import { GenerateQrDto } from './dto/generate-qr.dto';
@@ -22,17 +27,25 @@ export class BorrowerPaymentsController {
   ) {}
 
   @Get('payments')
-  async getMyPayments(@Query('borrowerId') borrowerId?: string) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower')
+  async getMyPayments(
+    @Req() req: AuthenticatedRequest,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
     return {
       success: true,
       data: await this.borrowerPaymentsService.getPayments(
-        resolveBorrowerId(borrowerId),
+        resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
       ),
     };
   }
 
   @Post('payments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower')
   async createPayment(
+    @Req() req: AuthenticatedRequest,
     @Body()
     payload: {
       loanId: string;
@@ -49,12 +62,17 @@ export class BorrowerPaymentsController {
       success: true,
       data: await this.borrowerPaymentsService.makePayment({
         ...payload,
-        borrowerId: resolveBorrowerId(payload.borrowerId ?? borrowerId),
+        borrowerId: resolveAuthenticatedBorrowerId(
+          req.user.sub,
+          payload.borrowerId ?? borrowerId,
+        ),
       }),
     };
   }
 
   @Post('payments/payhere/initiate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower')
   async initiatePayHerePayment(
     @Body()
     payload: {
@@ -62,7 +80,7 @@ export class BorrowerPaymentsController {
       amount: number;
       borrowerId?: string;
     },
-    @Req() request: Request,
+    @Req() request: AuthenticatedRequest,
     @Query('borrowerId') borrowerId?: string,
   ) {
     return {
@@ -70,7 +88,10 @@ export class BorrowerPaymentsController {
       data: await this.borrowerPaymentsService.initiatePayHerePayment({
         loanId: payload.loanId,
         amount: Number(payload.amount),
-        borrowerId: resolveBorrowerId(payload.borrowerId ?? borrowerId),
+        borrowerId: resolveAuthenticatedBorrowerId(
+          request.user.sub,
+          payload.borrowerId ?? borrowerId,
+        ),
         requestBaseUrl: this.getRequestBaseUrl(request),
       }),
     };
@@ -96,7 +117,10 @@ export class BorrowerPaymentsController {
   }
 
   @Post('payments/generate-qr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower')
   async generateQr(
+    @Req() req: AuthenticatedRequest,
     @Body() payload: GenerateQrDto,
     @Query('borrowerId') borrowerId?: string,
   ) {
@@ -104,13 +128,18 @@ export class BorrowerPaymentsController {
       success: true,
       data: await this.borrowerPaymentsService.generateQrToken(
         payload.loanId,
-        resolveBorrowerId(payload.borrowerId ?? borrowerId),
+        resolveAuthenticatedBorrowerId(
+          req.user.sub,
+          payload.borrowerId ?? borrowerId,
+        ),
         payload.amount,
       ),
     };
   }
 
   @Post('payments/verify-qr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower', 'lender')
   async verifyQr(@Body() payload: VerifyQrDto) {
     return {
       success: true,
@@ -119,24 +148,32 @@ export class BorrowerPaymentsController {
   }
 
   @Get('transactions')
-  async getMyTransactions(@Query('borrowerId') borrowerId?: string) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower')
+  async getMyTransactions(
+    @Req() req: AuthenticatedRequest,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
     return {
       success: true,
       data: await this.borrowerPaymentsService.getTransactions(
-        resolveBorrowerId(borrowerId),
+        resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
       ),
     };
   }
 
   @Get('transactions/:transactionId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower')
   async getTransactionDetails(
+    @Req() req: AuthenticatedRequest,
     @Param('transactionId') transactionId: string,
     @Query('borrowerId') borrowerId?: string,
   ) {
     return {
       success: true,
       data: await this.borrowerPaymentsService.getTransactionById(
-        resolveBorrowerId(borrowerId),
+        resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
         transactionId,
       ),
     };

@@ -1,16 +1,15 @@
-
 import { Injectable } from '@nestjs/common';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { COLLECTIONS, MessageDoc } from '../common/types';
-import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 @Injectable()
 export class MessagesService {
   constructor(
     private firebase: FirebaseService,
     private conversations: ConversationsService,
-  ) { }
+  ) {}
 
   /**
    * sendText (HTTP fallback)
@@ -36,7 +35,7 @@ export class MessagesService {
         fileName: null,
         readAt: null,
         status: 'sent',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
 
     await this.conversations.updateLastMessage(
@@ -49,7 +48,6 @@ export class MessagesService {
     const snap = await ref.get();
     return { id: snap.id, ...snap.data() } as MessageDoc;
   }
-
 
   async getMessages(
     conversationId: string,
@@ -72,7 +70,6 @@ export class MessagesService {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MessageDoc);
   }
 
-
   async markMessageRead(
     conversationId: string,
     messageId: string,
@@ -83,6 +80,6 @@ export class MessagesService {
     await this.firebase
       .collection(COLLECTIONS.MESSAGES(conversationId))
       .doc(messageId)
-      .update({ readAt: admin.firestore.FieldValue.serverTimestamp() });
+      .update({ readAt: FieldValue.serverTimestamp() });
   }
 }

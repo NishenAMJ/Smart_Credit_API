@@ -1,5 +1,18 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ChevronRight, UserRound, X } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronRight,
+  CircleDollarSign,
+  CreditCard,
+  IdCard,
+  Mail,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  UserRound,
+  X,
+} from "lucide-react";
 import LoanDetailsModal from "../loans/LoanDetailsModal";
 import LoanPortfolioCard from "../loans/LoanPortfolioCard";
 import {
@@ -31,6 +44,13 @@ function formatLabel(value: string): string {
   return value
     .replace(/_/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getKycStatusTone(value: string): "verified" | "rejected" | "review" {
+  const normalized = value.toLowerCase();
+  if (normalized === "approved") return "verified";
+  if (normalized === "rejected") return "rejected";
+  return "review";
 }
 
 function formatDate(value: string | null): string {
@@ -165,54 +185,142 @@ export default function BorrowerSidePanel({
               </div>
             ) : view === "profile" ? (
               <section className="borrower-panel-profile">
-                <div className="borrower-panel-profile__identity">
-                  <span aria-hidden="true">
+                <div className="borrower-panel-profile__hero">
+                  <span
+                    className="borrower-panel-profile__avatar"
+                    aria-hidden="true"
+                  >
                     {borrower.fullName.slice(0, 2).toUpperCase()}
                   </span>
-                  <div>
+                  <div className="borrower-panel-profile__heading">
                     <h3>{borrower.fullName}</h3>
-                    <p>
-                      {borrower.isActive
-                        ? "Active account"
-                        : "Inactive account"}
-                    </p>
+                    <div className="borrower-panel-profile__badges">
+                      <span
+                        className={`borrower-profile-status borrower-profile-status--${
+                          borrower.isActive ? "active" : "inactive"
+                        }`}
+                      >
+                        {borrower.isActive
+                          ? "Active account"
+                          : "Inactive account"}
+                      </span>
+                      <span
+                        className={`borrower-profile-status borrower-profile-status--${getKycStatusTone(
+                          borrower.kycStatus,
+                        )}`}
+                      >
+                        <ShieldCheck size={13} aria-hidden="true" />
+                        {formatLabel(borrower.kycStatus)} KYC
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <dl className="borrower-panel-profile__details">
-                  <div>
-                    <dt>Phone</dt>
-                    <dd>{borrower.phone ?? "Not available"}</dd>
+                <div className="borrower-panel-profile__metrics">
+                  <article>
+                    <span aria-hidden="true">
+                      <CircleDollarSign size={19} />
+                    </span>
+                    <div>
+                      <p>Outstanding balance</p>
+                      <strong>
+                        {formatCurrency(borrower.outstandingAmount)}
+                      </strong>
+                    </div>
+                  </article>
+                  <article>
+                    <span aria-hidden="true">
+                      <CreditCard size={19} />
+                    </span>
+                    <div>
+                      <p>Credit score</p>
+                      <strong>{borrower.creditScore ?? "Not available"}</strong>
+                    </div>
+                  </article>
+                </div>
+
+                <section className="borrower-profile-section">
+                  <div className="borrower-profile-section__heading">
+                    <h4>Contact information</h4>
+                    <p>Borrower-provided contact details</p>
                   </div>
-                  <div>
-                    <dt>Email</dt>
-                    <dd>{borrower.email || "Not available"}</dd>
+                  <dl className="borrower-profile-list">
+                    <div>
+                      <dt>
+                        <Phone size={17} aria-hidden="true" />
+                        Phone
+                      </dt>
+                      <dd>
+                        {borrower.phone ? (
+                          <a href={`tel:${borrower.phone}`}>{borrower.phone}</a>
+                        ) : (
+                          <span className="borrower-profile-list__empty">
+                            Not available
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>
+                        <Mail size={17} aria-hidden="true" />
+                        Email
+                      </dt>
+                      <dd>
+                        {borrower.email ? (
+                          <a href={`mailto:${borrower.email}`}>
+                            {borrower.email}
+                          </a>
+                        ) : (
+                          <span className="borrower-profile-list__empty">
+                            Not available
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>
+                        <MapPin size={17} aria-hidden="true" />
+                        Address
+                      </dt>
+                      <dd>
+                        {borrower.address ?? (
+                          <span className="borrower-profile-list__empty">
+                            Not available
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <section className="borrower-profile-section">
+                  <div className="borrower-profile-section__heading">
+                    <h4>Account details</h4>
+                    <p>Identity and membership information</p>
                   </div>
-                  <div>
-                    <dt>Address</dt>
-                    <dd>{borrower.address ?? "Not available"}</dd>
-                  </div>
-                  <div>
-                    <dt>NIC</dt>
-                    <dd>{borrower.nic ?? "Not available"}</dd>
-                  </div>
-                  <div>
-                    <dt>KYC status</dt>
-                    <dd>{formatLabel(borrower.kycStatus)}</dd>
-                  </div>
-                  <div>
-                    <dt>Credit score</dt>
-                    <dd>{borrower.creditScore ?? "Not available"}</dd>
-                  </div>
-                  <div>
-                    <dt>Joined</dt>
-                    <dd>{formatDate(borrower.createdAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Outstanding</dt>
-                    <dd>{formatCurrency(borrower.outstandingAmount)}</dd>
-                  </div>
-                </dl>
+                  <dl className="borrower-profile-list">
+                    <div>
+                      <dt>
+                        <IdCard size={17} aria-hidden="true" />
+                        NIC
+                      </dt>
+                      <dd>
+                        {borrower.nic ?? (
+                          <span className="borrower-profile-list__empty">
+                            Not available
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>
+                        <CalendarDays size={17} aria-hidden="true" />
+                        Joined
+                      </dt>
+                      <dd>{formatDate(borrower.createdAt)}</dd>
+                    </div>
+                  </dl>
+                </section>
               </section>
             ) : (
               <div className="borrower-panel-loans">

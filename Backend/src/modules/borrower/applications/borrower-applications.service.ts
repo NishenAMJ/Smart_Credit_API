@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FieldValue } from 'firebase-admin/firestore';
+import { createHash } from 'crypto';
 import { instanceToPlain } from 'class-transformer';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import {
@@ -148,6 +149,12 @@ export class BorrowerApplicationsService {
       : null;
     const now = FieldValue.serverTimestamp();
     const appRef = this.db.collection(this.LOAN_APPS_COL).doc();
+    const submissionKey = createHash('sha256')
+      .update(`${plainDto.borrowerId}:${plainDto.adId}`)
+      .digest('hex');
+    const submissionKeyRef = this.db
+      .collection('applicationSubmissionKeys')
+      .doc(submissionKey);
     const applicationData: Record<string, any> = {
       applicationId: appRef.id,
       listingId: plainDto.adId,
@@ -156,6 +163,7 @@ export class BorrowerApplicationsService {
       requestedPrincipalMinor: Math.round(plainDto.amount * 100),
       requestedTenureMonths: plainDto.tenureMonths,
       requestedPurpose: plainDto.loanPurpose,
+      preferredRepaymentMethod: plainDto.preferredRepaymentMethod,
       purposeDescription: plainDto.purposeDescription ?? '',
       status: shouldSubmit
         ? LoanApplicationStatus.PENDING
@@ -182,7 +190,43 @@ export class BorrowerApplicationsService {
         : {}),
     };
 
-    await appRef.set(applicationData);
+    let existingApplication: LoanApplication | null = null;
+    await this.db.runTransaction(async (transaction) => {
+      const keySnapshot = await transaction.get(submissionKeyRef);
+      const existingApplicationId = keySnapshot.exists
+        ? String(keySnapshot.get('applicationId') ?? '')
+        : '';
+
+      if (existingApplicationId) {
+        const existingSnapshot = await transaction.get(
+          this.db.collection(this.LOAN_APPS_COL).doc(existingApplicationId),
+        );
+        if (existingSnapshot.exists) {
+          const candidate = existingSnapshot.data() as LoanApplication;
+          if (
+            ![
+              LoanApplicationStatus.REJECTED,
+              LoanApplicationStatus.CANCELLED,
+            ].includes(candidate.status)
+          ) {
+            existingApplication = candidate;
+            return;
+          }
+        }
+      }
+
+      transaction.create(appRef, applicationData);
+      transaction.set(submissionKeyRef, {
+        applicationId: appRef.id,
+        borrowerId: plainDto.borrowerId,
+        listingId: plainDto.adId,
+        updatedAt: now,
+      });
+    });
+
+    if (existingApplication) {
+      return existingApplication;
+    }
 
     const created = await appRef.get();
     return { ...created.data() } as LoanApplication;
@@ -278,6 +322,9 @@ export class BorrowerApplicationsService {
     if (plainDto.tenureMonths !== undefined) {
       updates.requestedTenureMonths = plainDto.tenureMonths;
     }
+    if (plainDto.preferredRepaymentMethod !== undefined) {
+      updates.preferredRepaymentMethod = plainDto.preferredRepaymentMethod;
+    }
 
     await this.db
       .collection(this.LOAN_APPS_COL)
@@ -311,6 +358,52 @@ export class BorrowerApplicationsService {
     return {
       message: `Loan application ${applicationId} deleted successfully`,
     };
+  }
+
+  /**
+   * Withdraws an application that has not been converted into a loan. Repeated
+   * cancellation returns the same canonical state so duplicate taps are safe.
+   */
+  async cancelLoanApplication(
+    applicationId: string,
+    borrowerId: string,
+  ): Promise<LoanApplication> {
+    const applicationRef = this.db
+      .collection(this.LOAN_APPS_COL)
+      .doc(applicationId);
+
+    await this.db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(applicationRef);
+      if (!snapshot.exists) {
+        throw new NotFoundException(
+          `Loan application ${applicationId} not found`,
+        );
+      }
+      const application = snapshot.data() as LoanApplication;
+      if (application.borrowerId !== borrowerId) {
+        throw new ForbiddenException('Access denied to this loan application');
+      }
+      if (application.status === LoanApplicationStatus.CANCELLED) return;
+      if (
+        [
+          LoanApplicationStatus.APPROVED,
+          LoanApplicationStatus.REJECTED,
+          LoanApplicationStatus.FUNDED,
+        ].includes(application.status)
+      ) {
+        throw new BadRequestException(
+          `Application in ${application.status} state cannot be cancelled.`,
+        );
+      }
+
+      transaction.update(applicationRef, {
+        status: LoanApplicationStatus.CANCELLED,
+        cancelledAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    return this.getLoanApplicationById(applicationId, borrowerId);
   }
 
   /**

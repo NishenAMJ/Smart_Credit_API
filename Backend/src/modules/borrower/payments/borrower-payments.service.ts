@@ -14,6 +14,7 @@ import {
   BorrowerService,
 } from '../core/borrower.service';
 import { LoanStatus, Repayment } from '../types/borrower.types';
+import { CoreLedgerService } from '../../core-ledger/core-ledger.service';
 
 type PaymentRecord = Record<string, unknown> & {
   loanId?: string;
@@ -39,6 +40,7 @@ type PayHereOrder = {
   amount: number;
   currency: string;
   status: string;
+  installmentId: string;
   repaymentId?: string | null;
 };
 
@@ -60,6 +62,7 @@ export class BorrowerPaymentsService {
     private readonly borrowerService: BorrowerService,
     private readonly configService: ConfigService,
     private readonly firebaseService: FirebaseService,
+    private readonly coreLedgerService: CoreLedgerService,
   ) {}
 
   private get db() {
@@ -276,14 +279,31 @@ export class BorrowerPaymentsService {
       throw new BadRequestException('Payment amount must be greater than 0.');
     }
 
-    const [loan, profile] = await Promise.all([
+    const [loan, profile, installments] = await Promise.all([
       this.borrowerService.getLoanById(payload.loanId, payload.borrowerId),
       this.borrowerService.getProfile(payload.borrowerId),
+      this.borrowerService.getBorrowerLoanInstallments(
+        payload.loanId,
+        payload.borrowerId,
+      ),
     ]);
 
     if (payload.amount > loan.outstandingBalance) {
       throw new BadRequestException(
         `Payment amount (LKR ${payload.amount}) exceeds outstanding balance (LKR ${loan.outstandingBalance}).`,
+      );
+    }
+    const installment = installments.find((candidate) =>
+      this.isUnpaidInstallment(candidate),
+    );
+    if (!installment) {
+      throw new BadRequestException(
+        'No unpaid installment is available for this payment.',
+      );
+    }
+    if (Math.abs(payload.amount - installment.remainingAmount) > 0.009) {
+      throw new BadRequestException(
+        `PayHere must settle the next installment in full with LKR ${installment.remainingAmount}.`,
       );
     }
 
@@ -340,6 +360,7 @@ export class BorrowerPaymentsService {
       orderId,
       loanId: payload.loanId,
       borrowerId: payload.borrowerId,
+      installmentId: installment.installmentId,
       amount: payload.amount,
       formattedAmount: amount,
       currency,
@@ -481,17 +502,19 @@ export class BorrowerPaymentsService {
       return { accepted: true, completed: false };
     }
 
-    const repayment = await this.borrowerService.makeRepayment({
-      loanId: order.loanId,
-      borrowerId: order.borrowerId,
-      amount: order.amount,
-      paymentMethod: RepaymentMethod.CARD,
-      transactionReference: payload.payment_id ?? order.orderId,
-    });
+    const repayment = await this.coreLedgerService.settleInstallment(
+      order.loanId,
+      order.installmentId,
+      order.borrowerId,
+      {
+        paymentMethod: 'card',
+        externalReference: payload.payment_id ?? order.orderId,
+      },
+    );
 
     await orderRef.update({
       status: 'completed',
-      repaymentId: repayment.repaymentId,
+      repaymentId: repayment.transactionId,
       payherePaymentId: payload.payment_id ?? null,
       notification: payload,
       updatedAt: FieldValue.serverTimestamp(),
@@ -501,7 +524,7 @@ export class BorrowerPaymentsService {
     return {
       accepted: true,
       completed: true,
-      repaymentId: repayment.repaymentId,
+      repaymentId: repayment.transactionId,
     };
   }
 

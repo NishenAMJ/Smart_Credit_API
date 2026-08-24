@@ -23,8 +23,17 @@ export type RegisterPayload = {
   fullName: string;
   email: string;
   phone: string;
+  address: RegistrationAddress;
   password: string;
   role: MobileRole;
+};
+
+export type RegistrationAddress = {
+  line1: string;
+  line2?: string;
+  city: string;
+  district: string;
+  province: string;
 };
 
 export type SubmitKycPayload = {

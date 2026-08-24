@@ -7,6 +7,7 @@ import {
   IsArray,
   Min,
   Max,
+  MaxLength,
 } from 'class-validator';
 
 /**
@@ -122,4 +123,64 @@ export class UpdateLoanApplicationDto {
   @IsString()
   @IsOptional()
   additionalNotes?: string;
+}
+
+/** Client request body; ownership always comes from the authenticated JWT. */
+export class CreateLoanApplicationRequestDto {
+  @IsString()
+  @IsNotEmpty()
+  adId!: string;
+
+  @IsNumber()
+  @Min(10000)
+  @Max(5000000)
+  amount!: number;
+
+  @IsEnum(LoanPurpose)
+  purpose!: LoanPurpose;
+
+  @IsString()
+  @MaxLength(1000)
+  @IsOptional()
+  description?: string;
+
+  @IsNumber()
+  @Min(3)
+  @Max(60)
+  tenureMonths!: number;
+
+  @IsEnum(RepaymentMethod)
+  @IsOptional()
+  preferredRepaymentMethod?: RepaymentMethod;
+
+  @IsString()
+  @IsOptional()
+  borrowerId?: string;
+}
+
+export class UpdateLoanApplicationRequestDto {
+  @IsNumber()
+  @Min(10000)
+  @Max(5000000)
+  @IsOptional()
+  amount?: number;
+
+  @IsEnum(LoanPurpose)
+  @IsOptional()
+  purpose?: LoanPurpose;
+
+  @IsString()
+  @MaxLength(1000)
+  @IsOptional()
+  description?: string;
+
+  @IsNumber()
+  @Min(3)
+  @Max(60)
+  @IsOptional()
+  tenureMonths?: number;
+
+  @IsEnum(RepaymentMethod)
+  @IsOptional()
+  preferredRepaymentMethod?: RepaymentMethod;
 }

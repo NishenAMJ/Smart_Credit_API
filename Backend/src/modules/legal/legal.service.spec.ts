@@ -136,6 +136,10 @@ describe('LegalService', () => {
   let documentsService: { createSystemGeneratedRecord: jest.Mock; getById: jest.Mock };
   let gateway: { emitToUser: jest.Mock };
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   beforeEach(() => {
     const memory = createMemoryFirestore({
       'loans/loan-1': {
@@ -447,5 +451,35 @@ describe('LegalService', () => {
         path.startsWith('transactions/disbursement_loan-1'),
       ),
     ).toHaveLength(1);
+  });
+
+  it('regenerates an agreement PDF when the stored Cloudinary asset is unavailable', async () => {
+    const agreement = await generate();
+    const storedAgreement = records.get(`loanAgreements/${agreement.id}`);
+    if (!storedAgreement) throw new Error('Agreement fixture was not created.');
+    storedAgreement.signedPdfDocumentId = `agreement_pdf_${agreement.id}`;
+    documentsService.getById.mockResolvedValue({
+      id: storedAgreement.signedPdfDocumentId,
+      status: 'approved',
+      cloudinaryPublicId: 'documents/loan-1/missing-agreement.pdf',
+      cloudinaryResourceType: 'raw',
+      cloudinaryDeliveryType: 'authenticated',
+      cloudinaryVersion: 1,
+      format: undefined,
+    });
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 404 }));
+    const fallback = Buffer.from('regenerated-pdf');
+    jest.spyOn(service as any, 'buildAgreementPdf').mockResolvedValue(fallback);
+
+    const result = await service.downloadDocumentPdf(
+      agreement.id,
+      'lender-1',
+      'lender',
+    );
+
+    expect(result.buffer).toEqual(fallback);
+    expect(result.fileName).toMatch(/\.pdf$/);
   });
 });

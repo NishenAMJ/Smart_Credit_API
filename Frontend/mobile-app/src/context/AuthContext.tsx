@@ -28,12 +28,14 @@ import {
   setAuthToken as setLenderAuthToken,
 } from "../services/api";
 import { chatSocket } from "../services/socketService";
+import { locationService } from "../api/services/location.service";
 import type {
   AuthResponse,
   DashboardResponse,
   KycSubmission,
   LoginPayload,
   MobileRole,
+  RegistrationAddress,
   SessionResponse,
   SubmitKycPayload,
 } from "../types/auth";
@@ -43,10 +45,18 @@ type SignUpPayload = {
     fullName: string;
     email: string;
     phone: string;
+    address: RegistrationAddress;
     password: string;
     role: MobileRole;
   };
   kyc: SubmitKycPayload;
+  location?: {
+    latitude: number;
+    longitude: number;
+    city?: string;
+    district?: string;
+    visibility?: "hidden" | "approximate" | "exact";
+  };
 };
 
 type MobileSession = {
@@ -64,7 +74,7 @@ type AuthContextValue = {
   refreshing: boolean;
   error: string;
   signIn: (payload: LoginPayload) => Promise<void>;
-  signUp: (payload: SignUpPayload) => Promise<void>;
+  signUp: (payload: SignUpPayload) => Promise<{ locationSaved: boolean }>;
   signOut: () => void;
   refreshWorkspace: () => Promise<void>;
 };
@@ -223,9 +233,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
         role: payload.account.role,
       });
       setAuthToken(loginResponse.accessToken);
+      let locationSaved = false;
+      if (payload.location) {
+        try {
+          await locationService.saveMyLocation(payload.location);
+          locationSaved = true;
+        } catch (locationError) {
+          console.warn(
+            "Registration location could not be saved:",
+            getApiErrorMessage(locationError, "Location update failed."),
+          );
+        }
+      }
       const kycResponse = await submitKyc(payload.kyc);
       setKycSubmission(kycResponse.submission);
       await hydrateWorkspace(loginResponse.accessToken, loginResponse.user);
+      return { locationSaved };
     } catch (nextError) {
       await clearAuthStorage();
       resetWorkspaceState();

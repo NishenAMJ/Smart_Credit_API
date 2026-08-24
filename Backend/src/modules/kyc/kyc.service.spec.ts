@@ -174,6 +174,19 @@ describe('KycService', () => {
             roles: ['borrower'],
             primaryRole: 'borrower',
             kycStatus: 'pending',
+            address: {
+              line1: '10 Main Street',
+              city: 'Colombo',
+              district: 'Colombo',
+              province: 'Western',
+            },
+            kycDetails: {
+              documentType: 'national_id',
+              documentNumber: '200012345678',
+              fullName: 'Test User Identity',
+              issuingCountry: 'Sri Lanka',
+              expiryDate: '2030-12-31',
+            },
           }),
         }),
         set: userSet,
@@ -196,6 +209,19 @@ describe('KycService', () => {
                   return {
                     doc: jest.fn((id?: string) => ({
                       id: id ?? 'doc-1',
+                    })),
+                  };
+                }
+
+                if (name === 'userLocations') {
+                  return {
+                    doc: jest.fn((id?: string) => ({
+                      id: id ?? 'user-1',
+                      get: jest.fn().mockResolvedValue({
+                        id: id ?? 'user-1',
+                        exists: false,
+                        data: () => undefined,
+                      }),
                     })),
                   };
                 }
@@ -234,9 +260,12 @@ describe('KycService', () => {
     const result = await service.submitMobileKyc({
       role: 'borrower',
       fullName: 'Test User',
+      documentType: 'passport',
+      documentNumber: 'N1234567',
+      issuingCountry: 'Sri Lanka',
+      expiryDate: '2030-12-31',
       email: 'test@example.com',
       phoneNumber: '0712345678',
-      nic: '123456789V',
       birthDate: '2000-01-01',
       passwordHash: 'hashed-password',
       nicFrontDataUrl: buildDataUrl('application/pdf', 'nic-front'),
@@ -255,6 +284,23 @@ describe('KycService', () => {
     expect(mediaService.uploadBufferAsDocument).toHaveBeenCalledTimes(4);
     expect(documentsService.createRecord).toHaveBeenCalledTimes(4);
     expect(userSet).toHaveBeenCalledTimes(1);
+    expect(userSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kycDetails: expect.objectContaining({
+          documentType: 'passport',
+          documentNumber: 'N1234567',
+          fullName: 'Test User',
+          issuingCountry: 'Sri Lanka',
+          expiryDate: '2030-12-31',
+        }),
+        searchTokens: expect.arrayContaining([
+          '10 main street',
+          'colombo',
+          'western',
+        ]),
+      }),
+      { merge: true },
+    );
     expect(result.success).toBe(true);
     expect(result.kycStatus).toBe('pending');
     expect(result.documentIds).toHaveLength(4);
@@ -513,6 +559,23 @@ describe('KycService', () => {
 
     expect(pending.documents).toHaveLength(1);
     expect(pending.documents[0].userKycStatus).toBe('pending');
+    expect(pending.documents[0]).toMatchObject({
+      applicant: {
+        fullName: 'Test User',
+        role: 'borrower',
+        address: {
+          line1: '10 Main Street',
+          city: 'Colombo',
+          district: 'Colombo',
+          province: 'Western',
+        },
+      },
+      identityDetails: {
+        documentType: 'national_id',
+        documentNumber: '200012345678',
+        fullName: 'Test User Identity',
+      },
+    });
     expect(pending.summary).toEqual({
       total: 1,
       pending: 1,
@@ -523,6 +586,10 @@ describe('KycService', () => {
   });
 
   it('approves a KYC document and updates the user KYC status', async () => {
+    documentSnapshots['user-1'] = {
+      roles: ['borrower'],
+      accountStatus: 'active',
+    };
     documentSnapshots['doc-1'] = {
       userId: 'user-1',
       category: 'kyc',
@@ -564,6 +631,10 @@ describe('KycService', () => {
   });
 
   it('rejects a KYC document and stores the rejection reason', async () => {
+    documentSnapshots['user-1'] = {
+      roles: ['borrower'],
+      accountStatus: 'active',
+    };
     documentSnapshots['doc-1'] = {
       userId: 'user-1',
       category: 'kyc',

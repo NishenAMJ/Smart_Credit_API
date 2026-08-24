@@ -29,7 +29,7 @@ describe('PaymentsService', () => {
   it('maps lender-scoped transactions without loading optional summaries', async () => {
     const paymentsData = {
       loadLenderContext: jest.fn().mockResolvedValue(createContext()),
-      getTransactions: jest.fn().mockResolvedValue([
+      getTransactionPage: jest.fn().mockResolvedValue([
         {
           id: 'repayment_1',
           loanId: 'loan_1',
@@ -68,6 +68,9 @@ describe('PaymentsService', () => {
       null,
       false,
       false,
+      null,
+      null,
+      'payment',
     );
 
     expect(result.transactions).toEqual([
@@ -82,11 +85,81 @@ describe('PaymentsService', () => {
     ]);
     expect(result.summary.totalTransactions).toBe(0);
     expect(result.searchResultCount).toBeNull();
+    expect(paymentsData.getTransactionPage).toHaveBeenCalledWith(
+      'lender_1',
+      ['repayment'],
+      16,
+      null,
+      null,
+    );
+  });
+
+  it('pushes the disbursement filter into the transaction data query', async () => {
+    const paymentsData = {
+      loadLenderContext: jest.fn().mockResolvedValue(createContext()),
+      getTransactionPage: jest.fn().mockResolvedValue([
+        {
+          id: 'disbursement_1',
+          loanId: 'loan_1',
+          installmentId: null,
+          paymentId: null,
+          type: 'disbursement',
+          status: 'completed',
+          amount: 50000,
+          createdAt: new Date('2026-04-01T10:00:00.000Z'),
+          source: 'transaction',
+          note: null,
+        },
+      ]),
+      getInstallmentSummaries: jest.fn().mockResolvedValue(new Map()),
+    };
+    const service = new PaymentsService(
+      paymentsData as unknown as PaymentsDataService,
+    );
+
+    const result = await service.getPayments(
+      'lender_1',
+      15,
+      null,
+      false,
+      false,
+      null,
+      null,
+      'disbursement',
+    );
+
+    expect(result.transactions[0]).toEqual(
+      expect.objectContaining({
+        transactionId: 'disbursement_1',
+        type: 'disbursement',
+      }),
+    );
+    expect(paymentsData.getTransactionPage).toHaveBeenCalledWith(
+      'lender_1',
+      ['disbursement'],
+      16,
+      null,
+      null,
+    );
   });
 
   it('applies server-side search to installment identifiers', async () => {
     const paymentsData = {
       loadLenderContext: jest.fn().mockResolvedValue(createContext()),
+      getTransactionPage: jest.fn().mockResolvedValue([
+        {
+          id: 'selected_day_payment',
+          loanId: 'loan_1',
+          installmentId: 'month_002',
+          paymentId: null,
+          type: 'repayment',
+          status: 'completed',
+          amount: 5000,
+          createdAt: new Date('2026-04-20T18:30:00.000Z'),
+          source: 'transaction',
+          note: null,
+        },
+      ]),
       getTransactions: jest.fn().mockResolvedValue([
         {
           id: 'repayment_1',
@@ -135,6 +208,20 @@ describe('PaymentsService', () => {
   it('filters a daily collection using the Sri Lanka calendar day', async () => {
     const paymentsData = {
       loadLenderContext: jest.fn().mockResolvedValue(createContext()),
+      getTransactionPage: jest.fn().mockResolvedValue([
+        {
+          id: 'selected_day_payment',
+          loanId: 'loan_1',
+          installmentId: 'month_002',
+          paymentId: null,
+          type: 'repayment',
+          status: 'completed',
+          amount: 5000,
+          createdAt: new Date('2026-04-20T18:30:00.000Z'),
+          source: 'transaction',
+          note: null,
+        },
+      ]),
       getTransactions: jest.fn().mockResolvedValue([
         {
           id: 'previous_day_payment',
@@ -199,6 +286,7 @@ describe('PaymentsService', () => {
   it('caches lender context between list requests', async () => {
     const paymentsData = {
       loadLenderContext: jest.fn().mockResolvedValue(createContext()),
+      getTransactionPage: jest.fn().mockResolvedValue([]),
       getTransactions: jest.fn().mockResolvedValue([]),
       getInstallmentSummaries: jest.fn().mockResolvedValue(new Map()),
     };

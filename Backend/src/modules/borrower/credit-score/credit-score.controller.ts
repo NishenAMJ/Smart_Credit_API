@@ -1,35 +1,50 @@
-import { Controller, Get, Post, Query } from '@nestjs/common';
-import { resolveBorrowerId } from '../shared/borrower-request.utils';
+import { Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { resolveAuthenticatedBorrowerId } from '../shared/borrower-request.utils';
 import { CreditScoreService } from './credit-score.service';
 
 @Controller('borrower/credit-score')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('borrower')
 export class CreditScoreController {
   constructor(private readonly creditScoreService: CreditScoreService) {}
 
   @Get()
-  async getCreditScore(@Query('borrowerId') borrowerId?: string) {
+  async getCreditScore(
+    @Req() req: AuthenticatedRequest,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
     return {
       success: true,
       data: await this.creditScoreService.getSummary(
-        resolveBorrowerId(borrowerId),
+        resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
       ),
     };
   }
 
   @Get('history')
-  async getCreditScoreHistory(@Query('borrowerId') borrowerId?: string) {
+  async getCreditScoreHistory(
+    @Req() req: AuthenticatedRequest,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
     return {
       success: true,
       data: await this.creditScoreService.getScoreHistory(
-        resolveBorrowerId(borrowerId),
+        resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
       ),
     };
   }
 
   @Post('recalculate')
-  async recalculateCreditScore(@Query('borrowerId') borrowerId?: string) {
+  async recalculateCreditScore(
+    @Req() req: AuthenticatedRequest,
+    @Query('borrowerId') borrowerId?: string,
+  ) {
     const score = await this.creditScoreService.calculateCreditScore(
-      resolveBorrowerId(borrowerId),
+      resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
     );
 
     return {
@@ -42,4 +57,3 @@ export class CreditScoreController {
     };
   }
 }
-

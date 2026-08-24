@@ -95,12 +95,12 @@ function getSeedConfig() {
     throw new Error('SEED_MAX_WRITES must be at least 1.');
   }
   if (
-    !new Set(['overwrite', 'if-missing', 'backup']).has(
+    !new Set(['overwrite', 'if-missing', 'backup', 'none']).has(
       config.loginDetailsMode,
     )
   ) {
     throw new Error(
-      'SEED_LOGIN_DETAILS_MODE must be one of: overwrite, if-missing, backup.',
+      'SEED_LOGIN_DETAILS_MODE must be one of: overwrite, if-missing, backup, none.',
     );
   }
   if (config.writeBatchSize < 1 || config.writeBatchSize > 500) {
