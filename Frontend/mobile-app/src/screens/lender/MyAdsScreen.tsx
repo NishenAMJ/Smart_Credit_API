@@ -355,7 +355,13 @@ export default function MyAdsScreen({ navigation }: any) {
             >
               <Feather name="trending-up" size={16} color={COLORS.textPrimary} />
               <Text style={{ fontSize: 10, color: COLORS.textPrimary, marginTop: 3, fontWeight: "600" }}>
-                {item.isBoosted ? "Boosted" : item.boostStatus === "pending_verification" ? "Pending" : "Boost"}
+                {item.isBoosted
+                  ? "Boosted"
+                  : item.boostStatus === "pending_verification"
+                    ? "Awaiting review"
+                    : item.boostStatus === "payment_pending"
+                      ? "Payment pending"
+                      : "Boost"}
               </Text>
             </TouchableOpacity>
           )}

@@ -181,7 +181,7 @@ function AdvertisementCard({
               {ad.isBoosted
                 ? "Boost active"
                 : ad.boostStatus === "pending_verification"
-                  ? "Payment pending"
+                  ? "Awaiting verification"
                   : ad.boostStatus === "payment_pending"
                     ? "Continue boost"
                   : "Boost"}
