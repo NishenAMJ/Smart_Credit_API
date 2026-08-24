@@ -99,7 +99,14 @@ export default function Dashboard() {
       value: dashboard?.recentActivity.transactionsToday ?? 0,
       color: "#F59E0B",
     },
+    {
+      name: "Disputes Resolved",
+      value: dashboard?.recentActivity.disputesResolvedToday ?? 0,
+      color: "#8B5CF6",
+    },
   ];
+  const activityTotal = pieData.reduce((sum, item) => sum + item.value, 0);
+  const activityChartData = pieData.filter((item) => item.value > 0);
 
   const roleBreakdown = [
     { label: "Lenders", value: dashboard?.userRoles.lender ?? 0 },
@@ -220,7 +227,12 @@ export default function Dashboard() {
 
         <div
           className="card"
-          style={{ flex: 1, display: "flex", flexDirection: "column" }}
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
         >
           <div style={S.cardHeader}>
             <p style={S.cardTitle}>Today&apos;s Activity</p>
@@ -231,33 +243,52 @@ export default function Dashboard() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "center",
-              gap: 30,
+              justifyContent: "flex-start",
+              gap: 10,
+              minHeight: 0,
             }}
           >
-            <PieChart width={180} height={180}>
-              <Pie
-                data={pieData}
-                cx={85}
-                cy={85}
-                innerRadius={55}
-                outerRadius={80}
-                paddingAngle={3}
-                dataKey="value"
-              >
-                {pieData.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
+            <div style={S.activityChart}>
+              {activityTotal > 0 ? (
+                <PieChart width={160} height={160} accessibilityLayer={false}>
+                  <Pie
+                    data={activityChartData}
+                    cx={80}
+                    cy={80}
+                    innerRadius={48}
+                    outerRadius={69}
+                    paddingAngle={activityChartData.length > 1 ? 3 : 0}
+                    dataKey="value"
+                    stroke="#FFFFFF"
+                    strokeWidth={2}
+                  >
+                    {activityChartData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [Number(value), "Activities"]} />
+                  <text x="80" y="75" textAnchor="middle" style={S.activityTotal}>
+                    {activityTotal}
+                  </text>
+                  <text x="80" y="95" textAnchor="middle" style={S.activityCaption}>
+                    activities
+                  </text>
+                </PieChart>
+              ) : (
+                <div style={S.emptyActivity}>
+                  <strong>0</strong>
+                  <span>No activity recorded today</span>
+                </div>
+              )}
+            </div>
 
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 12,
+                gap: 2,
                 width: "100%",
-                maxWidth: 220,
+                maxWidth: 240,
               }}
             >
               {pieData.map((item) => (
@@ -356,8 +387,39 @@ const S: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "4px 0",
+    padding: "6px 0",
     borderBottom: "1px solid #F3F4F6",
+  },
+  activityChart: {
+    width: 160,
+    height: 160,
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activityTotal: {
+    fill: "#111827",
+    fontSize: 24,
+    fontWeight: 700,
+  },
+  activityCaption: {
+    fill: "#6B7280",
+    fontSize: 11,
+  },
+  emptyActivity: {
+    width: 164,
+    height: 164,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    border: "18px solid #E5E7EB",
+    borderRadius: "50%",
+    color: "#6B7280",
+    textAlign: "center",
+    fontSize: 11,
   },
   errorCard: {
     marginBottom: 16,
