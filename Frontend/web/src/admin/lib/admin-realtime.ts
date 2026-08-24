@@ -15,6 +15,7 @@ export function subscribeToAdminChanges(
   resources: AdminChangedPayload["resource"][],
   refresh: () => void,
 ): () => void {
+  // ADMIN: Listen for new items - refreshes a page after a matching real-time event.
   const token = getAdminToken();
   if (!token) return () => undefined;
   let timer: number | undefined;
@@ -27,6 +28,7 @@ export function subscribeToAdminChanges(
     auth: { token: `Bearer ${token}` },
   });
   socket.on("admin:changed", (payload: AdminChangedPayload) => {
+    // Refresh only when the changed resource belongs to the current page.
     if (resources.includes(payload.resource)) schedule();
   });
   socket.io.on("reconnect", schedule);

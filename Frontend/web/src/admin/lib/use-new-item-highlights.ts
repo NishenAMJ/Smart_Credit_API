@@ -13,6 +13,7 @@ type HighlightState = {
 
 const STORAGE_PREFIX = "smart-credit:admin:new-items:";
 
+// ADMIN: Load seen items - reads which records this browser has already opened.
 function readState(key: string): HighlightState | null {
   try {
     const raw = window.localStorage.getItem(`${STORAGE_PREFIX}${key}`);
@@ -65,6 +66,7 @@ export function useNewItemHighlights(
   );
 
   useEffect(() => {
+    // ADMIN: Start new item tracking - saves the time of the first page visit.
     if (!ready || state) return;
     const initial = { baselineAt: Date.now(), seenIds: [] };
     writeState(key, initial);
@@ -72,6 +74,7 @@ export function useNewItemHighlights(
   }, [key, ready, state]);
 
   const newIds = useMemo(() => {
+    // ADMIN: Find new items - highlights only new, pending, and unseen records.
     if (!state) return new Set<string>();
     const seen = new Set(state.seenIds);
     return new Set(
@@ -88,6 +91,7 @@ export function useNewItemHighlights(
 
   const markSeen = useCallback(
     (id: string) => {
+      // ADMIN: Mark item as seen - removes the highlight after the admin opens it.
       setState((current) => {
         if (!current || current.seenIds.includes(id)) return current;
         const next = {

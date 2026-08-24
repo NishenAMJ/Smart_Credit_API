@@ -169,6 +169,7 @@ export default function LenderAds() {
   }, [loadAdStats]);
 
   useEffect(() => {
+    // ADMIN: Refresh new advertisement - reloads ads after a real-time change.
     const activeCursor =
       currentPage <= 1 ? undefined : cursorStack[cursorStack.length - 1];
     return subscribeToAdminChanges(["ads"], () => {
@@ -178,6 +179,7 @@ export default function LenderAds() {
   }, [currentPage, cursorStack, loadAds, loadAdStats]);
 
   const filteredAds = useMemo(() => ads, [ads]);
+  // ADMIN: Highlight new advertisement - only pending ads can show as new.
   const newItemCandidates = useMemo(
     () =>
       ads.map((ad) => ({
@@ -258,6 +260,7 @@ export default function LenderAds() {
         <button
           style={S.iconButton("#6B7280", "#F3F4F6")}
           onClick={() => {
+            // ADMIN: Remove advertisement highlight - the admin has opened this ad.
             newHighlights.markSeen(ad.id);
             setSelectedAd(ad);
           }}
