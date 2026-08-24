@@ -354,8 +354,21 @@ export class ReportsService {
     try {
       return await this.cached<DashboardAnalytics>('dashboard', async () => {
         const db = this.firebaseService.db;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // ADMIN: Count today's activity - use Sri Lanka's calendar day on every server.
+        const now = new Date();
+        const dateParts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Colombo',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).formatToParts(now);
+        const part = (type: Intl.DateTimeFormatPartTypes) =>
+          Number(dateParts.find((entry) => entry.type === type)?.value ?? 0);
+        const todayStart = new Date(
+          Date.UTC(part('year'), part('month') - 1, part('day')) -
+            5.5 * 60 * 60 * 1000,
+        );
+        const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
         const [
           totalUsers,
           totalLoans,
@@ -396,12 +409,23 @@ export class ReportsService {
           this.getCount(
             db.collection('disputes').where('status', '==', 'in-progress'),
           ),
-          this.getCount(db.collection('users').where('createdAt', '>=', today)),
           this.getCount(
-            db.collection('loanApplications').where('createdAt', '>=', today),
+            db
+              .collection('users')
+              .where('createdAt', '>=', todayStart)
+              .where('createdAt', '<', tomorrowStart),
           ),
           this.getCount(
-            db.collection('disputes').where('resolvedAt', '>=', today),
+            db
+              .collection('loans')
+              .where('createdAt', '>=', todayStart)
+              .where('createdAt', '<', tomorrowStart),
+          ),
+          this.getCount(
+            db
+              .collection('disputes')
+              .where('resolvedAt', '>=', todayStart)
+              .where('resolvedAt', '<', tomorrowStart),
           ),
           this.getCount(
             db
@@ -416,7 +440,10 @@ export class ReportsService {
             db.collection('disputes').where('status', '==', 'resolved'),
           ),
           this.getCount(
-            db.collection('transactions').where('createdAt', '>=', today),
+            db
+              .collection('transactions')
+              .where('createdAt', '>=', todayStart)
+              .where('createdAt', '<', tomorrowStart),
           ),
           this.getSum(db.collection('transactions'), 'platformFeeMinor'),
           this.getCount(
