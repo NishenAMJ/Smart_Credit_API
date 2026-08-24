@@ -210,6 +210,7 @@ export default function KYCApprovals() {
   }, [loadKyc]);
 
   useEffect(
+    // ADMIN: Refresh new KYC - reloads KYC records after a real-time change.
     () => subscribeToAdminChanges(["kyc"], () => void loadKyc()),
     [loadKyc],
   );
@@ -244,6 +245,7 @@ export default function KYCApprovals() {
     });
   }, [records]);
 
+  // ADMIN: Highlight new KYC - only pending submissions can show as new.
   const newItemCandidates = useMemo(
     () =>
       submissions.map((submission) => ({
@@ -465,6 +467,7 @@ export default function KYCApprovals() {
                   role="button"
                   aria-label={`Open KYC submission for ${submission.fullName}`}
                   onClick={() => {
+                    // ADMIN: Remove KYC highlight - the admin has opened this submission.
                     newHighlights.markSeen(submission.id);
                     setSelectedSubmission(submission);
                   }}
