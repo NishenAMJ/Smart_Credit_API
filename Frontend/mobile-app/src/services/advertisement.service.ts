@@ -80,6 +80,7 @@ export const AdService = {
   activateAd: async (adId: string) =>
     api.patch(`/lender-ads/${adId}`, { status: "active" }),
 
+
   getBoostPlans: () =>
     api.get<{ plans: AdBoostPlan[]; bankAccount: Record<string, string>; paymentMethods: { card: boolean; bankTransfer: boolean } }>(
       "/lender-ad-boosts/plans",
@@ -137,4 +138,5 @@ export const AdService = {
 
   submitBoostReceipt: (boostId: string, receiptDocumentId: string, bankReference: string) =>
     api.post(`/lender-ad-boosts/${boostId}/receipt`, { receiptDocumentId, bankReference }),
+
 };
