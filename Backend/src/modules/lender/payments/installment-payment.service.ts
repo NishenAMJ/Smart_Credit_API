@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -23,6 +24,7 @@ import {
   PAYMENT_RECEIVED_NOTIFIER,
   type PaymentReceivedNotifier,
 } from '../shared/payment-received-notifier.port';
+import { findNextUnsettledInstallmentId } from './installment-order.utils';
 
 @Injectable()
 export class InstallmentPaymentService {
@@ -59,6 +61,7 @@ export class InstallmentPaymentService {
     const installmentRef = loanRef
       .collection('installments')
       .doc(installmentId);
+    const installmentsQuery = loanRef.collection('installments');
     const paymentTimestamp = Timestamp.fromDate(paidAt);
     const note = this.normalizeNote(input.note);
     const transactionId = repaymentTransactionIdFor(loanId, installmentId);
@@ -68,13 +71,19 @@ export class InstallmentPaymentService {
       : null;
 
     const recorded = await db.runTransaction(async (transaction) => {
-      const [loanSnapshot, installmentSnapshot, ledgerSnapshot, nonceSnapshot] =
-        await Promise.all([
-          transaction.get(loanRef),
-          transaction.get(installmentRef),
-          transaction.get(transactionRef),
-          nonceRef ? transaction.get(nonceRef) : Promise.resolve(null),
-        ]);
+      const [
+        loanSnapshot,
+        installmentSnapshot,
+        ledgerSnapshot,
+        nonceSnapshot,
+        installmentsSnapshot,
+      ] = await Promise.all([
+        transaction.get(loanRef),
+        transaction.get(installmentRef),
+        transaction.get(transactionRef),
+        nonceRef ? transaction.get(nonceRef) : Promise.resolve(null),
+        transaction.get(installmentsQuery),
+      ]);
 
       if (
         !loanSnapshot.exists ||
@@ -101,6 +110,15 @@ export class InstallmentPaymentService {
           alreadyRecorded: true,
         };
       }
+      const nextInstallmentId = findNextUnsettledInstallmentId(
+        installmentsSnapshot.docs,
+      );
+
+      if (nextInstallmentId && nextInstallmentId !== installmentId) {
+        throw new ConflictException(
+          'Installments must be paid in order. Record the earliest unpaid installment first.',
+        );
+      }
       if (nonceRef) {
         if (!nonceSnapshot?.exists) {
           throw new BadRequestException('QR nonce not found.');
@@ -124,6 +142,9 @@ export class InstallmentPaymentService {
         }
       }
       const normalizedInstallment = getNormalizedInstallment(installment);
+      if (normalizedInstallment.status === 'waived') {
+        throw new BadRequestException('This installment has been waived.');
+      }
       const installmentAmount = readNumber(installment.amountDueMinor) / 100;
       const paidAmount =
         normalizedInstallment.status === 'paid' ? installmentAmount : 0;

@@ -12,16 +12,27 @@ describe('InstallmentPaymentService', () => {
           listingId: 'listing-1',
           status: 'active',
           amountPaidMinor: 0,
-          remainingBalanceMinor: 450_000,
+          remainingBalanceMinor: 900_000,
         },
       ],
       [
         'loans/loan-1/installments/month-1',
         {
           installmentId: 'month-1',
+          sequence: 1,
           status: 'due',
           amountDueMinor: 450_000,
           dueAt: Timestamp.now(),
+        },
+      ],
+      [
+        'loans/loan-1/installments/month-2',
+        {
+          installmentId: 'month-2',
+          sequence: 2,
+          status: 'scheduled',
+          amountDueMinor: 450_000,
+          dueAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000),
         },
       ],
       [
@@ -39,9 +50,12 @@ describe('InstallmentPaymentService', () => {
     const reference = (path: string): any => ({
       path,
       id: path.split('/').at(-1),
-      collection: (name: string) => ({
-        doc: (id: string) => reference(`${path}/${name}/${id}`),
-      }),
+      collection: (name: string) => collection(`${path}/${name}`),
+    });
+    const collection = (path: string): any => ({
+      path,
+      isCollection: true,
+      doc: (id: string) => reference(`${path}/${id}`),
     });
     const snapshot = (ref: any) => ({
       exists: records.has(ref.path),
@@ -49,12 +63,25 @@ describe('InstallmentPaymentService', () => {
       get: (field: string) => records.get(ref.path)?.[field],
     });
     const db: any = {
-      collection: (name: string) => ({
-        doc: (id: string) => reference(`${name}/${id}`),
-      }),
+      collection: (name: string) => collection(name),
       runTransaction: async (work: (transaction: any) => unknown) =>
         work({
-          get: async (ref: any) => snapshot(ref),
+          get: async (ref: any) =>
+            ref.isCollection
+              ? {
+                  docs: [...records.keys()]
+                    .filter((path) => {
+                      const suffix = path.slice(ref.path.length + 1);
+                      return (
+                        path.startsWith(`${ref.path}/`) && !suffix.includes('/')
+                      );
+                    })
+                    .map((path) => {
+                      const documentRef = reference(path);
+                      return { ...snapshot(documentRef), id: documentRef.id };
+                    }),
+                }
+              : snapshot(ref),
           create: (ref: any, value: Record<string, unknown>) => {
             if (records.has(ref.path)) throw new Error('already exists');
             records.set(ref.path, value);
@@ -75,6 +102,16 @@ describe('InstallmentPaymentService', () => {
       ledgerDetailsService as any,
       notifier as any,
     );
+
+    await expect(
+      service.record('lender-1', 'loan-1', 'month-2', {
+        amount: 4500,
+        paymentMethod: 'cash',
+      }),
+    ).rejects.toThrow(
+      'Installments must be paid in order. Record the earliest unpaid installment first.',
+    );
+    expect(records.has('transactions/repayment_loan-1_month-2')).toBe(false);
 
     await expect(
       service.record(

@@ -102,6 +102,16 @@ function getOutstanding(installment: LoanLedgerInstallmentDetail): number {
   return Math.max(0, installment.amount - installment.paidAmount);
 }
 
+function isSettledInstallment(
+  installment: LoanLedgerInstallmentDetail,
+): boolean {
+  return (
+    installment.status === "paid" ||
+    installment.status === "waived" ||
+    getOutstanding(installment) <= 0
+  );
+}
+
 export default function LoanDetailsModal({
   lenderId,
   loanId,
@@ -185,7 +195,7 @@ export default function LoanDetailsModal({
   );
 
   const nextUnpaidInstallment = details?.installments.find(
-    (installment) => getOutstanding(installment) > 0,
+    (installment) => !isSettledInstallment(installment),
   );
   const expandedInstallmentIndex =
     details?.installments.findIndex(
@@ -197,6 +207,14 @@ export default function LoanDetailsModal({
       : null;
 
   function openPaymentForm(installment: LoanLedgerInstallmentDetail) {
+    if (installment.id !== nextUnpaidInstallment?.id) {
+      setPaymentForm((current) => ({
+        ...current,
+        error:
+          "Record the earliest unpaid installment before continuing to later installments.",
+      }));
+      return;
+    }
     setShowPayments(true);
     setExpandedInstallmentId(installment.id);
     setPaymentForm({
@@ -497,15 +515,22 @@ export default function LoanDetailsModal({
                               className="button button-secondary"
                               type="button"
                               disabled={
-                                getOutstanding(expandedInstallment) <= 0
+                                isSettledInstallment(expandedInstallment) ||
+                                expandedInstallment.id !==
+                                  nextUnpaidInstallment?.id
                               }
                               onClick={() =>
                                 openPaymentForm(expandedInstallment)
                               }
                             >
-                              {getOutstanding(expandedInstallment) > 0
-                                ? "Record payment"
-                                : "Paid"}
+                              {isSettledInstallment(expandedInstallment)
+                                ? expandedInstallment.status === "waived"
+                                  ? "Waived"
+                                  : "Paid"
+                                : expandedInstallment.id ===
+                                    nextUnpaidInstallment?.id
+                                  ? "Record payment"
+                                  : "Previous payment required"}
                             </button>
                           </div>
 

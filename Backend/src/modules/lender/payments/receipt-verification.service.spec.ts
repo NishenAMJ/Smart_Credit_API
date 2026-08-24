@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ReceiptVerificationService } from './receipt-verification.service';
 
 describe('ReceiptVerificationService', () => {
@@ -35,6 +39,8 @@ describe('ReceiptVerificationService', () => {
         remainingBalanceMinor: 20_000,
       },
       [`loans/${loanId}/installments/${installmentId}`]: {
+        installmentId,
+        sequence: 1,
         status: 'due',
         amountDueMinor: 10_000,
       },
@@ -60,11 +66,11 @@ describe('ReceiptVerificationService', () => {
       path,
       id: path.split('/').at(-1),
       get: jest.fn(async () => makeSnapshot(path)),
-      collection: (name: string) => ({
-        doc: (id: string) => makeRef(`${path}/${name}/${id}`),
-      }),
+      collection: (name: string) => collection(`${path}/${name}`),
     });
     const collection = (name: string): any => ({
+      path: name,
+      isCollection: true,
       doc: (id: string) => makeRef(`${name}/${id}`),
       where: (field: string, _operator: string, value: unknown) => ({
         get: jest.fn(async () => ({
@@ -81,7 +87,17 @@ describe('ReceiptVerificationService', () => {
     });
     const update = jest.fn();
     const transaction = {
-      get: jest.fn(async (ref: { path: string }) => {
+      get: jest.fn(async (ref: { path: string; isCollection?: boolean }) => {
+        if (ref.isCollection) {
+          return {
+            docs: Object.entries(records)
+              .filter(([path]) => {
+                const suffix = path.slice(ref.path.length + 1);
+                return path.startsWith(`${ref.path}/`) && !suffix.includes('/');
+              })
+              .map(([path]) => makeSnapshot(path)),
+          };
+        }
         const data = records[ref.path];
         return {
           exists: Boolean(data),
@@ -198,6 +214,35 @@ describe('ReceiptVerificationService', () => {
     await expect(
       service.decide(lenderId, transactionId, { decision: 'approve' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('prevents approving a later installment before the earliest unpaid one', async () => {
+    const laterInstallmentId = 'month_002';
+    const { service } = createHarness({
+      [`transactions/${transactionId}`]: {
+        transactionId,
+        type: 'repayment',
+        status: 'pending_verification',
+        paymentMethod: 'bank_transfer',
+        lenderId,
+        borrowerId,
+        loanId,
+        installmentId: laterInstallmentId,
+        repaymentId,
+        receiptDocumentId: documentId,
+        amountMinor: 10_000,
+      },
+      [`loans/${loanId}/installments/${laterInstallmentId}`]: {
+        installmentId: laterInstallmentId,
+        sequence: 2,
+        status: 'scheduled',
+        amountDueMinor: 10_000,
+      },
+    });
+
+    await expect(
+      service.decide(lenderId, transactionId, { decision: 'approve' }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('resolves and normalizes a legacy receipt linked by payment proof URL', async () => {

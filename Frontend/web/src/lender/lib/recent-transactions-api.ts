@@ -58,6 +58,7 @@ export type LoanLedgerPaymentDetail = {
 
 export type LoanLedgerInstallmentDetail = {
   id: string;
+  sequence: number;
   status: string;
   dueDate: string | null;
   amount: number;

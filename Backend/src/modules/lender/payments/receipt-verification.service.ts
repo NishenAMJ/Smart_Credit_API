@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -16,6 +17,7 @@ import type {
   ReceiptVerificationDecisionInput,
 } from './payments.types';
 import { PaymentsService } from './payments.service';
+import { findNextUnsettledInstallmentId } from './installment-order.utils';
 
 @Injectable()
 export class ReceiptVerificationService {
@@ -243,12 +245,27 @@ export class ReceiptVerificationService {
         return { decision: 'rejected' as const, loanId, transactionId };
       }
 
+      const installmentsSnapshot = await transaction.get(
+        loanRef.collection('installments'),
+      );
+      const nextInstallmentId = findNextUnsettledInstallmentId(
+        installmentsSnapshot.docs,
+      );
+      if (nextInstallmentId && nextInstallmentId !== installmentId) {
+        throw new ConflictException(
+          'Installments must be paid in order. Approve the earliest unpaid installment first.',
+        );
+      }
+
       const loan = loanSnapshot.data() ?? {};
       const installment = installmentSnapshot.data() ?? {};
       const amountMinor = readNumber(payment.amountMinor);
       const amountDueMinor = readNumber(installment.amountDueMinor);
       if (readString(installment.status) === 'paid') {
         throw new BadRequestException('This installment is already paid.');
+      }
+      if (readString(installment.status) === 'waived') {
+        throw new BadRequestException('This installment has been waived.');
       }
       if (amountMinor <= 0 || amountMinor !== amountDueMinor) {
         throw new BadRequestException(

@@ -67,6 +67,7 @@ export class PaymentLedgerDetailsService {
 
         return {
           id: installmentDoc.id,
+          sequence: normalized.installmentNumber,
           status: normalized.status,
           dueDate: normalized.dueDate?.toISOString() ?? null,
           amount,
@@ -81,6 +82,13 @@ export class PaymentLedgerDetailsService {
         };
       })
       .sort((left, right) => {
+        if (
+          left.sequence &&
+          right.sequence &&
+          left.sequence !== right.sequence
+        ) {
+          return left.sequence - right.sequence;
+        }
         const leftTime = left.dueDate ? new Date(left.dueDate).getTime() : 0;
         const rightTime = right.dueDate ? new Date(right.dueDate).getTime() : 0;
         return leftTime - rightTime;

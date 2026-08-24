@@ -49,6 +49,7 @@ export interface PaymentsResponse {
 
 export interface LoanLedgerInstallmentDetail {
   id: string;
+  sequence: number;
   status: string;
   dueDate: string | null;
   amount: number;
