@@ -987,7 +987,13 @@ export function decideAdBoostPayment(
 }
 
 export function getAdBoostReceiptAccess(documentId: string) {
-  return apiRequest<{ documentId: string; accessUrl: string; expiresAt: string }>(
+  return apiRequest<{
+    documentId: string;
+    accessUrl: string;
+    expiresAt: string;
+    fileName: string;
+    mimeType: string;
+  }>(
     `/documents/${encodeURIComponent(documentId)}/access`,
     { auth: true },
   );
