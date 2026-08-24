@@ -5829,6 +5829,27 @@
   background: #ffffff;
 }
 
+.boost-dialog__progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: auto;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.boost-dialog__progress svg {
+  color: #2563eb;
+  animation: boost-dialog-spin 800ms linear infinite;
+}
+
+@keyframes boost-dialog-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .boost-dialog__footer .button {
   min-height: 42px;
 }
@@ -5871,6 +5892,11 @@
   .boost-dialog__footer {
     align-items: stretch;
     flex-direction: column-reverse;
+  }
+
+  .boost-dialog__progress {
+    justify-content: center;
+    margin-right: 0;
   }
 
   .boost-dialog__footer .button {

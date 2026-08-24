@@ -77,6 +77,29 @@ export type AdBoost = {
   bankAccount?: Record<string, string>;
 };
 
+export type BoostReceiptUploadStage = "preparing" | "uploading" | "registering";
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutMessage: string,
+) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(timeoutMessage);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export async function fetchAdBoostPlans(): Promise<{
   plans: AdBoostPlan[];
   bankAccount: Record<string, string>;
@@ -85,7 +108,20 @@ export async function fetchAdBoostPlans(): Promise<{
   const response = await fetch(`${API_BASE_URL}/lender-ad-boosts/plans`, {
     headers: getAuthHeaders(),
   });
-  if (!response.ok) return extractError(response, "Failed to load boost plans.");
+  if (!response.ok)
+    return extractError(response, "Failed to load boost plans.");
+  return response.json();
+}
+
+export async function fetchAdBoosts(): Promise<AdBoost[]> {
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/lender-ad-boosts`,
+    { headers: getAuthHeaders() },
+    20_000,
+    "Loading existing boost requests took too long. Check your connection and try again.",
+  );
+  if (!response.ok)
+    return extractError(response, "Failed to load existing boost requests.");
   return response.json();
 }
 
@@ -94,74 +130,133 @@ export async function createAdBoost(input: {
   planId: string;
   paymentMethod: "bank_transfer" | "card";
 }): Promise<AdBoost> {
-  const response = await fetch(`${API_BASE_URL}/lender-ad-boosts`, {
-    method: "POST",
-    headers: getAuthHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(input),
-  });
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/lender-ad-boosts`,
+    {
+      method: "POST",
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(input),
+    },
+    20_000,
+    "Starting the boost took too long. Check your connection and try again.",
+  );
   if (!response.ok) return extractError(response, "Failed to start the boost.");
   return response.json();
 }
 
-export async function uploadBoostReceipt(file: File, boostId: string) {
-  const initResponse = await fetch(`${API_BASE_URL}/documents/uploads/init`, {
-    method: "POST",
-    headers: getAuthHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({
-      category: "payment_receipt",
-      documentType: "ad_boost_bank_receipt",
-      fileName: file.name,
-      contentType: file.type,
-      relatedEntityType: "ad_boost",
-      relatedEntityId: boostId,
-    }),
-  });
-  if (!initResponse.ok) return extractError(initResponse, "Failed to prepare receipt upload.");
+export async function uploadBoostReceipt(
+  file: File,
+  boostId: string,
+  onStage?: (stage: BoostReceiptUploadStage) => void,
+) {
+  onStage?.("preparing");
+  const initResponse = await fetchWithTimeout(
+    `${API_BASE_URL}/documents/uploads/init`,
+    {
+      method: "POST",
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        category: "payment_receipt",
+        documentType: "ad_boost_bank_receipt",
+        fileName: file.name,
+        contentType: file.type,
+        relatedEntityType: "ad_boost",
+        relatedEntityId: boostId,
+      }),
+    },
+    20_000,
+    "Preparing the receipt upload took too long. Check your connection and try again.",
+  );
+  if (!initResponse.ok)
+    return extractError(initResponse, "Failed to prepare receipt upload.");
   const intent = (await initResponse.json()) as Record<string, string | number>;
   const form = new FormData();
   form.append("file", file);
-  for (const key of ["apiKey", "timestamp", "signature", "folder", "publicId", "deliveryType"] as const) {
-    const uploadKey = key === "apiKey" ? "api_key" : key === "publicId" ? "public_id" : key === "deliveryType" ? "type" : key;
+  for (const key of [
+    "apiKey",
+    "timestamp",
+    "signature",
+    "folder",
+    "publicId",
+    "deliveryType",
+  ] as const) {
+    const uploadKey =
+      key === "apiKey"
+        ? "api_key"
+        : key === "publicId"
+          ? "public_id"
+          : key === "deliveryType"
+            ? "type"
+            : key;
     form.append(uploadKey, String(intent[key]));
   }
-  const uploadResponse = await fetch(String(intent.uploadUrl), { method: "POST", body: form });
+  onStage?.("uploading");
+  const uploadResponse = await fetchWithTimeout(
+    String(intent.uploadUrl),
+    { method: "POST", body: form },
+    60_000,
+    "Uploading the receipt took too long. Check your connection and try again.",
+  );
   if (!uploadResponse.ok) throw new Error("The receipt could not be uploaded.");
-  const uploaded = (await uploadResponse.json()) as Record<string, string | number>;
-  const fileHash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())))
+  const uploaded = (await uploadResponse.json()) as Record<
+    string,
+    string | number
+  >;
+  const fileHash = Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest("SHA-256", await file.arrayBuffer()),
+    ),
+  )
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
-  const completeResponse = await fetch(`${API_BASE_URL}/documents/uploads/complete`, {
-    method: "POST",
-    headers: getAuthHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({
-      publicId: uploaded.public_id,
-      assetId: uploaded.asset_id,
-      resourceType: uploaded.resource_type,
-      deliveryType: uploaded.type,
-      bytes: uploaded.bytes,
-      version: uploaded.version,
-      secureUrl: uploaded.secure_url,
-      format: uploaded.format,
-      fileHash,
-      originalFilename: file.name,
-      mimeType: file.type,
-      category: "payment_receipt",
-      documentType: "ad_boost_bank_receipt",
-      relatedEntityType: "ad_boost",
-      relatedEntityId: boostId,
-      displayName: "Advertisement boost payment receipt",
-    }),
-  });
-  if (!completeResponse.ok) return extractError(completeResponse, "Failed to register receipt.");
+  onStage?.("registering");
+  const completeResponse = await fetchWithTimeout(
+    `${API_BASE_URL}/documents/uploads/complete`,
+    {
+      method: "POST",
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        publicId: uploaded.public_id,
+        assetId: uploaded.asset_id,
+        resourceType: uploaded.resource_type,
+        deliveryType: uploaded.type,
+        bytes: uploaded.bytes,
+        version: uploaded.version,
+        secureUrl: uploaded.secure_url,
+        format: uploaded.format,
+        fileHash,
+        originalFilename: file.name,
+        mimeType: file.type,
+        category: "payment_receipt",
+        documentType: "ad_boost_bank_receipt",
+        relatedEntityType: "ad_boost",
+        relatedEntityId: boostId,
+        displayName: "Advertisement boost payment receipt",
+      }),
+    },
+    30_000,
+    "Confirming the receipt took too long. The boost request is saved; try submitting again.",
+  );
+  if (!completeResponse.ok)
+    return extractError(completeResponse, "Failed to register receipt.");
   return (await completeResponse.json()) as { documentId: string };
 }
 
-export async function submitBoostReceipt(boostId: string, receiptDocumentId: string, bankReference: string) {
-  const response = await fetch(`${API_BASE_URL}/lender-ad-boosts/${encodeURIComponent(boostId)}/receipt`, {
-    method: "POST",
-    headers: getAuthHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ receiptDocumentId, bankReference }),
-  });
+export async function submitBoostReceipt(
+  boostId: string,
+  receiptDocumentId: string,
+  bankReference: string,
+) {
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/lender-ad-boosts/${encodeURIComponent(boostId)}/receipt`,
+    {
+      method: "POST",
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ receiptDocumentId, bankReference }),
+    },
+    20_000,
+    "Submitting the receipt took too long. The upload is saved; try again.",
+  );
   if (!response.ok) return extractError(response, "Failed to submit receipt.");
   return response.json();
 }

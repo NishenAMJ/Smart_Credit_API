@@ -1,4 +1,7 @@
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -33,7 +36,9 @@ describe('MediaService', () => {
   });
 
   it('validates supported profile picture mime types and size limits', () => {
-    expect(() => service.validateProfilePicture('image/png', 1024)).not.toThrow();
+    expect(() =>
+      service.validateProfilePicture('image/png', 1024),
+    ).not.toThrow();
     expect(() =>
       service.validateProfilePicture('application/pdf', 1024),
     ).toThrow(BadRequestException);
@@ -50,30 +55,28 @@ describe('MediaService', () => {
   });
 
   it('maps upload responses from Cloudinary for sensitive documents', async () => {
-    const fetchSpy = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            asset_id: 'asset-1',
-            public_id: 'documents/user-1/kyc/doc-1',
-            version: 123,
-            format: 'pdf',
-            bytes: 2048,
-            resource_type: 'raw',
-            type: 'authenticated',
-            secure_url: 'https://example.com/doc.pdf',
-            original_filename: 'nic-front',
-            folder: 'documents/user-1/kyc',
-          }),
-          {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-            },
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          asset_id: 'asset-1',
+          public_id: 'documents/user-1/kyc/doc-1',
+          version: 123,
+          format: 'pdf',
+          bytes: 2048,
+          resource_type: 'raw',
+          type: 'authenticated',
+          secure_url: 'https://example.com/doc.pdf',
+          original_filename: 'nic-front',
+          folder: 'documents/user-1/kyc',
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
           },
-        ),
-      );
+        },
+      ),
+    );
 
     const payload = `data:application/pdf;base64,${Buffer.from('pdf-content').toString('base64')}`;
     const result = await service.uploadSensitiveDocumentFromDataUrl(
@@ -104,6 +107,46 @@ describe('MediaService', () => {
       'https://res.cloudinary.com/demo-cloud/raw/authenticated/s--',
     );
     expect(url).toContain('/v123/documents/user-1/kyc/doc-1.pdf');
+  });
+
+  it('retries Cloudinary verification while a new upload is propagating', async () => {
+    jest.useFakeTimers();
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            asset_id: 'asset-1',
+            public_id: 'documents/lender-1/payment_receipt/receipt-1',
+            version: 4,
+            format: 'png',
+            bytes: 4096,
+            resource_type: 'image',
+            type: 'authenticated',
+            secure_url: 'https://example.com/receipt.png',
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      );
+
+    const verification = service.verifyCloudinaryAsset(
+      'documents/lender-1/payment_receipt/receipt-1',
+      'image',
+      'authenticated',
+    );
+    await jest.advanceTimersByTimeAsync(750);
+
+    await expect(verification).resolves.toMatchObject({
+      assetId: 'asset-1',
+      publicId: 'documents/lender-1/payment_receipt/receipt-1',
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    jest.useRealTimers();
   });
 
   it('throws a backend error when cloudinary upload fails', async () => {

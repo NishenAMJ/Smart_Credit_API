@@ -36,6 +36,8 @@ type SignedUrlOptions = {
   format?: string;
 };
 
+const CLOUDINARY_VERIFY_RETRY_DELAYS_MS = [0, 250, 500, 1_000, 2_000];
+
 @Injectable()
 export class MediaService {
   private readonly cloudName?: string;
@@ -271,61 +273,52 @@ export class MediaService {
       };
     }
 
-    const timestamp = Math.floor(Date.now() / 1000);
-    const signature = this.createUploadSignature({
-      public_id: publicId,
-      timestamp: String(timestamp),
-      type: deliveryType,
-    });
+    for (const delayMs of CLOUDINARY_VERIFY_RETRY_DELAYS_MS) {
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
 
-    const params = new URLSearchParams({
-      public_id: publicId,
-      timestamp: String(timestamp),
-      type: deliveryType,
-      api_key: this.apiKey as string,
-      signature,
-    });
-
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${this.cloudName}/resources/${resourceType}/${deliveryType}/${encodeURIComponent(publicId)}`,
-      {
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString('base64')}`,
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${this.cloudName}/resources/${resourceType}/${deliveryType}/${encodeURIComponent(publicId)}`,
+        {
+          headers: {
+            Authorization: `Basic ${Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString('base64')}`,
+          },
+          signal: AbortSignal.timeout(10_000),
         },
-      },
-    );
-
-    // suppress unused variable
-    void params;
-
-    if (response.status === 404) {
-      return null;
-    }
-
-    if (!response.ok) {
-      throw new InternalServerErrorException(
-        'Failed to verify Cloudinary asset.',
       );
+
+      if (response.status === 404) {
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new InternalServerErrorException(
+          'Failed to verify Cloudinary asset.',
+        );
+      }
+
+      const payload = (await response.json()) as Record<string, unknown>;
+
+      return {
+        assetId: String(payload.asset_id ?? ''),
+        publicId: String(payload.public_id ?? publicId),
+        version: Number(payload.version ?? 0),
+        format: typeof payload.format === 'string' ? payload.format : undefined,
+        bytes: Number(payload.bytes ?? 0),
+        resourceType: String(payload.resource_type ?? resourceType),
+        deliveryType: String(payload.type ?? deliveryType),
+        secureUrl: String(payload.secure_url ?? ''),
+        originalFilename:
+          typeof payload.original_filename === 'string'
+            ? payload.original_filename
+            : undefined,
+        folder: typeof payload.folder === 'string' ? payload.folder : undefined,
+        uploadedAt: new Date().toISOString(),
+      };
     }
 
-    const payload = (await response.json()) as Record<string, unknown>;
-
-    return {
-      assetId: String(payload.asset_id ?? ''),
-      publicId: String(payload.public_id ?? publicId),
-      version: Number(payload.version ?? 0),
-      format: typeof payload.format === 'string' ? payload.format : undefined,
-      bytes: Number(payload.bytes ?? 0),
-      resourceType: String(payload.resource_type ?? resourceType),
-      deliveryType: String(payload.type ?? deliveryType),
-      secureUrl: String(payload.secure_url ?? ''),
-      originalFilename:
-        typeof payload.original_filename === 'string'
-          ? payload.original_filename
-          : undefined,
-      folder: typeof payload.folder === 'string' ? payload.folder : undefined,
-      uploadedAt: new Date().toISOString(),
-    };
+    return null;
   }
 
   /**

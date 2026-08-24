@@ -6,6 +6,7 @@ import {
   CreditCard,
   Eye,
   Landmark,
+  LoaderCircle,
   Plus,
   Rocket,
   X,
@@ -16,10 +17,13 @@ import CreateAdPage from "./create-ad";
 import {
   fetchLenderAdsPage,
   createAdBoost,
+  fetchAdBoosts,
   fetchAdBoostPlans,
   submitBoostReceipt,
   uploadBoostReceipt,
+  type AdBoost,
   type AdBoostPlan,
+  type BoostReceiptUploadStage,
   type LenderAd,
   type LenderAdsListResponse,
 } from "../lib/lender-ads-api";
@@ -168,10 +172,19 @@ function AdvertisementCard({
               type="button"
               className="button button-secondary"
               onClick={onBoost}
-              disabled={ad.isBoosted || ["payment_pending", "pending_verification"].includes(ad.boostStatus ?? "")}
+              disabled={
+                ad.isBoosted ||
+                ad.boostStatus === "pending_verification"
+              }
             >
               <Rocket size={16} />
-              {ad.isBoosted ? "Boost active" : ad.boostStatus === "pending_verification" ? "Payment pending" : "Boost"}
+              {ad.isBoosted
+                ? "Boost active"
+                : ad.boostStatus === "pending_verification"
+                  ? "Payment pending"
+                  : ad.boostStatus === "payment_pending"
+                    ? "Continue boost"
+                  : "Boost"}
             </button>
           </>
         ) : (
@@ -375,62 +388,135 @@ function BoostAdDialog({
   const [plans, setPlans] = useState<AdBoostPlan[]>([]);
   const [bankAccount, setBankAccount] = useState<Record<string, string>>({});
   const [planId, setPlanId] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "bank_transfer">("card");
-  const [paymentMethods, setPaymentMethods] = useState({ card: false, bankTransfer: false });
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "bank_transfer">(
+    "card",
+  );
+  const [paymentMethods, setPaymentMethods] = useState({
+    card: false,
+    bankTransfer: false,
+  });
   const [receipt, setReceipt] = useState<File | null>(null);
   const [bankReference, setBankReference] = useState("");
   const [busy, setBusy] = useState(false);
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingBoostId, setPendingBoostId] = useState<string | null>(null);
+  const [submissionStage, setSubmissionStage] = useState<
+    "creating" | BoostReceiptUploadStage | "submitting" | null
+  >(null);
 
   useEffect(() => {
-    void fetchAdBoostPlans()
-      .then((result) => {
+    void Promise.all([fetchAdBoostPlans(), fetchAdBoosts()])
+      .then(([result, existingBoosts]) => {
+        const resumableBoost = existingBoosts.find(
+          (boost) =>
+            boost.listingId === ad.id &&
+            boost.status === "payment_pending" &&
+            boost.paymentMethod === "bank_transfer",
+        );
         setPlans(result.plans);
-        setPlanId(result.plans[0]?.id ?? "");
+        setPlanId(resumableBoost?.plan.id ?? result.plans[0]?.id ?? "");
         setBankAccount(result.bankAccount);
         setPaymentMethods(result.paymentMethods);
-        if (result.paymentMethods.card) setPaymentMethod("card");
-        else if (result.paymentMethods.bankTransfer) setPaymentMethod("bank_transfer");
-        else setError("Boost payments are not configured yet. Your advertisement remains active without a boost.");
+        if (resumableBoost) {
+          setPendingBoostId(resumableBoost.boostId);
+          setPaymentMethod("bank_transfer");
+        } else if (result.paymentMethods.card) setPaymentMethod("card");
+        else if (result.paymentMethods.bankTransfer)
+          setPaymentMethod("bank_transfer");
+        else
+          setError(
+            "Boost payments are not configured yet. Your advertisement remains active without a boost.",
+          );
       })
-      .catch((failure) => setError(failure instanceof Error ? failure.message : "Failed to load boost plans."))
+      .catch((failure) =>
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : "Failed to load boost plans.",
+        ),
+      )
       .finally(() => setIsLoadingPlans(false));
-  }, []);
+  }, [ad.id]);
 
   const selectedPlan = plans.find((plan) => plan.id === planId);
 
   async function submit() {
     if (!selectedPlan) return;
-    if (paymentMethod === "bank_transfer" && (!receipt || !bankReference.trim())) {
+    if (
+      paymentMethod === "bank_transfer" &&
+      (!receipt || !bankReference.trim())
+    ) {
       setError("Select a receipt and enter the bank reference.");
       return;
     }
     try {
       setBusy(true);
       setError(null);
-      const boost = pendingBoostId
-        ? { boostId: pendingBoostId }
-        : await createAdBoost({ listingId: ad.id, planId, paymentMethod });
+      let boost: Pick<AdBoost, "boostId"> | AdBoost;
+      if (pendingBoostId) {
+        boost = { boostId: pendingBoostId };
+      } else {
+        setSubmissionStage("creating");
+        boost = await createAdBoost({ listingId: ad.id, planId, paymentMethod });
+      }
       if (paymentMethod === "card") {
-        if (!("checkout" in boost) || !boost.checkout?.paymentPageUrl) throw new Error("Card checkout could not be started.");
+        if (!("checkout" in boost) || !boost.checkout?.paymentPageUrl)
+          throw new Error("Card checkout could not be started.");
         window.location.assign(boost.checkout.paymentPageUrl);
         return;
       }
       setPendingBoostId(boost.boostId);
-      const uploaded = await uploadBoostReceipt(receipt!, boost.boostId);
-      await submitBoostReceipt(boost.boostId, uploaded.documentId, bankReference.trim());
+      const uploaded = await uploadBoostReceipt(
+        receipt!,
+        boost.boostId,
+        setSubmissionStage,
+      );
+      setSubmissionStage("submitting");
+      await submitBoostReceipt(
+        boost.boostId,
+        uploaded.documentId,
+        bankReference.trim(),
+      );
       onComplete("Boost payment submitted for administrator verification.");
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Failed to submit boost payment.");
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "Failed to submit boost payment.",
+      );
       setBusy(false);
+      setSubmissionStage(null);
     }
   }
 
+  const submissionLabel =
+    submissionStage === "creating"
+      ? "Creating request..."
+      : submissionStage === "preparing"
+        ? "Preparing upload..."
+        : submissionStage === "uploading"
+          ? "Uploading receipt..."
+          : submissionStage === "registering"
+            ? "Confirming receipt..."
+            : submissionStage === "submitting"
+              ? "Submitting for review..."
+              : null;
+
   return (
-    <div className="borrower-modal__backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="borrower-modal boost-dialog" role="dialog" aria-modal="true" aria-labelledby="boost-ad-title">
+    <div
+      className="borrower-modal__backdrop"
+      role="presentation"
+      onMouseDown={(event) =>
+        event.target === event.currentTarget && !busy && onClose()
+      }
+    >
+      <section
+        className="borrower-modal boost-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="boost-ad-title"
+      >
         <header className="borrower-modal__header boost-dialog__header">
           <div className="boost-dialog__title-group">
             <span className="boost-dialog__title-icon" aria-hidden="true">
@@ -438,20 +524,41 @@ function BoostAdDialog({
             </span>
             <div>
               <p className="eyebrow">Advertisement promotion</p>
-              <h2 className="section-title" id="boost-ad-title">Boost your reach</h2>
-              <p className="section-subtitle">Promote “{ad.title}” for a fixed period.</p>
+              <h2 className="section-title" id="boost-ad-title">
+                Boost your reach
+              </h2>
+              <p className="section-subtitle">
+                Promote “{ad.title}” for a fixed period.
+              </p>
             </div>
           </div>
-          <button type="button" className="borrower-modal__close" onClick={onClose} aria-label="Close boost dialog"><X size={18} /></button>
+          <button
+            type="button"
+            className="borrower-modal__close"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close boost dialog"
+          >
+            <X size={18} />
+          </button>
         </header>
         <div className="borrower-modal__body boost-dialog__body">
-          {error ? <div className="sms-alert sms-alert--error" role="alert">{error}</div> : null}
+          {error ? (
+            <div className="sms-alert sms-alert--error" role="alert">
+              {error}
+            </div>
+          ) : null}
           {isLoadingPlans ? (
-            <div className="borrower-modal__state">Loading boost options...</div>
+            <div className="borrower-modal__state">
+              Loading boost options...
+            </div>
           ) : (
             <div className="boost-dialog__layout">
               <div className="boost-dialog__form">
-                <section className="boost-dialog__section" aria-labelledby="boost-plan-label">
+                <section
+                  className="boost-dialog__section"
+                  aria-labelledby="boost-plan-label"
+                >
                   <div className="boost-dialog__section-heading">
                     <span>1</span>
                     <div>
@@ -471,20 +578,30 @@ function BoostAdDialog({
                           onClick={() => setPlanId(plan.id)}
                         >
                           <span>{plan.name}</span>
-                          <strong>LKR {(plan.amountMinor / 100).toLocaleString()}</strong>
-                          {isSelected ? <Check size={16} aria-hidden="true" /> : null}
+                          <strong>
+                            LKR {(plan.amountMinor / 100).toLocaleString()}
+                          </strong>
+                          {isSelected ? (
+                            <Check size={16} aria-hidden="true" />
+                          ) : null}
                         </button>
                       );
                     })}
                   </div>
                 </section>
 
-                <section className="boost-dialog__section" aria-labelledby="boost-payment-label">
+                <section
+                  className="boost-dialog__section"
+                  aria-labelledby="boost-payment-label"
+                >
                   <div className="boost-dialog__section-heading">
                     <span>2</span>
                     <div>
                       <h3 id="boost-payment-label">Select payment method</h3>
-                      <p>Availability is controlled by the platform configuration.</p>
+                      <p>
+                        Availability is controlled by the platform
+                        configuration.
+                      </p>
                     </div>
                   </div>
                   <div className="boost-dialog__payment-grid">
@@ -496,8 +613,17 @@ function BoostAdDialog({
                       onClick={() => setPaymentMethod("card")}
                     >
                       <CreditCard size={19} />
-                      <span><strong>Card payment</strong><small>{paymentMethods.card ? "Secure PayHere checkout" : "Not configured"}</small></span>
-                      {paymentMethod === "card" && paymentMethods.card ? <Check size={16} /> : null}
+                      <span>
+                        <strong>Card payment</strong>
+                        <small>
+                          {paymentMethods.card
+                            ? "Secure PayHere checkout"
+                            : "Not configured"}
+                        </small>
+                      </span>
+                      {paymentMethod === "card" && paymentMethods.card ? (
+                        <Check size={16} />
+                      ) : null}
                     </button>
                     <button
                       type="button"
@@ -507,54 +633,155 @@ function BoostAdDialog({
                       onClick={() => setPaymentMethod("bank_transfer")}
                     >
                       <Landmark size={19} />
-                      <span><strong>Bank transfer</strong><small>{paymentMethods.bankTransfer ? "Receipt verification" : "Not configured"}</small></span>
-                      {paymentMethod === "bank_transfer" && paymentMethods.bankTransfer ? <Check size={16} /> : null}
+                      <span>
+                        <strong>Bank transfer</strong>
+                        <small>
+                          {paymentMethods.bankTransfer
+                            ? "Receipt verification"
+                            : "Not configured"}
+                        </small>
+                      </span>
+                      {paymentMethod === "bank_transfer" &&
+                      paymentMethods.bankTransfer ? (
+                        <Check size={16} />
+                      ) : null}
                     </button>
                   </div>
                 </section>
 
-                {paymentMethod === "bank_transfer" && paymentMethods.bankTransfer ? (
-                  <section className="boost-dialog__bank-panel" aria-labelledby="boost-bank-label">
+                {paymentMethod === "bank_transfer" &&
+                paymentMethods.bankTransfer ? (
+                  <section
+                    className="boost-dialog__bank-panel"
+                    aria-labelledby="boost-bank-label"
+                  >
                     <div>
-                      <p className="eyebrow" id="boost-bank-label">Transfer destination</p>
+                      <p className="eyebrow" id="boost-bank-label">
+                        Transfer destination
+                      </p>
                       <dl className="boost-dialog__bank-details">
-                        <div><dt>Bank</dt><dd>{bankAccount.bankName}</dd></div>
-                        <div><dt>Account name</dt><dd>{bankAccount.accountName}</dd></div>
-                        <div><dt>Account number</dt><dd>{bankAccount.accountNumber}</dd></div>
-                        <div><dt>Branch</dt><dd>{bankAccount.branch}</dd></div>
+                        <div>
+                          <dt>Bank</dt>
+                          <dd>{bankAccount.bankName}</dd>
+                        </div>
+                        <div>
+                          <dt>Account name</dt>
+                          <dd>{bankAccount.accountName}</dd>
+                        </div>
+                        <div>
+                          <dt>Account number</dt>
+                          <dd>{bankAccount.accountNumber}</dd>
+                        </div>
+                        <div>
+                          <dt>Branch</dt>
+                          <dd>{bankAccount.branch}</dd>
+                        </div>
                       </dl>
                     </div>
                     <div className="boost-dialog__bank-form">
                       <label className="create-ad-field">
-                        <span className="create-ad-field__label">Bank reference</span>
-                        <input className="input" value={bankReference} placeholder="Enter transaction reference" onChange={(event) => setBankReference(event.target.value)} />
+                        <span className="create-ad-field__label">
+                          Bank reference
+                        </span>
+                        <input
+                          className="input"
+                          value={bankReference}
+                          placeholder="Enter transaction reference"
+                          onChange={(event) =>
+                            setBankReference(event.target.value)
+                          }
+                        />
                       </label>
                       <label className="create-ad-field">
-                        <span className="create-ad-field__label">Payment receipt</span>
-                        <input className="input boost-dialog__file-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setReceipt(event.target.files?.[0] ?? null)} />
-                        <small>{receipt ? receipt.name : "JPG, PNG, WEBP or PDF"}</small>
+                        <span className="create-ad-field__label">
+                          Payment receipt
+                        </span>
+                        <input
+                          className="input boost-dialog__file-input"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,application/pdf"
+                          onChange={(event) =>
+                            setReceipt(event.target.files?.[0] ?? null)
+                          }
+                        />
+                        <small>
+                          {receipt ? receipt.name : "JPG, PNG, WEBP or PDF"}
+                        </small>
                       </label>
                     </div>
                   </section>
                 ) : null}
               </div>
 
-              <aside className="boost-dialog__summary" aria-label="Boost order summary">
+              <aside
+                className="boost-dialog__summary"
+                aria-label="Boost order summary"
+              >
                 <p className="eyebrow">Order summary</p>
                 <h3>{selectedPlan?.name ?? "Select a plan"}</h3>
                 <dl>
-                  <div><dt>Advertisement</dt><dd>{ad.title}</dd></div>
-                  <div><dt>Payment</dt><dd>{paymentMethod === "card" ? "Card" : "Bank transfer"}</dd></div>
-                  <div className="boost-dialog__summary-total"><dt>Total</dt><dd>{selectedPlan ? `LKR ${(selectedPlan.amountMinor / 100).toLocaleString()}` : "—"}</dd></div>
+                  <div>
+                    <dt>Advertisement</dt>
+                    <dd>{ad.title}</dd>
+                  </div>
+                  <div>
+                    <dt>Payment</dt>
+                    <dd>
+                      {paymentMethod === "card" ? "Card" : "Bank transfer"}
+                    </dd>
+                  </div>
+                  <div className="boost-dialog__summary-total">
+                    <dt>Total</dt>
+                    <dd>
+                      {selectedPlan
+                        ? `LKR ${(selectedPlan.amountMinor / 100).toLocaleString()}`
+                        : "—"}
+                    </dd>
+                  </div>
                 </dl>
-                <p>Your advertisement remains active if you close this window without purchasing a boost.</p>
+                <p>
+                  Your advertisement remains active if you close this window
+                  without purchasing a boost.
+                </p>
               </aside>
             </div>
           )}
         </div>
         <footer className="boost-dialog__footer">
-          <button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Not now</button>
-          <button type="button" className="button button-primary" onClick={() => void submit()} disabled={busy || isLoadingPlans || !selectedPlan || (!paymentMethods.card && !paymentMethods.bankTransfer)}>{busy ? "Processing..." : paymentMethod === "card" ? "Continue to secure payment" : "Submit for verification"}</button>
+          {submissionLabel ? (
+            <span
+              className="boost-dialog__progress"
+              role="status"
+              aria-live="polite"
+            >
+              <LoaderCircle size={16} aria-hidden="true" />
+              {submissionLabel}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={onClose}
+            disabled={busy}
+          >
+            Not now
+          </button>
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => void submit()}
+            disabled={
+              busy ||
+              isLoadingPlans ||
+              !selectedPlan ||
+              (!paymentMethods.card && !paymentMethods.bankTransfer)
+            }
+          >
+            {submissionLabel ??
+              (paymentMethod === "card"
+                ? "Continue to secure payment"
+                : "Submit for verification")}
+          </button>
         </footer>
       </section>
     </div>

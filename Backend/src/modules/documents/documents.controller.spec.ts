@@ -68,4 +68,59 @@ describe('DocumentsController', () => {
       'authenticated',
     );
   });
+
+  it('reuses the same payment receipt when upload completion is retried', async () => {
+    const paymentBody: CompleteUploadDto = {
+      ...body,
+      publicId: 'documents/lender-1/payment_receipt/boost-receipt',
+      category: 'payment_receipt',
+      documentType: 'ad_boost_bank_receipt',
+      relatedEntityType: 'ad_boost',
+      relatedEntityId: 'boost-1',
+    };
+    const documentsService = {
+      findDuplicate: jest.fn().mockResolvedValue({
+        id: 'receipt-existing',
+        status: 'pending_review',
+        cloudinaryPublicId:
+          'documents/lender-1/payment_receipt/previous-upload',
+        relatedEntityType: paymentBody.relatedEntityType,
+        relatedEntityId: paymentBody.relatedEntityId,
+      }),
+      createRecord: jest.fn(),
+    };
+    const mediaService = {
+      ensureCloudinaryConfigured: jest.fn(),
+      verifyCloudinaryAsset: jest.fn().mockResolvedValue({
+        assetId: paymentBody.assetId,
+        publicId: paymentBody.publicId,
+        version: paymentBody.version,
+        format: paymentBody.format,
+        bytes: paymentBody.bytes,
+        resourceType: paymentBody.resourceType,
+        deliveryType: paymentBody.deliveryType,
+        secureUrl: paymentBody.secureUrl,
+        uploadedAt: '2026-08-24T00:00:00.000Z',
+      }),
+      deleteAsset: jest.fn().mockResolvedValue({ result: 'ok' }),
+    };
+    const controller = new DocumentsController(
+      documentsService as never,
+      mediaService as never,
+    );
+
+    await expect(
+      controller.completeUpload(request, paymentBody),
+    ).resolves.toEqual({
+      message: 'Existing payment receipt reused successfully.',
+      documentId: 'receipt-existing',
+      status: 'pending_review',
+    });
+    expect(documentsService.createRecord).not.toHaveBeenCalled();
+    expect(mediaService.deleteAsset).toHaveBeenCalledWith(
+      paymentBody.publicId,
+      'image',
+      'authenticated',
+    );
+  });
 });

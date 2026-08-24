@@ -133,6 +133,32 @@ export class DocumentsController {
     );
 
     if (duplicate) {
+      if (
+        body.category === 'payment_receipt' &&
+        duplicate.relatedEntityType === body.relatedEntityType &&
+        duplicate.relatedEntityId === body.relatedEntityId
+      ) {
+        if (duplicate.cloudinaryPublicId !== body.publicId) {
+          try {
+            await this.mediaService.deleteAsset(
+              body.publicId,
+              verified.resourceType as 'image' | 'raw',
+              verified.deliveryType as 'upload' | 'authenticated',
+            );
+          } catch (error) {
+            this.logger.warn(
+              `Could not remove redundant payment receipt upload ${body.publicId}. ${error instanceof Error ? error.message : ''}`.trim(),
+            );
+          }
+        }
+
+        return {
+          message: 'Existing payment receipt reused successfully.',
+          documentId: duplicate.id,
+          status: duplicate.status,
+        };
+      }
+
       if (body.category === 'dispute_evidence') {
         if (duplicate.cloudinaryPublicId !== body.publicId) {
           try {
