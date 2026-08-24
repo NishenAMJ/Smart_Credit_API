@@ -145,6 +145,51 @@ describe('BorrowerPaymentsService', () => {
     );
   });
 
+  it('converts canonical transaction minor units for borrower recent activity', async () => {
+    const borrowerPayments = {
+      getLoans: jest.fn().mockResolvedValue([
+        {
+          loanId: 'loan-1',
+          lenderId: 'lender-1',
+          lenderName: 'Example Lender',
+          principalAmount: 10000,
+        },
+      ]),
+      getLenderNamesMap: jest
+        .fn()
+        .mockResolvedValue(new Map([['lender-1', 'Example Lender']])),
+      getRepaymentHistory: jest.fn().mockResolvedValue([]),
+      getBorrowerRepaymentTransactions: jest.fn().mockResolvedValue([
+        {
+          transactionId: 'transaction-1',
+          loanId: 'loan-1',
+          type: 'repayment',
+          status: 'completed',
+          amountMinor: 425050,
+          paidAt: new Date('2026-08-23T00:00:00.000Z'),
+        },
+      ]),
+    };
+    const transactionService = new BorrowerPaymentsService(
+      borrowerPayments as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const result = await transactionService.getTransactions('borrower-1');
+
+    expect(result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          transactionId: 'transaction-1',
+          status: 'completed',
+          amount: 4250.5,
+        }),
+      ]),
+    );
+  });
+
   it('settles a successful PayHere callback through the idempotent installment ledger', async () => {
     const secret = 'payhere-secret';
     const order: Record<string, any> = {

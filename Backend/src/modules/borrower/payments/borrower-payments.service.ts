@@ -29,6 +29,7 @@ type PaymentRecord = Record<string, unknown> & {
   repaymentId?: string;
   transactionId?: string;
   amount?: unknown;
+  amountMinor?: unknown;
   status?: unknown;
   paidAt?: unknown;
   createdAt?: unknown;
@@ -126,7 +127,7 @@ export class BorrowerPaymentsService implements OnModuleInit, OnModuleDestroy {
         loanId: this.toOptionalString(transaction.loanId),
         installmentId: this.toOptionalString(transaction.installmentId),
         lenderId: this.toOptionalString(transaction.lenderId),
-        amount: transaction.amount,
+        amount: this.readTransactionAmount(transaction),
         status: transaction.status,
         paidAt: transaction.paidAt ?? transaction.createdAt,
         createdAt: transaction.createdAt,
@@ -1039,7 +1040,7 @@ export class BorrowerPaymentsService implements OnModuleInit, OnModuleDestroy {
           repaymentId: transaction.repaymentId ?? transaction.paymentId,
           paymentId: transaction.paymentId,
           loanId: transaction.loanId,
-          amount: transaction.amount,
+          amount: this.readTransactionAmount(transaction),
           status: transaction.status,
           paidAt: transaction.paidAt ?? transaction.createdAt,
           createdAt: transaction.createdAt,
@@ -1174,6 +1175,23 @@ export class BorrowerPaymentsService implements OnModuleInit, OnModuleDestroy {
 
   private roundMoney(value: number): number {
     return Math.round(value * 100) / 100;
+  }
+
+  private readTransactionAmount(transaction: {
+    amount?: unknown;
+    amountMinor?: unknown;
+  }): number {
+    if (transaction.amount !== null && transaction.amount !== undefined) {
+      const amount = Number(transaction.amount);
+      if (Number.isFinite(amount)) {
+        return this.roundMoney(amount);
+      }
+    }
+
+    const amountMinor = Number(transaction.amountMinor);
+    return Number.isFinite(amountMinor)
+      ? this.roundMoney(amountMinor / 100)
+      : 0;
   }
 
   private toMillis(value: unknown): number {
