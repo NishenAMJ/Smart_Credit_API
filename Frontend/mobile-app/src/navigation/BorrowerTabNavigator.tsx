@@ -11,6 +11,7 @@ import PaymentsScreen from "../screens/borrower/PaymentsScreen";
 import SupportScreen from "../screens/borrower/SupportScreen";
 import ProfileScreen from "../screens/borrower/ProfileScreen";
 import AgreementsListScreen from "../screens/shared/AgreementsListScreen";
+import { COLORS } from "../constants/colors";
 
 const Tab = createBottomTabNavigator();
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -78,15 +79,15 @@ export default function BorrowerTabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#007AFF",
-        tabBarInactiveTintColor: "#9CA3AF",
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.textMuted,
         tabBarStyle: {
           height: 60 + bottomInset,
           paddingBottom: bottomInset,
           paddingTop: 8,
           borderTopWidth: 1,
-          borderTopColor: "#F3F4F6",
-          backgroundColor: "#FFFFFF",
+          borderTopColor: COLORS.border,
+          backgroundColor: COLORS.surface,
           elevation: 8,
           shadowColor: "#000",
           shadowOffset: { width: 0, height: -2 },

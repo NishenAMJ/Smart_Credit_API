@@ -16,6 +16,11 @@ export function normalizeLenderAdStatusFilter(
   status?: string | null,
 ): string[] | null {
   if (!status) return null;
+  // Keep legacy canonical aliases queryable. Response mapping normalizes these
+  // values, but Firestore filtering happens before mapping and must therefore
+  // include every raw value that represents the requested status.
+  if (status === 'active') return ['active', 'approved'];
+  if (status === 'pending_review') return ['pending_review', 'pending'];
   if (status === 'inactive') {
     return ['draft', 'paused', 'rejected', 'expired', 'closed'];
   }

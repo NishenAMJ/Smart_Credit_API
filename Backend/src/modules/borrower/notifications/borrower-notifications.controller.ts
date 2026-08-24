@@ -12,7 +12,6 @@ import type { AuthenticatedRequest } from '../../../common/types/authenticated-r
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
-import { resolveAuthenticatedBorrowerId } from '../shared/borrower-request.utils';
 import { BorrowerNotificationsService } from './borrower-notifications.service';
 import type { BorrowerNotificationState } from './borrower-notifications.types';
 
@@ -27,12 +26,11 @@ export class BorrowerNotificationsController {
   @Get('summary')
   async getSummary(
     @Req() req: AuthenticatedRequest,
-    @Query('borrowerId') borrowerId?: string,
   ) {
     return {
       success: true,
       data: await this.borrowerNotificationsService.getSummary(
-        resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
+        req.user.sub,
       ),
     };
   }
@@ -40,7 +38,6 @@ export class BorrowerNotificationsController {
   @Get()
   async getNotifications(
     @Req() req: AuthenticatedRequest,
-    @Query('borrowerId') borrowerId?: string,
     @Query('state') state?: BorrowerNotificationState,
     @Query('pageSize') pageSize?: string,
     @Query('limit') limit?: string,
@@ -49,7 +46,7 @@ export class BorrowerNotificationsController {
     return {
       success: true,
       data: await this.borrowerNotificationsService.getNotifications(
-        resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
+        req.user.sub,
         this.resolveStateFilter(state),
         this.toNumber(pageSize) ?? this.toNumber(limit) ?? 30,
         cursor?.trim() || null,
@@ -60,12 +57,11 @@ export class BorrowerNotificationsController {
   @Put('mark-all-read')
   async markAllAsRead(
     @Req() req: AuthenticatedRequest,
-    @Query('borrowerId') borrowerId?: string,
   ) {
     return {
       success: true,
       data: await this.borrowerNotificationsService.markAllAsRead(
-        resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
+        req.user.sub,
       ),
     };
   }
@@ -74,7 +70,6 @@ export class BorrowerNotificationsController {
   async markAsRead(
     @Req() req: AuthenticatedRequest,
     @Param('notificationId') notificationId: string,
-    @Query('borrowerId') borrowerId?: string,
   ) {
     if (!notificationId.trim()) {
       throw new BadRequestException('notificationId is required.');
@@ -83,7 +78,7 @@ export class BorrowerNotificationsController {
     return {
       success: true,
       data: await this.borrowerNotificationsService.markAsRead(
-        resolveAuthenticatedBorrowerId(req.user.sub, borrowerId),
+        req.user.sub,
         notificationId.trim(),
       ),
     };

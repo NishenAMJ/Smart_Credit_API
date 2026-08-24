@@ -47,15 +47,37 @@ describe('ReceiptVerificationService', () => {
       },
       ...overrides,
     };
+    const makeSnapshot = (path: string) => {
+      const data = records[path];
+      return {
+        id: path.split('/').at(-1),
+        exists: Boolean(data),
+        data: () => data,
+        get: (field: string) => data?.[field],
+      };
+    };
     const makeRef = (path: string): any => ({
       path,
       id: path.split('/').at(-1),
+      get: jest.fn(async () => makeSnapshot(path)),
       collection: (name: string) => ({
         doc: (id: string) => makeRef(`${path}/${name}/${id}`),
       }),
     });
     const collection = (name: string): any => ({
       doc: (id: string) => makeRef(`${name}/${id}`),
+      where: (field: string, _operator: string, value: unknown) => ({
+        get: jest.fn(async () => ({
+          docs: Object.entries(records)
+            .filter(
+              ([path, data]) =>
+                path.startsWith(`${name}/`) &&
+                path.split('/').length === 2 &&
+                data[field] === value,
+            )
+            .map(([path]) => makeSnapshot(path)),
+        })),
+      }),
     });
     const update = jest.fn();
     const transaction = {
@@ -176,5 +198,47 @@ describe('ReceiptVerificationService', () => {
     await expect(
       service.decide(lenderId, transactionId, { decision: 'approve' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('resolves and normalizes a legacy receipt linked by payment proof URL', async () => {
+    const { service, update } = createHarness({
+      [`transactions/${transactionId}`]: {
+        transactionId,
+        type: 'repayment',
+        status: 'pending_verification',
+        paymentMethod: 'bank_transfer',
+        lenderId,
+        borrowerId,
+        loanId,
+        installmentId,
+        repaymentId,
+        paymentProofUrl: 'https://cloudinary.test/legacy-receipt',
+        amountMinor: 10_000,
+      },
+      [`documents/${documentId}`]: {
+        userId: borrowerId,
+        category: 'payment_receipt',
+        relatedEntityType: 'loan',
+        relatedEntityId: loanId,
+        status: 'pending_review',
+        cloudinarySecureUrl: 'https://cloudinary.test/legacy-receipt',
+      },
+    });
+
+    await expect(
+      service.decide(lenderId, transactionId, { decision: 'approve' }),
+    ).resolves.toMatchObject({ decision: 'approved' });
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ path: `transactions/${transactionId}` }),
+      expect.objectContaining({
+        status: 'completed',
+        receiptDocumentId: documentId,
+      }),
+    );
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ path: `repayments/${repaymentId}` }),
+      expect.objectContaining({ receiptDocumentId: documentId }),
+    );
   });
 });

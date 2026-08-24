@@ -42,7 +42,7 @@ export default function MyAdsScreen({ navigation }: any) {
     return unsubscribe;
   }, [navigation]);
 
-  const loadAds = async (reset = true) => {
+  const loadAds = async (reset = true, requestedFilter = filter) => {
     if (!reset && (!nextCursor || loadingMoreRef.current)) return;
 
     try {
@@ -52,7 +52,7 @@ export default function MyAdsScreen({ navigation }: any) {
         setLoadingMore(true);
       }
       const data = await AdService.getMyAds(
-        undefined,
+        requestedFilter === "all" ? undefined : requestedFilter,
         reset ? null : nextCursor,
       );
       const incoming = data?.ads ?? [];
@@ -106,10 +106,12 @@ export default function MyAdsScreen({ navigation }: any) {
 
   const FILTERS = ["all", "active", "pending_review", "paused", "rejected"];
 
-  const filtered = ads.filter((ad: any) => {
-    if (filter === "all") return true;
-    return ad.status === filter;
-  });
+  const handleFilterChange = (nextFilter: string) => {
+    if (nextFilter === filter) return;
+    setFilter(nextFilter);
+    setNextCursor(null);
+    void loadAds(true, nextFilter);
+  };
 
   const renderFilterBar = () => (
     <View style={{ paddingHorizontal: 16, marginBottom: 12, marginTop: 12 }}>
@@ -117,7 +119,7 @@ export default function MyAdsScreen({ navigation }: any) {
         {FILTERS.map((f) => (
           <TouchableOpacity
             key={f}
-            onPress={() => setFilter(f)}
+            onPress={() => handleFilterChange(f)}
             style={{
               paddingVertical: 6,
               paddingHorizontal: 12,
@@ -397,7 +399,7 @@ export default function MyAdsScreen({ navigation }: any) {
       </View>
 
       <FlatList
-        data={filtered}
+        data={ads}
         keyExtractor={(item: any) => item.adId}
         renderItem={renderAd}
         onRefresh={() => void loadAds(true)}

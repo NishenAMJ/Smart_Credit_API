@@ -82,7 +82,7 @@ export const AdService = {
 
 
   getBoostPlans: () =>
-    api.get<{ plans: AdBoostPlan[]; bankAccount: Record<string, string> }>(
+    api.get<{ plans: AdBoostPlan[]; bankAccount: Record<string, string>; paymentMethods: { card: boolean; bankTransfer: boolean } }>(
       "/lender-ad-boosts/plans",
     ),
 

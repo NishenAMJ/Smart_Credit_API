@@ -20,14 +20,10 @@ import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { BORDER_RADIUS } from "../../constants/borderRadius";
 import type { BorrowerNavigation } from "../../types/navigation";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
 
 type ContactSupportScreenProps = {
   navigation: BorrowerNavigation;
-  route?: {
-    params?: {
-      initialCategory?: string;
-    };
-  };
 };
 
 type CategoryOption = {
@@ -44,7 +40,6 @@ const categoryOptions: CategoryOption[] = [
   { label: "Account security", value: "security" },
   { label: "Technical issue", value: "technical" },
   { label: "General question", value: "general" },
-  { label: "Request a call", value: "call_request" },
   { label: "Dispute guidance", value: "dispute" },
 ];
 
@@ -53,13 +48,9 @@ const MESSAGE_LIMIT = 1000;
 
 export default function ContactSupportScreen({
   navigation,
-  route,
 }: ContactSupportScreenProps) {
-  const initialCategory = route?.params?.initialCategory ?? "";
-  const [category, setCategory] = useState(initialCategory);
-  const [subject, setSubject] = useState(
-    initialCategory === "call_request" ? "Request a support call" : "",
-  );
+  const [category, setCategory] = useState("");
+  const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
@@ -119,17 +110,10 @@ export default function ContactSupportScreen({
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Feather name="arrow-left" size={22} color={COLORS.surface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Contact Support</Text>
-      </View>
+      <BorrowerPageHeader
+        title="Contact Support"
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         style={styles.content}

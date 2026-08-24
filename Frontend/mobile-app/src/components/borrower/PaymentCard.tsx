@@ -104,13 +104,14 @@ export default function PaymentCard({
     statusColor = STATUS_COLORS.PAID.text;
     statusBgColor = STATUS_COLORS.PAID.background;
     statusLabel = payment.statusLabel || PAYMENT_BUTTON_LABELS.PAID;
+  } else if (verificationStatus === "rejected") {
+    statusColor = STATUS_COLORS.OVERDUE.text;
+    statusBgColor = STATUS_COLORS.OVERDUE.background;
+    statusLabel = payment.statusLabel || "Receipt rejected";
   } else if (isOverdue) {
     statusColor = STATUS_COLORS.OVERDUE.text;
     statusBgColor = STATUS_COLORS.OVERDUE.background;
     statusLabel = payment.statusLabel || PAYMENT_BUTTON_LABELS.OVERDUE;
-  } else if (verificationStatus === "rejected") {
-    statusColor = STATUS_COLORS.OVERDUE.text;
-    statusBgColor = STATUS_COLORS.OVERDUE.background;
   } else if (
     verificationStatus === "pending_verification" ||
     verificationStatus === "receipt_required" ||

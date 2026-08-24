@@ -4,6 +4,7 @@ import {
   Alert,
   Linking,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,6 +26,57 @@ import { COLORS } from "../../constants/colors";
 
 const categories = ["payment", "loan_terms", "fraud", "conduct", "other"];
 
+const statusLabels: Record<string, string> = {
+  open: "Submitted",
+  under_review: "Under review",
+  awaiting_response: "Your response is needed",
+  escalated: "Escalated for review",
+  resolved: "Resolved",
+  closed: "Closed",
+};
+
+const eventLabels: Record<string, string> = {
+  created: "Dispute submitted",
+  review_started: "Review started",
+  comment: "New message",
+  information_requested: "Information requested",
+  escalated: "Escalated for review",
+  resolved: "Dispute resolved",
+  reopened: "Dispute reopened",
+  acknowledged: "Resolution acknowledged",
+  closed: "Dispute closed",
+};
+
+function friendlyStatus(status: string) {
+  return statusLabels[status] ?? status.replace(/_/g, " ");
+}
+
+function friendlyEvent(type: string) {
+  return eventLabels[type] ?? type.replace(/_/g, " ");
+}
+
+function friendlyEventMessage(event: DisputeEvent) {
+  if (event.type === "information_requested")
+    return event.message.replace(/^(both|complainant|respondent):\s*/i, "");
+  return event.message;
+}
+
+function friendlyActor(role: string) {
+  if (role === "admin") return "Smart Credit support";
+  if (role === "system") return "System update";
+  if (role === "borrower") return "Borrower";
+  if (role === "lender") return "Lender";
+  return "Participant";
+}
+
+function friendlyError(error: unknown, fallback: string) {
+  const message = (
+    error as { response?: { data?: { message?: unknown } }; message?: string }
+  )?.response?.data?.message;
+  if (typeof message === "string" && message.trim()) return message;
+  return fallback;
+}
+
 export default function DisputesScreen({ navigation }: any) {
   const [items, setItems] = useState<Dispute[]>([]);
   const [loans, setLoans] = useState<EligibleLoan[]>([]);
@@ -39,6 +91,7 @@ export default function DisputesScreen({ navigation }: any) {
   const [description, setDescription] = useState("");
   const [desiredOutcome, setDesiredOutcome] = useState("");
   const [message, setMessage] = useState("");
+  const [reopenReason, setReopenReason] = useState("");
   const [messageEvidence, setMessageEvidence] = useState<
     DocumentPicker.DocumentPickerAsset[]
   >([]);
@@ -46,6 +99,7 @@ export default function DisputesScreen({ navigation }: any) {
     DocumentPicker.DocumentPickerAsset[]
   >([]);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const [casesResult, loansResult] = await Promise.allSettled([
@@ -65,23 +119,59 @@ export default function DisputesScreen({ navigation }: any) {
       const eligible = loansResult.value;
       setLoans(eligible);
       setLoanId((current) =>
-        eligible.some((loan) => loan.id === current)
-          ? current
-          : (eligible[0]?.id ?? ""),
+        !current || eligible.some((loan) => loan.id === current) ? current : "",
       );
     }
-    const failure = [casesResult, loansResult].find(
-      (result) => result.status === "rejected",
-    );
-    if (failure?.status === "rejected") {
-      const reason = failure.reason as { message?: string };
-      Alert.alert("Disputes", reason?.message ?? "Failed to load disputes.");
+    if (casesResult.status === "rejected") {
+      Alert.alert(
+        "Unable to load disputes",
+        friendlyError(
+          casesResult.reason,
+          "Please check your connection and try again.",
+        ),
+      );
     }
   }, []);
 
+  const openDispute = useCallback(async (item: Dispute) => {
+    setSelected(item);
+    try {
+      const [current, timeline] = await Promise.all([
+        disputesService.get(item.id),
+        disputesService.events(item.id),
+      ]);
+      setSelected(current);
+      setEvents(timeline);
+    } catch (error) {
+      Alert.alert(
+        "Unable to open dispute",
+        friendlyError(error, "Please check your connection and try again."),
+      );
+    }
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+      if (selected) {
+        await openDispute(selected);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load, openDispute, selected]);
+
   useEffect(() => {
     void load();
-    const changed = () => void load();
+    const changed = (payload?: { disputeId?: string }) => {
+      void load();
+      if (
+        selected &&
+        (!payload?.disputeId || payload.disputeId === selected.id)
+      )
+        void openDispute(selected);
+    };
     const connected = () => void load();
     chatSocket.on("disputeChanged", changed);
     chatSocket.on("socketConnected", connected);
@@ -89,15 +179,17 @@ export default function DisputesScreen({ navigation }: any) {
       chatSocket.off("disputeChanged", changed);
       chatSocket.off("socketConnected", connected);
     };
-  }, [load]);
+  }, [load, openDispute, selected?.id]);
 
   useEffect(() => {
-    if (selected) void disputesService.events(selected.id).then(setEvents);
+    setMessage("");
+    setMessageEvidence([]);
+    setReopenReason("");
+    setEvents([]);
   }, [selected?.id]);
 
   async function submit() {
     const problems: string[] = [];
-    if (!loanId) problems.push("Select an eligible loan.");
     if (subject.trim().length < 3)
       problems.push("Subject must contain at least 3 characters.");
     if (description.trim().length < 10)
@@ -116,15 +208,15 @@ export default function DisputesScreen({ navigation }: any) {
           .map((asset) => uploadDisputeEvidence(asset, loanId)),
       );
       const dispute = await disputesService.create({
-        loanId,
+        ...(loanId ? { loanId } : {}),
         category,
         subject,
         description,
         desiredOutcome,
-        ...(transactionId.trim()
+        ...(loanId && transactionId.trim()
           ? { transactionId: transactionId.trim() }
           : {}),
-        ...(installmentId.trim()
+        ...(loanId && installmentId.trim()
           ? { installmentId: installmentId.trim() }
           : {}),
         evidenceDocumentIds,
@@ -139,23 +231,56 @@ export default function DisputesScreen({ navigation }: any) {
       setEvidence([]);
       await load();
     } catch (error: any) {
-      Alert.alert("Unable to submit", error?.message ?? "Please try again.");
+      Alert.alert(
+        "Unable to submit",
+        friendlyError(error, "Please try again."),
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
   async function sendComment() {
-    if (!selected || !message.trim()) return;
-    const documentIds = await Promise.all(
-      messageEvidence
-        .slice(0, 5)
-        .map((asset) => uploadDisputeEvidence(asset, selected.loanId)),
-    );
-    await disputesService.comment(selected.id, message.trim(), documentIds);
-    setMessage("");
-    setMessageEvidence([]);
-    setEvents(await disputesService.events(selected.id));
+    if (!selected || selected.status !== "awaiting_response" || !message.trim())
+      return;
+    try {
+      setSubmitting(true);
+      const documentIds = await Promise.all(
+        messageEvidence
+          .slice(0, 5)
+          .map((asset) => uploadDisputeEvidence(asset, selected.loanId)),
+      );
+      await disputesService.comment(selected.id, message.trim(), documentIds);
+      setMessage("");
+      setMessageEvidence([]);
+      await load();
+      setEvents(await disputesService.events(selected.id));
+    } catch (error: any) {
+      Alert.alert(
+        "Unable to send response",
+        friendlyError(error, "Please try again."),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function reopenCase() {
+    if (!selected || reopenReason.trim().length < 5) return;
+    try {
+      setSubmitting(true);
+      await disputesService.reopen(selected.id, reopenReason.trim());
+      setReopenReason("");
+      await load();
+      setEvents(await disputesService.events(selected.id));
+    } catch (error: any) {
+      Alert.alert(
+        "Unable to reopen",
+        friendlyError(error, "Please try again."),
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -169,23 +294,38 @@ export default function DisputesScreen({ navigation }: any) {
           <Feather name="plus" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void onRefresh()}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+            progressBackgroundColor={COLORS.surface}
+          />
+        }
+      >
         {items.length ? (
           items.map((item) => (
             <TouchableOpacity
               key={item.id}
               style={styles.card}
-              onPress={() => setSelected(item)}
+              onPress={() => void openDispute(item)}
             >
               <View style={styles.row}>
                 <Text style={styles.title}>{item.subject}</Text>
-                <Text style={styles.status}>
-                  {item.status.replace(/_/g, " ")}
-                </Text>
+                <Text style={styles.status}>{friendlyStatus(item.status)}</Text>
               </View>
-              <Text style={styles.muted}>
-                {item.disputeCode} · Loan {item.loanId}
-              </Text>
+              {item.loanId ? (
+                <Text style={styles.muted}>
+                  {item.disputeCode} · Loan {item.loanId}
+                </Text>
+              ) : (
+                <Text style={styles.muted}>
+                  {item.disputeCode} {" · General dispute"}
+                </Text>
+              )}
               <Text numberOfLines={2}>{item.description}</Text>
             </TouchableOpacity>
           ))
@@ -208,13 +348,22 @@ export default function DisputesScreen({ navigation }: any) {
             <View />
           </View>
           <ScrollView contentContainerStyle={styles.content}>
-            <Text style={styles.label}>Loan</Text>
+            <Text style={styles.label}>Related loan (optional)</Text>
+            <TouchableOpacity
+              style={[styles.choice, !loanId && styles.choiceActive]}
+              onPress={() => {
+                setLoanId("");
+                setTransactionId("");
+                setInstallmentId("");
+              }}
+            >
+              <Text>General platform issue</Text>
+            </TouchableOpacity>
             {loans.length === 0 ? (
               <View style={styles.emptyLoanState}>
-                <Text style={styles.title}>No eligible loans</Text>
+                <Text style={styles.title}>No linked loans found</Text>
                 <Text style={styles.muted}>
-                  A dispute must be linked to one of your loans. No matching
-                  loan was found for this account.
+                  You can still submit a general platform dispute.
                 </Text>
               </View>
             ) : null}
@@ -233,20 +382,24 @@ export default function DisputesScreen({ navigation }: any) {
                 </Text>
               </TouchableOpacity>
             ))}
-            <TextInput
-              style={styles.input}
-              placeholder="Optional transaction ID"
-              value={transactionId}
-              onChangeText={setTransactionId}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Optional installment ID"
-              value={installmentId}
-              onChangeText={setInstallmentId}
-              autoCapitalize="none"
-            />
+            {loanId ? (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Optional transaction ID"
+                  value={transactionId}
+                  onChangeText={setTransactionId}
+                  autoCapitalize="none"
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Optional installment ID"
+                  value={installmentId}
+                  onChangeText={setInstallmentId}
+                  autoCapitalize="none"
+                />
+              </>
+            ) : null}
             <Text style={styles.label}>Category</Text>
             <View style={styles.wrap}>
               {categories.map((value) => (
@@ -305,11 +458,8 @@ export default function DisputesScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[
-                styles.primary,
-                (!loans.length || submitting) && styles.disabled,
-              ]}
-              disabled={!loans.length || submitting}
+              style={[styles.primary, submitting && styles.disabled]}
+              disabled={submitting}
               onPress={() => void submit()}
             >
               <Text style={styles.primaryText}>
@@ -335,7 +485,7 @@ export default function DisputesScreen({ navigation }: any) {
                 <View style={styles.card}>
                   <Text style={styles.title}>{selected.subject}</Text>
                   <Text style={styles.status}>
-                    {selected.status.replace(/_/g, " ")}
+                    {friendlyStatus(selected.status)}
                   </Text>
                   <Text>{selected.description}</Text>
                   <Text style={styles.label}>Desired outcome</Text>
@@ -361,16 +511,52 @@ export default function DisputesScreen({ navigation }: any) {
                     {selected.resolution.recommendedActions.map((action) => (
                       <Text key={action}>• {action}</Text>
                     ))}
+                    {selected.status === "resolved" ? (
+                      <>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Explain why this case should be reopened"
+                          value={reopenReason}
+                          onChangeText={setReopenReason}
+                        />
+                        <View style={styles.row}>
+                          <TouchableOpacity
+                            style={styles.primary}
+                            disabled={submitting}
+                            onPress={() =>
+                              void disputesService
+                                .acknowledge(selected.id)
+                                .then(load)
+                            }
+                          >
+                            <Text style={styles.primaryText}>Acknowledge</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.secondary}
+                            disabled={
+                              submitting ||
+                              selected.reopenCount >= 1 ||
+                              reopenReason.trim().length < 5
+                            }
+                            onPress={() => void reopenCase()}
+                          >
+                            <Text>Reopen</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    ) : null}
                   </View>
                 ) : null}
                 <Text style={styles.label}>Timeline</Text>
                 {events.map((event) => (
                   <View key={event.id} style={styles.card}>
                     <Text style={styles.title}>
-                      {event.type.replace(/_/g, " ")}
+                      {friendlyEvent(event.type)}
                     </Text>
-                    <Text>{event.message}</Text>
-                    <Text style={styles.muted}>{event.actorRole}</Text>
+                    <Text>{friendlyEventMessage(event)}</Text>
+                    <Text style={styles.muted}>
+                      {friendlyActor(event.actorRole)}
+                    </Text>
                     {event.documentIds.map((documentId) => (
                       <TouchableOpacity
                         key={documentId}
@@ -386,11 +572,24 @@ export default function DisputesScreen({ navigation }: any) {
                     ))}
                   </View>
                 ))}
-                {selected.status !== "closed" ? (
+                {selected.status === "awaiting_response" ? (
                   <>
+                    <View style={styles.responseNotice}>
+                      <Feather
+                        name="message-circle"
+                        size={18}
+                        color="#1D4ED8"
+                      />
+                      <Text style={styles.responseNoticeText}>
+                        Smart Credit support needs more information from you.
+                        Add your response below.
+                      </Text>
+                    </View>
                     <TextInput
-                      style={styles.input}
-                      placeholder="Add a message or reopening reason"
+                      style={[styles.input, styles.area]}
+                      multiline
+                      textAlignVertical="top"
+                      placeholder="Reply to the admin's information request"
                       value={message}
                       onChangeText={setMessage}
                     />
@@ -419,43 +618,20 @@ export default function DisputesScreen({ navigation }: any) {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.primary}
+                      disabled={submitting || !message.trim()}
                       onPress={() => void sendComment()}
                     >
-                      <Text style={styles.primaryText}>Send message</Text>
+                      <Text style={styles.primaryText}>
+                        {submitting ? "Sending..." : "Send response"}
+                      </Text>
                     </TouchableOpacity>
                   </>
-                ) : null}
-                {selected.status === "resolved" ? (
-                  <View style={styles.row}>
-                    <TouchableOpacity
-                      style={styles.primary}
-                      onPress={() =>
-                        void disputesService.acknowledge(selected.id).then(load)
-                      }
-                    >
-                      <Text style={styles.primaryText}>Acknowledge</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.secondary}
-                      onPress={() => {
-                        if (!message.trim()) {
-                          Alert.alert(
-                            "Reason required",
-                            "Enter the reopening reason in the message field first.",
-                          );
-                          return;
-                        }
-                        void disputesService
-                          .reopen(selected.id, message.trim())
-                          .then(() => {
-                            setMessage("");
-                            return load();
-                          });
-                      }}
-                    >
-                      <Text>Reopen</Text>
-                    </TouchableOpacity>
-                  </View>
+                ) : selected.status !== "resolved" &&
+                  selected.status !== "closed" ? (
+                  <Text style={styles.helpText}>
+                    No response is required from you right now. We will enable
+                    replies if more information is needed.
+                  </Text>
                 ) : null}
               </ScrollView>
             </>
@@ -527,6 +703,24 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: "#fff", fontWeight: "700" },
   disabled: { opacity: 0.5 },
+  responseNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+  },
+  responseNoticeText: { flex: 1, color: "#1E3A8A", lineHeight: 20 },
+  helpText: {
+    color: "#6B7280",
+    lineHeight: 20,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
+  },
   secondary: {
     backgroundColor: "#E5E7EB",
     padding: 13,

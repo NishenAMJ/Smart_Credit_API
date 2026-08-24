@@ -8,10 +8,11 @@ import {
   Text,
   TouchableOpacity,
   View,
-  RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import LoanCard from "../../components/borrower/LoanCard";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
 import EmptyState from "../../components/common/EmptyState";
 import { getMyLoans } from "../../api/services/loan.service";
 import { getApiErrorMessage } from "../../api/api-error";
@@ -67,20 +68,10 @@ export default function MyLoansScreen({ navigation }: MyLoansScreenProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Feather
-            name="arrow-left"
-            size={24}
-            color={COLORS.textPrimary || "#1A1A1A"}
-          />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Active Loans</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <BorrowerPageHeader
+        title="Active Loans"
+        onBack={() => navigation.goBack()}
+      />
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -104,10 +95,9 @@ export default function MyLoansScreen({ navigation }: MyLoansScreenProps) {
           keyExtractor={(item) => item.loanId}
           contentContainerStyle={styles.listContainer}
           refreshControl={
-            <RefreshControl
+            <BorrowerRefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={COLORS.primary}
             />
           }
           renderItem={({ item }) => (

@@ -1,6 +1,6 @@
 /** @format */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -14,12 +14,15 @@ import PaymentCard from "../../components/borrower/PaymentCard";
 import EmptyState from "../../components/common/EmptyState";
 import Button from "../../components/common/Button";
 import { getPayments } from "../../api/services/payment.service";
+import { loanService } from "../../api/services/loan.service";
+import { getApiErrorMessage } from "../../api/api-error";
 import { formatCurrency } from "../../utils/formatters";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { navigateToBorrowerTab } from "../../utils/borrowerNavigation";
 import type { BorrowerLoan, BorrowerRepayment } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
 
 type LoanDetailsScreenProps = {
   route: {
@@ -37,21 +40,50 @@ export default function LoanDetailsScreen({
   route,
   navigation,
 }: LoanDetailsScreenProps) {
-  const loan = route.params?.loan;
+  const [loan, setLoan] = useState<BorrowerLoan | undefined>(
+    route.params?.loan,
+  );
 
   const [payments, setPayments] = useState<BorrowerRepayment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const fetchLoanDetails = useCallback(async () => {
+    const loanId = route.params?.loan?.loanId;
+    if (!loanId) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    try {
+      setErrorMessage("");
+      const [loanResponse, paymentData] = await Promise.all([
+        loanService.getLoanById(loanId),
+        getPayments(),
+      ]);
+      setLoan(loanResponse.data);
+      setPayments(paymentData.filter((payment) => payment.loanId === loanId));
+    } catch (error) {
+      setErrorMessage(
+        getApiErrorMessage(error, "Unable to update this loan right now."),
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [route.params?.loan?.loanId]);
 
   useEffect(() => {
-    if (loan?.loanId) {
-      setLoading(true);
-      getPayments()
-        .then((data) => {
-          setPayments(data.filter((p) => p.loanId === loan.loanId));
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [loan?.loanId]);
+    setLoading(true);
+    void fetchLoanDetails();
+  }, [fetchLoanDetails]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void fetchLoanDetails();
+  }, [fetchLoanDetails]);
 
   const upcomingPayments = payments.filter((p) => {
     const s = String(p.status || "").toLowerCase();
@@ -98,7 +130,7 @@ export default function LoanDetailsScreen({
 
         {loading ? (
           <ActivityIndicator
-            size='small'
+            size="small"
             color={COLORS.primary}
             style={{ marginTop: 20 }}
           />
@@ -107,12 +139,12 @@ export default function LoanDetailsScreen({
             <PaymentCard
               key={payment.paymentId ?? `up-${index}`}
               payment={payment}
-              paymentMethod='Card'
+              paymentMethod="Card"
               onPay={() => navigateToBorrowerTab(navigation, "Payments")}
             />
           ))
         ) : (
-          <EmptyState title='No upcoming payment' />
+          <EmptyState title="No upcoming payment" />
         )}
 
         {pastPayments.length > 0 && (
@@ -140,10 +172,21 @@ export default function LoanDetailsScreen({
   return (
     <View style={styles.container}>
       <LoanDetailsHeader
-        title='Active Loan'
+        title="Active Loan"
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <BorrowerRefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
+        }
+      >
+        {errorMessage ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : null}
         {renderActiveView()}
       </ScrollView>
     </View>
@@ -159,8 +202,15 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
+  errorText: {
+    color: COLORS.error,
+    backgroundColor: COLORS.errorSoft,
+    borderRadius: 10,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 16,
     elevation: 2,
@@ -172,12 +222,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginBottom: 12,
   },
   text: {
     fontSize: 14,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginBottom: 6,
   },
   applyButton: {
@@ -188,7 +238,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   applyButtonText: {
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
     fontSize: 15,
     fontWeight: "600",
   },

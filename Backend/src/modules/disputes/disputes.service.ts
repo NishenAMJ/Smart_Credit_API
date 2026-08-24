@@ -7,6 +7,7 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { DocumentData, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../firebase/firebase.service';
@@ -15,6 +16,7 @@ import { AdminQueryCacheService } from '../../common/cache/admin-query-cache.ser
 import { buildSearchTokens } from '../../common/firestore/search-tokens';
 import { writeAuditLog } from '../../common/audit/write-audit-log';
 import type { UserRole } from '../auth/auth.types';
+import { RoleNotificationService } from '../../common/notifications/role-notification.service';
 import type {
   AddDisputeCommentDto,
   AdminDisputeQuery,
@@ -64,6 +66,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     private readonly firebaseService: FirebaseService,
     private readonly gateway: ChatGateway,
     private readonly cache: AdminQueryCacheService = new AdminQueryCacheService(),
+    @Optional() private readonly roleNotifications?: RoleNotificationService,
   ) {}
 
   onModuleInit() {
@@ -191,7 +194,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       id,
       disputeId: data.disputeId ?? id,
       disputeCode: data.disputeCode ?? `DSP-${id.slice(0, 8).toUpperCase()}`,
-      loanId: data.loanId ?? '',
+      loanId: data.loanId || null,
       transactionId: data.transactionId ?? null,
       installmentId: data.installmentId ?? null,
       complainantId,
@@ -227,6 +230,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           : legacyResolution,
       acknowledgements: data.acknowledgements ?? {},
       reopenCount: Number(data.reopenCount ?? 0),
+      responseRequestedFrom: ['complainant', 'respondent', 'both'].includes(
+        data.responseRequestedFrom,
+      )
+        ? data.responseRequestedFrom
+        : null,
       createdAt: this.timestamp(data.createdAt),
       updatedAt: this.timestamp(data.updatedAt, this.timestamp(data.createdAt)),
       resolvedAt,
@@ -261,6 +269,32 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     if (![dispute.complainantId, dispute.respondentId].includes(userId)) {
       throw new ForbiddenException(
         'You are not a participant in this dispute.',
+      );
+    }
+  }
+
+  private assertParticipantCanReply(dispute: Dispute, userId: string) {
+    if (dispute.status === 'closed') {
+      throw new BadRequestException('Closed disputes cannot receive comments.');
+    }
+    if (dispute.status === 'resolved') {
+      throw new BadRequestException(
+        'Reopen this dispute before sending another message.',
+      );
+    }
+    if (dispute.status !== 'awaiting_response') {
+      throw new BadRequestException(
+        'You can reply only after the admin requests information.',
+      );
+    }
+    const requestedFrom = dispute.responseRequestedFrom ?? 'both';
+    const isRequestedParticipant =
+      requestedFrom === 'both' ||
+      (requestedFrom === 'complainant' && userId === dispute.complainantId) ||
+      (requestedFrom === 'respondent' && userId === dispute.respondentId);
+    if (!isRequestedParticipant) {
+      throw new ForbiddenException(
+        'The admin requested information from the other participant.',
       );
     }
   }
@@ -313,8 +347,10 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       status: dispute.status,
       updatedAt: dispute.updatedAt.toDate().toISOString(),
     };
-    this.gateway.emitToUser(dispute.borrowerId, 'dispute:changed', payload);
-    this.gateway.emitToUser(dispute.lenderId, 'dispute:changed', payload);
+    if (dispute.borrowerId)
+      this.gateway.emitToUser(dispute.borrowerId, 'dispute:changed', payload);
+    if (dispute.lenderId)
+      this.gateway.emitToUser(dispute.lenderId, 'dispute:changed', payload);
     if (dispute.assignedAdminId)
       this.gateway.emitToUser(
         dispute.assignedAdminId,
@@ -352,6 +388,46 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     title: string,
     body: string,
   ) {
+    if (this.roleNotifications) {
+      const eventId = `${dispute.id}-${dispute.status}`;
+      const writes: Promise<unknown>[] = [];
+      if (dispute.borrowerId && dispute.borrowerId !== excludedUserId) {
+        writes.push(
+          this.roleNotifications.createBorrower(dispute.borrowerId, {
+            eventType,
+            eventId,
+            category: 'dispute',
+            severity: 'info',
+            title,
+            message: body,
+            entityType: 'dispute',
+            entityId: dispute.id,
+            actionTarget: 'DisputeDetail',
+            metadata: { disputeId: dispute.id, status: dispute.status },
+          }),
+        );
+      }
+      if (dispute.lenderId && dispute.lenderId !== excludedUserId) {
+        writes.push(
+          this.roleNotifications.createLender(dispute.lenderId, {
+            eventType,
+            eventId,
+            category: 'dispute',
+            severity: 'info',
+            title,
+            message: body,
+            entityType: 'dispute',
+            entityId: dispute.id,
+            actionLabel: 'Open dispute',
+            actionTarget: 'disputes',
+            metadata: { disputeId: dispute.id, status: dispute.status },
+          }),
+        );
+      }
+      await Promise.all(writes);
+      return;
+    }
+
     const now = Timestamp.now();
     const writes: Promise<unknown>[] = [];
     if (dispute.borrowerId && dispute.borrowerId !== excludedUserId) {
@@ -489,7 +565,10 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException(
         'Only borrowers and lenders can create disputes.',
       );
-    const loanId = this.text(input.loanId, 'loanId', 1, 120);
+    const requestedLoanId = input.loanId?.trim();
+    const loanId = requestedLoanId
+      ? this.text(requestedLoanId, 'loanId', 1, 120)
+      : null;
     const category = this.category(input.category);
     if (!CATEGORIES.includes(input.category))
       throw new BadRequestException('Invalid dispute category.');
@@ -512,21 +591,40 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     const evidenceDocumentIds = [...new Set(input.evidenceDocumentIds ?? [])];
     await this.validateEvidence(userId, evidenceDocumentIds);
 
-    const loanRef = this.db.collection('loans').doc(loanId);
-    const loanSnapshot = await loanRef.get();
-    if (!loanSnapshot.exists) throw new NotFoundException('Loan not found.');
-    const loan = loanSnapshot.data() ?? {};
-    const borrowerId = String(loan.borrowerId ?? '');
-    const lenderId = String(loan.lenderId ?? '');
-    if (!borrowerId || !lenderId)
+    const loanRef = loanId
+      ? this.db.collection('loans').doc(loanId)
+      : null;
+    const loanSnapshot = loanRef ? await loanRef.get() : null;
+    if (loanId && !loanSnapshot?.exists)
+      throw new NotFoundException('Loan not found.');
+    const loan = loanSnapshot?.data() ?? {};
+    const borrowerId = loanId
+      ? String(loan.borrowerId ?? '')
+      : role === 'borrower'
+        ? userId
+        : '';
+    const lenderId = loanId
+      ? String(loan.lenderId ?? '')
+      : role === 'lender'
+        ? userId
+        : '';
+    if (loanId) {
+      if (!borrowerId || !lenderId)
+        throw new BadRequestException(
+          'The selected loan does not have valid borrower and lender participants.',
+        );
+      if (
+        (role === 'borrower' && borrowerId !== userId) ||
+        (role === 'lender' && lenderId !== userId)
+      ) {
+        throw new ForbiddenException(
+          'The selected loan does not belong to you.',
+        );
+      }
+    } else if (input.transactionId || input.installmentId) {
       throw new BadRequestException(
-        'The selected loan does not have valid borrower and lender participants.',
+        'Select a loan before adding a transaction or installment ID.',
       );
-    if (
-      (role === 'borrower' && borrowerId !== userId) ||
-      (role === 'lender' && lenderId !== userId)
-    ) {
-      throw new ForbiddenException('The selected loan does not belong to you.');
     }
 
     if (input.transactionId) {
@@ -539,7 +637,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           'The transaction does not belong to this loan.',
         );
     }
-    if (input.installmentId) {
+    if (input.installmentId && loanRef) {
       const installment = await loanRef
         .collection('installments')
         .doc(input.installmentId)
@@ -564,7 +662,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
 
     const ref = this.db.collection('disputes').doc();
     const now = Timestamp.now();
-    const respondentId = role === 'borrower' ? lenderId : borrowerId;
+    const respondentId = loanId
+      ? role === 'borrower'
+        ? lenderId
+        : borrowerId
+      : '';
     const participantNames = await this.getUserDisplayNames([
       borrowerId,
       lenderId,
@@ -604,6 +706,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       resolution: null,
       acknowledgements: {},
       reopenCount: 0,
+      responseRequestedFrom: null,
       createdAt: now,
       updatedAt: now,
       resolvedAt: null,
@@ -623,7 +726,9 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       );
       if (!duplicates.empty)
         throw new ConflictException(
-          'An active dispute already exists for this loan and category.',
+          loanId
+            ? 'An active dispute already exists for this loan and category.'
+            : 'An active general dispute already exists for this category.',
         );
       transaction.create(ref, document);
       const eventRef = ref.collection('events').doc();
@@ -649,8 +754,25 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       userId,
       'dispute_created',
       'New dispute opened',
-      `${subject} was opened for loan ${loanId}.`,
+      loanId
+        ? `${subject} was opened for loan ${loanId}.`
+        : `${subject} was opened as a general platform dispute.`,
     );
+    await this.roleNotifications?.createAdmin({
+      eventType: 'dispute_created',
+      eventId: ref.id,
+      category: 'dispute',
+      title: 'New dispute requires review',
+      message: loanId
+        ? 'A loan participant opened a dispute for admin review.'
+        : 'A user opened a general platform dispute for admin review.',
+      severity: document.priority === 'critical' ? 'critical' : 'warning',
+      entityType: 'dispute',
+      entityId: ref.id,
+      actionLabel: 'Review dispute',
+      actionTarget: '/admin/disputes',
+      metadata: { status: 'open', priority: document.priority },
+    }).catch(() => undefined);
     return { success: true, dispute };
   }
 
@@ -709,7 +831,15 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     filters: AdminDisputeQuery = {},
   ) {
     let query: FirebaseFirestore.Query = this.db.collection('disputes');
-    if (filters.status) query = query.where('status', '==', filters.status);
+    if (filters.status === 'under_review') {
+      query = query.where('status', 'in', [
+        'under_review',
+        'in-progress',
+        'escalated',
+      ]);
+    } else if (filters.status) {
+      query = query.where('status', '==', filters.status);
+    }
     if (filters.priority)
       query = query.where('priority', '==', filters.priority);
     if (filters.assignedAdminId)
@@ -755,7 +885,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           count(disputes),
           count(disputes.where('status', '==', 'open')),
           count(
-            disputes.where('status', 'in', ['under_review', 'in-progress']),
+            disputes.where('status', 'in', [
+              'under_review',
+              'in-progress',
+              'escalated',
+            ]),
           ),
           count(disputes.where('status', '==', 'awaiting_response')),
           count(disputes.where('status', '==', 'escalated')),
@@ -820,12 +954,13 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     body: AddDisputeCommentDto,
   ) {
     const message = this.text(body.message, 'message', 1, 2000);
-    const documentIds = [...new Set(body.documentIds ?? [])];
-    await this.validateEvidence(role === 'admin' ? null : actorId, documentIds);
     const { ref, dispute } = await this.getRequired(disputeId);
     this.assertParticipant(dispute, actorId, role);
     if (dispute.status === 'closed')
       throw new BadRequestException('Closed disputes cannot receive comments.');
+    if (role !== 'admin') this.assertParticipantCanReply(dispute, actorId);
+    const documentIds = [...new Set(body.documentIds ?? [])];
+    await this.validateEvidence(role === 'admin' ? null : actorId, documentIds);
     const visibility =
       role === 'admin' && body.visibility === 'admin' ? 'admin' : 'shared';
     const returnsToReview =
@@ -834,6 +969,17 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     const now = Timestamp.now();
     const eventRef = ref.collection('events').doc();
     await this.db.runTransaction(async (transaction) => {
+      if (role !== 'admin') {
+        const currentSnapshot = await transaction.get(ref);
+        if (!currentSnapshot.exists)
+          throw new NotFoundException('Dispute not found.');
+        const current = this.mapDispute(
+          currentSnapshot.id,
+          currentSnapshot.data() ?? {},
+        );
+        this.assertParticipant(current, actorId, role);
+        this.assertParticipantCanReply(current, actorId);
+      }
       transaction.create(eventRef, {
         eventId: eventRef.id,
         ...this.eventData(
@@ -851,7 +997,11 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           },
         ),
       });
-      transaction.update(ref, { status: nextStatus, updatedAt: now });
+      transaction.update(ref, {
+        status: nextStatus,
+        updatedAt: now,
+        ...(returnsToReview ? { responseRequestedFrom: null } : {}),
+      });
       for (const id of documentIds)
         transaction.update(this.db.collection('documents').doc(id), {
           relatedEntityType: 'dispute',
@@ -859,7 +1009,12 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
           updatedAt: now,
         });
     });
-    const updated = { ...dispute, status: nextStatus, updatedAt: now };
+    const updated = {
+      ...dispute,
+      status: nextStatus,
+      updatedAt: now,
+      ...(returnsToReview ? { responseRequestedFrom: null } : {}),
+    };
     this.emit(updated, 'commented');
     if (role === 'admin')
       await this.auditAdminAction(
@@ -997,6 +1152,24 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     return { success: true, dispute: updated };
   }
 
+  async startReview(disputeId: string, adminId: string) {
+    const { dispute } = await this.getRequired(disputeId);
+    if (dispute.status !== 'open') {
+      return { success: true, dispute };
+    }
+    return {
+      success: true,
+      dispute: await this.transition(
+        disputeId,
+        adminId,
+        'admin',
+        'under_review',
+        'review_started',
+        'Admin started reviewing this dispute.',
+      ),
+    };
+  }
+
   async requestInformation(
     disputeId: string,
     adminId: string,
@@ -1013,6 +1186,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       'awaiting_response',
       'information_requested',
       `${requestedFrom}: ${note}`,
+      { responseRequestedFrom: requestedFrom },
     );
     await this.notify(
       updated,
@@ -1087,6 +1261,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         acknowledgements: {},
         reopenCount: 0,
         closedAt: null,
+        responseRequestedFrom: null,
       },
     );
     if (body.internalNotes?.trim())
@@ -1143,10 +1318,10 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         return;
       }
       const acknowledgements = { ...dispute.acknowledgements, [userId]: now };
-      both = Boolean(
-        acknowledgements[dispute.borrowerId] &&
-        acknowledgements[dispute.lenderId],
+      const participantIds = [dispute.borrowerId, dispute.lenderId].filter(
+        Boolean,
       );
+      both = participantIds.every((id) => Boolean(acknowledgements[id]));
       transaction.update(ref, {
         acknowledgements,
         status: both ? 'closed' : 'resolved',
@@ -1223,6 +1398,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
         acknowledgements: {},
         resolvedAt: null,
         closedAt: null,
+        responseRequestedFrom: null,
       },
     );
     await this.notify(
@@ -1245,7 +1421,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
       'closed',
       'closed',
       message,
-      { closedAt: now },
+      { closedAt: now, responseRequestedFrom: null },
     );
     await this.notify(
       updated,

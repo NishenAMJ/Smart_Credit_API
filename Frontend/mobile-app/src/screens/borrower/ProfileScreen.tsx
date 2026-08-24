@@ -11,10 +11,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import SidebarMenu from "../../components/common/SidebarMenu";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
+import { COLORS } from "../../constants/colors";
 import { profileService } from "../../api/services/profile.service";
 import { getApiErrorMessage } from "../../api/api-error";
 import { useAuth } from "../../context/AuthContext";
@@ -324,29 +326,26 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => setSidebarVisible(true)}>
-            <Feather name="menu" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.navigate("Notifications")}
-          >
-            <Feather name="bell" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Feather name="map-pin" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <BorrowerPageHeader
+        title="Profile"
+        onMenu={() => setSidebarVisible(true)}
+        actions={[
+          {
+            icon: "bell",
+            label: "Open notifications",
+            onPress: () => navigation.navigate("Notifications"),
+          },
+          {
+            icon: "map-pin",
+            label: "Find nearby lenders",
+            onPress: () => navigation.navigate("NearbyLendersMap"),
+          },
+        ]}
+      />
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       ) : (
         <ScrollView
@@ -354,10 +353,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
+            <BorrowerRefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#007AFF"
             />
           }
         >
@@ -396,7 +394,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             {detailRows.map((row) => (
               <View key={row.label} style={styles.detailRow}>
                 <View style={styles.rowLeft}>
-                  <Feather name={row.icon} size={16} color="#007AFF" />
+                  <Feather name={row.icon} size={16} color={COLORS.primary} />
                   <Text style={styles.detailLabel}>{row.label}</Text>
                 </View>
                 <Text style={styles.detailValue}>{row.value}</Text>
@@ -432,7 +430,11 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   </Text>
                 </View>
               </View>
-              <Feather name="chevron-right" size={18} color="#9CA3AF" />
+              <Feather
+                name="chevron-right"
+                size={18}
+                color={COLORS.textMuted}
+              />
             </TouchableOpacity>
             <View style={styles.scoreTrack}>
               <View
@@ -448,7 +450,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             {financeRows.map((row) => (
               <View key={row.label} style={styles.detailRow}>
                 <View style={styles.rowLeft}>
-                  <Feather name={row.icon} size={16} color="#007AFF" />
+                  <Feather name={row.icon} size={16} color={COLORS.primary} />
                   <Text style={styles.detailLabel}>{row.label}</Text>
                 </View>
                 <View style={styles.financeValueRow}>
@@ -457,7 +459,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                     <TouchableOpacity
                       style={{
                         marginLeft: 10,
-                        backgroundColor: "#007AFF",
+                        backgroundColor: COLORS.primary,
                         paddingHorizontal: 8,
                         paddingVertical: 4,
                         borderRadius: 4,
@@ -493,7 +495,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   style={styles.editButton}
                   onPress={onStartEditing}
                 >
-                  <Feather name="edit-2" size={14} color="#007AFF" />
+                  <Feather name="edit-2" size={14} color={COLORS.primary} />
                   <Text style={styles.editButtonText}>Edit</Text>
                 </TouchableOpacity>
               ) : null}
@@ -703,7 +705,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               Log out from this device and return to the sign in screen.
             </Text>
             <TouchableOpacity style={styles.logoutButton} onPress={onLogOut}>
-              <Feather name="log-out" size={16} color="#FFFFFF" />
+              <Feather name="log-out" size={16} color={COLORS.onPrimary} />
               <Text style={styles.logoutButtonText}>Log Out</Text>
             </TouchableOpacity>
           </View>
@@ -722,16 +724,16 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     paddingTop: 50,
     paddingBottom: 15,
     paddingHorizontal: 20,
@@ -746,7 +748,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
     marginLeft: 15,
   },
   headerRight: {
@@ -766,7 +768,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   profileCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     paddingVertical: 18,
     alignItems: "center",
@@ -793,17 +795,17 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#007AFF",
+    color: COLORS.primary,
   },
   name: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
   },
   subText: {
     marginTop: 4,
     fontSize: 13,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   completionBlock: {
     width: "82%",
@@ -816,26 +818,26 @@ const styles = StyleSheet.create({
   },
   completionLabel: {
     fontSize: 12,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   completionValue: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#007AFF",
+    color: COLORS.primary,
   },
   completionTrack: {
     height: 7,
     borderRadius: 999,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: COLORS.borderStrong,
     overflow: "hidden",
   },
   completionFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
   },
   sectionCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -869,7 +871,7 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#007AFF",
+    color: COLORS.primary,
   },
   scorePanel: {
     flexDirection: "row",
@@ -879,7 +881,7 @@ const styles = StyleSheet.create({
   },
   scoreLabel: {
     fontSize: 12,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginBottom: 4,
   },
   scoreValueRow: {
@@ -902,7 +904,7 @@ const styles = StyleSheet.create({
   scoreTrack: {
     height: 7,
     borderRadius: 999,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: COLORS.borderStrong,
     overflow: "hidden",
     marginBottom: 6,
   },
@@ -932,7 +934,7 @@ const styles = StyleSheet.create({
   detailLabel: {
     marginLeft: 8,
     fontSize: 13,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   detailValue: {
     fontSize: 13,
@@ -944,7 +946,7 @@ const styles = StyleSheet.create({
   },
   infoNote: {
     fontSize: 12,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginBottom: 10,
   },
   logoutButton: {
@@ -959,7 +961,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logoutButtonText: {
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
     fontSize: 15,
     fontWeight: "700",
   },
@@ -977,7 +979,7 @@ const styles = StyleSheet.create({
   readOnlyLabel: {
     flex: 1,
     fontSize: 13,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   lockedLabelRow: {
     flex: 1,
@@ -997,14 +999,14 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 12,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 10,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: COLORS.surfaceMuted,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
@@ -1040,8 +1042,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   lockedSecurityInput: {
-    color: "#6B7280",
-    backgroundColor: "#F3F4F6",
+    color: COLORS.textSecondary,
+    backgroundColor: COLORS.border,
   },
   editActions: {
     flexDirection: "row",
@@ -1055,7 +1057,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
   },
   cancelButtonText: {
     fontSize: 14,
@@ -1064,7 +1066,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 1,
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
@@ -1075,6 +1077,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
   },
 });

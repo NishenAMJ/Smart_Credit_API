@@ -2,7 +2,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { LenderLoansService } from './lender-loans.service';
 
 describe('LenderLoansService', () => {
-  it('maps schema-v2 money fields and nested installment progress', async () => {
+  it('paginates loan documents without reading installment subcollections', async () => {
     const createdAt = Timestamp.fromDate(new Date('2026-01-01T00:00:00Z'));
     const loanData = {
       lenderId: 'lender_001',
@@ -20,32 +20,40 @@ describe('LenderLoansService', () => {
       status: 'active',
       createdAt,
     };
-    const installmentDocs = [
-      { data: () => ({ status: 'paid', dueAt: createdAt }) },
-      {
-        data: () => ({
-          status: 'scheduled',
-          dueAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00Z')),
-        }),
-      },
-    ];
     const loanDoc = {
       id: 'loan_001',
       data: () => loanData,
-      ref: {
-        collection: jest.fn(() => ({
-          get: jest.fn().mockResolvedValue({ docs: installmentDocs }),
-        })),
-      },
     };
     const userRef = { id: 'borrower_001' };
+    const countResult = (count: number) => ({
+      get: jest.fn().mockResolvedValue({ data: () => ({ count }) }),
+    });
+    const query: any = {
+      aggregate: jest.fn(() => ({
+        get: jest.fn().mockResolvedValue({
+          data: () => ({
+            totalLoans: 1,
+            totalPrincipalMinor: 12000000,
+            outstandingBalanceMinor: 8480000,
+          }),
+        }),
+      })),
+      where: jest
+        .fn()
+        .mockImplementation((_field: string, _operator: string, value: string) =>
+          ({ count: () => countResult(value === 'active' ? 1 : 0) }),
+        ),
+      orderBy: jest.fn(),
+      limit: jest.fn(),
+      get: jest.fn().mockResolvedValue({ docs: [loanDoc] }),
+    };
+    query.orderBy.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
     const db = {
       collection: jest.fn((name: string) => {
         if (name === 'loans') {
           return {
-            where: jest.fn(() => ({
-              get: jest.fn().mockResolvedValue({ docs: [loanDoc] }),
-            })),
+            where: jest.fn(() => query),
           };
         }
 
@@ -79,12 +87,8 @@ describe('LenderLoansService', () => {
         id: 'borrower_001',
         fullName: 'Amal Perera',
       },
-      installmentProgress: {
-        total: 2,
-        paid: 1,
-        overdue: 0,
-        nextDueAt: '2026-08-01T00:00:00.000Z',
-      },
     });
+    expect(query.limit).toHaveBeenCalledWith(16);
+    expect((loanDoc as any).ref).toBeUndefined();
   });
 });

@@ -116,6 +116,9 @@ export default function LoanDetailsModal({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPayments, setShowPayments] = useState(initialShowPayments);
+  const [expandedInstallmentId, setExpandedInstallmentId] = useState<
+    string | null
+  >(null);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(
     createEmptyPaymentForm,
@@ -183,9 +186,18 @@ export default function LoanDetailsModal({
   const nextUnpaidInstallment = details?.installments.find(
     (installment) => getOutstanding(installment) > 0,
   );
+  const expandedInstallmentIndex =
+    details?.installments.findIndex(
+      (installment) => installment.id === expandedInstallmentId,
+    ) ?? -1;
+  const expandedInstallment =
+    expandedInstallmentIndex >= 0
+      ? details?.installments[expandedInstallmentIndex]
+      : null;
 
   function openPaymentForm(installment: LoanLedgerInstallmentDetail) {
     setShowPayments(true);
+    setExpandedInstallmentId(installment.id);
     setPaymentForm({
       installmentId: installment.id,
       amount: String(getOutstanding(installment)),
@@ -387,27 +399,55 @@ export default function LoanDetailsModal({
               {showPayments ? (
                 <div className="loan-details-payments">
                   {details.installments.length ? (
-                    details.installments.map((installment, index) => {
-                      const outstanding = getOutstanding(installment);
-                      const isFormOpen =
-                        paymentForm.installmentId === installment.id;
+                    <>
+                      <div
+                        className="loan-installment-tiles"
+                        aria-label="Monthly installments"
+                      >
+                        {details.installments.map((installment, index) => (
+                          <button
+                            className={`loan-installment-tile loan-installment-tile--${installment.status}${
+                              expandedInstallmentId === installment.id
+                                ? " loan-installment-tile--selected"
+                                : ""
+                            }`}
+                            type="button"
+                            key={installment.id}
+                            aria-pressed={
+                              expandedInstallmentId === installment.id
+                            }
+                            onClick={() => {
+                              setExpandedInstallmentId((current) =>
+                                current === installment.id
+                                  ? null
+                                  : installment.id,
+                              );
+                              setPaymentForm(createEmptyPaymentForm());
+                            }}
+                          >
+                            <strong>{index + 1}</strong>
+                            <span>{formatLabel(installment.status)}</span>
+                          </button>
+                        ))}
+                      </div>
 
-                      return (
-                        <article
-                          className="loan-installment-record"
-                          key={installment.id}
-                        >
+                      {expandedInstallment ? (
+                        <article className="loan-installment-record loan-installment-record--expanded">
                           <div className="loan-installment-record__header">
                             <div>
-                              <span>Installment {index + 1}</span>
-                              <strong>{formatDate(installment.dueDate)}</strong>
+                              <span>
+                                Installment {expandedInstallmentIndex + 1}
+                              </span>
+                              <strong>
+                                Due {formatDate(expandedInstallment.dueDate)}
+                              </strong>
                             </div>
                             <span
                               className={`badge ${getStatusBadgeClass(
-                                installment.status,
+                                expandedInstallment.status,
                               )}`}
                             >
-                              {formatLabel(installment.status)}
+                              {formatLabel(expandedInstallment.status)}
                             </span>
                           </div>
 
@@ -415,30 +455,43 @@ export default function LoanDetailsModal({
                             <div>
                               <span>Amount due</span>
                               <strong>
-                                {formatCurrency(installment.amount)}
+                                {formatCurrency(expandedInstallment.amount)}
                               </strong>
                             </div>
                             <div>
                               <span>Paid</span>
                               <strong>
-                                {formatCurrency(installment.paidAmount)}
+                                {formatCurrency(
+                                  expandedInstallment.paidAmount,
+                                )}
                               </strong>
                             </div>
                             <div>
                               <span>Outstanding</span>
-                              <strong>{formatCurrency(outstanding)}</strong>
+                              <strong>
+                                {formatCurrency(
+                                  getOutstanding(expandedInstallment),
+                                )}
+                              </strong>
                             </div>
                             <button
                               className="button button-secondary"
                               type="button"
-                              disabled={outstanding <= 0}
-                              onClick={() => openPaymentForm(installment)}
+                              disabled={
+                                getOutstanding(expandedInstallment) <= 0
+                              }
+                              onClick={() =>
+                                openPaymentForm(expandedInstallment)
+                              }
                             >
-                              {outstanding > 0 ? "Record payment" : "Paid"}
+                              {getOutstanding(expandedInstallment) > 0
+                                ? "Record payment"
+                                : "Paid"}
                             </button>
                           </div>
 
-                          {isFormOpen ? (
+                          {paymentForm.installmentId ===
+                          expandedInstallment.id ? (
                             <div className="loan-payment-form">
                               <div className="loan-payment-form__heading">
                                 <div>
@@ -448,7 +501,9 @@ export default function LoanDetailsModal({
                                     details.
                                   </span>
                                 </div>
-                                <span>Installment {index + 1}</span>
+                                <span>
+                                  Installment {expandedInstallmentIndex + 1}
+                                </span>
                               </div>
                               <div className="loan-payment-form__grid">
                                 <label className="loan-payment-field">
@@ -526,11 +581,6 @@ export default function LoanDetailsModal({
                                 </label>
                               </div>
 
-                              <p className="loan-payment-form__note">
-                                The installment is recorded once and settled in
-                                full.
-                              </p>
-
                               {paymentForm.error ? (
                                 <p className="create-ad-banner create-ad-banner--error">
                                   {paymentForm.error}
@@ -552,7 +602,9 @@ export default function LoanDetailsModal({
                                   type="button"
                                   disabled={paymentForm.isSaving}
                                   onClick={() =>
-                                    void handleRecordPayment(installment.id)
+                                    void handleRecordPayment(
+                                      expandedInstallment.id,
+                                    )
                                   }
                                 >
                                   {paymentForm.isSaving
@@ -563,9 +615,9 @@ export default function LoanDetailsModal({
                             </div>
                           ) : null}
 
-                          {installment.payments.length ? (
+                          {expandedInstallment.payments.length ? (
                             <div className="loan-installment-record__payments">
-                              {installment.payments.map((payment) => (
+                              {expandedInstallment.payments.map((payment) => (
                                 <div
                                   className="loan-ledger-payment-row"
                                   key={payment.id}
@@ -590,8 +642,13 @@ export default function LoanDetailsModal({
                             </div>
                           ) : null}
                         </article>
-                      );
-                    })
+                      ) : (
+                        <p className="loan-installment-hint">
+                          Select an installment to view its amounts and payment
+                          history.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <div className="loan-details-state">
                       No installments are available for this loan.

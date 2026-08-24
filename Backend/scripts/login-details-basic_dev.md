@@ -7,7 +7,9 @@ Default password: `SmartCredit@123`
 
 | Role(s) | User ID | Email | Phone | Password | Account Status | KYC Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| `admin` | `admin_001` | `admin@smartcredit.lk` | `+94710000001` | `SmartCredit@123` | `active` | `approved` |
+| `admin` | `admin_001` | `admin@smartcredit.lk` | `
+admin password: `SmartCredit@1234`
++94710000001` | `SmartCredit@123` | `active` | `approved` |
 | `lender` | `lender_001` | `kamal@smartcredit.lk` | `+94710000002` | `SmartCredit@123` | `active` | `approved` |
 | `borrower` | `borrower_001` | `amal@gmail.com` | `+94710000003` | `SmartCredit@123` | `active` | `approved` |
 | `borrower\|lender` | `multi_role_001` | `nimal@gmail.com` | `+94710000004` | `SmartCredit@123` | `active` | `approved` |

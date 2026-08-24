@@ -3,7 +3,10 @@ import { Timestamp, WriteBatch } from 'firebase-admin/firestore';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { LenderNotificationDraftFactory } from './lender-notification-draft.factory';
 import { LenderNotificationSyncDataService } from './lender-notification-sync-data.service';
-import type { LenderNotificationDraft as NotificationDraft } from './lender-notification-writer.service';
+import {
+  lenderNotificationId,
+  type LenderNotificationDraft as NotificationDraft,
+} from './lender-notification-writer.service';
 
 @Injectable()
 export class LenderNotificationSyncService {
@@ -48,7 +51,9 @@ export class LenderNotificationSyncService {
 
     const db = this.firebaseService.getDb();
     const refs = drafts.map((draft) =>
-      db.collection('notifications').doc(draft.id),
+      db
+        .collection('notifications')
+        .doc(lenderNotificationId(draft.lenderId, draft.id)),
     );
     const existingSnapshots = await db.getAll(...refs);
     const existingMap = new Map(
@@ -60,7 +65,7 @@ export class LenderNotificationSyncService {
       this.setNotificationDocument(
         batch,
         draft,
-        existingMap.get(draft.id) ?? {},
+        existingMap.get(lenderNotificationId(draft.lenderId, draft.id)) ?? {},
       );
     });
     await batch.commit();
@@ -71,6 +76,9 @@ export class LenderNotificationSyncService {
     draft: NotificationDraft,
     existing: Record<string, unknown>,
   ): void {
+    if (existing.userId && existing.userId !== draft.lenderId) {
+      throw new Error('Notification ID belongs to another lender.');
+    }
     const readAt =
       existing.readAt instanceof Timestamp
         ? existing.readAt
@@ -79,10 +87,14 @@ export class LenderNotificationSyncService {
           : null;
 
     batch.set(
-      this.firebaseService.getDb().collection('notifications').doc(draft.id),
+      this.firebaseService
+        .getDb()
+        .collection('notifications')
+        .doc(lenderNotificationId(draft.lenderId, draft.id)),
       {
-        notificationId: draft.id,
+        notificationId: lenderNotificationId(draft.lenderId, draft.id),
         userId: draft.lenderId,
+        audienceRole: 'lender',
         category: draft.category,
         eventType: draft.eventType,
         title: draft.title,

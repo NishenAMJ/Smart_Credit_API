@@ -10,7 +10,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { getApiErrorMessage } from "../../api/api-error";
@@ -19,6 +18,9 @@ import EmptyState from "../../components/common/EmptyState";
 import Loader from "../../components/common/Loader";
 import LoanCard from "../../components/borrower/LoanCard";
 import SidebarMenu from "../../components/common/SidebarMenu";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
+import { COLORS } from "../../constants/colors";
 import type { BorrowerLoan } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
 
@@ -153,13 +155,13 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
   ];
 
   useEffect(() => {
-    void fetchFeaturedLoans();
+    void fetchAvailableLoans();
   }, []);
 
-  const fetchFeaturedLoans = async () => {
+  const fetchAvailableLoans = async () => {
     try {
       setErrorMessage("");
-      const response = await loanService.getFeaturedLoans();
+      const response = await loanService.getAvailableLoans();
       const loans = response.data ?? [];
 
       if (loans.length === 0) {
@@ -183,12 +185,12 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    void fetchFeaturedLoans();
+    void fetchAvailableLoans();
   }, []);
 
   const handleSearch = async () => {
     if (searchQuery.trim() === "") {
-      void fetchFeaturedLoans();
+      void fetchAvailableLoans();
       return;
     }
 
@@ -300,28 +302,22 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => setSidebarVisible(true)}>
-            <Feather name="menu" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Find Loans</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.navigate("Notifications")}
-          >
-            <Feather name="bell" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.navigate("NearbyLendersMap")}
-          >
-            <Feather name="map-pin" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <BorrowerPageHeader
+        title="Find Loans"
+        onMenu={() => setSidebarVisible(true)}
+        actions={[
+          {
+            icon: "bell",
+            label: "Open notifications",
+            onPress: () => navigation.navigate("Notifications"),
+          },
+          {
+            icon: "map-pin",
+            label: "Find nearby lenders",
+            onPress: () => navigation.navigate("NearbyLendersMap"),
+          },
+        ]}
+      />
 
       <TouchableOpacity
         style={styles.mapBanner}
@@ -329,7 +325,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
         activeOpacity={0.9}
       >
         <View style={styles.mapBannerIcon}>
-          <Feather name="map-pin" size={18} color="#007AFF" />
+          <Feather name="map-pin" size={18} color={COLORS.primary} />
         </View>
         <View style={styles.mapBannerText}>
           <Text style={styles.mapBannerTitle}>Find nearby lenders</Text>
@@ -337,12 +333,12 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
             Open the map and sort lenders by distance.
           </Text>
         </View>
-        <Feather name="chevron-right" size={20} color="#6B7280" />
+        <Feather name="chevron-right" size={20} color={COLORS.textSecondary} />
       </TouchableOpacity>
 
       <View style={styles.searchContainer}>
         <TouchableOpacity style={styles.searchIcon} onPress={handleSearch}>
-          <Feather name="search" size={20} color="#007AFF" />
+          <Feather name="search" size={20} color={COLORS.primary} />
         </TouchableOpacity>
 
         <TextInput
@@ -353,7 +349,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
           onChangeText={(text) => {
             setSearchQuery(text);
             if (text.trim() === "") {
-              void fetchFeaturedLoans();
+              void fetchAvailableLoans();
             }
           }}
           onSubmitEditing={handleSearch}
@@ -365,10 +361,10 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
             style={styles.filterIcon}
             onPress={() => {
               setSearchQuery("");
-              void fetchFeaturedLoans();
+              void fetchAvailableLoans();
             }}
           >
-            <Feather name="x-circle" size={20} color="#9CA3AF" />
+            <Feather name="x-circle" size={20} color={COLORS.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -396,7 +392,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
               <Feather
                 name="chevron-down"
                 size={14}
-                color="#1A1A1A"
+                color={COLORS.textPrimary}
                 style={styles.filterChipIcon}
               />
             </TouchableOpacity>
@@ -411,10 +407,9 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
         contentContainerStyle={styles.loanList}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
+          <BorrowerRefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#007AFF"
           />
         }
         ListEmptyComponent={
@@ -447,7 +442,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
                 style={styles.dropdownCloseButton}
                 onPress={() => setActiveDropdown(null)}
               >
-                <Feather name="x" size={20} color="#6B7280" />
+                <Feather name="x" size={20} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -493,7 +488,7 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
                       Any
                     </Text>
                     {selectedLocation === "Any" ? (
-                      <Feather name="check" size={18} color="#007AFF" />
+                      <Feather name="check" size={18} color={COLORS.primary} />
                     ) : null}
                   </TouchableOpacity>
                 </View>
@@ -521,7 +516,11 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
                         {option}
                       </Text>
                       {isSelected ? (
-                        <Feather name="check" size={18} color="#007AFF" />
+                        <Feather
+                          name="check"
+                          size={18}
+                          color={COLORS.primary}
+                        />
                       ) : null}
                     </TouchableOpacity>
                   );
@@ -544,16 +543,16 @@ export default function FindLoansScreen({ navigation }: FindLoansScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     paddingTop: 50,
     paddingBottom: 15,
     paddingHorizontal: 20,
@@ -568,7 +567,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
     marginLeft: 15,
   },
   headerRight: {
@@ -578,7 +577,7 @@ const styles = StyleSheet.create({
     marginLeft: 15,
   },
   mapBanner: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     marginHorizontal: 15,
     marginTop: 14,
     borderRadius: 8,
@@ -607,15 +606,15 @@ const styles = StyleSheet.create({
   mapBannerTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
   },
   mapBannerSubtitle: {
     fontSize: 12,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginTop: 2,
   },
   searchContainer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     margin: 15,
     marginTop: 12,
     borderRadius: 10,
@@ -635,7 +634,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 15,
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
   },
   filterIcon: {
     padding: 5,
@@ -649,7 +648,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   filterChip: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 8,
@@ -678,12 +677,12 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: 11,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   filterValue: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginTop: 3,
   },
   loanList: {
@@ -691,7 +690,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   loanCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 15,
     marginBottom: 15,
@@ -718,7 +717,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#007AFF",
+    color: COLORS.primary,
   },
   lenderDetails: {
     flex: 1,
@@ -726,22 +725,22 @@ const styles = StyleSheet.create({
   lenderName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginBottom: 4,
   },
   loanAmount: {
     fontSize: 13,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginBottom: 2,
   },
   duration: {
     fontSize: 13,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   totalAmount: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
   },
   loanBadges: {
     flexDirection: "row",
@@ -766,11 +765,11 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontWeight: "500",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginRight: 4,
   },
   applyButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
@@ -778,7 +777,7 @@ const styles = StyleSheet.create({
   applyButtonText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
   },
   emptyState: {
     alignItems: "center",
@@ -786,7 +785,7 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 14,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   dropdownOverlay: {
     flex: 1,
@@ -794,7 +793,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   dropdownSheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     paddingBottom: 24,
@@ -810,12 +809,12 @@ const styles = StyleSheet.create({
   dropdownTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginBottom: 4,
   },
   dropdownSubtitle: {
     fontSize: 13,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   dropdownCloseButton: {
     padding: 4,
@@ -830,11 +829,11 @@ const styles = StyleSheet.create({
   },
   locationInputLabel: {
     fontSize: 13,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginBottom: 8,
   },
   locationInput: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: COLORS.surfaceMuted,
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 10,
@@ -870,10 +869,10 @@ const styles = StyleSheet.create({
   },
   dropdownOptionText: {
     fontSize: 15,
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     fontWeight: "500",
   },
   dropdownOptionTextActive: {
-    color: "#007AFF",
+    color: COLORS.primary,
   },
 });

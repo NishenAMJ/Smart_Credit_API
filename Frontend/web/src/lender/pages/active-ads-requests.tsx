@@ -2,14 +2,12 @@ import { useEffect, useState } from "react";
 import {
   BadgeCheck,
   Ban,
-  CalendarDays,
+  Check,
   CreditCard,
   Eye,
   Landmark,
-  Percent,
   Plus,
   Rocket,
-  Timer,
   X,
 } from "lucide-react";
 import BorrowerSidePanel from "../components/borrowers/BorrowerSidePanel";
@@ -120,42 +118,32 @@ function AdvertisementCard({
   return (
     <article className="lender-ad-card">
       <header className="lender-ad-card__header">
+        <div className="lender-ad-card__identity">
+          <p className="lender-ad-card__audience">{ad.borrowerFocus}</p>
+          <h3>{ad.title}</h3>
+        </div>
         <span
           className={`lender-ad-status lender-ad-status--${ad.status.replaceAll("_", "-")}`}
         >
           {formatLabel(ad.status)}
         </span>
-        <span className="lender-ad-card__date">
-          <CalendarDays size={14} /> {formatDate(ad.createdAt)}
-        </span>
       </header>
 
-      <div className="lender-ad-card__content">
-        <p className="lender-ad-card__audience">{ad.borrowerFocus}</p>
-        <h3>{ad.title}</h3>
-        <p className="lender-ad-card__description">
-          {ad.description || "No description was provided."}
-        </p>
+      <div className="lender-ad-card__amount">
+        <span>Available amount</span>
+        <strong>
+          {formatCurrency(ad.minAmount)} – {formatCurrency(ad.maxAmount)}
+        </strong>
       </div>
 
       <dl className="lender-ad-card__terms">
         <div>
-          <dt>Amount range</dt>
-          <dd>
-            {formatCurrency(ad.minAmount)} – {formatCurrency(ad.maxAmount)}
-          </dd>
+          <dt>Applications</dt>
+          <dd>{ad.applicationCount}</dd>
         </div>
         <div>
-          <dt>
-            <Percent size={14} /> Annual rate
-          </dt>
-          <dd>{ad.preferredInterestRate}%</dd>
-        </div>
-        <div>
-          <dt>
-            <Timer size={14} /> Maximum term
-          </dt>
-          <dd>{ad.maxTenureMonths} months</dd>
+          <dt>Funded loans</dt>
+          <dd>{ad.fundedLoansCount}</dd>
         </div>
       </dl>
 
@@ -174,7 +162,7 @@ function AdvertisementCard({
               className="button button-primary"
               onClick={onReviewRequests}
             >
-              View borrower requests
+              Requests
             </button>
             <button
               type="button"
@@ -187,7 +175,7 @@ function AdvertisementCard({
             </button>
           </>
         ) : (
-          <p>
+          <p className="lender-ad-card__next-state">
             {ad.status === "pending_review"
               ? "Waiting for admin approval"
               : "Not currently visible to borrowers"}
@@ -388,9 +376,11 @@ function BoostAdDialog({
   const [bankAccount, setBankAccount] = useState<Record<string, string>>({});
   const [planId, setPlanId] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"card" | "bank_transfer">("card");
+  const [paymentMethods, setPaymentMethods] = useState({ card: false, bankTransfer: false });
   const [receipt, setReceipt] = useState<File | null>(null);
   const [bankReference, setBankReference] = useState("");
   const [busy, setBusy] = useState(false);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingBoostId, setPendingBoostId] = useState<string | null>(null);
 
@@ -400,8 +390,13 @@ function BoostAdDialog({
         setPlans(result.plans);
         setPlanId(result.plans[0]?.id ?? "");
         setBankAccount(result.bankAccount);
+        setPaymentMethods(result.paymentMethods);
+        if (result.paymentMethods.card) setPaymentMethod("card");
+        else if (result.paymentMethods.bankTransfer) setPaymentMethod("bank_transfer");
+        else setError("Boost payments are not configured yet. Your advertisement remains active without a boost.");
       })
-      .catch((failure) => setError(failure instanceof Error ? failure.message : "Failed to load boost plans."));
+      .catch((failure) => setError(failure instanceof Error ? failure.message : "Failed to load boost plans."))
+      .finally(() => setIsLoadingPlans(false));
   }, []);
 
   const selectedPlan = plans.find((plan) => plan.id === planId);
@@ -435,42 +430,131 @@ function BoostAdDialog({
 
   return (
     <div className="borrower-modal__backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="borrower-modal pending-request-modal" role="dialog" aria-modal="true" aria-labelledby="boost-ad-title">
-        <header className="borrower-modal__header">
-          <div>
-            <p className="eyebrow">Optional promotion</p>
-            <h2 className="section-title" id="boost-ad-title">Boost {ad.title}</h2>
-            <p className="section-subtitle">Your ad stays active even if you do not purchase a boost.</p>
+      <section className="borrower-modal boost-dialog" role="dialog" aria-modal="true" aria-labelledby="boost-ad-title">
+        <header className="borrower-modal__header boost-dialog__header">
+          <div className="boost-dialog__title-group">
+            <span className="boost-dialog__title-icon" aria-hidden="true">
+              <Rocket size={20} />
+            </span>
+            <div>
+              <p className="eyebrow">Advertisement promotion</p>
+              <h2 className="section-title" id="boost-ad-title">Boost your reach</h2>
+              <p className="section-subtitle">Promote “{ad.title}” for a fixed period.</p>
+            </div>
           </div>
           <button type="button" className="borrower-modal__close" onClick={onClose} aria-label="Close boost dialog"><X size={18} /></button>
         </header>
-        <div className="borrower-modal__body">
+        <div className="borrower-modal__body boost-dialog__body">
           {error ? <div className="sms-alert sms-alert--error" role="alert">{error}</div> : null}
-          <div className="create-ad-form-grid">
-            <label className="create-ad-field create-ad-field--full">
-              <span className="create-ad-field__label">Boost plan</span>
-              <select className="input" value={planId} onChange={(event) => setPlanId(event.target.value)}>
-                {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - LKR {(plan.amountMinor / 100).toLocaleString()}</option>)}
-              </select>
-            </label>
-          </div>
-          <div className="tabs">
-            <button type="button" className={`tab ${paymentMethod === "card" ? "active" : ""}`} onClick={() => setPaymentMethod("card")}><CreditCard size={16} /> Card</button>
-            <button type="button" className={`tab ${paymentMethod === "bank_transfer" ? "active" : ""}`} onClick={() => setPaymentMethod("bank_transfer")}><Landmark size={16} /> Bank transfer</button>
-          </div>
-          {paymentMethod === "bank_transfer" ? (
-            <div className="create-ad-form-grid">
-              <p className="create-ad-field create-ad-field--full">
-                Pay {selectedPlan ? `LKR ${(selectedPlan.amountMinor / 100).toLocaleString()}` : "the plan fee"} to {bankAccount.bankName || "the platform bank account"}, {bankAccount.accountName} {bankAccount.accountNumber} {bankAccount.branch}.
-              </p>
-              <label className="create-ad-field"><span className="create-ad-field__label">Bank reference</span><input className="input" value={bankReference} onChange={(event) => setBankReference(event.target.value)} /></label>
-              <label className="create-ad-field"><span className="create-ad-field__label">Payment receipt</span><input className="input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setReceipt(event.target.files?.[0] ?? null)} /></label>
+          {isLoadingPlans ? (
+            <div className="borrower-modal__state">Loading boost options...</div>
+          ) : (
+            <div className="boost-dialog__layout">
+              <div className="boost-dialog__form">
+                <section className="boost-dialog__section" aria-labelledby="boost-plan-label">
+                  <div className="boost-dialog__section-heading">
+                    <span>1</span>
+                    <div>
+                      <h3 id="boost-plan-label">Choose a promotion period</h3>
+                      <p>One-time price with no automatic renewal.</p>
+                    </div>
+                  </div>
+                  <div className="boost-dialog__plan-grid">
+                    {plans.map((plan) => {
+                      const isSelected = plan.id === planId;
+                      return (
+                        <button
+                          key={plan.id}
+                          type="button"
+                          className={`boost-dialog__plan${isSelected ? " boost-dialog__plan--selected" : ""}`}
+                          aria-pressed={isSelected}
+                          onClick={() => setPlanId(plan.id)}
+                        >
+                          <span>{plan.name}</span>
+                          <strong>LKR {(plan.amountMinor / 100).toLocaleString()}</strong>
+                          {isSelected ? <Check size={16} aria-hidden="true" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="boost-dialog__section" aria-labelledby="boost-payment-label">
+                  <div className="boost-dialog__section-heading">
+                    <span>2</span>
+                    <div>
+                      <h3 id="boost-payment-label">Select payment method</h3>
+                      <p>Availability is controlled by the platform configuration.</p>
+                    </div>
+                  </div>
+                  <div className="boost-dialog__payment-grid">
+                    <button
+                      type="button"
+                      disabled={!paymentMethods.card}
+                      className={`boost-dialog__payment${paymentMethod === "card" && paymentMethods.card ? " boost-dialog__payment--selected" : ""}`}
+                      aria-pressed={paymentMethod === "card"}
+                      onClick={() => setPaymentMethod("card")}
+                    >
+                      <CreditCard size={19} />
+                      <span><strong>Card payment</strong><small>{paymentMethods.card ? "Secure PayHere checkout" : "Not configured"}</small></span>
+                      {paymentMethod === "card" && paymentMethods.card ? <Check size={16} /> : null}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!paymentMethods.bankTransfer}
+                      className={`boost-dialog__payment${paymentMethod === "bank_transfer" && paymentMethods.bankTransfer ? " boost-dialog__payment--selected" : ""}`}
+                      aria-pressed={paymentMethod === "bank_transfer"}
+                      onClick={() => setPaymentMethod("bank_transfer")}
+                    >
+                      <Landmark size={19} />
+                      <span><strong>Bank transfer</strong><small>{paymentMethods.bankTransfer ? "Receipt verification" : "Not configured"}</small></span>
+                      {paymentMethod === "bank_transfer" && paymentMethods.bankTransfer ? <Check size={16} /> : null}
+                    </button>
+                  </div>
+                </section>
+
+                {paymentMethod === "bank_transfer" && paymentMethods.bankTransfer ? (
+                  <section className="boost-dialog__bank-panel" aria-labelledby="boost-bank-label">
+                    <div>
+                      <p className="eyebrow" id="boost-bank-label">Transfer destination</p>
+                      <dl className="boost-dialog__bank-details">
+                        <div><dt>Bank</dt><dd>{bankAccount.bankName}</dd></div>
+                        <div><dt>Account name</dt><dd>{bankAccount.accountName}</dd></div>
+                        <div><dt>Account number</dt><dd>{bankAccount.accountNumber}</dd></div>
+                        <div><dt>Branch</dt><dd>{bankAccount.branch}</dd></div>
+                      </dl>
+                    </div>
+                    <div className="boost-dialog__bank-form">
+                      <label className="create-ad-field">
+                        <span className="create-ad-field__label">Bank reference</span>
+                        <input className="input" value={bankReference} placeholder="Enter transaction reference" onChange={(event) => setBankReference(event.target.value)} />
+                      </label>
+                      <label className="create-ad-field">
+                        <span className="create-ad-field__label">Payment receipt</span>
+                        <input className="input boost-dialog__file-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setReceipt(event.target.files?.[0] ?? null)} />
+                        <small>{receipt ? receipt.name : "JPG, PNG, WEBP or PDF"}</small>
+                      </label>
+                    </div>
+                  </section>
+                ) : null}
+              </div>
+
+              <aside className="boost-dialog__summary" aria-label="Boost order summary">
+                <p className="eyebrow">Order summary</p>
+                <h3>{selectedPlan?.name ?? "Select a plan"}</h3>
+                <dl>
+                  <div><dt>Advertisement</dt><dd>{ad.title}</dd></div>
+                  <div><dt>Payment</dt><dd>{paymentMethod === "card" ? "Card" : "Bank transfer"}</dd></div>
+                  <div className="boost-dialog__summary-total"><dt>Total</dt><dd>{selectedPlan ? `LKR ${(selectedPlan.amountMinor / 100).toLocaleString()}` : "—"}</dd></div>
+                </dl>
+                <p>Your advertisement remains active if you close this window without purchasing a boost.</p>
+              </aside>
             </div>
-          ) : null}
+          )}
         </div>
-        <footer className="borrower-modal__footer">
+        <footer className="boost-dialog__footer">
           <button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Not now</button>
-          <button type="button" className="button button-primary" onClick={() => void submit()} disabled={busy || !selectedPlan}>{busy ? "Processing..." : paymentMethod === "card" ? "Pay securely" : "Submit payment"}</button>
+          <button type="button" className="button button-primary" onClick={() => void submit()} disabled={busy || isLoadingPlans || !selectedPlan || (!paymentMethods.card && !paymentMethods.bankTransfer)}>{busy ? "Processing..." : paymentMethod === "card" ? "Continue to secure payment" : "Submit for verification"}</button>
         </footer>
       </section>
     </div>

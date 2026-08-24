@@ -1,5 +1,10 @@
 import { Module, Global } from '@nestjs/common';
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import {
+  applicationDefault,
+  cert,
+  getApps,
+  initializeApp,
+} from 'firebase-admin/app';
 import {
   getFirebaseProjectId,
   isFirebaseEmulatorEnabled,
@@ -24,15 +29,18 @@ import { FirebaseService } from './firebase.service';
           const firebaseConfig = useEmulator ? null : loadFirebaseConfig();
           const projectId = useEmulator
             ? getFirebaseProjectId()
-            : ((firebaseConfig as any).project_id ??
-              (firebaseConfig as any).projectId);
+            : ((firebaseConfig as any)?.project_id ??
+              (firebaseConfig as any)?.projectId ??
+              getFirebaseProjectId());
           const storageBucket =
             process.env.FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`;
           const app = initializeApp(
             useEmulator
               ? { projectId, storageBucket }
               : {
-                  credential: cert(firebaseConfig!),
+                  credential: firebaseConfig
+                    ? cert(firebaseConfig)
+                    : applicationDefault(),
                   projectId,
                   storageBucket,
                 },

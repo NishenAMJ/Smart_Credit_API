@@ -738,7 +738,7 @@ export class BorrowerService {
   async getActiveLoanAds() {
     const snapshot = await this.db
       .collection(this.ADS_COL)
-      .where('status', '==', 'active')
+      .where('status', 'in', ['active', 'approved'])
       .get();
 
     const now = Date.now();
@@ -1072,7 +1072,7 @@ export class BorrowerService {
       lenderId: loan.lenderId,
       amount: dto.amount,
       amountMinor: Math.round(dto.amount * 100),
-      platformFeeMinor: Math.round(dto.amount * 2),
+      platformFeeMinor: 0,
       principalPaid,
       interestPaid,
       paymentMethod: dto.paymentMethod,
@@ -1099,7 +1099,7 @@ export class BorrowerService {
       lenderId: loan.lenderId,
       amount: dto.amount,
       amountMinor: Math.round(dto.amount * 100),
-      platformFeeMinor: Math.round(dto.amount * 2),
+      platformFeeMinor: 0,
       type: 'repayment',
       status,
       paymentMethod: dto.paymentMethod,

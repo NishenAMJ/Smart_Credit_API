@@ -45,11 +45,25 @@ export class ReceiptVerificationService {
         ({ data }) =>
           readString(data.type) === 'repayment' &&
           readString(data.paymentMethod) === 'bank_transfer' &&
-          Boolean(readString(data.receiptDocumentId)),
+          (Boolean(readString(data.receiptDocumentId)) ||
+            Boolean(readString(data.paymentProofUrl))),
       );
+    const recordsWithReceipts = (
+      await Promise.all(
+        records.map(async (record) => ({
+          ...record,
+          receiptDocumentId: await this.resolveReceiptDocumentId(record.data),
+        })),
+      )
+    ).filter(
+      (
+        record,
+      ): record is (typeof records)[number] & { receiptDocumentId: string } =>
+        Boolean(record.receiptDocumentId),
+    );
     const borrowerIds = [
       ...new Set(
-        records
+        recordsWithReceipts
           .map(({ data }) => readString(data.borrowerId))
           .filter((id): id is string => Boolean(id)),
       ),
@@ -65,8 +79,8 @@ export class ReceiptVerificationService {
         readString(user.data()?.fullName, user.data()?.name) ?? 'Borrower',
       ]),
     );
-    const submissions = records
-      .map(({ id, data }) => {
+    const submissions = recordsWithReceipts
+      .map(({ id, data, receiptDocumentId }) => {
         const createdAt = readDate(data.createdAt);
         const borrowerId = readString(data.borrowerId) ?? '';
         return {
@@ -77,7 +91,7 @@ export class ReceiptVerificationService {
           borrowerName: names.get(borrowerId) ?? 'Borrower',
           amount: readNumber(data.amountMinor) / 100,
           currency: readString(data.currency) ?? 'LKR',
-          receiptDocumentId: readString(data.receiptDocumentId) ?? '',
+          receiptDocumentId,
           submittedAt: createdAt?.toISOString() ?? null,
           status: 'pending_verification' as const,
         };
@@ -108,6 +122,19 @@ export class ReceiptVerificationService {
     const transactionRef = this.db
       .collection('transactions')
       .doc(transactionId);
+    const pendingSnapshot = await transactionRef.get();
+    if (!pendingSnapshot.exists) {
+      throw new NotFoundException('Receipt submission was not found.');
+    }
+    const pendingPayment = pendingSnapshot.data() ?? {};
+    if (readString(pendingPayment.lenderId) !== lenderId) {
+      throw new ForbiddenException(
+        'This receipt does not belong to your lending account.',
+      );
+    }
+    const resolvedReceiptDocumentId =
+      await this.resolveReceiptDocumentId(pendingPayment);
+
     const result = await this.db.runTransaction(async (transaction) => {
       const transactionSnapshot = await transaction.get(transactionRef);
       if (!transactionSnapshot.exists) {
@@ -137,7 +164,8 @@ export class ReceiptVerificationService {
       const loanId = readString(payment.loanId);
       const installmentId = readString(payment.installmentId);
       const repaymentId = readString(payment.repaymentId, payment.paymentId);
-      const documentId = readString(payment.receiptDocumentId);
+      const documentId =
+        readString(payment.receiptDocumentId) ?? resolvedReceiptDocumentId;
       if (!loanId || !installmentId || !repaymentId || !documentId) {
         throw new BadRequestException(
           'The receipt submission is missing required payment references.',
@@ -190,6 +218,7 @@ export class ReceiptVerificationService {
         };
         transaction.update(transactionRef, {
           status: 'rejected',
+          receiptDocumentId: documentId,
           verificationStatus: 'rejected',
           verifiedByLender: false,
           reviewedAt: now,
@@ -199,6 +228,7 @@ export class ReceiptVerificationService {
         });
         transaction.update(repaymentRef, {
           status: 'rejected',
+          receiptDocumentId: documentId,
           verificationStatus: 'rejected',
           verifiedByLender: false,
           reviewedAt: now,
@@ -233,6 +263,7 @@ export class ReceiptVerificationService {
       const completed = remainingBalanceMinor === 0;
       transaction.update(transactionRef, {
         status: 'completed',
+        receiptDocumentId: documentId,
         verificationStatus: 'approved',
         verifiedByLender: true,
         verifiedByLenderId: lenderId,
@@ -244,6 +275,7 @@ export class ReceiptVerificationService {
       });
       transaction.update(repaymentRef, {
         status: 'completed',
+        receiptDocumentId: documentId,
         verificationStatus: 'approved',
         verifiedByLender: true,
         verifiedByLenderId: lenderId,
@@ -281,5 +313,38 @@ export class ReceiptVerificationService {
     if (typeof value !== 'string') return null;
     const note = value.trim();
     return note ? note.slice(0, 500) : null;
+  }
+
+  private async resolveReceiptDocumentId(
+    payment: FirebaseFirestore.DocumentData,
+  ): Promise<string | null> {
+    const directDocumentId = readString(payment.receiptDocumentId);
+    if (directDocumentId) return directDocumentId;
+
+    const paymentProofUrl = readString(payment.paymentProofUrl);
+    const loanId = readString(payment.loanId);
+    const borrowerId = readString(payment.borrowerId);
+    if (!paymentProofUrl || !loanId || !borrowerId) return null;
+
+    const snapshot = await this.db
+      .collection('documents')
+      .where('relatedEntityId', '==', loanId)
+      .get();
+    const candidates = snapshot.docs.filter((document) => {
+      const data = document.data();
+      return (
+        readString(data.userId) === borrowerId &&
+        readString(data.category) === 'payment_receipt' &&
+        readString(data.relatedEntityType) === 'loan' &&
+        !['deleted', 'rejected'].includes(readString(data.status) ?? '')
+      );
+    });
+    const exactMatch = candidates.find(
+      (document) =>
+        readString(document.data().cloudinarySecureUrl) === paymentProofUrl,
+    );
+
+    if (exactMatch) return exactMatch.id;
+    return candidates.length === 1 ? candidates[0].id : null;
   }
 }

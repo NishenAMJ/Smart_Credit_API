@@ -17,7 +17,6 @@ export type AuditSeverity = "info" | "warning" | "critical" | "success";
 export type AuditTargetType = "user" | "ad" | "system" | "report";
 export type AdStatus =
   | "pending"
-  | "approved"
   | "rejected"
   | "active"
   | "closed";
@@ -75,10 +74,17 @@ async function apiRequest<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error(
+      "Unable to connect to the server. Please check that the backend is running and try again.",
+    );
+  }
 
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
@@ -326,6 +332,8 @@ export interface AdminTransaction {
   amount: number;
   platformFee: number;
   paymentType: string;
+  paymentMethod?: string;
+  externalReference?: string;
   status: string;
   verifiedByLender: boolean;
   createdAt?: string;
@@ -350,6 +358,12 @@ export interface RevenueReportResponse {
     platformFees: number;
     interestRevenue: number;
     revenueGrowth: number;
+    revenueBySource?: {
+      disbursementFees: number;
+      adBoostCharges: number;
+      otherPlatformFees: number;
+      repaymentFees: number;
+    } | null;
     revenueByMonth: Array<{
       month: string;
       revenue: number;
@@ -392,7 +406,6 @@ export interface AdStatsResponse {
   stats: {
     all: number;
     active: number;
-    approved: number;
     pending: number;
     rejected: number;
     closed: number;
@@ -401,6 +414,7 @@ export interface AdStatsResponse {
 
 export interface AuditLogEntry {
   id: string;
+  action: string;
   actionType:
     | "kyc_approved"
     | "kyc_rejected"
@@ -412,10 +426,17 @@ export interface AuditLogEntry {
     | "system_event";
   description: string;
   performedBy: string;
+  actorId: string;
   targetName: string;
-  targetType: AuditTargetType;
+  targetId: string;
+  targetType: AuditTargetType | "boost";
   dateTime: string;
   severity: AuditSeverity;
+  before: unknown;
+  after: unknown;
+  metadata: Record<string, unknown>;
+  ipAddress?: string;
+  sessionId?: string;
 }
 
 export interface AuditLogsResponse {
@@ -869,6 +890,8 @@ export function getDisputeEvidenceAccess(documentId: string) {
     documentId: string;
     accessUrl: string;
     expiresAt: string;
+    fileName: string;
+    mimeType: string;
   }>(`/documents/${documentId}/access`, { auth: true });
 }
 
@@ -892,10 +915,18 @@ export function changeDisputePriority(
   });
 }
 
+export function startDisputeReview(disputeId: string) {
+  return apiRequest<{ success: boolean; dispute: AdminDispute }>(
+    `/admin/disputes/${disputeId}/review`,
+    { method: "PATCH", auth: true },
+  );
+}
+
 export type AdminAdBoost = {
   boostId: string;
   listingId: string;
   lenderId: string;
+  lenderName?: string;
   status: string;
   paymentMethod: "bank_transfer" | "card";
   transactionId: string;
@@ -904,6 +935,10 @@ export type AdminAdBoost = {
   rejectionReason: string | null;
   createdAt: string | null;
   submittedAt: string | null;
+  reviewedAt: string | null;
+  reviewedByAdminId: string | null;
+  reviewedByAdminName?: string;
+  listingTitle?: string;
   startsAt: string | null;
   endsAt: string | null;
   plan: {
@@ -1015,10 +1050,26 @@ export function closeDispute(disputeId: string, reason: string) {
 
 import type { AgreementsResponse } from "../../legal/types";
 
-export function getLegalAgreements() {
-  return apiRequest<AgreementsResponse>("/legal/documents", {
-    auth: true,
-  });
+export async function getLegalAgreements(): Promise<AgreementsResponse> {
+  const documents: AgreementsResponse["documents"] = [];
+  let cursor: string | null = null;
+
+  do {
+    const query = new URLSearchParams({ pageSize: "50" });
+    if (cursor) query.set("cursor", cursor);
+
+    const response = await apiRequest<AgreementsResponse>(
+      `/legal/documents?${query.toString()}`,
+      { auth: true },
+    );
+    documents.push(...response.documents);
+    cursor = response.pageInfo.hasMore ? response.pageInfo.nextCursor : null;
+  } while (cursor);
+
+  return {
+    documents,
+    pageInfo: { hasMore: false, nextCursor: null },
+  };
 }
 
 export async function downloadLegalAgreement(

@@ -898,7 +898,9 @@ async function buildSchemaV2Fixtures(referenceDate = new Date()) {
   complete.transactions.forEach((transaction) => {
     transaction.platformFeeMinor =
       transaction.platformFeeMinor ??
-      Math.round(Number(transaction.amountMinor ?? 0) * 0.02);
+      (transaction.type === 'repayment'
+        ? 0
+        : Math.round(Number(transaction.amountMinor ?? 0) * 0.02));
   });
   return complete;
 }

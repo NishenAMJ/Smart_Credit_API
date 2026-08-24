@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -7,14 +7,16 @@ import {
   FileText,
   Flag,
   Eye,
+  ExternalLink,
   Inbox,
   LockKeyhole,
+  Maximize2,
   MessageSquareText,
+  Minimize2,
   RefreshCw,
   Search,
   Send,
   ShieldAlert,
-  UserCheck,
   UserRound,
   X,
   ChevronLeft,
@@ -22,16 +24,15 @@ import {
 } from "lucide-react";
 import {
   addAdminDisputeComment,
-  assignDispute,
   changeDisputePriority,
   closeDispute,
-  escalateDispute,
   getDisputeEvents,
   getDisputeEvidenceAccess,
   getDisputeStats,
   getDisputes,
   requestDisputeInformation,
   resolveCanonicalDispute,
+  startDisputeReview,
   type AdminDispute,
   type DisputeEvent,
   type DisputePriority,
@@ -40,6 +41,10 @@ import {
 import { subscribeToAdminDisputes } from "../../lib/dispute-realtime";
 import { formatFirestoreDate } from "../../lib/admin-format";
 import { useDebouncedValue } from "../../lib/use-debounced-value";
+import {
+  toEpochMillis,
+  useNewItemHighlights,
+} from "../../lib/use-new-item-highlights";
 import "./Disputes.css";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
@@ -51,7 +56,6 @@ const DISPUTE_STATUS_FILTERS: Array<{
   { value: "open", label: "Open" },
   { value: "under_review", label: "In review" },
   { value: "awaiting_response", label: "Awaiting" },
-  { value: "escalated", label: "Escalated" },
   { value: "resolved", label: "Resolved" },
   { value: "closed", label: "Closed" },
 ];
@@ -59,7 +63,8 @@ const DISPUTE_STATUS_FILTERS: Array<{
 type DisputeSummaryCard = {
   label: string;
   count: number;
-  tone: "primary" | "warning" | "info" | "danger" | "success";
+  tone: "primary" | "warning" | "info" | "success";
+  filter: DisputeStatus | "all";
 };
 
 type DisputeRow = {
@@ -77,12 +82,10 @@ type DisputeRow = {
   disputedAmount: string;
   evidenceUrls: string[];
   createdAt: string;
+  createdAtMs: number;
   updatedAt: string;
-  assignedAdminId: string;
   desiredOutcome: string;
   resolution: string;
-  escalationReason: string;
-  notes: string;
 };
 
 function mapDispute(dispute: AdminDispute): DisputeRow {
@@ -106,7 +109,7 @@ function mapDispute(dispute: AdminDispute): DisputeRow {
         ? dispute.borrowerName || dispute.borrowerId
         : dispute.lenderName || dispute.lenderId) ||
       dispute.respondentId ||
-      "Unknown",
+      (dispute.loanId ? "Unknown" : "Platform support"),
     description:
       dispute.description || dispute.title || "No description provided",
     category: dispute.category,
@@ -118,26 +121,29 @@ function mapDispute(dispute: AdminDispute): DisputeRow {
         : "N/A",
     evidenceUrls: dispute.evidenceDocumentIds || dispute.evidenceUrls || [],
     createdAt: formatFirestoreDate(dispute.createdAt),
+    createdAtMs: toEpochMillis(dispute.createdAt),
     updatedAt: formatFirestoreDate(dispute.updatedAt ?? dispute.createdAt),
-    assignedAdminId: dispute.assignedAdminId || dispute.assignedTo || "Unassigned",
     desiredOutcome: dispute.desiredOutcome || "No requested outcome provided",
     resolution: dispute.resolution?.summary || "N/A",
-    escalationReason: dispute.escalationReason || "N/A",
-    notes: dispute.notes || "N/A",
   };
 }
 
 function StatusBadge({ status }: { status: DisputeStatus }) {
+  const displayStatus = status === "escalated" ? "under_review" : status;
   return (
-    <span className={`admin-dispute-status admin-dispute-status--${status}`}>
-      {formatLabel(status)}
+    <span
+      className={`admin-dispute-status admin-dispute-status--${displayStatus}`}
+    >
+      {formatLabel(displayStatus)}
     </span>
   );
 }
 
 function PriorityBadge({ priority }: { priority: DisputePriority }) {
   return (
-    <span className={`admin-dispute-priority admin-dispute-priority--${priority}`}>
+    <span
+      className={`admin-dispute-priority admin-dispute-priority--${priority}`}
+    >
       {formatLabel(priority)}
     </span>
   );
@@ -153,23 +159,44 @@ function formatLabel(value: string) {
 function buildDisputeSummaryCards(counts: {
   all: number;
   open: number;
-  inProgress: number;
-  escalated: number;
+  inReview: number;
+  awaitingResponse: number;
   resolved: number;
+  closed: number;
 }): DisputeSummaryCard[] {
   return [
-    { label: "All cases", count: counts.all, tone: "primary" },
-    { label: "Open", count: counts.open, tone: "warning" },
-    { label: "In progress", count: counts.inProgress, tone: "info" },
-    { label: "Escalated", count: counts.escalated, tone: "danger" },
-    { label: "Resolved", count: counts.resolved, tone: "success" },
+    { label: "All cases", count: counts.all, tone: "primary", filter: "all" },
+    { label: "Open", count: counts.open, tone: "warning", filter: "open" },
+    {
+      label: "In review",
+      count: counts.inReview,
+      tone: "info",
+      filter: "under_review",
+    },
+    {
+      label: "Awaiting response",
+      count: counts.awaitingResponse,
+      tone: "warning",
+      filter: "awaiting_response",
+    },
+    {
+      label: "Resolved",
+      count: counts.resolved,
+      tone: "success",
+      filter: "resolved",
+    },
+    {
+      label: "Closed",
+      count: counts.closed,
+      tone: "primary",
+      filter: "closed",
+    },
   ];
 }
 
 function SummaryIcon({ tone }: { tone: DisputeSummaryCard["tone"] }) {
   if (tone === "warning") return <Clock3 size={19} />;
   if (tone === "info") return <MessageSquareText size={19} />;
-  if (tone === "danger") return <ShieldAlert size={19} />;
   if (tone === "success") return <CheckCircle2 size={19} />;
   return <Inbox size={19} />;
 }
@@ -190,6 +217,12 @@ export default function Disputes() {
   const [evidenceLoadingId, setEvidenceLoadingId] = useState<string | null>(
     null,
   );
+  const [evidencePreview, setEvidencePreview] = useState<{
+    accessUrl: string;
+    fileName: string;
+    mimeType: string;
+  } | null>(null);
+  const [isEvidenceFullscreen, setIsEvidenceFullscreen] = useState(false);
   const [error, setError] = useState("");
   const [globalCounts, setGlobalCounts] = useState<Record<string, number>>({});
   const [events, setEvents] = useState<DisputeEvent[]>([]);
@@ -207,9 +240,11 @@ export default function Disputes() {
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [totalLoaded, setTotalLoaded] = useState(0);
+  const latestLoadRequest = useRef(0);
 
   const loadDisputes = useCallback(
     async (cursor?: string) => {
+      const requestId = ++latestLoadRequest.current;
       setLoading(true);
       try {
         const response = await getDisputes({
@@ -218,13 +253,13 @@ export default function Disputes() {
           status: filterStatus === "all" ? undefined : filterStatus,
           search: debouncedSearch.trim() || undefined,
         });
+        if (requestId !== latestLoadRequest.current) return;
         const mappedDisputes = response.disputes.map(mapDispute);
         setDisputes(mappedDisputes);
         setSelectedDispute((current) => {
           if (!current) return null;
           return (
-            mappedDisputes.find((dispute) => dispute.id === current.id) ??
-            current
+            mappedDisputes.find((dispute) => dispute.id === current.id) ?? null
           );
         });
         setHasMore(response.hasMore ?? false);
@@ -232,11 +267,12 @@ export default function Disputes() {
         setTotalLoaded(response.count);
         setError("");
       } catch (err) {
+        if (requestId !== latestLoadRequest.current) return;
         setError(
           err instanceof Error ? err.message : "Failed to load disputes.",
         );
       } finally {
-        setLoading(false);
+        if (requestId === latestLoadRequest.current) setLoading(false);
       }
     },
     [debouncedSearch, filterStatus, pageSize],
@@ -278,17 +314,46 @@ export default function Disputes() {
   }, [selectedDispute?.id]);
 
   useEffect(() => {
-    if (!selectedDispute) return;
+    if (!selectedDispute && !evidencePreview) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedDispute(null);
+      if (event.key !== "Escape") return;
+      if (evidencePreview) {
+        setEvidencePreview(null);
+        setIsEvidenceFullscreen(false);
+        return;
+      }
+      setSelectedDispute(null);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [selectedDispute?.id]);
+  }, [evidencePreview, selectedDispute?.id]);
+
+  useEffect(() => {
+    if (!evidencePreview) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [evidencePreview]);
 
   const filteredDisputes = useMemo(() => disputes, [disputes]);
+  const newItemCandidates = useMemo(
+    () =>
+      disputes.map((dispute) => ({
+        id: dispute.id,
+        createdAtMs: dispute.createdAtMs,
+        actionable: dispute.status === "open",
+      })),
+    [disputes],
+  );
+  const newHighlights = useNewItemHighlights(
+    "disputes",
+    newItemCandidates,
+    !loading,
+  );
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;
@@ -320,21 +385,45 @@ export default function Disputes() {
     open:
       globalCounts.open ??
       disputes.filter((dispute) => dispute.status === "open").length,
-    inProgress:
-      globalCounts.under_review != null ||
-      globalCounts.awaiting_response != null
-        ? (globalCounts.under_review ?? 0) +
-          (globalCounts.awaiting_response ?? 0)
-        : disputes.filter((dispute) =>
-            ["under_review", "awaiting_response"].includes(dispute.status),
-          ).length,
-    escalated:
-      globalCounts.escalated ??
-      disputes.filter((dispute) => dispute.status === "escalated").length,
+    inReview:
+      globalCounts.under_review ??
+      disputes.filter((dispute) => dispute.status === "under_review").length,
+    awaitingResponse:
+      globalCounts.awaiting_response ??
+      disputes.filter((dispute) => dispute.status === "awaiting_response")
+        .length,
     resolved:
       globalCounts.resolved ??
       disputes.filter((dispute) => dispute.status === "resolved").length,
+    closed:
+      globalCounts.closed ??
+      disputes.filter((dispute) => dispute.status === "closed").length,
   };
+
+  function handleFilterChange(status: DisputeStatus | "all") {
+    setSelectedDispute(null);
+    setFilterStatus(status);
+  }
+
+  async function handleSelectDispute(dispute: DisputeRow) {
+    newHighlights.markSeen(dispute.id);
+    setSelectedDispute(dispute);
+    if (dispute.status !== "open") return;
+
+    try {
+      const response = await startDisputeReview(dispute.id);
+      const updated = mapDispute(response.dispute);
+      setDisputes((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setSelectedDispute(updated);
+      if (filterStatus === "open") setFilterStatus("under_review");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to start case review.",
+      );
+    }
+  }
 
   function syncStatus(
     id: string,
@@ -373,30 +462,6 @@ export default function Disputes() {
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to resolve dispute.",
-      );
-    }
-  }
-
-  async function handleClaim(dispute: DisputeRow) {
-    try {
-      await assignDispute(dispute.id);
-      syncStatus(dispute.id, "under_review");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to claim dispute.");
-    }
-  }
-
-  async function handleReassign(dispute: DisputeRow) {
-    const adminId = window.prompt(
-      "Enter the admin user ID to assign this case to:",
-    );
-    if (!adminId?.trim()) return;
-    try {
-      await assignDispute(dispute.id, adminId.trim());
-      await loadDisputes();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to reassign dispute.",
       );
     }
   }
@@ -463,19 +528,6 @@ export default function Disputes() {
     }
   }
 
-  async function handleEscalate(dispute: DisputeRow) {
-    const escalationReason = `Escalated ${dispute.priority} priority dispute for further investigation`;
-
-    try {
-      await escalateDispute(dispute.id, escalationReason);
-      syncStatus(dispute.id, "escalated", { escalationReason });
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to escalate dispute.",
-      );
-    }
-  }
-
   function canAct(dispute: DisputeRow) {
     return dispute.status !== "resolved" && dispute.status !== "closed";
   }
@@ -485,11 +537,10 @@ export default function Disputes() {
       setEvidenceLoadingId(documentId);
       setError("");
       const response = await getDisputeEvidenceAccess(documentId);
-      window.open(response.accessUrl, "_blank", "noopener,noreferrer");
+      setEvidencePreview(response);
+      setIsEvidenceFullscreen(false);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Evidence is unavailable.",
-      );
+      setError(err instanceof Error ? err.message : "Evidence is unavailable.");
     } finally {
       setEvidenceLoadingId(null);
     }
@@ -512,7 +563,10 @@ export default function Disputes() {
           onClick={() => void loadDisputes()}
           disabled={loading}
         >
-          <RefreshCw className={loading ? "admin-dispute-spin" : ""} size={17} />
+          <RefreshCw
+            className={loading ? "admin-dispute-spin" : ""}
+            size={17}
+          />
           Refresh queue
         </button>
       </header>
@@ -529,9 +583,14 @@ export default function Disputes() {
 
       <div className="admin-dispute-summary" aria-label="Dispute totals">
         {buildDisputeSummaryCards(counts).map((item) => (
-          <article
+          <button
             key={item.label}
-            className={`admin-dispute-summary__card admin-dispute-summary__card--${item.tone}`}
+            type="button"
+            className={`admin-dispute-summary__card admin-dispute-summary__card--${item.tone}${
+              filterStatus === item.filter ? " is-active" : ""
+            }`}
+            aria-pressed={filterStatus === item.filter}
+            onClick={() => handleFilterChange(item.filter)}
           >
             <span className="admin-dispute-summary__icon">
               <SummaryIcon tone={item.tone} />
@@ -540,7 +599,7 @@ export default function Disputes() {
               <p>{item.label}</p>
               <strong>{loading ? "—" : item.count}</strong>
             </div>
-          </article>
+          </button>
         ))}
       </div>
 
@@ -552,7 +611,7 @@ export default function Disputes() {
               type="button"
               className={filterStatus === option.value ? "is-active" : ""}
               aria-pressed={filterStatus === option.value}
-              onClick={() => setFilterStatus(option.value)}
+              onClick={() => handleFilterChange(option.value)}
             >
               {option.label}
             </button>
@@ -608,11 +667,16 @@ export default function Disputes() {
                   type="button"
                   className={`admin-dispute-case${
                     selectedDispute?.id === dispute.id ? " is-selected" : ""
-                  }`}
-                  onClick={() => setSelectedDispute(dispute)}
+                  }${newHighlights.isNew(dispute.id) ? " is-new" : ""}`}
+                  onClick={() => void handleSelectDispute(dispute)}
                 >
                   <div className="admin-dispute-case__topline">
-                    <StatusBadge status={dispute.status} />
+                    <div className="admin-dispute-case__badges">
+                      <StatusBadge status={dispute.status} />
+                      {newHighlights.isNew(dispute.id) && (
+                        <span className="admin-new-badge">New</span>
+                      )}
+                    </div>
                     <PriorityBadge priority={dispute.priority} />
                   </div>
                   <strong>{dispute.title}</strong>
@@ -669,7 +733,10 @@ export default function Disputes() {
                   <p>{selectedDispute.disputeCode}</p>
                   <h2>{selectedDispute.title}</h2>
                   <span>
-                    Loan {selectedDispute.loanId} · Created {selectedDispute.createdAt}
+                    {selectedDispute.loanId === "N/A"
+                      ? "General dispute"
+                      : `Loan ${selectedDispute.loanId}`} {" · Created "}
+                    {selectedDispute.createdAt}
                   </span>
                 </div>
                 <button
@@ -696,25 +763,29 @@ export default function Disputes() {
                   <strong>{formatLabel(selectedDispute.category)}</strong>
                 </div>
                 <div>
-                  <span>Assigned admin</span>
-                  <strong>{selectedDispute.assignedAdminId}</strong>
-                </div>
-                <div>
                   <span>Raised by</span>
                   <strong>{selectedDispute.raisedBy}</strong>
                 </div>
                 <div>
                   <span>Against</span>
-                  <strong>{selectedDispute.againstUser}</strong>
+                  <strong>
+                    {selectedDispute.againstUser === "Unknown"
+                      ? "Not specified"
+                      : selectedDispute.againstUser}
+                  </strong>
                 </div>
-                <div>
-                  <span>Transaction</span>
-                  <strong>{selectedDispute.transactionId}</strong>
-                </div>
-                <div>
-                  <span>Disputed amount</span>
-                  <strong>{selectedDispute.disputedAmount}</strong>
-                </div>
+                {selectedDispute.transactionId !== "N/A" ? (
+                  <div>
+                    <span>Transaction</span>
+                    <strong>{selectedDispute.transactionId}</strong>
+                  </div>
+                ) : null}
+                {selectedDispute.disputedAmount !== "N/A" ? (
+                  <div>
+                    <span>Disputed amount</span>
+                    <strong>{selectedDispute.disputedAmount}</strong>
+                  </div>
+                ) : null}
               </div>
 
               <section className="admin-dispute-section">
@@ -756,24 +827,92 @@ export default function Disputes() {
                 </section>
               ) : null}
 
-              {selectedDispute.resolution !== "N/A" ? (
-                <section className="admin-dispute-resolution admin-dispute-resolution--complete">
-                  <div>
-                    <CheckCircle2 size={19} />
-                    <strong>Recorded resolution</strong>
-                  </div>
-                  <p>{selectedDispute.resolution}</p>
-                </section>
-              ) : null}
+              {canAct(selectedDispute) ? (
+                <>
+                  <section className="admin-dispute-section admin-dispute-controls">
+                    <div className="admin-dispute-section__title">
+                      <div>
+                        <h3>Case priority</h3>
+                        <p>Set how urgently this dispute should be reviewed.</p>
+                      </div>
+                      <Flag size={18} />
+                    </div>
+                    <div className="admin-dispute-control-grid admin-dispute-control-grid--single">
+                      <label>
+                        <span>Priority</span>
+                        <select
+                          value={selectedDispute.priority}
+                          onChange={(event) =>
+                            void handlePriority(
+                              selectedDispute,
+                              event.target.value as DisputePriority,
+                            )
+                          }
+                        >
+                          {(["low", "medium", "high", "critical"] as const).map(
+                            (priority) => (
+                              <option key={priority} value={priority}>
+                                {formatLabel(priority)}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+                    </div>
+                  </section>
 
-              {selectedDispute.escalationReason !== "N/A" ? (
-                <section className="admin-dispute-resolution admin-dispute-resolution--escalated">
-                  <div>
-                    <ShieldAlert size={19} />
-                    <strong>Escalation reason</strong>
-                  </div>
-                  <p>{selectedDispute.escalationReason}</p>
-                </section>
+                  <section className="admin-dispute-composer">
+                    <div className="admin-dispute-section__title">
+                      <div>
+                        <h3>Case communication</h3>
+                        <p>
+                          Share an update or keep a private investigation note.
+                        </p>
+                      </div>
+                      <MessageSquareText size={18} />
+                    </div>
+                    <textarea
+                      rows={3}
+                      placeholder="Write a response, information request, or internal note..."
+                      value={caseMessage}
+                      onChange={(event) => setCaseMessage(event.target.value)}
+                    />
+                    <div className="admin-dispute-composer__actions">
+                      <label>
+                        <LockKeyhole size={15} />
+                        <select
+                          value={messageVisibility}
+                          onChange={(event) =>
+                            setMessageVisibility(
+                              event.target.value as "shared" | "admin",
+                            )
+                          }
+                        >
+                          <option value="shared">
+                            Visible to both parties
+                          </option>
+                          <option value="admin">Private admin note</option>
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="admin-dispute-button admin-dispute-button--secondary"
+                        disabled={!caseMessage.trim()}
+                        onClick={() => void handleRequestInfo(selectedDispute)}
+                      >
+                        Request information
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-dispute-button admin-dispute-button--primary"
+                        disabled={!caseMessage.trim()}
+                        onClick={() => void handleAddMessage(selectedDispute)}
+                      >
+                        <Send size={16} /> Add update
+                      </button>
+                    </div>
+                  </section>
+                </>
               ) : null}
 
               <section className="admin-dispute-section">
@@ -827,156 +966,68 @@ export default function Disputes() {
                     ))}
                   </div>
                 ) : (
-                  <p className="admin-dispute-muted">No timeline entries yet.</p>
+                  <p className="admin-dispute-muted">
+                    No timeline entries yet.
+                  </p>
                 )}
               </section>
 
+              {selectedDispute.resolution !== "N/A" ? (
+                <section className="admin-dispute-resolution admin-dispute-resolution--complete">
+                  <div>
+                    <CheckCircle2 size={19} />
+                    <strong>Recorded resolution</strong>
+                  </div>
+                  <p>{selectedDispute.resolution}</p>
+                </section>
+              ) : null}
+
               {canAct(selectedDispute) ? (
-                <>
-                  <section className="admin-dispute-section admin-dispute-controls">
-                    <div className="admin-dispute-section__title">
-                      <div>
-                        <h3>Case controls</h3>
-                        <p>Manage ownership, priority, and escalation.</p>
-                      </div>
-                      <Flag size={18} />
+                <section className="admin-dispute-composer admin-dispute-composer--resolution">
+                  <div className="admin-dispute-section__title">
+                    <div>
+                      <h3>Resolve case</h3>
+                      <p>
+                        Record the decision and any actions the parties must
+                        take.
+                      </p>
                     </div>
-                    <div className="admin-dispute-control-grid">
-                      <label>
-                        <span>Priority</span>
-                        <select
-                          value={selectedDispute.priority}
-                          onChange={(event) =>
-                            void handlePriority(
-                              selectedDispute,
-                              event.target.value as DisputePriority,
-                            )
-                          }
-                        >
-                          {(["low", "medium", "high", "critical"] as const).map(
-                            (priority) => (
-                              <option key={priority} value={priority}>
-                                {formatLabel(priority)}
-                              </option>
-                            ),
-                          )}
-                        </select>
-                      </label>
-                      <div className="admin-dispute-control-actions">
-                        <button
-                          type="button"
-                          className="admin-dispute-button admin-dispute-button--secondary"
-                          onClick={() => void handleClaim(selectedDispute)}
-                        >
-                          <UserCheck size={16} /> Claim
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-dispute-button admin-dispute-button--secondary"
-                          onClick={() => void handleReassign(selectedDispute)}
-                        >
-                          <UserRound size={16} /> Reassign
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-dispute-button admin-dispute-button--danger-ghost"
-                          onClick={() => void handleEscalate(selectedDispute)}
-                        >
-                          <ShieldAlert size={16} /> Escalate
-                        </button>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="admin-dispute-composer">
-                    <div className="admin-dispute-section__title">
-                      <div>
-                        <h3>Case communication</h3>
-                        <p>Share an update or keep a private investigation note.</p>
-                      </div>
-                      <MessageSquareText size={18} />
-                    </div>
-                    <textarea
-                      rows={3}
-                      placeholder="Write a response, information request, or internal note..."
-                      value={caseMessage}
-                      onChange={(event) => setCaseMessage(event.target.value)}
-                    />
-                    <div className="admin-dispute-composer__actions">
-                      <label>
-                        <LockKeyhole size={15} />
-                        <select
-                          value={messageVisibility}
-                          onChange={(event) =>
-                            setMessageVisibility(
-                              event.target.value as "shared" | "admin",
-                            )
-                          }
-                        >
-                          <option value="shared">Visible to both parties</option>
-                          <option value="admin">Private admin note</option>
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        className="admin-dispute-button admin-dispute-button--secondary"
-                        disabled={!caseMessage.trim()}
-                        onClick={() => void handleRequestInfo(selectedDispute)}
-                      >
-                        Request information
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-dispute-button admin-dispute-button--primary"
-                        disabled={!caseMessage.trim()}
-                        onClick={() => void handleAddMessage(selectedDispute)}
-                      >
-                        <Send size={16} /> Add update
-                      </button>
-                    </div>
-                  </section>
-
-                  <section className="admin-dispute-composer admin-dispute-composer--resolution">
-                    <div className="admin-dispute-section__title">
-                      <div>
-                        <h3>Resolve case</h3>
-                        <p>Record the decision and any actions the parties must take.</p>
-                      </div>
-                      <CheckCircle2 size={18} />
-                    </div>
-                    <textarea
-                      rows={3}
-                      placeholder="Required resolution summary..."
-                      value={resolutionSummary}
-                      onChange={(event) => setResolutionSummary(event.target.value)}
-                    />
-                    <textarea
-                      rows={3}
-                      placeholder="Recommended actions, one per line"
-                      value={recommendedActions}
-                      onChange={(event) =>
-                        setRecommendedActions(event.target.value)
-                      }
-                    />
-                    <div className="admin-dispute-composer__actions">
-                      <button
-                        type="button"
-                        className="admin-dispute-button admin-dispute-button--danger-ghost"
-                        onClick={() => void handleManualClose(selectedDispute)}
-                      >
-                        Manual close
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-dispute-button admin-dispute-button--success"
-                        disabled={!resolutionSummary.trim()}
-                        onClick={() => void handleResolve(selectedDispute)}
-                      >
-                        <CheckCircle2 size={16} /> Resolve dispute
-                      </button>
-                    </div>
-                  </section>
-                </>
+                    <CheckCircle2 size={18} />
+                  </div>
+                  <textarea
+                    rows={3}
+                    placeholder="Required resolution summary..."
+                    value={resolutionSummary}
+                    onChange={(event) =>
+                      setResolutionSummary(event.target.value)
+                    }
+                  />
+                  <textarea
+                    rows={3}
+                    placeholder="Recommended actions, one per line"
+                    value={recommendedActions}
+                    onChange={(event) =>
+                      setRecommendedActions(event.target.value)
+                    }
+                  />
+                  <div className="admin-dispute-composer__actions">
+                    <button
+                      type="button"
+                      className="admin-dispute-button admin-dispute-button--danger-ghost"
+                      onClick={() => void handleManualClose(selectedDispute)}
+                    >
+                      Manual close
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-dispute-button admin-dispute-button--success"
+                      disabled={!resolutionSummary.trim()}
+                      onClick={() => void handleResolve(selectedDispute)}
+                    >
+                      <CheckCircle2 size={16} /> Resolve dispute
+                    </button>
+                  </div>
+                </section>
               ) : null}
             </>
           ) : (
@@ -993,6 +1044,105 @@ export default function Disputes() {
           )}
         </main>
       </div>
+
+      {evidencePreview ? (
+        <div
+          className="admin-dispute-evidence-preview-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setEvidencePreview(null);
+              setIsEvidenceFullscreen(false);
+            }
+          }}
+        >
+          <section
+            className={`admin-dispute-evidence-preview${
+              isEvidenceFullscreen
+                ? " admin-dispute-evidence-preview--fullscreen"
+                : ""
+            }`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-dispute-evidence-preview-title"
+          >
+            <header className="admin-dispute-evidence-preview__header">
+              <div className="admin-dispute-evidence-preview__identity">
+                <span className="admin-dispute-evidence-preview__file-icon">
+                  <FileText size={20} />
+                </span>
+                <div>
+                  <span>Secure evidence preview</span>
+                  <h2 id="admin-dispute-evidence-preview-title">
+                    {evidencePreview.fileName || "Evidence file"}
+                  </h2>
+                  <small>
+                    {evidencePreview.mimeType.toLowerCase().includes("pdf")
+                      ? "PDF document"
+                      : "Image attachment"}
+                  </small>
+                </div>
+              </div>
+              <div className="admin-dispute-evidence-preview__actions">
+                <button
+                  type="button"
+                  className="admin-dispute-evidence-toolbar-button"
+                  onClick={() => setIsEvidenceFullscreen((current) => !current)}
+                >
+                  {isEvidenceFullscreen ? (
+                    <Minimize2 size={18} />
+                  ) : (
+                    <Maximize2 size={18} />
+                  )}
+                  <span>
+                    {isEvidenceFullscreen ? "Exit full screen" : "Full screen"}
+                  </span>
+                </button>
+                <a
+                  className="admin-dispute-evidence-toolbar-button"
+                  href={evidencePreview.accessUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ExternalLink size={18} />
+                  <span>Open original</span>
+                </a>
+                <button
+                  type="button"
+                  className="admin-dispute-evidence-toolbar-button admin-dispute-evidence-toolbar-button--close"
+                  aria-label="Close evidence preview"
+                  onClick={() => {
+                    setEvidencePreview(null);
+                    setIsEvidenceFullscreen(false);
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </header>
+            <div className="admin-dispute-evidence-preview__body">
+              {evidencePreview.mimeType.toLowerCase().includes("pdf") ||
+              evidencePreview.fileName.toLowerCase().endsWith(".pdf") ? (
+                <iframe
+                  src={evidencePreview.accessUrl}
+                  title={evidencePreview.fileName || "Dispute evidence PDF"}
+                />
+              ) : (
+                <img
+                  src={evidencePreview.accessUrl}
+                  alt={evidencePreview.fileName || "Dispute evidence"}
+                />
+              )}
+            </div>
+            <footer className="admin-dispute-evidence-preview__footer">
+              <span>
+                <LockKeyhole size={14} /> Temporary authenticated preview
+              </span>
+              <span>Press Esc to close</span>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

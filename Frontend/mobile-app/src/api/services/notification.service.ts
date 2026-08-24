@@ -1,7 +1,6 @@
 /** @format */
 
 import apiClient from "../axios.config";
-import { getUserId } from "../../utils/auth.storage";
 
 export type BorrowerNotification = {
   id: string;
@@ -40,15 +39,10 @@ type NotificationsResponse = {
 
 export const notificationService = {
   getMyNotifications: async () => {
-    const borrowerId = await getUserId();
-    if (!borrowerId) {
-      throw new Error("User session expired. Please log in again.");
-    }
-
     const response = await apiClient.get<NotificationsResponse>(
       "/borrower/notifications",
       {
-        params: { borrowerId, limit: 50 },
+        params: { limit: 50 },
       },
     );
 
@@ -59,32 +53,18 @@ export const notificationService = {
   },
 
   markAsRead: async (notificationId: string) => {
-    const borrowerId = await getUserId();
-    if (!borrowerId) {
-      throw new Error("User session expired. Please log in again.");
-    }
-
     const response = await apiClient.put<{
       success?: boolean;
       data?: BorrowerNotification;
-    }>(`/borrower/notifications/${notificationId}/read`, undefined, {
-      params: { borrowerId },
-    });
+    }>(`/borrower/notifications/${notificationId}/read`);
     return response.data?.data;
   },
 
   markAllAsRead: async () => {
-    const borrowerId = await getUserId();
-    if (!borrowerId) {
-      throw new Error("User session expired. Please log in again.");
-    }
-
     const response = await apiClient.put<{
       success?: boolean;
       data?: { updatedCount: number; unreadCount: number };
-    }>("/borrower/notifications/mark-all-read", undefined, {
-      params: { borrowerId },
-    });
+    }>("/borrower/notifications/mark-all-read");
     return response.data?.data;
   },
 };

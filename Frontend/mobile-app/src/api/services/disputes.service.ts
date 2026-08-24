@@ -12,7 +12,7 @@ export type DisputeStatus =
 export type Dispute = {
   id: string;
   disputeCode: string;
-  loanId: string;
+  loanId: string | null;
   subject: string;
   description: string;
   desiredOutcome: string;
@@ -27,6 +27,7 @@ export type Dispute = {
   };
   acknowledgements: Record<string, unknown>;
   reopenCount: number;
+  responseRequestedFrom?: "complainant" | "respondent" | "both" | null;
 };
 export type DisputeEvent = {
   id: string;
@@ -34,6 +35,7 @@ export type DisputeEvent = {
   actorRole: string;
   message: string;
   documentIds: string[];
+  createdAt?: string | { _seconds?: number; seconds?: number };
 };
 export type EligibleLoan = {
   id: string;
@@ -61,6 +63,10 @@ export const disputesService = {
       await apiClient.get<{ events: DisputeEvent[] }>(`/disputes/${id}/events`)
     ).data.events;
   },
+  async get(id: string) {
+    return (await apiClient.get<{ dispute: Dispute }>(`/disputes/${id}`)).data
+      .dispute;
+  },
   async create(body: Record<string, unknown>) {
     return (await apiClient.post<{ dispute: Dispute }>("/disputes", body)).data
       .dispute;
@@ -83,7 +89,7 @@ export const disputesService = {
 
 export async function uploadDisputeEvidence(
   asset: DocumentPickerAsset,
-  loanId: string,
+  loanId?: string | null,
 ) {
   const mimeType = asset.mimeType ?? "application/octet-stream";
   if ((asset.size ?? 0) > 10 * 1024 * 1024)
@@ -100,8 +106,7 @@ export async function uploadDisputeEvidence(
       documentType: "case_evidence",
       fileName: asset.name,
       contentType: mimeType,
-      relatedEntityType: "loan",
-      relatedEntityId: loanId,
+      ...(loanId ? { relatedEntityType: "loan", relatedEntityId: loanId } : {}),
     })
   ).data;
   const form = new FormData();
@@ -139,8 +144,9 @@ export async function uploadDisputeEvidence(
         mimeType,
         category: "dispute_evidence",
         documentType: "case_evidence",
-        relatedEntityType: "loan",
-        relatedEntityId: loanId,
+        ...(loanId
+          ? { relatedEntityType: "loan", relatedEntityId: loanId }
+          : {}),
         displayName: asset.name,
       },
     )

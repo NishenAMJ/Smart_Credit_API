@@ -19,6 +19,7 @@ import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { BORDER_RADIUS } from "../../constants/borderRadius";
 import type { BorrowerNavigation } from "../../types/navigation";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
 
 type HelpCenterScreenProps = {
   navigation: BorrowerNavigation;
@@ -49,17 +50,10 @@ export default function HelpCenterScreen({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Feather name="arrow-left" size={22} color={COLORS.surface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Help Center</Text>
-      </View>
+      <BorrowerPageHeader
+        title="Help Center"
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         style={styles.content}

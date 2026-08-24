@@ -238,9 +238,8 @@ export default function NotificationsPage({
 
   async function loadNotifications() {
     const [summaryResponse, listResponse] = await Promise.all([
-      fetchLenderNotificationSummary(session.lenderId),
+      fetchLenderNotificationSummary(),
       fetchLenderNotifications(
-        session.lenderId,
         selectedCategory,
         selectedState,
         80,
@@ -258,10 +257,11 @@ export default function NotificationsPage({
       try {
         setIsLoading(true);
         setError(null);
+        setSummary(null);
+        setNotifications([]);
         const [summaryResponse, listResponse] = await Promise.all([
-          fetchLenderNotificationSummary(session.lenderId),
+          fetchLenderNotificationSummary(),
           fetchLenderNotifications(
-            session.lenderId,
             selectedCategory,
             selectedState,
             80,
@@ -298,7 +298,6 @@ export default function NotificationsPage({
     try {
       if (!notification.isRead) {
         const updated = await markNotificationAsRead(
-          session.lenderId,
           notification.id,
         );
         setNotifications((current) =>
@@ -333,7 +332,6 @@ export default function NotificationsPage({
       setIsMarkingAll(true);
       setError(null);
       await markAllNotificationsAsRead(
-        session.lenderId,
         selectedCategory,
         selectedState,
       );

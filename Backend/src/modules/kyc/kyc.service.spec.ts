@@ -36,6 +36,7 @@ describe('KycService', () => {
     deleteAsset: jest.Mock;
   };
   let userSet: jest.Mock;
+  let userGet: jest.Mock;
   let documentSnapshots: Record<string, any>;
   let transactionGet: jest.Mock;
   let transactionUpdate: jest.Mock;
@@ -48,6 +49,34 @@ describe('KycService', () => {
 
   beforeEach(async () => {
     userSet = jest.fn().mockResolvedValue(undefined);
+    userGet = jest.fn().mockResolvedValue({
+      exists: true,
+      id: 'user-1',
+      data: () => ({
+        uid: 'user-1',
+        fullName: 'Test User',
+        email: 'test@example.com',
+        phone: '0712345678',
+        passwordHash: 'hashed-password',
+        role: ['borrower'],
+        roles: ['borrower'],
+        primaryRole: 'borrower',
+        kycStatus: 'pending',
+        address: {
+          line1: '10 Main Street',
+          city: 'Colombo',
+          district: 'Colombo',
+          province: 'Western',
+        },
+        kycDetails: {
+          documentType: 'national_id',
+          documentNumber: '200012345678',
+          fullName: 'Test User Identity',
+          issuingCountry: 'Sri Lanka',
+          expiryDate: '2030-12-31',
+        },
+      }),
+    });
     documentSnapshots = {};
     transactionGet = jest.fn(async (docRef: { id: string }) => ({
       exists: Boolean(documentSnapshots[docRef.id]),
@@ -162,33 +191,7 @@ describe('KycService', () => {
       })),
       doc: jest.fn(() => ({
         id: 'user-1',
-        get: jest.fn().mockResolvedValue({
-          exists: true,
-          data: () => ({
-            uid: 'user-1',
-            fullName: 'Test User',
-            email: 'test@example.com',
-            phone: '0712345678',
-            passwordHash: 'hashed-password',
-            role: ['borrower'],
-            roles: ['borrower'],
-            primaryRole: 'borrower',
-            kycStatus: 'pending',
-            address: {
-              line1: '10 Main Street',
-              city: 'Colombo',
-              district: 'Colombo',
-              province: 'Western',
-            },
-            kycDetails: {
-              documentType: 'national_id',
-              documentNumber: '200012345678',
-              fullName: 'Test User Identity',
-              issuingCountry: 'Sri Lanka',
-              expiryDate: '2030-12-31',
-            },
-          }),
-        }),
+        get: userGet,
         set: userSet,
       })),
     };
@@ -283,6 +286,16 @@ describe('KycService', () => {
 
     expect(mediaService.uploadBufferAsDocument).toHaveBeenCalledTimes(4);
     expect(documentsService.createRecord).toHaveBeenCalledTimes(4);
+    expect(
+      documentsService.createRecord.mock.calls.map(
+        ([input]: [{ documentType: string }]) => input.documentType,
+      ),
+    ).toEqual([
+      'passport_front',
+      'passport_back',
+      'address_proof',
+      'bank_document',
+    ]);
     expect(userSet).toHaveBeenCalledTimes(1);
     expect(userSet).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -583,6 +596,62 @@ describe('KycService', () => {
       rejected: 0,
     });
     expect(userDocs.documents).toHaveLength(1);
+  });
+
+  it('returns only documents referenced by the current KYC submission', async () => {
+    userGet.mockResolvedValue({
+      exists: true,
+      id: 'user-1',
+      data: () => ({
+        fullName: 'Test User',
+        roles: ['borrower'],
+        kycStatus: 'pending',
+        kycFiles: {
+          documentRefs: {
+            passport_front: 'new-front',
+            passport_back: 'new-back',
+          },
+        },
+        kycDetails: { documentType: 'passport' },
+      }),
+    });
+    documentsService.getKycReview.mockResolvedValueOnce({
+      documents: [
+        {
+          id: 'new-front',
+          userId: 'user-1',
+          category: 'kyc',
+          documentType: 'passport_front',
+          status: 'pending_review',
+        },
+        {
+          id: 'new-back',
+          userId: 'user-1',
+          category: 'kyc',
+          documentType: 'passport_back',
+          status: 'pending_review',
+        },
+        {
+          id: 'old-front',
+          userId: 'user-1',
+          category: 'kyc',
+          documentType: 'nic_front',
+          status: 'rejected',
+        },
+      ],
+      hasMore: false,
+      nextCursor: undefined,
+    });
+
+    const response = await service.getPendingKyc();
+
+    expect(response.documents.map((document) => document.id)).toEqual([
+      'new-front',
+      'new-back',
+    ]);
+    expect(response.documents.map((document) => document.documentType)).toEqual(
+      ['passport_front', 'passport_back'],
+    );
   });
 
   it('approves a KYC document and updates the user KYC status', async () => {

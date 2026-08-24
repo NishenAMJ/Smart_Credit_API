@@ -38,10 +38,10 @@ describe('ChatGateway presence resilience', () => {
     await expect(gateway.handleConnection(client)).resolves.toBeUndefined();
 
     expect(client.disconnect).not.toHaveBeenCalled();
-    expect(gateway.server.emit).toHaveBeenCalledWith('userOnline', {
-      userId: 'lender_1',
-      isOnline: true,
-    });
+    expect(gateway.server.emit).not.toHaveBeenCalledWith(
+      'userOnline',
+      expect.anything(),
+    );
   });
 
   it('does not reject the disconnect lifecycle when Firestore is unavailable', async () => {

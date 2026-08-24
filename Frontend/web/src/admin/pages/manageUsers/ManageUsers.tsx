@@ -323,7 +323,7 @@ export default function ManageUsers() {
         <div>
           <h1 className="page-title">Manage Users</h1>
           <p className="page-subtitle">
-            Users loaded from Firestore with lender and borrower credit data
+            Review lender and borrower accounts and credit information
           </p>
         </div>
         <span style={S.pendingChip}>{stats.pendingUsers} Pending</span>

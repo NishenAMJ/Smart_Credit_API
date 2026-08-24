@@ -73,13 +73,21 @@ export class BorrowerDashboardService {
         const data = doc.data();
         const loan = this.normalizeLoanDocument(data, doc.id);
 
+        // A pending disbursement has been approved, but the borrower has not
+        // received the funds yet. Cancelled/unknown records are likewise not
+        // part of the borrower's financial totals.
+        if (!this.isFundedLoanStatus(loan.status)) {
+          return;
+        }
+
         totalBorrowed += loan.principalAmount || 0;
 
         const totalRepayable =
-          (loan.principalAmount || 0) + this.toNumber(data.totalInterest);
-        const repaidOnThisLoan = Math.max(
-          0,
-          totalRepayable - (loan.outstandingBalance || 0),
+          (loan.principalAmount || 0) + (loan.totalInterest || 0);
+        const repaidOnThisLoan = this.readMajorUnitAmount(
+          data.amountPaidMinor,
+          data.amountPaid,
+          Math.max(0, totalRepayable - (loan.outstandingBalance || 0)),
         );
         totalRepaid += repaidOnThisLoan;
 
@@ -88,7 +96,7 @@ export class BorrowerDashboardService {
         );
 
         if (
-          data.status === LoanStatus.ACTIVE &&
+          loan.status === LoanStatus.ACTIVE &&
           payableOutstanding > BORROWER_MONEY.ROUNDING_DUST_THRESHOLD
         ) {
           activeLoansCount++;
@@ -118,12 +126,12 @@ export class BorrowerDashboardService {
         profile: profileData,
         activeLoans: activeLoansCount,
         pendingApplications,
-        totalOutstanding,
+        totalOutstanding: this.roundMoney(totalOutstanding),
         nextDueDate,
         nextPaymentAmount,
         creditScore: profileData?.creditScore || 0,
-        totalBorrowed,
-        totalRepaid,
+        totalBorrowed: this.roundMoney(totalBorrowed),
+        totalRepaid: this.roundMoney(totalRepaid),
       };
 
       return {
@@ -189,6 +197,28 @@ export class BorrowerDashboardService {
       : fallback;
   }
 
+  /** Reads canonical minor units first, then a legacy major-unit field. */
+  private readMajorUnitAmount(
+    minorValue: unknown,
+    majorValue: unknown,
+    fallback = 0,
+  ): number {
+    if (typeof minorValue === 'number' && Number.isFinite(minorValue)) {
+      return minorValue / 100;
+    }
+
+    return this.toNumber(majorValue, fallback);
+  }
+
+  private isFundedLoanStatus(status: LoanStatus): boolean {
+    return [
+      LoanStatus.ACTIVE,
+      LoanStatus.OVERDUE,
+      LoanStatus.DEFAULTED,
+      LoanStatus.COMPLETED,
+    ].includes(status);
+  }
+
   private roundMoney(value: number): number {
     return Math.round(value * 100) / 100;
   }
@@ -243,7 +273,11 @@ export class BorrowerDashboardService {
     const status = this.normalizeLoanStatus(data.status);
     const createdAt = this.toTimestamp(data.createdAt) ?? now;
     const updatedAt = this.toTimestamp(data.updatedAt) ?? createdAt;
-    const startDate = this.toTimestamp(data.startDate) ?? createdAt;
+    const startDate =
+      this.toTimestamp(data.disbursedAt) ??
+      this.toTimestamp(data.approvedAt) ??
+      this.toTimestamp(data.startDate) ??
+      createdAt;
     const nextDueDate =
       this.toTimestamp(data.firstPaymentDueAt) ??
       this.toTimestamp(data.nextDueDate) ??
@@ -254,17 +288,27 @@ export class BorrowerDashboardService {
       nextDueDate ??
       startDate;
 
-    const principalAmount = this.toNumber(data.principalAmount);
-    const tenureMonths = this.toNumber(data.tenureMonths);
-    const totalRepayable = this.toNumber(
-      data.totalRepayable,
-      principalAmount + this.toNumber(data.totalInterest),
+    const principalAmount = this.readMajorUnitAmount(
+      data.principalMinor,
+      data.principalAmount,
     );
-    const monthlyInstallment = this.toNumber(
+    const tenureMonths = this.toNumber(data.tenureMonths);
+    const totalInterest = this.readMajorUnitAmount(
+      data.interestAmountMinor,
+      data.totalInterest,
+    );
+    const totalRepayable = this.readMajorUnitAmount(
+      data.totalRepayableMinor,
+      data.totalRepayable,
+      principalAmount + totalInterest,
+    );
+    const monthlyInstallment = this.readMajorUnitAmount(
+      data.monthlyInstallmentMinor,
       data.monthlyInstallment,
       tenureMonths > 0 ? Math.round(totalRepayable / tenureMonths) : 0,
     );
-    const outstandingBalance = this.toNumber(
+    const outstandingBalance = this.readMajorUnitAmount(
+      data.remainingBalanceMinor,
       data.outstandingBalance,
       status === LoanStatus.COMPLETED ? 0 : totalRepayable || principalAmount,
     );
@@ -280,10 +324,7 @@ export class BorrowerDashboardService {
       tenureMonths,
       monthlyInstallment,
       outstandingBalance,
-      totalInterest: this.toNumber(
-        data.totalInterest,
-        Math.max(0, totalRepayable - principalAmount),
-      ),
+      totalInterest,
       status,
       startDate,
       nextDueDate,

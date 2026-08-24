@@ -47,6 +47,7 @@ export default function AdminRoutes() {
         <Route path="agreements" element={<LegalAgreements />} />
         <Route path="audit-logs" element={<AuditLogs />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="notifications" element={<Navigate to="../dashboard" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="signin" replace />} />
     </Routes>

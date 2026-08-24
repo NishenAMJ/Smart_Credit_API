@@ -11,6 +11,7 @@ import {
 import { UseFilters, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Server, Socket } from 'socket.io';
+import { corsOriginDelegate } from '../../../bootstrap/cors-origins';
 import { WsExceptionFilter } from '../common/filters/ws-exception.filter';
 import { UsersService } from '../users/users.service';
 import { BlocksService } from '../users/blocks.service';
@@ -46,7 +47,7 @@ interface DeliveredPayload {
 
 @UseFilters(WsExceptionFilter)
 @WebSocketGateway({
-  cors: { origin: '*', credentials: true },
+  cors: { origin: corsOriginDelegate, credentials: true },
   transports: ['websocket'],
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -114,7 +115,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.userSockets.get(userId)!.add(client.id);
 
     void this.updatePresenceSafely(userId, true);
-    this.server.emit('userOnline', { userId, isOnline: true });
 
     this.logger.log(
       `[${client.id}] Connected — userId: ${userId} role: ${payload.role}`,
@@ -133,7 +133,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!sockets || sockets.size === 0) {
       this.userSockets.delete(userId);
       void this.updatePresenceSafely(userId, false);
-      this.server.emit('userOnline', { userId, isOnline: false });
     }
 
     this.logger.log(`[${client.id}] Disconnected — userId: ${userId}`);

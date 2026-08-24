@@ -5,7 +5,6 @@ import * as DocumentPicker from "expo-document-picker";
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,6 +15,8 @@ import { Feather } from "@expo/vector-icons";
 import { resubmitKyc } from "../../api/services/auth.service";
 import { getApiErrorMessage } from "../../api/api-error";
 import { useAuth } from "../../context/AuthContext";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
+import { COLORS } from "../../constants/colors";
 type Props = { navigation: { goBack: () => void } };
 type FileField = "documentFrontUrl" | "documentBackUrl" | "selfieUrl";
 
@@ -39,7 +40,7 @@ async function pickAsDataUrl() {
 }
 
 export default function KycResubmissionScreen({ navigation }: Props) {
-  const { sessionStatus, refreshWorkspace } = useAuth();
+  const { sessionStatus, kycSubmission, refreshWorkspace } = useAuth();
   const [files, setFiles] = useState<Partial<Record<FileField, string>>>({});
   const [names, setNames] = useState<Partial<Record<FileField, string>>>({});
   const [busy, setBusy] = useState(false);
@@ -81,6 +82,13 @@ export default function KycResubmissionScreen({ navigation }: Props) {
     }
   }
 
+  const documentLabel =
+    kycSubmission?.documentType === "passport"
+      ? "Passport"
+      : kycSubmission?.documentType === "driving_license"
+        ? "Driving licence"
+        : "NIC";
+
   const options: Array<{
     field: FileField;
     label: string;
@@ -88,26 +96,23 @@ export default function KycResubmissionScreen({ navigation }: Props) {
   }> = [
     {
       field: "documentFrontUrl",
-      label: "Identity document front",
+      label: `${documentLabel} front`,
       required: true,
     },
     {
       field: "documentBackUrl",
-      label: "Identity document back",
+      label: `${documentLabel} back`,
       required: true,
     },
     { field: "selfieUrl", label: "New selfie with document" },
   ];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name="arrow-left" size={24} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Re-upload KYC</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <View style={styles.safeArea}>
+      <BorrowerPageHeader
+        title="Re-upload KYC"
+        onBack={() => navigation.goBack()}
+      />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Submit corrected documents</Text>
         <Text style={styles.subtitle}>
@@ -126,7 +131,7 @@ export default function KycResubmissionScreen({ navigation }: Props) {
             <Feather
               name={names[option.field] ? "check-circle" : "upload"}
               size={22}
-              color="#007AFF"
+              color={COLORS.primary}
             />
             <View style={styles.fileText}>
               <Text style={styles.fileLabel}>
@@ -145,50 +150,55 @@ export default function KycResubmissionScreen({ navigation }: Props) {
           onPress={() => void submit()}
         >
           {busy ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={COLORS.onPrimary} />
           ) : (
             <Text style={styles.submitText}>Send for review</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F5F6FA" },
+  safeArea: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     padding: 18,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
   },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#111827" },
   content: { padding: 20, gap: 14 },
   title: { fontSize: 24, fontWeight: "700", color: "#111827" },
-  subtitle: { fontSize: 15, lineHeight: 22, color: "#6B7280", marginBottom: 8 },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
   error: { color: "#DC2626", fontSize: 14 },
   fileCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: 18,
     borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
   fileText: { marginLeft: 14, flex: 1 },
   fileLabel: { fontSize: 15, fontWeight: "600", color: "#111827" },
-  fileName: { fontSize: 13, color: "#6B7280", marginTop: 4 },
+  fileName: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4 },
   submit: {
     marginTop: 10,
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     minHeight: 54,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   disabled: { opacity: 0.6 },
-  submitText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  submitText: { color: COLORS.onPrimary, fontSize: 16, fontWeight: "700" },
 });

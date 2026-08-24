@@ -11,8 +11,9 @@ import { AdminQueryCacheService } from '../../common/cache/admin-query-cache.ser
 import { writeAuditLog } from '../../common/audit/write-audit-log';
 import { normalizeSearchToken } from '../../common/firestore/search-tokens';
 import { ChatGateway } from '../chat/gateway/chat.gateway';
+import { RoleNotificationService } from '../../common/notifications/role-notification.service';
 
-type AdminAdStatus = 'pending' | 'approved' | 'active' | 'rejected' | 'closed';
+type AdminAdStatus = 'pending' | 'active' | 'rejected' | 'closed';
 
 @Injectable()
 export class AdminAdApprovalService {
@@ -25,6 +26,7 @@ export class AdminAdApprovalService {
     @Optional()
     private readonly cache: AdminQueryCacheService = new AdminQueryCacheService(),
     @Optional() private readonly gateway?: ChatGateway,
+    @Optional() private readonly roleNotifications?: RoleNotificationService,
   ) {}
 
   private get db() {
@@ -47,9 +49,8 @@ export class AdminAdApprovalService {
       case 'draft':
         return 'pending';
       case 'active':
-        return 'active';
       case 'approved':
-        return 'approved';
+        return 'active';
       case 'rejected':
         return 'rejected';
       case 'paused':
@@ -107,6 +108,7 @@ export class AdminAdApprovalService {
 
   private rawStatuses(status?: AdminAdStatus): string[] | undefined {
     if (status === 'pending') return ['pending_review', 'pending', 'draft'];
+    if (status === 'active') return ['active', 'approved'];
     if (status === 'closed') return ['paused', 'expired', 'closed'];
     return status ? [status] : undefined;
   }
@@ -160,16 +162,15 @@ export class AdminAdApprovalService {
     try {
       const cached = await this.cache.remember('admin:ads:stats', async () => {
         const ads = this.db.collection(this.collection);
-        const [all, active, approved, pending, rejected, closed] =
+        const [all, active, pending, rejected, closed] =
           await Promise.all([
             this.count(ads),
-            this.count(ads.where('status', '==', 'active')),
-            this.count(ads.where('status', '==', 'approved')),
+            this.count(ads.where('status', 'in', this.rawStatuses('active')!)),
             this.count(ads.where('status', 'in', this.rawStatuses('pending')!)),
             this.count(ads.where('status', '==', 'rejected')),
             this.count(ads.where('status', 'in', this.rawStatuses('closed')!)),
           ]);
-        return { all, active, approved, pending, rejected, closed };
+        return { all, active, pending, rejected, closed };
       });
       return {
         success: true,
@@ -288,13 +289,40 @@ export class AdminAdApprovalService {
     title: string,
     message: string,
   ) {
-    await this.db.collection('notifications').add({
+    if (this.roleNotifications) {
+      await this.roleNotifications.createLender(String(data.lenderId), {
+        eventType: type,
+        eventId: adId,
+        category: 'ad',
+        title,
+        message,
+        severity: type.includes('rejected') ? 'warning' : 'success',
+        entityType: 'ad',
+        entityId: adId,
+        actionLabel: 'Open advertisements',
+        actionTarget: 'active-ads-requests',
+        metadata: { status: type },
+      });
+      return;
+    }
+
+    const id = `lender__${String(data.lenderId)}__${type}__ad__${adId}`;
+    await this.db.collection('notifications').doc(id).set({
+      notificationId: id,
       userId: data.lenderId,
-      type,
+      audienceRole: 'lender',
+      category: 'ad',
+      eventType: type,
       title,
-      message,
-      adId,
-      read: false,
+      body: message,
+      severity: type.includes('rejected') ? 'warning' : 'success',
+      isRead: false,
+      readAt: null,
+      entityType: 'ad',
+      entityId: adId,
+      actionLabel: 'Open advertisements',
+      actionTarget: 'active-ads-requests',
+      metadata: { status: type },
       createdAt: FieldValue.serverTimestamp(),
     });
   }

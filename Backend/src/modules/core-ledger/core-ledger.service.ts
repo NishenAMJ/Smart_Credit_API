@@ -213,7 +213,7 @@ export class CoreLedgerService {
       transaction.set(
         db
           .collection('borrowerNotifications')
-          .doc(`agreement-created-${applicationId}`),
+          .doc(`borrower__${borrowerId}__agreement-created-${applicationId}`),
         {
           borrowerId,
           category: 'agreement',
@@ -238,9 +238,11 @@ export class CoreLedgerService {
       transaction.set(
         db
           .collection('notifications')
-          .doc(`agreement-created-${applicationId}-${lenderId}`),
+          .doc(`lender__${lenderId}__agreement-created-${applicationId}`),
         {
+          notificationId: `lender__${lenderId}__agreement-created-${applicationId}`,
           userId: lenderId,
+          audienceRole: 'lender',
           category: 'agreement',
           eventType: 'created',
           title: 'Agreement ready to sign',
@@ -352,7 +354,7 @@ export class CoreLedgerService {
         status: 'completed',
         currency: 'LKR',
         amountMinor: amount,
-        platformFeeMinor: Math.round(amount * 0.02),
+        platformFeeMinor: 0,
         lenderId: loan.lenderId,
         borrowerId,
         loanId,

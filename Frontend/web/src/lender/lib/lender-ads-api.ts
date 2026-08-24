@@ -80,6 +80,7 @@ export type AdBoost = {
 export async function fetchAdBoostPlans(): Promise<{
   plans: AdBoostPlan[];
   bankAccount: Record<string, string>;
+  paymentMethods: { card: boolean; bankTransfer: boolean };
 }> {
   const response = await fetch(`${API_BASE_URL}/lender-ad-boosts/plans`, {
     headers: getAuthHeaders(),
