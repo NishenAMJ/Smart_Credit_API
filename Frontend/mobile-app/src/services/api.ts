@@ -7,7 +7,8 @@ import { toApiError } from "../api/api-error";
 // Using _api internally so we can cast it below with unwrapped response types
 const _api = axios.create({
   baseURL: getApiBaseUrl(),
-  timeout: 15000,
+  // Allow a Cloud Run instance enough time to complete an occasional cold start.
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },
