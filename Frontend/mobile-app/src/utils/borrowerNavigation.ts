@@ -7,6 +7,7 @@ export type BorrowerTabRoute =
   | "Loans"
   | "Payments"
   | "Support"
+  | "Agreement"
   | "Profile";
 
 /**

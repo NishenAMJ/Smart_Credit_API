@@ -742,6 +742,7 @@ export class KycService {
   }
 
   // Returns the admin review queue for KYC documents.
+  // ADMIN: Review KYC - service
   async getPendingKyc(limit?: string, cursor?: string) {
     try {
       const pageSize = this.parseLimit(limit);
@@ -1067,6 +1068,7 @@ export class KycService {
   }
 
   // Approves a document and mirrors that result back onto the user's profile.
+  // ADMIN: Approve KYC - service
   async approveDocument(
     documentId: string,
     reviewedBy?: string,
@@ -1279,6 +1281,7 @@ export class KycService {
   }
 
   // Rejects a document and stores the rejection reason on both the document and user profile.
+  // ADMIN: Reject KYC - service
   async rejectDocument(
     documentId: string,
     reason: string,

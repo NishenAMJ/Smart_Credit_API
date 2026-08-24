@@ -73,6 +73,8 @@ export const ENDPOINTS = {
     generateQr: "/borrower/payments/generate-qr",
     verifyQr: "/borrower/payments/verify-qr",
     initiatePayHere: "/borrower/payments/payhere/initiate",
+    payHereStatus: (orderId: string) =>
+      `/borrower/payments/payhere/orders/${orderId}/status`,
   },
   transactions: {
     list: "/borrower/transactions",

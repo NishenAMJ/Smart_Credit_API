@@ -18,6 +18,7 @@ import {
 } from "../../lib/api";
 
 // Renders the admin dashboard overview, charts, and summary cards.
+// ADMIN: View dashboard - frontend
 export default function Dashboard() {
   const [dashboard, setDashboard] = useState<
     DashboardAnalyticsResponse["data"] | null
@@ -103,7 +104,7 @@ export default function Dashboard() {
   const roleBreakdown = [
     { label: "Lenders", value: dashboard?.userRoles.lender ?? 0 },
     { label: "Borrowers", value: dashboard?.userRoles.borrower ?? 0 },
-    { label: "Admins", value: dashboard?.userRoles.admin ?? 0 },
+    { label: "Administrator", value: dashboard?.userRoles.admin ?? 0 },
   ];
 
   return (
@@ -112,8 +113,7 @@ export default function Dashboard() {
         <div>
           <h1 className="page-title">Admin Dashboard</h1>
           <p className="page-subtitle">
-            Live metrics from Firestore users, loans, requests, transactions,
-            and disputes
+            Overview of users, loans, requests, transactions, and disputes
           </p>
         </div>
         <div style={{ fontSize: 13, color: "#6B7280" }}>
@@ -174,7 +174,7 @@ export default function Dashboard() {
               <span style={{ width: 16 }} />
               <span style={legendDot("#10B981")} /> Borrowers
               <span style={{ width: 16 }} />
-              <span style={legendDot("#8B5CF6")} /> Admins
+              <span style={legendDot("#8B5CF6")} /> Administrator
             </div>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
@@ -206,7 +206,7 @@ export default function Dashboard() {
                           ? "#007AFF"
                           : entry.label === "Borrowers"
                             ? "#10B981"
-                            : entry.label === "Admins"
+                            : entry.label === "Administrator"
                               ? "#8B5CF6"
                               : "#9CA3AF"
                       }

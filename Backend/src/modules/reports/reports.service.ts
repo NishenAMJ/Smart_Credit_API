@@ -72,6 +72,7 @@ export class ReportsService {
     };
   }
 
+  // ADMIN: View analytics - service
   async getUsersReport() {
     try {
       return await this.cached<UserReport>('users', async () => {
@@ -291,13 +292,52 @@ export class ReportsService {
             ),
           ),
         ]);
+        let revenueBySource: RevenueReport['revenueBySource'] = null;
+        let recognizedRevenueMinor = totalFeesMinor;
+        try {
+          const [disbursementFeesMinor, adBoostChargesMinor, repaymentFeesMinor] =
+            await Promise.all([
+              this.getSum(
+                transactions.where('type', '==', 'disbursement'),
+                'platformFeeMinor',
+              ),
+              this.getSum(
+                transactions.where('type', '==', 'listing_boost'),
+                'platformFeeMinor',
+              ),
+              this.getSum(
+                transactions.where('type', '==', 'repayment'),
+                'platformFeeMinor',
+              ),
+            ]);
+          revenueBySource = {
+            disbursementFees: disbursementFeesMinor / 100,
+            adBoostCharges: adBoostChargesMinor / 100,
+            otherPlatformFees:
+              Math.max(
+                0,
+                totalFeesMinor -
+                  disbursementFeesMinor -
+                  adBoostChargesMinor -
+                  repaymentFeesMinor,
+              ) / 100,
+            repaymentFees: repaymentFeesMinor / 100,
+          };
+          recognizedRevenueMinor = Math.max(
+            0,
+            totalFeesMinor - repaymentFeesMinor,
+          );
+        } catch {
+          // Source totals are optional while their Firestore index is building.
+        }
         return {
-          totalRevenue: totalFeesMinor / 100,
+          totalRevenue: recognizedRevenueMinor / 100,
           monthlyRevenue: monthlyFeesMinor / 100,
           revenueThisYear: yearlyFeesMinor / 100,
-          platformFees: totalFeesMinor / 100,
+          platformFees: recognizedRevenueMinor / 100,
           interestRevenue: interestMinor / 100,
           revenueGrowth: 0,
+          revenueBySource,
           revenueByMonth: months.map((month, index) => ({
             month: month.key,
             revenue: (monthlySeries[index] ?? 0) / 100,
@@ -309,6 +349,7 @@ export class ReportsService {
     }
   }
 
+  // ADMIN: View dashboard - service
   async getDashboardAnalytics() {
     try {
       return await this.cached<DashboardAnalytics>('dashboard', async () => {

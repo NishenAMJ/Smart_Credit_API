@@ -19,6 +19,7 @@ import { RepaymentMethod } from '../applications/dto/loan-application.dto';
 import { BorrowerPaymentsService } from './borrower-payments.service';
 import { GenerateQrDto } from './dto/generate-qr.dto';
 import { VerifyQrDto } from './dto/verify-qr.dto';
+import { InitiatePayHereDto } from './dto/initiate-payhere.dto';
 
 @Controller('borrower')
 export class BorrowerPaymentsController {
@@ -75,11 +76,7 @@ export class BorrowerPaymentsController {
   @Roles('borrower')
   async initiatePayHerePayment(
     @Body()
-    payload: {
-      loanId: string;
-      amount: number;
-      borrowerId?: string;
-    },
+    payload: InitiatePayHereDto,
     @Req() request: AuthenticatedRequest,
     @Query('borrowerId') borrowerId?: string,
   ) {
@@ -87,7 +84,7 @@ export class BorrowerPaymentsController {
       success: true,
       data: await this.borrowerPaymentsService.initiatePayHerePayment({
         loanId: payload.loanId,
-        amount: Number(payload.amount),
+        amount: payload.amount,
         borrowerId: resolveAuthenticatedBorrowerId(
           request.user.sub,
           payload.borrowerId ?? borrowerId,
@@ -101,6 +98,22 @@ export class BorrowerPaymentsController {
   @Header('Content-Type', 'text/html')
   async renderPayHereCheckout(@Param('orderId') orderId: string) {
     return this.borrowerPaymentsService.renderPayHereCheckout(orderId);
+  }
+
+  @Get('payments/payhere/orders/:orderId/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('borrower')
+  async getPayHereOrderStatus(
+    @Req() request: AuthenticatedRequest,
+    @Param('orderId') orderId: string,
+  ) {
+    return {
+      success: true,
+      data: await this.borrowerPaymentsService.getPayHereOrderStatus(
+        orderId,
+        request.user.sub,
+      ),
+    };
   }
 
   @Get('payments/payhere/result/:status')

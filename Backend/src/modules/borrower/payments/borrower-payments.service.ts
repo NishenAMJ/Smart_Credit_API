@@ -1,11 +1,16 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
-  InternalServerErrorException,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createHash, randomUUID } from 'crypto';
-import { FieldValue } from 'firebase-admin/firestore';
+import { RoleNotificationService } from '../../../common/notifications/role-notification.service';
+import { randomUUID } from 'crypto';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { PayHereService } from '../../../common/payhere/payhere.service';
+import type { PayHereNotification } from '../../../common/payhere/payhere.types';
 import { FirebaseService } from '../../../firebase/firebase.service';
 import { BORROWER_MONEY } from '../shared/borrower.constants';
 import { RepaymentMethod } from '../applications/dto/loan-application.dto';
@@ -37,32 +42,28 @@ type PayHereOrder = {
   orderId: string;
   loanId: string;
   borrowerId: string;
+  lenderId?: string;
   amount: number;
+  amountMinor?: number;
   currency: string;
   status: string;
   installmentId: string;
   repaymentId?: string | null;
-};
-
-type PayHereNotification = {
-  merchant_id?: string;
-  order_id?: string;
-  payment_id?: string;
-  payhere_amount?: string;
-  payhere_currency?: string;
-  status_code?: string;
-  md5sig?: string;
+  expiresAt?: unknown;
+  lastReconciledAt?: unknown;
 };
 
 @Injectable()
-export class BorrowerPaymentsService {
+export class BorrowerPaymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly PAYHERE_ORDERS_COL = 'payherePayments';
+  private reconciliationTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly borrowerService: BorrowerService,
-    private readonly configService: ConfigService,
     private readonly firebaseService: FirebaseService,
     private readonly coreLedgerService: CoreLedgerService,
+    private readonly payHere: PayHereService,
+    @Optional() private readonly roleNotifications?: RoleNotificationService,
   ) {}
 
   private get db() {
@@ -160,10 +161,6 @@ export class BorrowerPaymentsService {
           loan.outstandingBalance > BORROWER_MONEY.ROUNDING_DUST_THRESHOLD,
       )
       .map((loan) => {
-        const outstandingBalance =
-          loan.outstandingBalance <= BORROWER_MONEY.ROUNDING_DUST_THRESHOLD
-            ? 0
-            : Math.round(loan.outstandingBalance * 100) / 100;
         const nextInstallment = (
           installmentsByLoanId.get(loan.loanId) ?? []
         ).find((installment) => this.isUnpaidInstallment(installment));
@@ -293,20 +290,7 @@ export class BorrowerPaymentsService {
     borrowerId: string;
     requestBaseUrl: string;
   }) {
-    const merchantId = this.configService.get<string>('PAYHERE_MERCHANT_ID');
-    const merchantSecret = this.configService.get<string>(
-      'PAYHERE_MERCHANT_SECRET',
-    );
-
-    if (!merchantId || !merchantSecret) {
-      throw new InternalServerErrorException(
-        'PayHere is not configured on the server.',
-      );
-    }
-
-    if (!payload.amount || payload.amount <= 0) {
-      throw new BadRequestException('Payment amount must be greater than 0.');
-    }
+    const requestedAmountMinor = this.payHere.toMinor(payload.amount);
 
     const [loan, profile, installments] = await Promise.all([
       this.borrowerService.getLoanById(payload.loanId, payload.borrowerId),
@@ -317,7 +301,7 @@ export class BorrowerPaymentsService {
       ),
     ]);
 
-    if (payload.amount > loan.outstandingBalance) {
+    if (requestedAmountMinor > this.payHere.toMinor(loan.outstandingBalance)) {
       throw new BadRequestException(
         `Payment amount (LKR ${payload.amount}) exceeds outstanding balance (LKR ${loan.outstandingBalance}).`,
       );
@@ -330,22 +314,29 @@ export class BorrowerPaymentsService {
         'No unpaid installment is available for this payment.',
       );
     }
-    if (Math.abs(payload.amount - installment.remainingAmount) > 0.009) {
+    const installmentAmountMinor = this.payHere.toMinor(
+      installment.remainingAmount,
+    );
+    if (requestedAmountMinor !== installmentAmountMinor) {
       throw new BadRequestException(
         `PayHere must settle the next installment in full with LKR ${installment.remainingAmount}.`,
       );
     }
 
-    const baseUrl = this.getPublicBaseUrl(payload.requestBaseUrl);
+    if (
+      (loan as unknown as { paymentReviewStatus?: string })
+        .paymentReviewStatus === 'chargeback_review'
+    ) {
+      throw new BadRequestException(
+        'Card payments are paused while a previous payment is under review.',
+      );
+    }
+
+    const baseUrl = this.payHere.publicBaseUrl(payload.requestBaseUrl);
     const orderId = `PH-${Date.now()}-${randomUUID().slice(0, 8)}`;
-    const currency =
-      this.configService.get<string>('PAYHERE_CURRENCY') ?? 'LKR';
-    const amount = this.formatAmount(payload.amount);
-    const checkoutUrl =
-      this.configService.get<string>('PAYHERE_CHECKOUT_URL') ??
-      (this.isPayHereSandbox()
-        ? 'https://sandbox.payhere.lk/pay/checkout'
-        : 'https://www.payhere.lk/pay/checkout');
+    const currency = 'LKR';
+    const amount = this.payHere.formatMinor(requestedAmountMinor);
+    const checkoutUrl = this.payHere.checkoutUrl();
     const firstName = this.getFirstName(profile.fullName);
     const lastName = this.getLastName(profile.fullName);
     const address = profile.address
@@ -355,24 +346,23 @@ export class BorrowerPaymentsService {
       : 'N/A';
     const city =
       profile.address?.city || profile.address?.district || 'Colombo';
-    const country =
-      this.configService.get<string>('PAYHERE_COUNTRY') ?? 'Sri Lanka';
+    const country = 'Sri Lanka';
+    if (!profile.email?.trim() || !profile.phone?.trim()) {
+      throw new BadRequestException(
+        'A verified email address and phone number are required for card payments.',
+      );
+    }
+    const urls = this.payHere.urls('borrower/payments', payload.requestBaseUrl);
 
     const payment = {
-      merchant_id: merchantId,
-      return_url:
-        this.configService.get<string>('PAYHERE_RETURN_URL') ??
-        `${baseUrl}/api/borrower/payments/payhere/result/success`,
-      cancel_url:
-        this.configService.get<string>('PAYHERE_CANCEL_URL') ??
-        `${baseUrl}/api/borrower/payments/payhere/result/cancelled`,
-      notify_url:
-        this.configService.get<string>('PAYHERE_NOTIFY_URL') ??
-        `${baseUrl}/api/borrower/payments/payhere/notify`,
+      merchant_id: this.payHere.merchantId(),
+      return_url: urls.returnUrl,
+      cancel_url: urls.cancelUrl,
+      notify_url: urls.notifyUrl,
       first_name: firstName,
       last_name: lastName,
-      email: profile.email || 'customer@smartcredit.local',
-      phone: profile.phone || '0770000000',
+      email: profile.email.trim(),
+      phone: profile.phone.trim(),
       address: address || 'N/A',
       city,
       country,
@@ -382,30 +372,109 @@ export class BorrowerPaymentsService {
       amount,
       custom_1: payload.borrowerId,
       custom_2: payload.loanId,
-      hash: this.generateCheckoutHash(merchantId, orderId, amount, currency),
+      hash: this.payHere.checkoutHash(orderId, amount, currency),
     };
-
-    await this.db.collection(this.PAYHERE_ORDERS_COL).doc(orderId).set({
-      orderId,
-      loanId: payload.loanId,
-      borrowerId: payload.borrowerId,
-      installmentId: installment.installmentId,
-      amount: payload.amount,
-      formattedAmount: amount,
-      currency,
-      status: 'initiated',
-      checkoutUrl,
-      payment,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    const expiresAt = Timestamp.fromMillis(Date.now() + 30 * 60_000);
+    const installmentRef = this.db
+      .collection('loans')
+      .doc(payload.loanId)
+      .collection('installments')
+      .doc(installment.installmentId);
+    const orderRef = this.db.collection(this.PAYHERE_ORDERS_COL).doc(orderId);
+    let effectiveOrderId = orderId;
+    let effectiveExpiresAt = expiresAt;
+    await this.db.runTransaction(async (transaction) => {
+      const installmentSnapshot = await transaction.get(installmentRef);
+      if (!installmentSnapshot.exists) {
+        throw new BadRequestException('The installment no longer exists.');
+      }
+      const installmentData = installmentSnapshot.data() ?? {};
+      if (String(installmentData.status).toLowerCase() === 'paid') {
+        throw new BadRequestException(
+          'This installment has already been paid.',
+        );
+      }
+      if (
+        Number(installmentData.amountDueMinor) > 0 &&
+        Number(installmentData.amountDueMinor) !== requestedAmountMinor
+      ) {
+        throw new BadRequestException(
+          'The installment amount has changed. Refresh and try again.',
+        );
+      }
+      const activeOrderId = String(installmentData.activePayHereOrderId ?? '');
+      if (activeOrderId) {
+        const activeOrderRef = this.db
+          .collection(this.PAYHERE_ORDERS_COL)
+          .doc(activeOrderId);
+        const activeOrderSnapshot = await transaction.get(activeOrderRef);
+        const activeOrder = activeOrderSnapshot.data() ?? {};
+        const activeExpiry = this.timestampMillis(activeOrder.expiresAt);
+        if (
+          activeOrderSnapshot.exists &&
+          ['initiated', 'pending', 'processing'].includes(
+            String(activeOrder.status),
+          ) &&
+          activeExpiry > Date.now()
+        ) {
+          effectiveOrderId = activeOrderId;
+          effectiveExpiresAt = activeOrder.expiresAt as Timestamp;
+          return;
+        }
+        if (activeOrderSnapshot.exists) {
+          transaction.update(activeOrderRef, {
+            status: 'expired',
+            expiredAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          });
+        }
+      }
+      transaction.set(orderRef, {
+        orderId,
+        loanId: payload.loanId,
+        lenderId: loan.lenderId,
+        borrowerId: payload.borrowerId,
+        installmentId: installment.installmentId,
+        amount: requestedAmountMinor / 100,
+        amountMinor: requestedAmountMinor,
+        formattedAmount: amount,
+        currency,
+        status: 'initiated',
+        checkoutUrl,
+        payment,
+        expiresAt,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+      transaction.update(installmentRef, {
+        activePayHereOrderId: orderId,
+        activePayHereOrderExpiresAt: expiresAt,
+        updatedAt: Timestamp.now(),
+      });
     });
 
     return {
-      orderId,
-      paymentPageUrl: `${baseUrl}/api/borrower/payments/payhere/checkout/${orderId}`,
-      checkoutUrl,
-      payment,
+      orderId: effectiveOrderId,
+      status: 'initiated',
+      expiresAt: effectiveExpiresAt.toDate().toISOString(),
+      paymentPageUrl: `${baseUrl}/api/borrower/payments/payhere/checkout/${effectiveOrderId}`,
     };
+  }
+
+  onModuleInit() {
+    if (!this.payHere.reconciliationEnabled()) return;
+    this.reconciliationTimer = setInterval(
+      () =>
+        void this.reconcilePendingPayHereOrders().catch((error) =>
+          this.payHere.logReconciliationError('scheduled-borrower-scan', error),
+        ),
+      5 * 60_000,
+    );
+    this.reconciliationTimer.unref();
+  }
+
+  onModuleDestroy() {
+    if (this.reconciliationTimer) clearInterval(this.reconciliationTimer);
   }
 
   async renderPayHereCheckout(orderId: string) {
@@ -418,7 +487,27 @@ export class BorrowerPaymentsService {
       throw new BadRequestException('PayHere order not found.');
     }
 
-    const data = doc.data() as { checkoutUrl?: string; payment?: unknown };
+    const data = doc.data() as {
+      checkoutUrl?: string;
+      payment?: unknown;
+      status?: string;
+      expiresAt?: unknown;
+    };
+    if (
+      !['initiated', 'pending'].includes(String(data.status)) ||
+      this.timestampMillis(data.expiresAt) <= Date.now()
+    ) {
+      if (['initiated', 'pending'].includes(String(data.status))) {
+        await doc.ref.update({
+          status: 'expired',
+          expiredAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      }
+      throw new BadRequestException(
+        'This PayHere checkout has expired or is no longer active.',
+      );
+    }
     const checkoutUrl = String(data.checkoutUrl ?? '');
     const payment =
       data.payment && typeof data.payment === 'object'
@@ -485,16 +574,8 @@ export class BorrowerPaymentsService {
   }
 
   async handlePayHereNotification(payload: PayHereNotification) {
-    const merchantId = this.configService.get<string>('PAYHERE_MERCHANT_ID');
-    const orderId = payload.order_id;
-
-    if (!merchantId || payload.merchant_id !== merchantId || !orderId) {
-      throw new BadRequestException('Invalid PayHere notification.');
-    }
-
-    if (!this.isValidPayHereNotification(payload)) {
-      throw new BadRequestException('Invalid PayHere signature.');
-    }
+    const notification = this.payHere.verifyNotification(payload);
+    const orderId = notification.orderId;
 
     const orderRef = this.db.collection(this.PAYHERE_ORDERS_COL).doc(orderId);
     const orderDoc = await orderRef.get();
@@ -504,50 +585,114 @@ export class BorrowerPaymentsService {
     }
 
     const order = orderDoc.data() as PayHereOrder;
-    const statusCode = String(payload.status_code ?? '');
-    const notificationAmount = Number(payload.payhere_amount);
-    const notificationCurrency = String(payload.payhere_currency ?? '');
-
     if (
-      this.formatAmount(notificationAmount) !==
-        this.formatAmount(order.amount) ||
-      notificationCurrency !== order.currency
+      notification.amountMinor !==
+        (order.amountMinor ?? this.payHere.toMinor(order.amount)) ||
+      notification.currency !== order.currency
     ) {
       throw new BadRequestException('PayHere payment details do not match.');
     }
-
-    if (order.status === 'completed' && order.repaymentId) {
+    const eventRef = this.db
+      .collection('payherePaymentEvents')
+      .doc(`${orderId}_${notification.eventId}`);
+    if ((await eventRef.get()).exists) {
       return { accepted: true, alreadyProcessed: true };
     }
-
-    if (statusCode !== '2') {
-      await orderRef.update({
-        status: this.mapPayHereStatus(statusCode),
-        payherePaymentId: payload.payment_id ?? null,
-        notification: payload,
-        updatedAt: FieldValue.serverTimestamp(),
+    if (notification.status === 'charged_back') {
+      await this.freezeChargeback(orderRef, order, notification);
+      await eventRef.set({
+        ...notification.sanitized,
+        eventId: notification.eventId,
+        source: 'callback',
+        receivedAt: Timestamp.now(),
       });
-
+      return { accepted: true, completed: false, status: 'charged_back' };
+    }
+    if (order.status === 'completed' && order.repaymentId) {
+      await eventRef.set({
+        ...notification.sanitized,
+        eventId: notification.eventId,
+        source: 'callback',
+        receivedAt: Timestamp.now(),
+      });
+      return { accepted: true, alreadyProcessed: true };
+    }
+    if (notification.status !== 'completed') {
+      await orderRef.update({
+        status: notification.status,
+        payherePaymentId: notification.paymentId,
+        lastNotification: notification.sanitized,
+        ...(notification.status === 'pending'
+          ? {}
+          : { payment: FieldValue.delete() }),
+        updatedAt: Timestamp.now(),
+      });
+      await eventRef.set({
+        ...notification.sanitized,
+        eventId: notification.eventId,
+        source: 'callback',
+        receivedAt: Timestamp.now(),
+      });
+      if (notification.status !== 'pending') {
+        await this.clearActivePayHereOrder(order);
+      }
       return { accepted: true, completed: false };
     }
 
-    const repayment = await this.coreLedgerService.settleInstallment(
-      order.loanId,
-      order.installmentId,
-      order.borrowerId,
-      {
-        paymentMethod: 'card',
-        externalReference: payload.payment_id ?? order.orderId,
-      },
-    );
+    await orderRef.update({ status: 'processing', updatedAt: Timestamp.now() });
 
-    await orderRef.update({
-      status: 'completed',
-      repaymentId: repayment.transactionId,
-      payherePaymentId: payload.payment_id ?? null,
-      notification: payload,
-      updatedAt: FieldValue.serverTimestamp(),
-      completedAt: FieldValue.serverTimestamp(),
+    let repayment: { transactionId: string };
+    try {
+      repayment = await this.coreLedgerService.settleInstallment(
+        order.loanId,
+        order.installmentId,
+        order.borrowerId,
+        {
+          paymentMethod: 'card',
+          externalReference: notification.paymentId ?? order.orderId,
+        },
+      );
+    } catch (error) {
+      await orderRef.update({
+        status: 'processing_failed',
+        processingError:
+          error instanceof Error
+            ? error.message.slice(0, 200)
+            : 'Unknown error',
+        updatedAt: Timestamp.now(),
+      });
+      throw error;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/require-await
+    await this.db.runTransaction(async (transaction) => {
+      transaction.update(orderRef, {
+        status: 'completed',
+        repaymentId: repayment.transactionId,
+        payherePaymentId: notification.paymentId,
+        lastNotification: notification.sanitized,
+        payment: FieldValue.delete(),
+        updatedAt: Timestamp.now(),
+        completedAt: Timestamp.now(),
+      });
+      transaction.set(eventRef, {
+        ...notification.sanitized,
+        eventId: notification.eventId,
+        source: 'callback',
+        receivedAt: Timestamp.now(),
+      });
+      transaction.update(
+        this.db
+          .collection('loans')
+          .doc(order.loanId)
+          .collection('installments')
+          .doc(order.installmentId),
+        {
+          activePayHereOrderId: null,
+          activePayHereOrderExpiresAt: null,
+          updatedAt: Timestamp.now(),
+        },
+      );
     });
 
     return {
@@ -555,6 +700,276 @@ export class BorrowerPaymentsService {
       completed: true,
       repaymentId: repayment.transactionId,
     };
+  }
+
+  async getPayHereOrderStatus(orderId: string, borrowerId: string) {
+    const ref = this.db.collection(this.PAYHERE_ORDERS_COL).doc(orderId);
+    const snapshot = await ref.get();
+    if (!snapshot.exists)
+      throw new BadRequestException('PayHere order not found.');
+    const order = snapshot.data() as PayHereOrder;
+    if (order.borrowerId !== borrowerId) {
+      throw new ForbiddenException(
+        'This PayHere order belongs to another borrower.',
+      );
+    }
+    if (
+      ['initiated', 'pending', 'processing', 'processing_failed'].includes(
+        order.status,
+      ) &&
+      this.payHere.reconciliationEnabled() &&
+      Date.now() - this.timestampMillis(order.lastReconciledAt) > 2 * 60_000
+    ) {
+      await this.reconcilePayHereOrder(ref, order).catch((error) =>
+        this.payHere.logReconciliationError(orderId, error),
+      );
+      const refreshed = await ref.get();
+      Object.assign(order, refreshed.data());
+    }
+    if (
+      ['initiated', 'pending'].includes(order.status) &&
+      this.timestampMillis(order.expiresAt) <= Date.now()
+    ) {
+      await ref.update({
+        status: 'expired',
+        expiredAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+      await this.clearActivePayHereOrder(order);
+      order.status = 'expired';
+    }
+    return {
+      orderId,
+      status: order.status,
+      expiresAt: this.toIsoDate(order.expiresAt),
+      repaymentId: order.repaymentId ?? null,
+    };
+  }
+
+  private async reconcilePayHereOrder(
+    orderRef: FirebaseFirestore.DocumentReference,
+    order: PayHereOrder,
+  ) {
+    await orderRef.set({ lastReconciledAt: Timestamp.now() }, { merge: true });
+    const retrieved = await this.payHere.retrievePayment(order.orderId);
+    if (!retrieved) return;
+    const orderAmountMinor =
+      order.amountMinor ?? this.payHere.toMinor(order.amount);
+    if (
+      retrieved.orderId !== order.orderId ||
+      retrieved.amountMinor !== orderAmountMinor ||
+      retrieved.currency !== order.currency
+    ) {
+      throw new Error(
+        'Retrieved PayHere payment details do not match the order.',
+      );
+    }
+    if (
+      retrieved.status === 'CHARGEBACKED' ||
+      retrieved.status.startsWith('REFUND')
+    ) {
+      await this.freezeChargeback(orderRef, order, {
+        paymentId: retrieved.paymentId,
+        sanitized: {
+          orderId: order.orderId,
+          paymentId: retrieved.paymentId,
+          amount: this.payHere.formatMinor(retrieved.amountMinor),
+          currency: retrieved.currency,
+          statusCode: retrieved.status,
+        },
+      });
+      return;
+    }
+    if (retrieved.status !== 'RECEIVED' || order.status === 'completed') return;
+    const repayment = await this.coreLedgerService.settleInstallment(
+      order.loanId,
+      order.installmentId,
+      order.borrowerId,
+      {
+        paymentMethod: 'card',
+        externalReference: retrieved.paymentId,
+      },
+    );
+    await orderRef.update({
+      status: 'completed',
+      repaymentId: repayment.transactionId,
+      payherePaymentId: retrieved.paymentId,
+      reconciledAt: Timestamp.now(),
+      completedAt: Timestamp.now(),
+      payment: FieldValue.delete(),
+      updatedAt: Timestamp.now(),
+    });
+  }
+
+  private async reconcilePendingPayHereOrders() {
+    const snapshot = await this.db
+      .collection(this.PAYHERE_ORDERS_COL)
+      .where('status', 'in', [
+        'initiated',
+        'pending',
+        'processing',
+        'processing_failed',
+      ])
+      .limit(100)
+      .get();
+    for (const document of snapshot.docs) {
+      let order = document.data() as PayHereOrder;
+      if (
+        Date.now() - this.timestampMillis(order.lastReconciledAt) <
+        2 * 60_000
+      )
+        continue;
+      await this.reconcilePayHereOrder(document.ref, order).catch((error) =>
+        this.payHere.logReconciliationError(document.id, error),
+      );
+      order = (await document.ref.get()).data() as PayHereOrder;
+      if (
+        ['initiated', 'pending'].includes(order.status) &&
+        this.timestampMillis(order.expiresAt) <= Date.now()
+      ) {
+        await document.ref.update({
+          status: 'expired',
+          expiredAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+        await this.clearActivePayHereOrder(order);
+      }
+    }
+  }
+
+  private async freezeChargeback(
+    orderRef: FirebaseFirestore.DocumentReference,
+    order: PayHereOrder,
+    notification: {
+      paymentId: string | null;
+      sanitized: Record<string, string | null>;
+    },
+  ) {
+    const now = Timestamp.now();
+    const disputeId = `payhere_chargeback_${order.orderId}`;
+    // Firestore expects a promise-returning callback; this phase only queues
+    // atomic writes, so it has no asynchronous read to await.
+    // eslint-disable-next-line @typescript-eslint/require-await
+    await this.db.runTransaction(async (transaction) => {
+      transaction.update(orderRef, {
+        status: 'charged_back',
+        payherePaymentId: notification.paymentId,
+        lastNotification: notification.sanitized,
+        chargedBackAt: now,
+        payment: FieldValue.delete(),
+        updatedAt: now,
+      });
+      transaction.set(
+        this.db.collection('loans').doc(order.loanId),
+        {
+          paymentReviewStatus: 'chargeback_review',
+          paymentReviewOrderId: order.orderId,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+      if (order.repaymentId) {
+        transaction.set(
+          this.db.collection('transactions').doc(order.repaymentId),
+          {
+            providerStatus: 'charged_back',
+            riskStatus: 'under_review',
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+      }
+      transaction.set(
+        this.db.collection('disputes').doc(disputeId),
+        {
+          id: disputeId,
+          disputeId,
+          disputeCode: `PH-${order.orderId}`,
+          loanId: order.loanId,
+          transactionId: order.repaymentId ?? null,
+          installmentId: order.installmentId,
+          complainantId: 'system',
+          complainantRole: 'borrower',
+          respondentId: order.lenderId ?? '',
+          respondentRole: 'lender',
+          borrowerId: order.borrowerId,
+          lenderId: order.lenderId ?? '',
+          borrowerName: '',
+          lenderName: '',
+          category: 'payment',
+          subject: 'PayHere chargeback requires review',
+          description: `PayHere reported a chargeback or refund for order ${order.orderId}.`,
+          desiredOutcome:
+            'An administrator must review the provider payment before any ledger adjustment.',
+          disputedAmountMinor:
+            order.amountMinor ?? this.payHere.toMinor(order.amount),
+          currency: order.currency,
+          evidenceDocumentIds: [],
+          status: 'under_review',
+          priority: 'critical',
+          assignedAdminId: null,
+          resolution: null,
+          acknowledgements: {},
+          reopenCount: 0,
+          responseRequestedFrom: null,
+          source: 'payhere',
+          createdAt: now,
+          updatedAt: now,
+          resolvedAt: null,
+          closedAt: null,
+        },
+        { merge: true },
+      );
+    });
+    const notice = {
+      eventType: 'payhere_chargeback',
+      eventId: order.orderId,
+      category: 'payment',
+      title: 'Payment chargeback under review',
+      message:
+        'PayHere reported a chargeback. Card payments for this loan are paused while an administrator reviews it.',
+      severity: 'critical' as const,
+      entityType: 'dispute',
+      entityId: disputeId,
+      actionLabel: 'Review dispute',
+      actionTarget: '/admin/disputes',
+      metadata: { loanId: order.loanId, orderId: order.orderId },
+    };
+    await Promise.all(
+      [
+        this.roleNotifications?.createAdmin(notice),
+        this.roleNotifications?.createBorrower(order.borrowerId, {
+          ...notice,
+          actionTarget: 'support',
+        }),
+        order.lenderId
+          ? this.roleNotifications?.createLender(order.lenderId, notice)
+          : undefined,
+      ]
+        .filter(Boolean)
+        .map((promise) => Promise.resolve(promise).catch(() => undefined)),
+    );
+  }
+
+  private async clearActivePayHereOrder(order: PayHereOrder) {
+    const installmentRef = this.db
+      .collection('loans')
+      .doc(order.loanId)
+      .collection('installments')
+      .doc(order.installmentId);
+    await this.db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(installmentRef);
+      if (
+        snapshot.exists &&
+        snapshot.get('activePayHereOrderId') === order.orderId
+      ) {
+        transaction.update(installmentRef, {
+          activePayHereOrderId: null,
+          activePayHereOrderExpiresAt: null,
+          updatedAt: Timestamp.now(),
+        });
+      }
+    });
   }
 
   generateQrToken(loanId: string, borrowerId: string, amount?: number) {
@@ -792,58 +1207,18 @@ export class BorrowerPaymentsService {
     return typeof value === 'string' ? value : null;
   }
 
-  private generateCheckoutHash(
-    merchantId: string,
-    orderId: string,
-    amount: string,
-    currency: string,
-  ) {
-    const merchantSecret = this.configService.get<string>(
-      'PAYHERE_MERCHANT_SECRET',
-    );
-    const hashedSecret = this.md5(merchantSecret ?? '').toUpperCase();
-
-    return this.md5(
-      `${merchantId}${orderId}${amount}${currency}${hashedSecret}`,
-    ).toUpperCase();
-  }
-
-  private isValidPayHereNotification(payload: PayHereNotification) {
-    const merchantSecret = this.configService.get<string>(
-      'PAYHERE_MERCHANT_SECRET',
-    );
-    const localMd5sig = this.md5(
-      `${payload.merchant_id ?? ''}${payload.order_id ?? ''}${payload.payhere_amount ?? ''}${payload.payhere_currency ?? ''}${payload.status_code ?? ''}${this.md5(merchantSecret ?? '').toUpperCase()}`,
-    ).toUpperCase();
-
-    return localMd5sig === String(payload.md5sig ?? '').toUpperCase();
-  }
-
-  private md5(value: string) {
-    return createHash('md5').update(value).digest('hex');
-  }
-
-  private formatAmount(amount: number) {
-    return Number(amount).toFixed(2);
-  }
-
-  private isPayHereSandbox() {
-    return ['true', '1', 'yes', 'sandbox'].includes(
-      String(this.configService.get<string>('PAYHERE_SANDBOX') ?? '')
-        .trim()
-        .toLowerCase(),
-    );
-  }
-
-  private getPublicBaseUrl(requestBaseUrl: string) {
-    const configured =
-      this.configService.get<string>('PAYHERE_PUBLIC_BASE_URL') ??
-      this.configService.get<string>('PUBLIC_API_BASE_URL') ??
-      this.configService.get<string>('API_PUBLIC_URL');
-
-    return (configured || requestBaseUrl)
-      .replace(/\/api\/?$/, '')
-      .replace(/\/$/, '');
+  private timestampMillis(value: unknown) {
+    if (value instanceof Timestamp) return value.toMillis();
+    if (
+      value &&
+      typeof value === 'object' &&
+      'toMillis' in value &&
+      typeof value.toMillis === 'function'
+    ) {
+      return (value as { toMillis(): number }).toMillis();
+    }
+    if (value instanceof Date) return value.getTime();
+    return typeof value === 'string' ? new Date(value).getTime() : 0;
   }
 
   private getFirstName(fullName?: string) {
@@ -858,14 +1233,6 @@ export class BorrowerPaymentsService {
       .trim()
       .split(/\s+/);
     return parts.length > 1 ? parts.slice(1).join(' ') : 'Customer';
-  }
-
-  private mapPayHereStatus(statusCode: string) {
-    if (statusCode === '0') return 'pending';
-    if (statusCode === '-1') return 'cancelled';
-    if (statusCode === '-2') return 'failed';
-    if (statusCode === '-3') return 'charged_back';
-    return 'unknown';
   }
 
   private escapeHtml(value: string) {

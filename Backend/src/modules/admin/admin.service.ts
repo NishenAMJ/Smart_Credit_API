@@ -190,7 +190,7 @@ export class AdminService {
     };
   }
 
-  // Returns all users after removing sensitive fields and applying optional filters.
+  // ADMIN: Manage users - service
   async getAllUsers(
     query: QueryUsersDto = {},
     limit?: string,
@@ -238,7 +238,7 @@ export class AdminService {
     }
   }
 
-  // Returns a single sanitized user record for the requested id.
+  // ADMIN: View user details - service
   async getUserById(userId: string) {
     try {
       const userDoc = await this.getUserDocument(userId).get();
@@ -258,7 +258,7 @@ export class AdminService {
     }
   }
 
-  // Aggregates user counts by status and role for admin reporting.
+  // ADMIN: View user statistics - service
   async getUserStats() {
     try {
       const cached = await this.cache.remember('admin:users:stats', () =>
@@ -300,7 +300,7 @@ export class AdminService {
     }
   }
 
-  // Suspends the selected user and persists the audit-related metadata.
+  // ADMIN: Suspend user - service
   async suspendUser(userId: string, reason?: string, actorAdminId = 'system') {
     try {
       const userRef = this.getUserDocument(userId);
@@ -346,7 +346,7 @@ export class AdminService {
     }
   }
 
-  // Restores a suspended user to the active state and clears suspension metadata.
+  // ADMIN: Activate user - service
   async activateUser(userId: string, actorAdminId = 'system') {
     try {
       const userRef = this.getUserDocument(userId);

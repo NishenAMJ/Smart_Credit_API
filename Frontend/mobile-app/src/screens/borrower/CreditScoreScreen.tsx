@@ -1,12 +1,11 @@
 /** @format */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
@@ -15,6 +14,9 @@ import { creditScoreService } from "../../api/services/creditScore.service";
 import type { CreditScoreSummary } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
 import { getScoreColor, getScoreRating } from "../../utils/scoreUtils";
+import { COLORS } from "../../constants/colors";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
 
 type CreditScoreScreenProps = {
   navigation: BorrowerNavigation;
@@ -28,6 +30,7 @@ export default function CreditScoreScreen({
 }: CreditScoreScreenProps) {
   const [creditData, setCreditData] = useState<CreditScoreSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -49,13 +52,19 @@ export default function CreditScoreScreen({
       setCreditData(null);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void fetchCreditScore();
+  }, []);
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
@@ -69,17 +78,28 @@ export default function CreditScoreScreen({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name="arrow-left" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Smart Credit Score</Text>
-        <TouchableOpacity onPress={() => navigation.navigate("CreditHistory")}>
-          <Feather name="clock" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+      <BorrowerPageHeader
+        title="Smart Credit Score"
+        onBack={() => navigation.goBack()}
+        actions={[
+          {
+            icon: "clock",
+            label: "View credit history",
+            onPress: () => navigation.navigate("CreditHistory"),
+          },
+        ]}
+      />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <BorrowerRefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
+        }
+      >
         {errorMessage ? (
           <Text style={styles.emptyBreakdownText}>{errorMessage}</Text>
         ) : null}
@@ -141,15 +161,15 @@ export default function CreditScoreScreen({
         <View style={styles.tipsCard}>
           <Text style={styles.sectionTitle}>Tips to Improve</Text>
           <View style={styles.tip}>
-            <Feather name="check-circle" size={20} color="#10B981" />
+            <Feather name="check-circle" size={20} color={COLORS.success} />
             <Text style={styles.tipText}>Pay all loans on time</Text>
           </View>
           <View style={styles.tip}>
-            <Feather name="check-circle" size={20} color="#10B981" />
+            <Feather name="check-circle" size={20} color={COLORS.success} />
             <Text style={styles.tipText}>Maintain low balance</Text>
           </View>
           <View style={styles.tip}>
-            <Feather name="check-circle" size={20} color="#10B981" />
+            <Feather name="check-circle" size={20} color={COLORS.success} />
             <Text style={styles.tipText}>Avoid multiple loan applications</Text>
           </View>
         </View>
@@ -161,34 +181,20 @@ export default function CreditScoreScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F5F6FA",
-  },
-  header: {
-    backgroundColor: "#007AFF",
-    paddingTop: 50,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#FFFFFF",
+    backgroundColor: COLORS.background,
   },
   content: {
     flex: 1,
     paddingHorizontal: 20,
   },
   scoreCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 30,
     alignItems: "center",
@@ -204,7 +210,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: COLORS.border,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
@@ -212,7 +218,7 @@ const styles = StyleSheet.create({
   scoreNumber: {
     fontSize: 48,
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginBottom: 4,
   },
   scoreLevel: {
@@ -226,7 +232,7 @@ const styles = StyleSheet.create({
   },
 
   breakdownCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 20,
     marginBottom: 15,
@@ -239,7 +245,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginBottom: 20,
   },
   breakdownItem: {
@@ -252,31 +258,31 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: {
     fontSize: 14,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   breakdownValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
   },
   emptyBreakdownText: {
     fontSize: 13,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     lineHeight: 19,
   },
   progressBar: {
     height: 8,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: COLORS.border,
     borderRadius: 4,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     borderRadius: 4,
   },
   tipsCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 20,
     marginBottom: 100,
@@ -293,7 +299,7 @@ const styles = StyleSheet.create({
   },
   tipText: {
     fontSize: 14,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginLeft: 12,
   },
 });

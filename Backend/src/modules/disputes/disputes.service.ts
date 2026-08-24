@@ -825,6 +825,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  // ADMIN: Manage disputes - service
   async getAllDisputes(
     limit?: string,
     cursor?: string,
@@ -1198,6 +1199,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     return { success: true, dispute: updated };
   }
 
+  // ADMIN: Escalate dispute - service
   async escalateDispute(
     disputeId: string,
     reason: string,
@@ -1230,6 +1232,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  // ADMIN: Resolve dispute - service
   async resolveCanonical(
     disputeId: string,
     adminId: string,
@@ -1411,6 +1414,7 @@ export class DisputesService implements OnModuleInit, OnModuleDestroy {
     return { success: true, dispute: updated };
   }
 
+  // ADMIN: Close dispute - service
   async close(disputeId: string, adminId: string, reason: string) {
     const message = this.text(reason, 'reason', 3, 1000);
     const now = Timestamp.now();

@@ -6,7 +6,8 @@ export type AdBoostStatus =
   | 'approved'
   | 'rejected'
   | 'cancelled'
-  | 'expired';
+  | 'expired'
+  | 'chargeback_review';
 
 export interface AdBoostPlan {
   id: string;
@@ -20,6 +21,7 @@ export interface AdBoostResponse {
   boostId: string;
   listingId: string;
   lenderId: string;
+  lenderName?: string;
   plan: AdBoostPlan;
   paymentMethod: AdBoostPaymentMethod;
   status: AdBoostStatus;
@@ -32,5 +34,7 @@ export interface AdBoostResponse {
   createdAt: string | null;
   submittedAt: string | null;
   reviewedAt: string | null;
+  reviewedByAdminId: string | null;
+  reviewedByAdminName?: string;
+  listingTitle?: string;
 }
-

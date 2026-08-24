@@ -11,11 +11,13 @@ import { AdBoostsService } from './ad-boosts.service';
 export class AdminAdBoostsController {
   constructor(private readonly service: AdBoostsService) {}
 
+  // ADMIN: Verify ad boost payments - controller
   @Get()
   list(@Query('status') status?: string) {
     return this.service.listForAdmin(status);
   }
 
+  // ADMIN: Approve or reject ad boost payment - controller
   @Post(':boostId/decision')
   decide(
     @Req() request: AuthenticatedRequest,
@@ -30,4 +32,3 @@ export class AdminAdBoostsController {
     );
   }
 }
-

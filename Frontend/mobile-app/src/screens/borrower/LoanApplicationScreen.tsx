@@ -18,6 +18,8 @@ import { navigateToBorrowerTab } from "../../utils/borrowerNavigation";
 import { isValidAmount } from "../../utils/validation";
 import type { BorrowerLoan } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
+import { COLORS } from "../../constants/colors";
 
 type LoanApplicationScreenProps = {
   route: {
@@ -268,21 +270,17 @@ export default function LoanApplicationScreen({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Feather name="arrow-left" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Loan Application</Text>
-        <TouchableOpacity
-          style={styles.notificationButton}
-          onPress={() => navigation.navigate("Notifications")}
-        >
-          <Feather name="bell" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+      <BorrowerPageHeader
+        title="Loan Application"
+        onBack={() => navigation.goBack()}
+        actions={[
+          {
+            icon: "bell",
+            label: "Open notifications",
+            onPress: () => navigation.navigate("Notifications"),
+          },
+        ]}
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.lenderCard}>
@@ -321,13 +319,13 @@ export default function LoanApplicationScreen({
               <Feather
                 name="check-circle"
                 size={16}
-                color="#007AFF"
+                color={COLORS.primary}
                 style={styles.scoreIcon}
               />
             </View>
             <View style={styles.scoreRight}>
-              <Feather name="star" size={16} color="#F59E0B" />
-              <Feather name="star" size={16} color="#F59E0B" />
+              <Feather name="star" size={16} color={COLORS.warning} />
+              <Feather name="star" size={16} color={COLORS.warning} />
               <Text style={styles.scoreRating}>2.0</Text>
             </View>
           </View>
@@ -455,10 +453,10 @@ export default function LoanApplicationScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     paddingTop: 50,
     paddingBottom: 15,
     paddingHorizontal: 20,
@@ -472,7 +470,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
   },
   notificationButton: {
     padding: 5,
@@ -498,15 +496,15 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 24,
     fontWeight: "600",
-    color: "#007AFF",
+    color: COLORS.primary,
   },
   lenderName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
   },
   loanInfoCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 15,
     marginBottom: 15,
@@ -525,23 +523,23 @@ const styles = StyleSheet.create({
   loanTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
   },
   loanAmountText: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
   },
   loanInfoDetails: {
     marginBottom: 15,
   },
   loanInfoText: {
     fontSize: 14,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   progressBar: {
     height: 6,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: COLORS.borderStrong,
     borderRadius: 3,
     overflow: "hidden",
     marginBottom: 15,
@@ -563,12 +561,12 @@ const styles = StyleSheet.create({
   scoreLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginRight: 5,
   },
   scoreValue: {
     fontSize: 14,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginRight: 5,
   },
   scoreIcon: {
@@ -581,7 +579,7 @@ const styles = StyleSheet.create({
   scoreRating: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginLeft: 5,
   },
   formSection: {
@@ -590,7 +588,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginBottom: 10,
   },
   warningBanner: {
@@ -615,11 +613,11 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
     marginBottom: 10,
   },
   inputContainer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
     flexDirection: "row",
     alignItems: "center",
@@ -634,17 +632,17 @@ const styles = StyleSheet.create({
   currency: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#6B7280",
+    color: COLORS.textSecondary,
     marginRight: 10,
   },
   input: {
     flex: 1,
     fontSize: 16,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: COLORS.textPrimary,
   },
   submitButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     paddingVertical: 16,
     borderRadius: 10,
     alignItems: "center",
@@ -661,6 +659,6 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
   },
 });

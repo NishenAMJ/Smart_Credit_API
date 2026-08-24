@@ -178,6 +178,7 @@ function buildSummaryCards(stats: {
 
 // Keeps user moderation logic and view state together on a single screen.
 // Renders the admin user management page and keeps moderation actions together.
+// ADMIN: Manage users - frontend
 export default function ManageUsers() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
@@ -289,7 +290,7 @@ export default function ManageUsers() {
     setCursorStack([]);
   }
 
-  // Updates local state immediately after a successful backend moderation action.
+  // ADMIN: Suspend user - frontend
   async function handleSuspend(userId: string) {
     try {
       await suspendUser(userId, DEFAULT_USER_SUSPENSION_REASON);
@@ -303,7 +304,7 @@ export default function ManageUsers() {
     }
   }
 
-  // Mirrors the backend reactivation result without forcing a full page reload.
+  // ADMIN: Activate user - frontend
   async function handleActivate(userId: string) {
     try {
       await activateUser(userId);
@@ -323,7 +324,7 @@ export default function ManageUsers() {
         <div>
           <h1 className="page-title">Manage Users</h1>
           <p className="page-subtitle">
-            Users loaded from Firestore with lender and borrower credit data
+            Review lender and borrower accounts and credit information
           </p>
         </div>
         <span style={S.pendingChip}>{stats.pendingUsers} Pending</span>

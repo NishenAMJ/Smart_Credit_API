@@ -35,7 +35,7 @@ export type BorrowerStackParamList = {
   CreditScore: undefined;
   CreditHistory: undefined;
   HelpCenter: undefined;
-  ContactSupport: { initialCategory?: string } | undefined;
+  ContactSupport: undefined;
   Notifications: undefined;
   KycResubmission: undefined;
   BorrowerChat: NavigatorScreenParams<ChatStackParamList> | undefined;

@@ -4,14 +4,18 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Callout, Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
+import MapView, {
+  Callout,
+  Marker,
+  PROVIDER_GOOGLE,
+  Region,
+} from "react-native-maps";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -22,6 +26,8 @@ import {
   NearbyUserLocation,
 } from "../../api/services/location.service";
 import { COLORS } from "../../constants/colors";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
 import {
   MAP_DEFAULT_DELTA,
   MAP_DEFAULT_RADIUS_KM,
@@ -138,21 +144,18 @@ export default function NearbyLendersMapScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Feather name="arrow-left" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>Nearby Lenders</Text>
-          <Text style={styles.headerSubtitle}>{summaryText}</Text>
-        </View>
-        <TouchableOpacity style={styles.headerButton} onPress={onRefresh}>
-          <Feather name="refresh-cw" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-        </View>
+      <BorrowerPageHeader
+        title={`Nearby Lenders · ${summaryText}`}
+        onBack={() => navigation.goBack()}
+        actions={[
+          {
+            icon: "refresh-cw",
+            label: "Refresh nearby lenders",
+            onPress: onRefresh,
+            disabled: refreshing,
+          },
+        ]}
+      />
       <View style={styles.mapWrap}>
         {region ? (
           <MapView
@@ -230,12 +233,13 @@ export default function NearbyLendersMapScreen({ navigation }: Props) {
                 size={18}
                 color={COLORS.primary}
               />
-              
             </TouchableOpacity>
           </View>
         </View>
 
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+        {errorMessage ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : null}
 
         <View style={styles.radiusSection}>
           <Text style={styles.radiusLabel}>Radius</Text>
@@ -277,7 +281,10 @@ export default function NearbyLendersMapScreen({ navigation }: Props) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.resultList}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              <BorrowerRefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+              />
             }
           >
             {lenders.length === 0 && !loading ? (
@@ -314,7 +321,9 @@ export default function NearbyLendersMapScreen({ navigation }: Props) {
                   <Text style={styles.resultMeta}>
                     {lender.city ?? lender.district ?? "Nearby area"}
                   </Text>
-                  <Text style={styles.distanceText}>{lender.distanceKm} km</Text>
+                  <Text style={styles.distanceText}>
+                    {lender.distanceKm} km
+                  </Text>
                   <View style={styles.applyHint}>
                     <Text style={styles.applyHintText}>
                       {loan ? "Apply now" : "No active offer"}
@@ -361,7 +370,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   headerTitle: {
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
     fontSize: 18,
     fontWeight: "700",
   },
@@ -464,7 +473,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: 8,
   },
- 
+
   errorText: {
     color: COLORS.error,
     fontSize: 13,
@@ -494,7 +503,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 8,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
   },
   radiusChipActive: {
     borderColor: COLORS.primary,
@@ -518,7 +527,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     padding: 12,
     marginRight: 12,
   },
@@ -568,7 +577,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     padding: 14,
     justifyContent: "center",
   },

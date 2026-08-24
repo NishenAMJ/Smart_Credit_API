@@ -13,11 +13,26 @@ export type AuditSeverity = 'info' | 'warning' | 'critical' | 'success';
 
 export interface AuditLogEntry {
   id: string;
+  action: string;
   actionType: AuditActionType;
   description: string;
   performedBy: string;
+  actorId: string;
   targetName: string;
-  targetType: 'user' | 'ad' | 'dispute' | 'transaction' | 'system' | 'report';
+  targetId: string;
+  targetType:
+    | 'user'
+    | 'ad'
+    | 'boost'
+    | 'dispute'
+    | 'transaction'
+    | 'system'
+    | 'report';
   dateTime: string;
   severity: AuditSeverity;
+  before: unknown;
+  after: unknown;
+  metadata: Record<string, unknown>;
+  ipAddress?: string;
+  sessionId?: string;
 }

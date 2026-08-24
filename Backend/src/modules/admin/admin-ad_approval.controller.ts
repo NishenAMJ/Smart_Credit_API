@@ -26,7 +26,7 @@ class RejectAdDto {
 export class AdminAdApprovalController {
   constructor(private readonly approvalService: AdminAdApprovalService) {}
 
-  // Static routes must remain above :adId routes.
+  // ADMIN: View advertisement statistics - controller
   @Get('stats')
   async getAdStats() {
     return this.approvalService.getAdStats();
@@ -40,8 +40,7 @@ export class AdminAdApprovalController {
     return { count: response.stats.pending };
   }
 
-  // GET /admin/ads?status=pending|active|rejected|closed|all
-  // List ads filtered by status
+  // ADMIN: Moderate advertisements - controller
   @Get()
   async getAds(
     @Query('limit') limit?: string,
@@ -60,8 +59,7 @@ export class AdminAdApprovalController {
     return this.approvalService.getAdDetail(adId);
   }
 
-  // POST /admin/ads/:adId/approve
-  // Approve a pending ad → sets status to 'active'
+  // ADMIN: Approve advertisement - controller
   @Post(':adId/approve')
   @HttpCode(HttpStatus.OK)
   async approveAd(
@@ -71,8 +69,7 @@ export class AdminAdApprovalController {
     return this.approvalService.approveAd(adId, req.user.sub);
   }
 
-  // POST /admin/ads/:adId/reject
-  // Reject a pending ad with a reason
+  // ADMIN: Reject advertisement - controller
   @Post(':adId/reject')
   @HttpCode(HttpStatus.OK)
   async rejectAd(

@@ -1,5 +1,6 @@
 import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
+// ADMIN: Suspend user - validation
 export class SuspendUserDto {
   @IsString()
   @IsNotEmpty()

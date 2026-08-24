@@ -2,6 +2,8 @@ import { BorrowerPaymentsService } from './borrower-payments.service';
 import { RepaymentMethod } from '../applications/dto/loan-application.dto';
 import { BorrowerService } from '../core/borrower.service';
 import { createHash } from 'crypto';
+import { PayHereService } from '../../../common/payhere/payhere.service';
+import { ForbiddenException } from '@nestjs/common';
 
 type BorrowerPaymentsServiceMock = jest.Mocked<
   Pick<BorrowerService, 'makeRepayment' | 'generateQrToken' | 'verifyQrToken'>
@@ -144,9 +146,33 @@ describe('BorrowerPaymentsService', () => {
       get: jest.fn(async () => ({ exists: true, data: () => order })),
       update: jest.fn(async (updates) => Object.assign(order, updates)),
     };
+    const events = new Set<string>();
+    const eventRef = (id: string) => ({
+      get: jest.fn(async () => ({ exists: events.has(id) })),
+      set: jest.fn(async () => {
+        events.add(id);
+      }),
+    });
+    const installmentRef = { update: jest.fn(), set: jest.fn() };
+    const loanRef = {
+      collection: () => ({ doc: () => installmentRef }),
+      set: jest.fn(),
+    };
     const firebaseService = {
       db: {
-        collection: () => ({ doc: () => orderRef }),
+        collection: (name: string) => ({
+          doc: (id: string) => {
+            if (name === 'payherePayments') return orderRef;
+            if (name === 'payherePaymentEvents') return eventRef(id);
+            if (name === 'loans') return loanRef;
+            return installmentRef;
+          },
+        }),
+        runTransaction: async (callback: (transaction: any) => unknown) =>
+          callback({
+            update: (ref: any, updates: any) => ref.update(updates),
+            set: (ref: any, data: any) => ref.set(data),
+          }),
       },
     };
     const configService = {
@@ -164,9 +190,9 @@ describe('BorrowerPaymentsService', () => {
     };
     const callbackService = new BorrowerPaymentsService(
       {} as any,
-      configService as any,
       firebaseService as any,
       coreLedgerService as any,
+      new PayHereService(configService as any),
     );
     const hashedSecret = createHash('md5')
       .update(secret)
@@ -205,5 +231,48 @@ describe('BorrowerPaymentsService', () => {
         externalReference: 'provider-payment-1',
       }),
     );
+
+    const chargebackSignature = createHash('md5')
+      .update('merchant-1PH-14500.00LKR-3' + hashedSecret)
+      .digest('hex')
+      .toUpperCase();
+    await expect(
+      callbackService.handlePayHereNotification({
+        ...payload,
+        status_code: '-3',
+        md5sig: chargebackSignature,
+      }),
+    ).resolves.toMatchObject({ status: 'charged_back' });
+    expect(order.status).toBe('charged_back');
+    expect(coreLedgerService.settleInstallment).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not expose a PayHere order to another borrower', async () => {
+    const firebaseService = {
+      db: {
+        collection: () => ({
+          doc: () => ({
+            get: jest.fn(async () => ({
+              exists: true,
+              data: () => ({
+                orderId: 'PH-private',
+                borrowerId: 'borrower-owner',
+                status: 'pending',
+              }),
+            })),
+          }),
+        }),
+      },
+    };
+    const statusService = new BorrowerPaymentsService(
+      {} as any,
+      firebaseService as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(
+      statusService.getPayHereOrderStatus('PH-private', 'borrower-other'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

@@ -15,7 +15,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  RefreshControl,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
@@ -24,6 +23,7 @@ import LoanCard from "../../components/borrower/LoanCard";
 import TransactionCard from "../../components/borrower/TransactionCard";
 import CreditScoreWidget from "../../components/borrower/CreditScoreWidget";
 import SidebarMenu from "../../components/common/SidebarMenu";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
 import { dashboardService } from "../../api/services/dashboard.service";
 import { getMyLoans } from "../../api/services/loan.service";
 import { transactionService } from "../../api/services/transaction.service";
@@ -112,14 +112,13 @@ export default function Home({ navigation }: MyLoansScreenProps) {
         transactionResponse,
         creditResponse,
         agreementResponse,
-      ] =
-        await Promise.all([
-          dashboardService.getDashboard(),
-          getMyLoans("active"),
-          transactionService.getMyTransactions(),
-          creditScoreService.getMyCreditScore().catch(() => null),
-          listLegalDocuments().catch(() => null),
-        ]);
+      ] = await Promise.all([
+        dashboardService.getDashboard(),
+        getMyLoans("active"),
+        transactionService.getMyTransactions(),
+        creditScoreService.getMyCreditScore().catch(() => null),
+        listLegalDocuments().catch(() => null),
+      ]);
 
       let dashData = dashboardResponse;
       // Unwrap nested data if the service returned the response wrapper instead of the metrics directly
@@ -158,23 +157,6 @@ export default function Home({ navigation }: MyLoansScreenProps) {
           ...dashData,
           creditScore: creditResponse.data?.creditScore ?? dashData.creditScore,
         };
-      }
-
-      // Derive total outstanding from active loans when the dashboard field is zero or missing
-      if (
-        dashData &&
-        (!dashData.totalOutstanding || dashData.totalOutstanding === 0) &&
-        loanData?.length > 0
-      ) {
-        const totalOutstanding = loanData.reduce((sum, loan) => {
-          return sum + (loan.outstandingBalance ?? 0);
-        }, 0);
-        if (totalOutstanding > 0) {
-          dashData = {
-            ...dashData,
-            totalOutstanding,
-          };
-        }
       }
 
       setDashboard(dashData);
@@ -245,7 +227,8 @@ export default function Home({ navigation }: MyLoansScreenProps) {
 
   const totalPaid = useMemo(() => {
     return transactions.reduce((sum, transaction) => {
-      return String(transaction.status ?? "").toLowerCase() === "completed"
+      return transaction.type === "repayment" &&
+        String(transaction.status ?? "").toLowerCase() === "completed"
         ? sum + Number(transaction.amount ?? 0)
         : sum;
     }, 0);
@@ -310,7 +293,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
             style={styles.heroIconButton}
             onPress={() => setSidebarVisible(true)}
           >
-            <Feather name="menu" size={22} color="#FFFFFF" />
+            <Feather name="menu" size={22} color={COLORS.onPrimary} />
           </TouchableOpacity>
 
           <Animated.Text
@@ -326,14 +309,18 @@ export default function Home({ navigation }: MyLoansScreenProps) {
                 navigation.navigate("BorrowerChat", { screen: "ChatList" })
               }
             >
-              <Feather name="message-circle" size={20} color="#FFFFFF" />
+              <Feather
+                name="message-circle"
+                size={20}
+                color={COLORS.onPrimary}
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.heroIconButton}
               onPress={() => navigation.navigate("Notifications")}
             >
-              <Feather name="bell" size={20} color="#FFFFFF" />
+              <Feather name="bell" size={20} color={COLORS.onPrimary} />
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -383,10 +370,9 @@ export default function Home({ navigation }: MyLoansScreenProps) {
         )}
         scrollEventThrottle={16}
         refreshControl={
-          <RefreshControl
+          <BorrowerRefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={COLORS.surface}
             progressViewOffset={HEADER_MAX_HEIGHT - 50}
           />
         }
@@ -601,9 +587,7 @@ export default function Home({ navigation }: MyLoansScreenProps) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Loans</Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("MyLoans")}
-            >
+            <TouchableOpacity onPress={() => navigation.navigate("MyLoans")}>
               <Text style={styles.sectionLink}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -728,7 +712,7 @@ const styles = StyleSheet.create({
   heroTopTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
   },
   heroActionRow: {
     flexDirection: "row",
@@ -746,7 +730,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
     marginBottom: SPACING.sm,
   },
   heroSubtitle: {
@@ -773,7 +757,7 @@ const styles = StyleSheet.create({
   heroMetricValue: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
   },
   content: {
     flex: 1,
@@ -956,7 +940,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   primaryActionText: {
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
     fontSize: 13,
     fontWeight: "700",
   },
@@ -967,7 +951,7 @@ const styles = StyleSheet.create({
   },
   progressBarTrack: {
     height: 12,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: COLORS.borderStrong,
     borderRadius: 999,
     overflow: "hidden",
     marginBottom: SPACING.sm,

@@ -104,6 +104,7 @@ function buildAdSummaryCards(stats: {
 
 // Keeps ad moderation state and actions together on one screen.
 // Renders the admin lender ads moderation page with filtering, paging, and actions.
+// ADMIN: Moderate advertisements - frontend
 export default function LenderAds() {
   const [ads, setAds] = useState<LenderAdRow[]>([]);
   const [stats, setStats] = useState({

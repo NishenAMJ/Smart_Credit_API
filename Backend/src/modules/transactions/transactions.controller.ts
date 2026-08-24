@@ -11,7 +11,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
-  // Returns a paginated list of admin transaction records.
+  // ADMIN: View transactions - controller
   @Get()
   async getTransactions(
     @Query('limit') limit?: string,

@@ -1,6 +1,6 @@
 /** @format */
 
-import React from "react";
+import React, { useCallback, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -16,6 +16,10 @@ import type {
   ApplicationStatus,
 } from "../../types/borrower";
 import type { BorrowerNavigation } from "../../types/navigation";
+import { applicationService } from "../../api/services/application.service";
+import { getApiErrorMessage } from "../../api/api-error";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
 
 type ApplicationDetailsScreenProps = {
   route: {
@@ -31,20 +35,21 @@ const STATUS_STEPS: {
   label: string;
   icon: string;
 }[] = [
-  { key: "pending", label: "Submitted", icon: "send" },
+  { key: "draft", label: "Draft", icon: "edit-3" },
+  { key: "submitted", label: "Submitted", icon: "send" },
   { key: "under_review", label: "Under Review", icon: "eye" },
   { key: "approved", label: "Approved", icon: "check-circle" },
   { key: "converted", label: "Agreement Created", icon: "file-text" },
 ];
 
 const STATUS_COLOR: Record<string, string> = {
-  pending: "#F59E0B",
+  draft: "#6B7280",
+  submitted: "#F59E0B",
   under_review: "#3B82F6",
   approved: "#10B981",
-  funded: "#059669",
   converted: "#059669",
   rejected: "#EF4444",
-  cancelled: "#6B7280",
+  withdrawn: "#6B7280",
 };
 
 function getStatusLabel(status?: string) {
@@ -61,14 +66,43 @@ export default function ApplicationDetailsScreen({
   route,
   navigation,
 }: ApplicationDetailsScreenProps) {
-  const application = route.params?.application;
+  const [application, setApplication] = useState(route.params?.application);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const applicationId = application?.requestId ?? application?.applicationId;
+
+  const onRefresh = useCallback(async () => {
+    if (!applicationId) return;
+    setRefreshing(true);
+    try {
+      setErrorMessage("");
+      const response =
+        await applicationService.getApplicationById(applicationId);
+      setApplication(response.data);
+    } catch (error) {
+      setErrorMessage(
+        getApiErrorMessage(
+          error,
+          "Unable to update this application right now.",
+        ),
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }, [applicationId]);
   const rawStatus = String(application?.status ?? "").toLowerCase();
   const status =
-    rawStatus === "draft" || rawStatus === "open" || rawStatus === "pending"
-      ? "under_review"
-      : rawStatus || "under_review";
+    rawStatus === "open" || rawStatus === "pending"
+      ? "submitted"
+      : rawStatus === "accepted"
+        ? "approved"
+        : rawStatus === "funded"
+          ? "converted"
+          : rawStatus === "cancelled"
+            ? "withdrawn"
+            : rawStatus || "submitted";
   const currentStep = getCurrentStepIndex(status);
-  const isRejected = status === "rejected" || status === "cancelled";
+  const isClosed = status === "rejected" || status === "withdrawn";
   const statusColor = STATUS_COLOR[status] ?? "#9CA3AF";
 
   const formatDate = (dateStr?: string) => {
@@ -82,21 +116,27 @@ export default function ApplicationDetailsScreen({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Feather name="arrow-left" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Application Details</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BorrowerPageHeader
+        title="Application Details"
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <BorrowerRefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void onRefresh()}
+            enabled={Boolean(applicationId)}
+          />
+        }
       >
+        {errorMessage ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
         {/* Status Badge */}
         <View
           style={[styles.statusBadgeCard, { borderLeftColor: statusColor }]}
@@ -174,7 +214,7 @@ export default function ApplicationDetailsScreen({
               })
             }
           >
-            <Feather name="file-text" size={18} color="#FFFFFF" />
+            <Feather name="file-text" size={18} color={COLORS.onPrimary} />
             <Text style={styles.agreementButtonText}>
               Review and sign agreement
             </Text>
@@ -185,7 +225,7 @@ export default function ApplicationDetailsScreen({
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Application Timeline</Text>
 
-          {isRejected ? (
+          {isClosed ? (
             <View style={styles.rejectedBanner}>
               <Feather name="x-circle" size={20} color="#EF4444" />
               <Text style={styles.rejectedText}>
@@ -261,8 +301,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   backButton: { width: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: "#FFFFFF" },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: COLORS.onPrimary },
   scrollContent: { padding: SPACING.lg, paddingBottom: 60 },
+  errorBanner: {
+    backgroundColor: COLORS.errorSoft,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   agreementButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 10,
@@ -273,9 +324,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  agreementButtonText: { color: "#FFFFFF", fontWeight: "700" },
+  agreementButtonText: { color: COLORS.onPrimary, fontWeight: "700" },
   statusBadgeCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
@@ -297,7 +348,7 @@ const styles = StyleSheet.create({
   statusBadgeValue: { fontSize: 18, fontWeight: "700" },
   statusDot: { width: 12, height: 12, borderRadius: 6 },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
@@ -328,7 +379,7 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "right",
   },
-  divider: { height: 1, backgroundColor: "#F3F4F6" },
+  divider: { height: 1, backgroundColor: COLORS.border },
   rejectedBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -344,7 +395,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: COLORS.borderStrong,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -353,7 +404,7 @@ const styles = StyleSheet.create({
   timelineLine: {
     width: 2,
     flex: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: COLORS.borderStrong,
     marginVertical: 2,
     minHeight: 24,
   },
@@ -361,7 +412,7 @@ const styles = StyleSheet.create({
   timelineContent: { flex: 1, paddingVertical: 4, paddingBottom: SPACING.md },
   timelineLabel: { fontSize: 14, fontWeight: "600", color: COLORS.textPrimary },
   timelineLabelActive: { color: COLORS.primary },
-  timelineLabelInactive: { color: "#9CA3AF" },
+  timelineLabelInactive: { color: COLORS.textMuted },
   timelineSubLabel: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
   editButton: {
     backgroundColor: COLORS.primary,
@@ -372,5 +423,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: SPACING.sm,
   },
-  editButtonText: { color: "#FFFFFF", fontWeight: "600", fontSize: 15 },
+  editButtonText: { color: COLORS.onPrimary, fontWeight: "600", fontSize: 15 },
 });

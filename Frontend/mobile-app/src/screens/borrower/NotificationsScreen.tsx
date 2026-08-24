@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,6 +11,10 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import EmptyState from "../../components/common/EmptyState";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
+import { COLORS } from "../../constants/colors";
+import { navigateToBorrowerTab } from "../../utils/borrowerNavigation";
 import { getApiErrorMessage } from "../../api/api-error";
 import {
   BorrowerNotification,
@@ -141,6 +144,28 @@ export default function NotificationsScreen({
           ? item.metadata.loanId
           : undefined;
       navigation.navigate("LoanAgreement", { initialLoanId: loanId });
+      return;
+    }
+
+    switch (item.actionTarget ?? item.category) {
+      case "applications":
+      case "application":
+        navigation.navigate("MyApplications");
+        break;
+      case "payments":
+      case "payment":
+        navigateToBorrowerTab(navigation, "Payments", { tab: "Upcoming" });
+        break;
+      case "profile":
+        navigateToBorrowerTab(navigation, "Profile");
+        break;
+      case "support":
+        navigateToBorrowerTab(navigation, "Support");
+        break;
+      case "dispute":
+      case "disputes":
+        navigation.navigate("Disputes");
+        break;
     }
   };
 
@@ -153,7 +178,9 @@ export default function NotificationsScreen({
         style={[
           styles.statusDot,
           {
-            backgroundColor: !item.isRead ? "#007AFF" : "#D1D5DB",
+            backgroundColor: !item.isRead
+              ? COLORS.primary
+              : COLORS.borderStrong,
           },
         ]}
       />
@@ -171,16 +198,10 @@ export default function NotificationsScreen({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerIconButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Feather name="arrow-left" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        <TouchableOpacity style={styles.headerIconButton}></TouchableOpacity>
-      </View>
+      <BorrowerPageHeader
+        title="Notifications"
+        onBack={() => navigation.goBack()}
+      />
 
       <View style={styles.subHeader}>
         <Text style={styles.subHeaderText}>
@@ -193,7 +214,7 @@ export default function NotificationsScreen({
 
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       ) : (
         <FlatList
@@ -202,10 +223,9 @@ export default function NotificationsScreen({
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl
+            <BorrowerRefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#007AFF"
             />
           }
           ListHeaderComponent={
@@ -225,10 +245,10 @@ export default function NotificationsScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F6FA",
+    backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: "#007AFF",
+    backgroundColor: COLORS.primary,
     paddingTop: 50,
     paddingBottom: 15,
     paddingHorizontal: 20,
@@ -239,13 +259,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: COLORS.onPrimary,
   },
   headerIconButton: {
     padding: 4,
   },
   subHeader: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
@@ -262,7 +282,7 @@ const styles = StyleSheet.create({
   markReadText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#007AFF",
+    color: COLORS.primary,
   },
   listContent: {
     padding: 16,
@@ -280,7 +300,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   notificationCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
@@ -317,7 +337,7 @@ const styles = StyleSheet.create({
   },
   notificationTime: {
     fontSize: 11,
-    color: "#6B7280",
+    color: COLORS.textSecondary,
   },
   notificationMessage: {
     fontSize: 13,

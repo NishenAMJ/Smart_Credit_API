@@ -354,7 +354,7 @@ export class CoreLedgerService {
         status: 'completed',
         currency: 'LKR',
         amountMinor: amount,
-        platformFeeMinor: Math.round(amount * 0.02),
+        platformFeeMinor: 0,
         lenderId: loan.lenderId,
         borrowerId,
         loanId,

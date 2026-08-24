@@ -3,6 +3,7 @@ import { downloadLegalAgreement, getLegalAgreements } from "../../lib/api";
 import AgreementsPage from "../../../legal/AgreementsPage";
 import type { AgreementsResponse } from "../../../legal/types";
 
+// ADMIN: View legal agreements - frontend
 export default function LegalAgreements() {
   const fetcher = useCallback(async (): Promise<AgreementsResponse> => {
     return getLegalAgreements();

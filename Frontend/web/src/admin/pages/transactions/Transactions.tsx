@@ -14,14 +14,19 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
+  Download,
+  X,
 } from "lucide-react";
 import {
   getTransactions,
+  getTransactionsReport,
   subscribeToTransactions,
   type AdminTransaction,
+  type TransactionsReportResponse,
 } from "../../lib/api";
 
 type StatusFilter = "all" | "completed" | "pending" | "failed";
+type TypeFilter = "all" | "disbursement" | "repayment" | "listing_boost";
 
 const STATUS_FILTERS: Array<{ label: string; value: StatusFilter }> = [
   { label: "All", value: "all" },
@@ -47,12 +52,21 @@ type TransactionSummaryCard = {
 };
 
 // Renders the admin transactions ledger with search, filters, and pagination.
+// ADMIN: View transactions - frontend
 export default function Transactions() {
   const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<AdminTransaction | null>(null);
+  const [report, setReport] = useState<
+    TransactionsReportResponse["data"] | null
+  >(null);
 
   // Pagination state
   const [pageSize, setPageSize] = useState<number>(10);
@@ -83,10 +97,23 @@ export default function Transactions() {
     [pageSize],
   );
 
+  const loadReport = useCallback(async () => {
+    try {
+      const response = await getTransactionsReport();
+      setReport(response.data);
+    } catch {
+      // The transaction table can still be used if summary data is unavailable.
+    }
+  }, []);
+
   useEffect(() => {
     setCurrentPage(1);
     setCursorStack([]);
   }, [pageSize]);
+
+  useEffect(() => {
+    void loadReport();
+  }, [loadReport]);
 
   useEffect(() => {
     if (currentPage !== 1) {
@@ -128,6 +155,17 @@ export default function Transactions() {
       const matchesStatus =
         statusFilter === "all" ||
         transaction.status.toLowerCase() === statusFilter;
+      const matchesType =
+        typeFilter === "all" || transaction.paymentType === typeFilter;
+      const createdAt = transaction.createdAt
+        ? new Date(transaction.createdAt)
+        : null;
+      const matchesFrom =
+        !dateFrom ||
+        Boolean(createdAt && createdAt >= new Date(`${dateFrom}T00:00:00`));
+      const matchesTo =
+        !dateTo ||
+        Boolean(createdAt && createdAt <= new Date(`${dateTo}T23:59:59.999`));
       const matchesSearch =
         !normalizedSearch ||
         [
@@ -140,14 +178,18 @@ export default function Transactions() {
           transaction.borrowerName,
           transaction.borrowerEmail,
           transaction.paymentType,
+          transaction.paymentMethod,
+          transaction.externalReference,
           transaction.status,
         ]
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(normalizedSearch));
 
-      return matchesStatus && matchesSearch;
+      return (
+        matchesStatus && matchesType && matchesFrom && matchesTo && matchesSearch
+      );
     });
-  }, [search, statusFilter, transactions]);
+  }, [dateFrom, dateTo, search, statusFilter, transactions, typeFilter]);
 
   function handleNextPage() {
     if (!hasMore || !nextCursor) return;
@@ -174,11 +216,53 @@ export default function Transactions() {
     setCursorStack([]);
   }
 
-  const stats = useMemo(
-    () =>
-      buildTransactionSummaryCards(transactions, filteredTransactions.length),
-    [filteredTransactions.length, transactions],
-  );
+  const stats = useMemo(() => buildTransactionSummaryCards(report), [report]);
+
+  function refresh() {
+    setCurrentPage(1);
+    setCursorStack([]);
+    void Promise.all([loadTransactions(), loadReport()]);
+  }
+
+  function exportCsv() {
+    const rows = filteredTransactions.map((transaction) => [
+      transaction.transactionId,
+      transaction.loanId ?? "",
+      transaction.paymentType,
+      transaction.lenderName ?? transaction.lenderId ?? "",
+      transaction.borrowerName ?? transaction.borrowerId ?? "",
+      transaction.amount.toFixed(2),
+      transaction.status,
+      transaction.paymentMethod ?? "",
+      transaction.externalReference ?? "",
+      transaction.createdAt ?? "",
+      transaction.paidAt ?? "",
+    ]);
+    const csv = [
+      [
+        "Transaction ID",
+        "Loan ID",
+        "Type",
+        "Lender",
+        "Borrower",
+        "Amount (LKR)",
+        "Status",
+        "Payment Method",
+        "External Reference",
+        "Created At",
+        "Completed At",
+      ],
+      ...rows,
+    ]
+      .map((row) => row.map(csvCell).join(","))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div>
@@ -218,16 +302,49 @@ export default function Transactions() {
       </div>
 
       <div className="card" style={S.toolbarCard}>
-        <div className="tabs">
-          {STATUS_FILTERS.map((filter) => (
-            <button
-              key={filter.value}
-              className={`tab ${statusFilter === filter.value ? "active" : ""}`}
-              onClick={() => setStatusFilter(filter.value)}
-            >
-              {filter.label}
-            </button>
-          ))}
+        <div style={S.filterArea}>
+          <div className="tabs">
+            {STATUS_FILTERS.map((filter) => (
+              <button
+                key={filter.value}
+                className={`tab ${statusFilter === filter.value ? "active" : ""}`}
+                onClick={() => setStatusFilter(filter.value)}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+          <select
+            className="input"
+            style={S.filterSelect}
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value as TypeFilter)}
+            aria-label="Transaction type"
+          >
+            <option value="all">All types</option>
+            <option value="disbursement">Disbursement</option>
+            <option value="repayment">Repayment</option>
+            <option value="listing_boost">Ad Boost</option>
+          </select>
+          <input
+            className="input"
+            style={S.dateInput}
+            type="date"
+            value={dateFrom}
+            onChange={(event) => setDateFrom(event.target.value)}
+            aria-label="From date"
+            title="From date"
+          />
+          <input
+            className="input"
+            style={S.dateInput}
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(event) => setDateTo(event.target.value)}
+            aria-label="To date"
+            title="To date"
+          />
         </div>
 
         <div style={S.toolbarRight}>
@@ -242,11 +359,16 @@ export default function Transactions() {
           </div>
           <button
             className="btn-secondary btn-sm"
-            onClick={() => {
-              setCurrentPage(1);
-              setCursorStack([]);
-              void loadTransactions();
-            }}
+            onClick={exportCsv}
+            title="Export visible transactions"
+            disabled={!filteredTransactions.length}
+          >
+            <Download size={15} />
+            Export CSV
+          </button>
+          <button
+            className="btn-secondary btn-sm"
+            onClick={refresh}
             title="Refresh"
           >
             <RefreshCw size={15} />
@@ -263,14 +385,21 @@ export default function Transactions() {
               <th>Borrower</th>
               <th>Amount</th>
               <th>Status</th>
-              <th>Paid</th>
+              <th>Completed At</th>
             </tr>
           </thead>
           <tbody>
             {filteredTransactions.map((transaction) => (
-              <tr key={transaction.id}>
+              <tr
+                key={transaction.id}
+                onClick={() => setSelectedTransaction(transaction)}
+                style={S.clickableRow}
+                title="View transaction details"
+              >
                 <td>
-                  <div style={S.primaryText}>{transaction.transactionId}</div>
+                  <div style={S.primaryText}>
+                    {shortTransactionReference(transaction.transactionId)}
+                  </div>
                   <div style={S.secondaryText}>
                     {formatDate(transaction.createdAt)}
                   </div>
@@ -310,7 +439,7 @@ export default function Transactions() {
                   </div>
                 </td>
                 <td>
-                  {formatDate(transaction.paidAt ?? transaction.createdAt)}
+                  <span style={S.dateText}>{formatDate(transaction.paidAt)}</span>
                 </td>
               </tr>
             ))}
@@ -335,8 +464,8 @@ export default function Transactions() {
               {filteredTransactions.length > 0
                 ? (currentPage - 1) * pageSize + 1
                 : 0}
-              –{(currentPage - 1) * pageSize + totalLoaded}{" "}
-              {hasMore ? "" : "(last page)"}
+              –{(currentPage - 1) * pageSize + filteredTransactions.length} of{" "}
+              {(report?.totalTransactions ?? totalLoaded).toLocaleString()}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <label style={{ fontSize: 13, color: "#6B7280" }}>Rows:</label>
@@ -376,6 +505,13 @@ export default function Transactions() {
           </div>
         </div>
       </div>
+
+      {selectedTransaction && (
+        <TransactionDetails
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+        />
+      )}
     </div>
   );
 }
@@ -392,13 +528,95 @@ function PersonCell({
   return (
     <div>
       <div style={S.primaryText}>{name ?? id ?? "N/A"}</div>
-      <div style={S.secondaryText}>{email ?? id ?? ""}</div>
+      {!isDevelopmentEmail(email) && (
+        <div style={S.secondaryText}>{email ?? id ?? ""}</div>
+      )}
     </div>
   );
 }
 
+function TransactionDetails({
+  transaction,
+  onClose,
+}: {
+  transaction: AdminTransaction;
+  onClose: () => void;
+}) {
+  const details = [
+    ["Reference", shortTransactionReference(transaction.transactionId)],
+    ["Full transaction ID", transaction.transactionId],
+    ["Type", formatLabel(transaction.paymentType)],
+    ["Status", formatLabel(transaction.status)],
+    ["Amount", formatCurrency(transaction.amount)],
+    ["Platform fee", formatCurrency(transaction.platformFee)],
+    ["Payment method", formatLabel(transaction.paymentMethod)],
+    ["External reference", transaction.externalReference ?? "N/A"],
+    ["Loan reference", transaction.loanId ?? "N/A"],
+    ["Lender", transaction.lenderName ?? transaction.lenderId ?? "N/A"],
+    ["Borrower", transaction.borrowerName ?? transaction.borrowerId ?? "N/A"],
+    ["Created at", formatFullDate(transaction.createdAt)],
+    ["Completed at", formatFullDate(transaction.paidAt)],
+    ["Last updated", formatFullDate(transaction.updatedAt)],
+  ];
+
+  return (
+    <div style={S.modalOverlay} onClick={onClose}>
+      <div
+        style={S.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="transaction-details-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div style={S.modalHeader}>
+          <div>
+            <h2 id="transaction-details-title" style={S.modalTitle}>
+              Transaction Details
+            </h2>
+            <p style={S.modalSubtitle}>
+              {shortTransactionReference(transaction.transactionId)}
+            </p>
+          </div>
+          <button
+            className="btn-secondary btn-sm"
+            onClick={onClose}
+            aria-label="Close transaction details"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div style={S.detailsGrid}>
+          {details.map(([label, value]) => (
+            <div key={label} style={S.detailItem}>
+              <span style={S.detailLabel}>{label}</span>
+              <span style={S.detailValue}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function isDevelopmentEmail(email?: string) {
+  return Boolean(email && /(seed|bulk[._-]?dev)/i.test(email));
+}
+
+function shortTransactionReference(transactionId: string) {
+  let hash = 0;
+  for (const character of transactionId) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return `TXN-${String(hash % 1_000_000).padStart(6, "0")}`;
+}
+
+function csvCell(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
 function formatCurrency(value: number) {
   return `LKR ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 }
@@ -420,6 +638,12 @@ function formatDate(value?: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatFullDate(value?: string) {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 function formatLabel(value?: string) {
@@ -452,37 +676,20 @@ function getStatusBadge(status: string) {
 
 // Builds the summary cards so the ledger body stays easier to scan.
 function buildTransactionSummaryCards(
-  transactions: AdminTransaction[],
-  visibleCount: number,
+  report: TransactionsReportResponse["data"] | null,
 ): TransactionSummaryCard[] {
-  const completed = transactions.filter((transaction) =>
-    ["completed", "success", "successful"].includes(
-      transaction.status.toLowerCase(),
-    ),
-  ).length;
-  const pending = transactions.filter(
-    (transaction) => transaction.status.toLowerCase() === "pending",
-  ).length;
-  const failed = transactions.filter(
-    (transaction) => transaction.status.toLowerCase() === "failed",
-  ).length;
-  const volume = transactions.reduce(
-    (total, transaction) => total + transaction.amount,
-    0,
-  );
-
   return [
     {
       label: "Total Transactions",
-      value: transactions.length.toLocaleString(),
-      helper: `${visibleCount} visible`,
+      value: (report?.totalTransactions ?? 0).toLocaleString(),
+      helper: "All recorded transactions",
       icon: Activity,
       color: "#007AFF",
       bg: "#EFF6FF",
     },
     {
       label: "Completed",
-      value: completed.toLocaleString(),
+      value: (report?.successfulTransactions ?? 0).toLocaleString(),
       helper: "Verified or settled",
       icon: CheckCircle2,
       color: "#10B981",
@@ -490,19 +697,27 @@ function buildTransactionSummaryCards(
     },
     {
       label: "Pending",
-      value: pending.toLocaleString(),
+      value: (report?.pendingTransactions ?? 0).toLocaleString(),
       helper: "Awaiting completion",
       icon: Clock3,
       color: "#F59E0B",
       bg: "#FFFBEB",
     },
     {
-      label: "Volume",
-      value: formatCurrency(volume),
-      helper: `${failed} failed`,
+      label: "Failed",
+      value: (report?.failedTransactions ?? 0).toLocaleString(),
+      helper: "Unsuccessful transactions",
       icon: XCircle,
       color: "#EF4444",
       bg: "#FEF2F2",
+    },
+    {
+      label: "Transaction Volume",
+      value: formatCurrency(report?.totalTransactionVolume ?? 0),
+      helper: "Total processed amount",
+      icon: Activity,
+      color: "#8B5CF6",
+      bg: "#F5F3FF",
     },
   ];
 }
@@ -533,7 +748,7 @@ const S = {
   },
   statsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
     gap: 16,
     marginBottom: 16,
   },
@@ -576,6 +791,19 @@ const S = {
     alignItems: "center",
     gap: 16,
     marginBottom: 16,
+    flexWrap: "wrap",
+  },
+  filterArea: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  filterSelect: {
+    width: 150,
+  },
+  dateInput: {
+    width: 145,
   },
   toolbarRight: {
     display: "flex",
@@ -588,15 +816,13 @@ const S = {
   primaryText: {
     fontWeight: 600,
     color: "#111827",
-    whiteSpace: "normal",
-    wordBreak: "break-word",
+    whiteSpace: "nowrap",
   },
   secondaryText: {
     marginTop: 2,
     fontSize: 12,
     color: "#6B7280",
-    whiteSpace: "normal",
-    wordBreak: "break-word",
+    whiteSpace: "nowrap",
   },
   amount: {
     fontWeight: 700,
@@ -604,6 +830,12 @@ const S = {
   },
   statusCell: {
     minWidth: 96,
+  },
+  dateText: {
+    whiteSpace: "nowrap",
+  },
+  clickableRow: {
+    cursor: "pointer",
   },
   emptyCell: {
     textAlign: "center",
@@ -618,6 +850,71 @@ const S = {
     borderTop: "1px solid #F3F4F6",
     flexWrap: "wrap",
     gap: 12,
+  },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 1000,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    background: "rgba(15, 23, 42, 0.55)",
+  },
+  modal: {
+    width: "min(720px, 100%)",
+    maxHeight: "85vh",
+    overflowY: "auto",
+    padding: 24,
+    borderRadius: 16,
+    background: "#FFFFFF",
+    boxShadow: "0 24px 60px rgba(15, 23, 42, 0.25)",
+  },
+  modalHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+    paddingBottom: 18,
+    borderBottom: "1px solid #E5E7EB",
+  },
+  modalTitle: {
+    margin: 0,
+    fontSize: 20,
+    color: "#111827",
+  },
+  modalSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  detailsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+    marginTop: 18,
+  },
+  detailItem: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
+    minWidth: 0,
+    padding: 12,
+    borderRadius: 10,
+    background: "#F9FAFB",
+  },
+  detailLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  detailValue: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#111827",
+    overflowWrap: "anywhere",
   },
   paginationInfo: {
     display: "flex",

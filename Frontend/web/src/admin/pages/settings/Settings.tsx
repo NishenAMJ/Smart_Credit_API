@@ -2,7 +2,6 @@ import { useState, useRef } from "react";
 import {
   User,
   Lock,
-  Bell,
   Shield,
   Camera,
   Check,
@@ -13,16 +12,14 @@ import {
 import { changeAdminPassword } from "../../lib/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type SettingsTab = "profile" | "security" | "notifications" | "platform";
+type SettingsTab = "profile" | "security" | "platform";
 
 // ── Mock admin data ───────────────────────────────────────────────────────────
 const INITIAL_PROFILE = {
-  firstName: "Super",
+  firstName: "Platform",
   lastName: "Admin",
   email: "admin@smartcredit.com",
   phone: "+94 77 123 4567",
-  role: "Super Admin",
-  department: "Platform Operations",
   bio: "Managing the Smart Credit+ platform operations and compliance.",
   avatarColor: "#007AFF",
   avatarBg: "#EFF6FF",
@@ -32,7 +29,6 @@ const INITIAL_PROFILE = {
 const TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: "profile", label: "Profile", icon: User },
   { id: "security", label: "Security", icon: Lock },
-  { id: "notifications", label: "Notifications", icon: Bell },
   { id: "platform", label: "Platform", icon: Shield },
 ];
 
@@ -153,6 +149,7 @@ function Section({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 // Renders the admin settings page with profile, security, notification, and platform controls.
+// ADMIN: Manage settings - frontend
 export default function Settings() {
   const [activeTab, setTab] = useState<SettingsTab>("profile");
   const [toast, setToast] = useState(false);
@@ -165,18 +162,6 @@ export default function Settings() {
   const [passSuccess, setPassSuccess] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  // ── Notifications state ───────────────────────────────────────────────────
-  const [notifs, setNotifs] = useState({
-    kycAlerts: true,
-    userFlags: true,
-    adSubmissions: true,
-    systemReports: false,
-    loginAlerts: true,
-    weeklyDigest: false,
-    emailNotifs: true,
-    browserNotifs: false,
-  });
 
   // ── Platform settings state ───────────────────────────────────────────────
   const [platform, setPlatform] = useState({
@@ -238,11 +223,6 @@ export default function Settings() {
   // ── Platform update ───────────────────────────────────────────────────────
   function updatePlatform(field: string, value: string | boolean) {
     setPlatform((prev) => ({ ...prev, [field]: value }));
-  }
-
-  // ── Notif update ──────────────────────────────────────────────────────────
-  function updateNotif(field: string, value: boolean) {
-    setNotifs((prev) => ({ ...prev, [field]: value }));
   }
 
   return (
@@ -321,22 +301,8 @@ export default function Settings() {
                 marginTop: 2,
               }}
             >
-              {profile.role}
+              Administrator
             </p>
-            <div style={{ marginTop: 10, textAlign: "center" }}>
-              <span
-                style={{
-                  background: "#EFF6FF",
-                  color: "#1E40AF",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  padding: "3px 10px",
-                  borderRadius: 20,
-                }}
-              >
-                {profile.department}
-              </span>
-            </div>
           </div>
 
           {/* Tab list */}
@@ -418,28 +384,6 @@ export default function Settings() {
                     value={profile.bio}
                     onChange={(e) => updateProfile("bio", e.target.value)}
                     style={{ resize: "vertical", fontFamily: "inherit" }}
-                  />
-                </FieldRow>
-              </Section>
-
-              <Section
-                title="Role & Department"
-                subtitle="Your role assignment — contact IT to change."
-              >
-                <FieldRow label="Role">
-                  <input
-                    className="input"
-                    value={profile.role}
-                    disabled
-                    style={{ background: "#F9FAFB", color: "#6B7280" }}
-                  />
-                </FieldRow>
-                <FieldRow label="Department">
-                  <input
-                    className="input"
-                    value={profile.department}
-                    disabled
-                    style={{ background: "#F9FAFB", color: "#6B7280" }}
                   />
                 </FieldRow>
               </Section>
@@ -656,123 +600,6 @@ export default function Settings() {
             </div>
           )}
 
-          {/* ════ NOTIFICATIONS TAB ════ */}
-          {activeTab === "notifications" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Section
-                title="Alert Preferences"
-                subtitle="Choose which events trigger notifications."
-              >
-                {[
-                  {
-                    key: "kycAlerts",
-                    label: "KYC Submissions",
-                    hint: "New KYC documents submitted for review",
-                  },
-                  {
-                    key: "userFlags",
-                    label: "User Flags",
-                    hint: "Users flagged for suspicious activity",
-                  },
-                  {
-                    key: "adSubmissions",
-                    label: "Ad Submissions",
-                    hint: "New lender ads submitted for approval",
-                  },
-                  {
-                    key: "systemReports",
-                    label: "System Reports",
-                    hint: "Automated system performance reports",
-                  },
-                  {
-                    key: "loginAlerts",
-                    label: "Login Alerts",
-                    hint: "Notify on login from new device or IP",
-                  },
-                  {
-                    key: "weeklyDigest",
-                    label: "Weekly Digest",
-                    hint: "Weekly summary of platform activity",
-                  },
-                ].map((item) => (
-                  <div key={item.key} style={S.notifRow}>
-                    <div style={{ flex: 1 }}>
-                      <p
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: "#1A1A1A",
-                        }}
-                      >
-                        {item.label}
-                      </p>
-                      <p
-                        style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}
-                      >
-                        {item.hint}
-                      </p>
-                    </div>
-                    <Toggle
-                      checked={
-                        notifs[item.key as keyof typeof notifs] as boolean
-                      }
-                      onChange={(v) => updateNotif(item.key, v)}
-                    />
-                  </div>
-                ))}
-              </Section>
-
-              <Section
-                title="Delivery Channels"
-                subtitle="How you receive notifications."
-              >
-                {[
-                  {
-                    key: "emailNotifs",
-                    label: "Email Notifications",
-                    hint: "Receive alerts to admin@smartcredit.com",
-                  },
-                  {
-                    key: "browserNotifs",
-                    label: "Browser Notifications",
-                    hint: "Push notifications in the browser",
-                  },
-                ].map((item) => (
-                  <div key={item.key} style={S.notifRow}>
-                    <div style={{ flex: 1 }}>
-                      <p
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: "#1A1A1A",
-                        }}
-                      >
-                        {item.label}
-                      </p>
-                      <p
-                        style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}
-                      >
-                        {item.hint}
-                      </p>
-                    </div>
-                    <Toggle
-                      checked={
-                        notifs[item.key as keyof typeof notifs] as boolean
-                      }
-                      onChange={(v) => updateNotif(item.key, v)}
-                    />
-                  </div>
-                ))}
-              </Section>
-
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button className="btn-primary" onClick={handleSave}>
-                  <Check size={15} /> Save Preferences
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* ════ PLATFORM TAB ════ */}
           {activeTab === "platform" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -847,8 +674,8 @@ export default function Settings() {
                   },
                   {
                     key: "twoFactorEnforce",
-                    label: "Enforce 2FA for Admins",
-                    hint: "Require two-factor authentication for all admins",
+                    label: "Require Two-Factor Authentication",
+                    hint: "Require two-factor authentication for the administrator account",
                   },
                 ].map((item) => (
                   <div key={item.key} style={S.notifRow}>

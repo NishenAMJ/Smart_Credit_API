@@ -24,7 +24,7 @@ import type { AuthenticatedRequest } from '../../common/types/authenticated-requ
 export class KycController {
   constructor(private readonly kycService: KycService) {}
 
-  // Returns paginated KYC documents that admins still need to review.
+  // ADMIN: Review KYC - controller
   @Get('pending')
   async getPendingKyc(
     @Query('limit') limit?: string,
@@ -52,7 +52,7 @@ export class KycController {
     );
   }
 
-  // Approves one KYC document and updates the user's overall KYC status.
+  // ADMIN: Approve KYC - controller
   @Post(':documentId/approve')
   @HttpCode(HttpStatus.OK)
   async approveDocument(
@@ -63,7 +63,7 @@ export class KycController {
     return this.kycService.approveDocument(documentId, req.user.sub, dto.notes);
   }
 
-  // Rejects one KYC document and stores the admin's rejection reason.
+  // ADMIN: Reject KYC - controller
   @Post(':documentId/reject')
   @HttpCode(HttpStatus.OK)
   async rejectDocument(
