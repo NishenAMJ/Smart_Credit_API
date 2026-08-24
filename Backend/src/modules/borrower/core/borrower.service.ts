@@ -786,8 +786,16 @@ export class BorrowerService {
     const loans = snapshot.docs.map((doc) =>
       this.normalizeLoanDocument(doc.data(), doc.id),
     );
+    const lenderNames = await this.getLenderNamesMap(
+      loans.map((loan) => loan.lenderId),
+    );
+    const loansWithLenderNames = loans.map((loan) => ({
+      ...loan,
+      lenderName:
+        lenderNames.get(loan.lenderId) ?? loan.lenderName ?? 'Lender',
+    }));
 
-    return loans.sort(
+    return loansWithLenderNames.sort(
       (a, b) =>
         this.timestampToMillis(b.createdAt) -
         this.timestampToMillis(a.createdAt),

@@ -409,6 +409,31 @@ describe('BorrowerService', () => {
       expect(mockWhere).toHaveBeenCalledWith('borrowerId', '==', 'b_1');
       expect(mockWhere).toHaveBeenCalledWith('status', '==', LoanStatus.ACTIVE);
     });
+
+    it('enriches active loans with the lender display name', async () => {
+      mockGet
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'loan_1',
+              data: () => ({
+                loanId: 'loan_1',
+                borrowerId: 'b_1',
+                lenderId: 'lender_1',
+                status: LoanStatus.ACTIVE,
+              }),
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({ fullName: 'City Finance' }),
+        });
+
+      const result = await service.getLoans('b_1', LoanStatus.ACTIVE);
+
+      expect(result[0]?.lenderName).toBe('City Finance');
+    });
   });
 
   describe('getActiveLoanAds', () => {

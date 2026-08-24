@@ -2,7 +2,6 @@
 
 import apiClient from "../axios.config";
 import { ENDPOINTS } from "../endpoints";
-import { titleCase } from "../normalizers";
 import { getUserId } from "../../utils/auth.storage";
 import type { BorrowerLoan, LoanStatus } from "../../types/borrower";
 
@@ -22,8 +21,7 @@ function normalizeLoan(loan: Partial<BorrowerLoan>): BorrowerLoan {
     ...loan,
     loanId: String(loan.loanId ?? loan.adId ?? ""),
     lenderName:
-      loan.lenderName ??
-      titleCase(String(loan.lenderId ?? FALLBACK_LENDER_NAME)),
+      loan.lenderName?.trim() || FALLBACK_LENDER_NAME,
     principalAmount,
     minAmount: loan.minAmount ?? principalAmount,
     maxAmount: loan.maxAmount ?? principalAmount,
