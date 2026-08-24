@@ -4,6 +4,7 @@ import type {
 } from "../../legal/types";
 import { API_BASE_URL, getAuthHeaders } from "./api-config";
 import { createLenderRealtimeConnection } from "./lender-realtime";
+import { apiErrorFromResponse } from "../../lib/validation";
 
 type DocumentResponse = {
   message?: string;
@@ -15,7 +16,11 @@ async function readJson<T>(response: Response): Promise<T> {
     message?: string;
   } | null;
   if (!response.ok) {
-    throw new Error(body?.message ?? "Agreement request failed.");
+    throw apiErrorFromResponse(
+      response.status,
+      body,
+      "Agreement request failed.",
+    );
   }
   return body as T;
 }

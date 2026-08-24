@@ -6,6 +6,7 @@ import {
   DEFAULT_KYC_REJECTION_REASON,
 } from "../constants/admin-actions";
 import type { AdminAuthResponse } from "../types/admin-auth";
+import { apiErrorFromResponse } from "../../lib/validation";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api";
@@ -15,11 +16,7 @@ export type AdminUserRole = "admin" | "borrower" | "lender";
 export type AdminUserStatus = "active" | "pending" | "suspended";
 export type AuditSeverity = "info" | "warning" | "critical" | "success";
 export type AuditTargetType = "user" | "ad" | "system" | "report";
-export type AdStatus =
-  | "pending"
-  | "rejected"
-  | "active"
-  | "closed";
+export type AdStatus = "pending" | "rejected" | "active" | "closed";
 export type WebLoginRole = AdminUserRole;
 export type PublicSignupRole = "borrower" | "lender";
 export type SubmitKycPayload = {
@@ -94,7 +91,7 @@ async function apiRequest<T>(
       clearAdminSession();
     }
 
-    throw new Error(data?.message || "Request failed");
+    throw apiErrorFromResponse(response.status, data, "Request failed");
   }
 
   return data as T;
@@ -993,10 +990,7 @@ export function getAdBoostReceiptAccess(documentId: string) {
     expiresAt: string;
     fileName: string;
     mimeType: string;
-  }>(
-    `/documents/${encodeURIComponent(documentId)}/access`,
-    { auth: true },
-  );
+  }>(`/documents/${encodeURIComponent(documentId)}/access`, { auth: true });
 }
 
 export function addAdminDisputeComment(

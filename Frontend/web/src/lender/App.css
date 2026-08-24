@@ -8591,3 +8591,15 @@
     grid-template-columns: 1fr;
   }
 }
+.validation-field-error {
+  display: block;
+  margin-top: 0.35rem;
+  color: #b42318;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+[aria-invalid="true"] {
+  border-color: #d92d20 !important;
+  box-shadow: 0 0 0 3px rgb(217 45 32 / 10%);
+}

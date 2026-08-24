@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { CalendarRange, Download, X } from "lucide-react";
+import { dateError } from "../../../lib/validation";
 
 export type CsvDownload = {
   blob: Blob;
@@ -61,8 +62,10 @@ export default function DateRangeCsvExport({
   async function handleExport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!startDate || !endDate) {
-      setError("Select both a start date and an end date.");
+    const startError = dateError(startDate, "Start date", { notFuture: true });
+    const endError = dateError(endDate, "End date", { notFuture: true });
+    if (startError || endError) {
+      setError(startError ?? endError ?? "Select a valid date range.");
       return;
     }
     if (startDate > endDate) {
@@ -131,6 +134,7 @@ export default function DateRangeCsvExport({
                 <CalendarRange size={16} />
                 <input
                   type="date"
+                  max={fallbackEndDate}
                   value={startDate}
                   onChange={(event) => {
                     setStartDate(event.target.value);
@@ -145,6 +149,7 @@ export default function DateRangeCsvExport({
                 <CalendarRange size={16} />
                 <input
                   type="date"
+                  max={fallbackEndDate}
                   value={endDate}
                   onChange={(event) => {
                     setEndDate(event.target.value);

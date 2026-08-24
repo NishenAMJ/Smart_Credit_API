@@ -18,6 +18,16 @@ import {
   updateLenderProfile,
   type LenderProfile,
 } from "../../lib/lender-profile-api";
+import {
+  emailError,
+  focusFirstInvalidField,
+  getApiFieldErrors,
+  numberError,
+  normalizePhone,
+  optionalText,
+  phoneError,
+  requiredText,
+} from "../../../lib/validation";
 
 type LenderProfileModalProps = {
   session: LenderSession;
@@ -37,6 +47,43 @@ type ProfileFormState = {
   responseTimeHours: string;
   preferredRegions: string;
 };
+type ProfileErrors = Partial<Record<keyof ProfileFormState, string>>;
+
+function validateProfileForm(form: ProfileFormState): ProfileErrors {
+  const errors: ProfileErrors = {
+    fullName: requiredText(form.fullName, "Full name", { min: 3, max: 120 }),
+    email: emailError(form.email),
+    phone: phoneError(form.phone, false),
+    address: optionalText(form.address, "Business address", { max: 240 }),
+    city: optionalText(form.city, "City", { min: 2, max: 80 }),
+    district: optionalText(form.district, "District", { min: 2, max: 80 }),
+    businessName: optionalText(form.businessName, "Business name", {
+      min: 3,
+      max: 160,
+    }),
+    responseTimeHours: numberError(form.responseTimeHours, "Response time", {
+      min: 1,
+      max: 72,
+      integer: true,
+    }),
+  };
+  const regions = [
+    ...new Set(
+      form.preferredRegions
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (regions.length > 10)
+    errors.preferredRegions = "Add no more than 10 preferred regions.";
+  else if (regions.some((region) => region.length < 2 || region.length > 80)) {
+    errors.preferredRegions = "Each region must contain 2 to 80 characters.";
+  }
+  return Object.fromEntries(
+    Object.entries(errors).filter(([, message]) => Boolean(message)),
+  ) as ProfileErrors;
+}
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-LK", {
@@ -78,6 +125,10 @@ export default function LenderProfileModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<ProfileErrors>({});
+  const [touched, setTouched] = useState<Set<keyof ProfileFormState>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -177,22 +228,36 @@ export default function LenderProfileModal({
       return;
     }
 
+    const validationErrors = validateProfileForm(formState);
+    setTouched(
+      new Set(Object.keys(validationErrors) as (keyof ProfileFormState)[]),
+    );
+    setFieldErrors(validationErrors);
+    if (Object.keys(validationErrors).length) {
+      focusFirstInvalidField(validationErrors);
+      return;
+    }
+
     try {
       setIsSaving(true);
       setError(null);
       const updatedProfile = await updateLenderProfile(session.lenderId, {
-        fullName: formState.fullName,
-        email: formState.email,
-        phone: formState.phone,
+        fullName: formState.fullName.trim(),
+        email: formState.email.trim().toLowerCase(),
+        phone: formState.phone.trim() ? normalizePhone(formState.phone) : "",
         address: formState.address,
         city: formState.city,
         district: formState.district,
         businessName: formState.businessName,
         responseTimeHours: Number(formState.responseTimeHours),
-        preferredRegions: formState.preferredRegions
-          .split(",")
-          .map((value) => value.trim())
-          .filter((value) => value.length > 0),
+        preferredRegions: [
+          ...new Set(
+            formState.preferredRegions
+              .split(",")
+              .map((value) => value.trim())
+              .filter((value) => value.length > 0),
+          ),
+        ],
       });
 
       setProfile(updatedProfile);
@@ -200,6 +265,11 @@ export default function LenderProfileModal({
       setSuccessMessage("Profile updated successfully.");
       onProfileSaved(updatedProfile);
     } catch (saveError) {
+      const backendErrors = getApiFieldErrors(saveError);
+      if (Object.keys(backendErrors).length) {
+        setFieldErrors(backendErrors as ProfileErrors);
+        focusFirstInvalidField(backendErrors);
+      }
       setError(
         saveError instanceof Error
           ? saveError.message
@@ -255,7 +325,19 @@ export default function LenderProfileModal({
               {error}
             </div>
           ) : profile && formState ? (
-            <form className="lender-profile-form" onSubmit={handleSubmit}>
+            <form
+              className="lender-profile-form"
+              onSubmit={handleSubmit}
+              noValidate
+              onBlurCapture={(event) => {
+                const key = (event.target as HTMLElement).dataset
+                  .validationField as keyof ProfileFormState | undefined;
+                if (!key) return;
+                setTouched((current) => new Set(current).add(key));
+                const next = validateProfileForm(formState);
+                setFieldErrors((current) => ({ ...current, [key]: next[key] }));
+              }}
+            >
               <aside className="lender-profile-overview">
                 <div className="lender-profile-identity">
                   <div
@@ -341,6 +423,8 @@ export default function LenderProfileModal({
                     <label className="lender-profile-field">
                       <span>Full name</span>
                       <input
+                        data-validation-field="fullName"
+                        aria-invalid={Boolean(fieldErrors.fullName)}
                         className="input"
                         type="text"
                         autoComplete="name"
@@ -350,11 +434,18 @@ export default function LenderProfileModal({
                           updateField("fullName", event.target.value)
                         }
                       />
+                      {touched.has("fullName") && fieldErrors.fullName ? (
+                        <small className="validation-field-error">
+                          {fieldErrors.fullName}
+                        </small>
+                      ) : null}
                     </label>
 
                     <label className="lender-profile-field">
                       <span>Email address</span>
                       <input
+                        data-validation-field="email"
+                        aria-invalid={Boolean(fieldErrors.email)}
                         className="input"
                         type="email"
                         autoComplete="email"
@@ -364,11 +455,18 @@ export default function LenderProfileModal({
                           updateField("email", event.target.value)
                         }
                       />
+                      {touched.has("email") && fieldErrors.email ? (
+                        <small className="validation-field-error">
+                          {fieldErrors.email}
+                        </small>
+                      ) : null}
                     </label>
 
                     <label className="lender-profile-field lender-profile-field--full">
                       <span>Phone number</span>
                       <input
+                        data-validation-field="phone"
+                        aria-invalid={Boolean(fieldErrors.phone)}
                         className="input"
                         type="tel"
                         autoComplete="tel"
@@ -377,6 +475,11 @@ export default function LenderProfileModal({
                           updateField("phone", event.target.value)
                         }
                       />
+                      {touched.has("phone") && fieldErrors.phone ? (
+                        <small className="validation-field-error">
+                          {fieldErrors.phone}
+                        </small>
+                      ) : null}
                     </label>
                   </div>
                 </section>
@@ -395,6 +498,8 @@ export default function LenderProfileModal({
                     <label className="lender-profile-field lender-profile-field--full">
                       <span>Business name</span>
                       <input
+                        data-validation-field="businessName"
+                        aria-invalid={Boolean(fieldErrors.businessName)}
                         className="input"
                         type="text"
                         autoComplete="organization"
@@ -403,11 +508,19 @@ export default function LenderProfileModal({
                           updateField("businessName", event.target.value)
                         }
                       />
+                      {touched.has("businessName") &&
+                      fieldErrors.businessName ? (
+                        <small className="validation-field-error">
+                          {fieldErrors.businessName}
+                        </small>
+                      ) : null}
                     </label>
 
                     <label className="lender-profile-field lender-profile-field--full">
                       <span>Business address</span>
                       <input
+                        data-validation-field="address"
+                        aria-invalid={Boolean(fieldErrors.address)}
                         className="input"
                         type="text"
                         autoComplete="street-address"
@@ -416,11 +529,18 @@ export default function LenderProfileModal({
                           updateField("address", event.target.value)
                         }
                       />
+                      {touched.has("address") && fieldErrors.address ? (
+                        <small className="validation-field-error">
+                          {fieldErrors.address}
+                        </small>
+                      ) : null}
                     </label>
 
                     <label className="lender-profile-field">
                       <span>City</span>
                       <input
+                        data-validation-field="city"
+                        aria-invalid={Boolean(fieldErrors.city)}
                         className="input"
                         type="text"
                         autoComplete="address-level2"
@@ -429,11 +549,18 @@ export default function LenderProfileModal({
                           updateField("city", event.target.value)
                         }
                       />
+                      {touched.has("city") && fieldErrors.city ? (
+                        <small className="validation-field-error">
+                          {fieldErrors.city}
+                        </small>
+                      ) : null}
                     </label>
 
                     <label className="lender-profile-field">
                       <span>District</span>
                       <input
+                        data-validation-field="district"
+                        aria-invalid={Boolean(fieldErrors.district)}
                         className="input"
                         type="text"
                         autoComplete="address-level1"
@@ -442,11 +569,18 @@ export default function LenderProfileModal({
                           updateField("district", event.target.value)
                         }
                       />
+                      {touched.has("district") && fieldErrors.district ? (
+                        <small className="validation-field-error">
+                          {fieldErrors.district}
+                        </small>
+                      ) : null}
                     </label>
 
                     <label className="lender-profile-field">
                       <span>Response time (hours)</span>
                       <input
+                        data-validation-field="responseTimeHours"
+                        aria-invalid={Boolean(fieldErrors.responseTimeHours)}
                         className="input"
                         type="number"
                         min="1"
@@ -456,11 +590,19 @@ export default function LenderProfileModal({
                           updateField("responseTimeHours", event.target.value)
                         }
                       />
+                      {touched.has("responseTimeHours") &&
+                      fieldErrors.responseTimeHours ? (
+                        <small className="validation-field-error">
+                          {fieldErrors.responseTimeHours}
+                        </small>
+                      ) : null}
                     </label>
 
                     <label className="lender-profile-field">
                       <span>Preferred regions</span>
                       <input
+                        data-validation-field="preferredRegions"
+                        aria-invalid={Boolean(fieldErrors.preferredRegions)}
                         className="input"
                         type="text"
                         value={formState.preferredRegions}
@@ -469,6 +611,12 @@ export default function LenderProfileModal({
                         }
                         placeholder="Colombo, Kandy, Galle"
                       />
+                      {touched.has("preferredRegions") &&
+                      fieldErrors.preferredRegions ? (
+                        <small className="validation-field-error">
+                          {fieldErrors.preferredRegions}
+                        </small>
+                      ) : null}
                     </label>
                   </div>
                 </section>
@@ -482,7 +630,11 @@ export default function LenderProfileModal({
                     <button
                       type="button"
                       className="button button-secondary"
-                      onClick={() => setFormState(toFormState(profile))}
+                      onClick={() => {
+                        setFormState(toFormState(profile));
+                        setFieldErrors({});
+                        setTouched(new Set());
+                      }}
                       disabled={isSaving}
                     >
                       <RotateCcw size={16} /> Reset

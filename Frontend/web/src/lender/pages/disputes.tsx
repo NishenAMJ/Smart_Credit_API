@@ -33,6 +33,7 @@ import {
   type EligibleLoan,
   type TimestampValue,
 } from "../lib/disputes-api";
+import { fileError, requiredText } from "../../lib/validation";
 
 const CATEGORY_OPTIONS: Array<{ value: DisputeCategory; label: string }> = [
   { value: "payment", label: "Payment or collection" },
@@ -270,6 +271,21 @@ export default function LenderDisputesPage({
 
   async function createCase(event: React.FormEvent) {
     event.preventDefault();
+    const validationError =
+      requiredText(subject, "Subject", { min: 3, max: 160 }) ??
+      requiredText(description, "Description", { min: 10, max: 4000 }) ??
+      requiredText(desiredOutcome, "Requested outcome", {
+        min: 3,
+        max: 1000,
+      }) ??
+      (evidence.length > 5
+        ? "Attach no more than five evidence files."
+        : undefined) ??
+      evidence.map((file) => fileError(file, file.name)).find(Boolean);
+    if (validationError) {
+      setActionError(validationError);
+      return;
+    }
     try {
       setSubmitting(true);
       setActionError("");
@@ -303,7 +319,17 @@ export default function LenderDisputesPage({
   }
 
   async function addMessage() {
-    if (!selected || !message.trim()) return;
+    if (!selected) return;
+    const validationError =
+      requiredText(message, "Reply", { min: 1, max: 2000 }) ??
+      (messageEvidence.length > 5
+        ? "Attach no more than five evidence files."
+        : undefined) ??
+      messageEvidence.map((file) => fileError(file, file.name)).find(Boolean);
+    if (validationError) {
+      setActionError(validationError);
+      return;
+    }
     try {
       setSubmitting(true);
       setActionError("");
@@ -345,7 +371,15 @@ export default function LenderDisputesPage({
   }
 
   async function reopenCase() {
-    if (!selected || reopenReason.trim().length < 5) return;
+    if (!selected) return;
+    const validationError = requiredText(reopenReason, "Reopen reason", {
+      min: 5,
+      max: 1000,
+    });
+    if (validationError) {
+      setActionError(validationError);
+      return;
+    }
     try {
       setSubmitting(true);
       setActionError("");
@@ -692,6 +726,8 @@ export default function LenderDisputesPage({
                         id="dispute-reopen-reason"
                         rows={3}
                         value={reopenReason}
+                        minLength={5}
+                        maxLength={1000}
                         onChange={(event) =>
                           setReopenReason(event.target.value)
                         }
@@ -772,6 +808,7 @@ export default function LenderDisputesPage({
                     value={message}
                     placeholder="Write a clear update for the borrower and admin"
                     onChange={(event) => setMessage(event.target.value)}
+                    maxLength={2000}
                   />
                   <div className="dispute-composer__actions">
                     <label className="dispute-attachment-button">
@@ -783,11 +820,23 @@ export default function LenderDisputesPage({
                         type="file"
                         multiple
                         accept="image/jpeg,image/png,image/webp,application/pdf"
-                        onChange={(event) =>
-                          setMessageEvidence(
-                            Array.from(event.target.files ?? []).slice(0, 5),
-                          )
-                        }
+                        onChange={(event) => {
+                          const files = Array.from(event.target.files ?? []);
+                          const validationError =
+                            files.length > 5
+                              ? "Attach no more than five evidence files."
+                              : files
+                                  .map((file) => fileError(file, file.name))
+                                  .find(Boolean);
+                          if (validationError) {
+                            setActionError(validationError);
+                            setMessageEvidence([]);
+                            event.target.value = "";
+                          } else {
+                            setActionError("");
+                            setMessageEvidence(files);
+                          }
+                        }}
                       />
                     </label>
                     <button
@@ -934,11 +983,23 @@ export default function LenderDisputesPage({
                   type="file"
                   multiple
                   accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={(event) =>
-                    setEvidence(
-                      Array.from(event.target.files ?? []).slice(0, 5),
-                    )
-                  }
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files ?? []);
+                    const validationError =
+                      files.length > 5
+                        ? "Attach no more than five evidence files."
+                        : files
+                            .map((file) => fileError(file, file.name))
+                            .find(Boolean);
+                    if (validationError) {
+                      setActionError(validationError);
+                      setEvidence([]);
+                      event.target.value = "";
+                    } else {
+                      setActionError("");
+                      setEvidence(files);
+                    }
+                  }}
                 />
                 {evidence.length ? <em>{evidence.length} selected</em> : null}
               </label>

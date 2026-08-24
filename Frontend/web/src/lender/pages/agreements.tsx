@@ -144,6 +144,10 @@ export default function LenderAgreementsPage({
 
   async function handleSign() {
     if (!selected || !signedName.trim() || !consentAccepted) return;
+    if (signedName.trim().length > 160) {
+      setError("The verified signing name cannot exceed 160 characters.");
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -186,6 +190,10 @@ export default function LenderAgreementsPage({
 
   async function handleConfirmTransfer() {
     if (!selected || !transferConfirmed) return;
+    if (transferReference.trim().length > 160) {
+      setError("Transfer reference cannot exceed 160 characters.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -383,7 +391,7 @@ export default function LenderAgreementsPage({
                   : "Awaiting your signature"}
               </p>
               <p>
-                <CheckCircle2 size={16} /> External transfer: {" "}
+                <CheckCircle2 size={16} /> External transfer:{" "}
                 {disbursementConfirmed
                   ? `Confirmed${
                       selected.disbursementConfirmation.externalReference
@@ -403,11 +411,13 @@ export default function LenderAgreementsPage({
                   <input
                     className="input"
                     value={signedName}
+                    maxLength={160}
                     readOnly
                     aria-describedby="verified-signing-name-help"
                   />
                   <small id="verified-signing-name-help">
-                    Verified profile name. Update your profile if this is incorrect.
+                    Verified profile name. Update your profile if this is
+                    incorrect.
                   </small>
                 </label>
                 <label className="lender-agreements__consent">
@@ -435,14 +445,19 @@ export default function LenderAgreementsPage({
               </div>
             ) : null}
 
-            {!selected.legacyReadOnly && lenderSigned && !disbursementConfirmed ? (
+            {!selected.legacyReadOnly &&
+            lenderSigned &&
+            !disbursementConfirmed ? (
               <div className="lender-agreements__sign-form">
                 <label>
                   <span>External transfer reference (optional)</span>
                   <input
                     className="input"
                     value={transferReference}
-                    onChange={(event) => setTransferReference(event.target.value)}
+                    maxLength={160}
+                    onChange={(event) =>
+                      setTransferReference(event.target.value)
+                    }
                     placeholder="Bank reference or receipt number"
                   />
                 </label>

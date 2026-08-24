@@ -1,5 +1,6 @@
 import { API_BASE_URL, getAuthHeaders } from "./api-config";
 import { createLenderRealtimeConnection } from "./lender-realtime";
+import { apiErrorFromResponse } from "../../lib/validation";
 
 export type DisputeStatus =
   | "open"
@@ -76,10 +77,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: getAuthHeaders({ "Content-Type": "application/json" }),
   });
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as {
-      message?: string;
-    };
-    throw new Error(body.message || "Dispute request failed.");
+    const body = await response.json().catch(() => ({}));
+    throw apiErrorFromResponse(
+      response.status,
+      body,
+      "Dispute request failed.",
+    );
   }
   return response.json() as Promise<T>;
 }
@@ -151,9 +154,8 @@ export async function uploadDisputeEvidence(
       documentType: "case_evidence",
       fileName: file.name,
       contentType: file.type,
-      ...(loanId
-        ? { relatedEntityType: "loan", relatedEntityId: loanId }
-        : {}),
+      sizeBytes: file.size,
+      ...(loanId ? { relatedEntityType: "loan", relatedEntityId: loanId } : {}),
     }),
   });
   const form = new FormData();

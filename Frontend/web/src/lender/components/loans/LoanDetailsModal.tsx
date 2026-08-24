@@ -15,6 +15,7 @@ import {
   type LoanLedgerDetailsResponse,
   type LoanLedgerInstallmentDetail,
 } from "../../lib/recent-transactions-api";
+import { dateError, focusFirstInvalidField } from "../../../lib/validation";
 
 type LoanDetailsModalProps = {
   lenderId: string;
@@ -217,6 +218,26 @@ export default function LoanDetailsModal({
         ...current,
         error: "The installment does not have a valid outstanding amount.",
       }));
+      return;
+    }
+    const activationDate = details?.loan.createdAt?.slice(0, 10) ?? null;
+    const paidAtError = dateError(paymentForm.paidAt, "Payment date", {
+      notFuture: true,
+      min: activationDate,
+    });
+    if (paidAtError) {
+      setPaymentForm((current) => ({ ...current, error: paidAtError }));
+      focusFirstInvalidField({ paidAt: paidAtError });
+      return;
+    }
+    if (paymentForm.note.trim().length > 500) {
+      setPaymentForm((current) => ({
+        ...current,
+        error: "Payment note cannot exceed 500 characters.",
+      }));
+      focusFirstInvalidField({
+        note: "Payment note cannot exceed 500 characters.",
+      });
       return;
     }
 
@@ -461,9 +482,7 @@ export default function LoanDetailsModal({
                             <div>
                               <span>Paid</span>
                               <strong>
-                                {formatCurrency(
-                                  expandedInstallment.paidAmount,
-                                )}
+                                {formatCurrency(expandedInstallment.paidAmount)}
                               </strong>
                             </div>
                             <div>
@@ -524,6 +543,12 @@ export default function LoanDetailsModal({
                                   <input
                                     className="input"
                                     type="date"
+                                    data-validation-field="paidAt"
+                                    max={getLocalDateValue()}
+                                    min={
+                                      details?.loan.createdAt?.slice(0, 10) ??
+                                      undefined
+                                    }
                                     value={paymentForm.paidAt}
                                     onChange={(event) =>
                                       setPaymentForm((current) => ({
@@ -567,6 +592,8 @@ export default function LoanDetailsModal({
                                   </span>
                                   <textarea
                                     className="create-ad-textarea"
+                                    data-validation-field="note"
+                                    maxLength={500}
                                     rows={3}
                                     placeholder="Optional payment note"
                                     value={paymentForm.note}

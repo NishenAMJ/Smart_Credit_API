@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAuthHeaders } from "./api-config";
+import { apiErrorFromResponse } from "../../lib/validation";
 
 export type LenderAd = {
   id: string;
@@ -160,6 +161,7 @@ export async function uploadBoostReceipt(
         documentType: "ad_boost_bank_receipt",
         fileName: file.name,
         contentType: file.type,
+        sizeBytes: file.size,
         relatedEntityType: "ad_boost",
         relatedEntityId: boostId,
       }),
@@ -266,12 +268,8 @@ async function extractError(
   fallback: string,
 ): Promise<never> {
   try {
-    const body = (await response.json()) as { message?: string | string[] };
-    const message = Array.isArray(body.message)
-      ? body.message.join(", ")
-      : body.message;
-
-    throw new Error(message || fallback);
+    const body = await response.json();
+    throw apiErrorFromResponse(response.status, body, fallback);
   } catch (error) {
     if (error instanceof Error) {
       throw error;

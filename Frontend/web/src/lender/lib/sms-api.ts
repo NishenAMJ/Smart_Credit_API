@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAuthHeaders } from "./api-config";
+import { apiErrorFromResponse } from "../../lib/validation";
 
 export type SmsSettings = {
   enabled: boolean;
@@ -42,13 +43,8 @@ async function parseResponse<T>(
 ): Promise<T> {
   if (response.ok) return response.json();
 
-  const payload = (await response.json().catch(() => null)) as {
-    message?: string | string[];
-  } | null;
-  const message = Array.isArray(payload?.message)
-    ? payload.message.join(" ")
-    : payload?.message;
-  throw new Error(message || fallback);
+  const payload = await response.json().catch(() => null);
+  throw apiErrorFromResponse(response.status, payload, fallback);
 }
 
 export async function fetchSmsSettings(): Promise<SmsSettings> {

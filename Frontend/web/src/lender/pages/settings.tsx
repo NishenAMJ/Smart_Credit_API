@@ -27,6 +27,7 @@ import {
   resubmitLenderKyc,
   type LenderKycSubmission,
 } from "../lib/lender-kyc-api";
+import { fileError } from "../../lib/validation";
 
 type SettingsPageProps = {
   session: LenderSession;
@@ -370,9 +371,20 @@ export default function SettingsPage({
                       accept="image/jpeg,image/png,image/webp,application/pdf"
                       required
                       disabled={isResubmittingKyc}
-                      onChange={(event) =>
-                        setKycFront(event.target.files?.[0] ?? null)
-                      }
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        const message = fileError(file, "ID front", {
+                          required: true,
+                        });
+                        if (message) {
+                          setKycError(message);
+                          setKycFront(null);
+                          event.target.value = "";
+                        } else {
+                          setKycError(null);
+                          setKycFront(file);
+                        }
+                      }}
                     />
                     <small>
                       {kycFront?.name || "PDF or image, up to 10 MB"}
@@ -385,9 +397,20 @@ export default function SettingsPage({
                       accept="image/jpeg,image/png,image/webp,application/pdf"
                       required
                       disabled={isResubmittingKyc}
-                      onChange={(event) =>
-                        setKycBack(event.target.files?.[0] ?? null)
-                      }
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        const message = fileError(file, "ID back", {
+                          required: true,
+                        });
+                        if (message) {
+                          setKycError(message);
+                          setKycBack(null);
+                          event.target.value = "";
+                        } else {
+                          setKycError(null);
+                          setKycBack(file);
+                        }
+                      }}
                     />
                     <small>
                       {kycBack?.name || "PDF or image, up to 10 MB"}
@@ -399,9 +422,20 @@ export default function SettingsPage({
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       disabled={isResubmittingKyc}
-                      onChange={(event) =>
-                        setKycSelfie(event.target.files?.[0] ?? null)
-                      }
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        const message = fileError(file, "Selfie", {
+                          imageOnly: true,
+                        });
+                        if (message) {
+                          setKycError(message);
+                          setKycSelfie(null);
+                          event.target.value = "";
+                        } else {
+                          setKycError(null);
+                          setKycSelfie(file);
+                        }
+                      }}
                     />
                     <small>{kycSelfie?.name || "JPG, PNG, or WEBP"}</small>
                   </label>

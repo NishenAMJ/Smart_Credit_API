@@ -15,6 +15,12 @@ import {
 import type { LenderSession } from "../lib/lender-session";
 import { createLenderAd } from "../lib/lender-ads-api";
 import { fetchLenderProfile } from "../lib/lender-profile-api";
+import {
+  focusFirstInvalidField,
+  getApiFieldErrors,
+  numberError,
+  requiredText,
+} from "../../lib/validation";
 
 type CreateAdPageProps = {
   session: LenderSession;
@@ -78,44 +84,70 @@ function validateDraft(draft: AdDraft): DraftErrors {
   const errors: DraftErrors = {};
   const minAmount = Number(draft.minAmount);
   const maxAmount = Number(draft.maxAmount);
-  const interestRate = Number(draft.interestRate);
-  const tenureMonths = Number(draft.tenureMonths);
 
-  if (draft.headline.trim().length < 12)
-    errors.headline = "Use at least 12 characters.";
-  if (!Number.isFinite(minAmount) || minAmount <= 0) {
-    errors.minAmount = "Enter a valid minimum amount.";
-  }
-  if (!Number.isFinite(maxAmount) || maxAmount <= 0) {
-    errors.maxAmount = "Enter a valid maximum amount.";
-  } else if (Number.isFinite(minAmount) && maxAmount < minAmount) {
+  errors.headline = requiredText(draft.headline, "Title", {
+    min: 12,
+    max: 160,
+  });
+  errors.minAmount = numberError(draft.minAmount, "Minimum amount", {
+    min: 10_000,
+    max: 5_000_000,
+    maxDecimals: 2,
+  });
+  errors.maxAmount = numberError(draft.maxAmount, "Maximum amount", {
+    min: 10_000,
+    max: 5_000_000,
+    maxDecimals: 2,
+  });
+  if (
+    !errors.maxAmount &&
+    Number.isFinite(minAmount) &&
+    maxAmount < minAmount
+  ) {
     errors.maxAmount = "Must be equal to or above the minimum.";
   }
-  if (
-    !Number.isFinite(interestRate) ||
-    interestRate <= 0 ||
-    interestRate > 100
-  ) {
-    errors.interestRate = "Enter an annual rate between 0 and 100.";
-  }
-  if (
-    !Number.isInteger(tenureMonths) ||
-    tenureMonths <= 0 ||
-    tenureMonths > 120
-  ) {
-    errors.tenureMonths = "Enter a whole number from 1 to 120.";
-  }
-  if (draft.borrowerFocus.trim().length < 8) {
-    errors.borrowerFocus = "Describe the intended borrowers.";
-  }
-  if (draft.requirements.trim().length < 12) {
-    errors.requirements = "Explain the required documents or checks.";
-  }
-  if (draft.supportNote.trim().length < 12) {
-    errors.supportNote = "Add a short, clear offer description.";
-  }
+  errors.interestRate = numberError(
+    draft.interestRate,
+    "Annual interest rate",
+    {
+      min: 0.01,
+      max: 100,
+      maxDecimals: 2,
+    },
+  );
+  errors.tenureMonths = numberError(draft.tenureMonths, "Maximum tenure", {
+    min: 3,
+    max: 60,
+    integer: true,
+  });
+  errors.borrowerFocus = requiredText(
+    draft.borrowerFocus,
+    "Intended borrowers",
+    { min: 8, max: 240 },
+  );
+  errors.processingTime = requiredText(
+    draft.processingTime,
+    "Expected review time",
+    { min: 6, max: 100 },
+  );
+  errors.repaymentStyle = requiredText(
+    draft.repaymentStyle,
+    "Repayment style",
+    { min: 6, max: 100 },
+  );
+  errors.requirements = requiredText(
+    draft.requirements,
+    "Eligibility and documents",
+    { min: 12, max: 1000 },
+  );
+  errors.supportNote = requiredText(draft.supportNote, "Description", {
+    min: 12,
+    max: 2000,
+  });
 
-  return errors;
+  return Object.fromEntries(
+    Object.entries(errors).filter(([, message]) => Boolean(message)),
+  ) as DraftErrors;
 }
 
 function formatCurrency(value: string | number): string {
@@ -129,9 +161,17 @@ function formatCurrency(value: string | number): string {
   }).format(amount);
 }
 
-function FieldError({ message }: { message?: string }) {
+function FieldError({
+  message,
+  field,
+}: {
+  message?: string;
+  field: keyof AdDraft;
+}) {
   return message ? (
-    <span className="create-ad-field__error">{message}</span>
+    <span className="create-ad-field__error" id={`create-ad-error-${field}`}>
+      {message}
+    </span>
   ) : null;
 }
 
@@ -147,6 +187,9 @@ export default function CreateAdPage({
       ) ?? EMPTY_DRAFT,
   );
   const [showValidation, setShowValidation] = useState(false);
+  const [touchedFields, setTouchedFields] = useState<Set<keyof AdDraft>>(
+    () => new Set(),
+  );
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -230,6 +273,7 @@ export default function CreateAdPage({
 
     if (Object.keys(errors).length > 0) {
       setPublishError("Review the highlighted fields before submitting.");
+      focusFirstInvalidField(errors);
       return;
     }
 
@@ -254,6 +298,11 @@ export default function CreateAdPage({
       setPublishMessage("Advertisement submitted for admin review.");
       onPublished?.();
     } catch (error) {
+      const backendErrors = getApiFieldErrors(error);
+      if (Object.keys(backendErrors).length) {
+        setShowValidation(true);
+        focusFirstInvalidField(backendErrors);
+      }
       setPublishError(
         error instanceof Error
           ? error.message
@@ -270,7 +319,9 @@ export default function CreateAdPage({
       : "Set an amount range";
 
   const inputError = (key: keyof AdDraft) =>
-    showValidation && Boolean(errors[key]);
+    (showValidation || touchedFields.has(key)) && Boolean(errors[key]);
+  const visibleError = (key: keyof AdDraft) =>
+    showValidation || touchedFields.has(key) ? errors[key] : undefined;
 
   return (
     <section className={embedded ? "create-ad-embedded" : "dashboard-panel"}>
@@ -294,6 +345,11 @@ export default function CreateAdPage({
             void handlePublishAd();
           }}
           noValidate
+          onBlurCapture={(event) => {
+            const key = (event.target as HTMLElement).dataset
+              .validationField as keyof AdDraft | undefined;
+            if (key) setTouchedFields((current) => new Set(current).add(key));
+          }}
         >
           <div className="create-ad-form-card__header">
             <div>
@@ -330,9 +386,12 @@ export default function CreateAdPage({
             </p>
           ) : null}
           {kycStatus && kycStatus !== "approved" ? (
-            <p className="create-ad-banner create-ad-banner--error" role="status">
-              Advertisement submission is locked until your lender KYC is approved.
-              Current status: {kycStatus.replace(/_/g, " ")}.
+            <p
+              className="create-ad-banner create-ad-banner--error"
+              role="status"
+            >
+              Advertisement submission is locked until your lender KYC is
+              approved. Current status: {kycStatus.replace(/_/g, " ")}.
             </p>
           ) : null}
 
@@ -355,10 +414,17 @@ export default function CreateAdPage({
                   }
                   placeholder="Example: Flexible working capital for small businesses"
                   maxLength={90}
+                  data-validation-field="headline"
                   aria-invalid={inputError("headline")}
+                  aria-describedby={
+                    inputError("headline")
+                      ? "create-ad-error-headline"
+                      : undefined
+                  }
                 />
                 <FieldError
-                  message={showValidation ? errors.headline : undefined}
+                  field="headline"
+                  message={visibleError("headline")}
                 />
               </label>
               <label className="create-ad-field create-ad-field--full">
@@ -374,10 +440,17 @@ export default function CreateAdPage({
                   }
                   placeholder="Example: Registered small-business owners"
                   maxLength={100}
+                  data-validation-field="borrowerFocus"
                   aria-invalid={inputError("borrowerFocus")}
+                  aria-describedby={
+                    inputError("borrowerFocus")
+                      ? "create-ad-error-borrowerFocus"
+                      : undefined
+                  }
                 />
                 <FieldError
-                  message={showValidation ? errors.borrowerFocus : undefined}
+                  field="borrowerFocus"
+                  message={visibleError("borrowerFocus")}
                 />
               </label>
             </div>
@@ -398,16 +471,25 @@ export default function CreateAdPage({
                 <input
                   className="input"
                   type="number"
-                  min="1"
+                  min="10000"
+                  max="5000000"
+                  step="0.01"
+                  data-validation-field="minAmount"
                   value={draft.minAmount}
                   onChange={(event) =>
                     updateDraft("minAmount", event.target.value)
                   }
                   placeholder="50000"
                   aria-invalid={inputError("minAmount")}
+                  aria-describedby={
+                    inputError("minAmount")
+                      ? "create-ad-error-minAmount"
+                      : undefined
+                  }
                 />
                 <FieldError
-                  message={showValidation ? errors.minAmount : undefined}
+                  field="minAmount"
+                  message={visibleError("minAmount")}
                 />
               </label>
               <label className="create-ad-field">
@@ -417,16 +499,25 @@ export default function CreateAdPage({
                 <input
                   className="input"
                   type="number"
-                  min="1"
+                  min="10000"
+                  max="5000000"
+                  step="0.01"
+                  data-validation-field="maxAmount"
                   value={draft.maxAmount}
                   onChange={(event) =>
                     updateDraft("maxAmount", event.target.value)
                   }
                   placeholder="250000"
                   aria-invalid={inputError("maxAmount")}
+                  aria-describedby={
+                    inputError("maxAmount")
+                      ? "create-ad-error-maxAmount"
+                      : undefined
+                  }
                 />
                 <FieldError
-                  message={showValidation ? errors.maxAmount : undefined}
+                  field="maxAmount"
+                  message={visibleError("maxAmount")}
                 />
               </label>
               <label className="create-ad-field">
@@ -439,15 +530,22 @@ export default function CreateAdPage({
                   min="0.1"
                   max="100"
                   step="0.1"
+                  data-validation-field="interestRate"
                   value={draft.interestRate}
                   onChange={(event) =>
                     updateDraft("interestRate", event.target.value)
                   }
                   placeholder="14.5"
                   aria-invalid={inputError("interestRate")}
+                  aria-describedby={
+                    inputError("interestRate")
+                      ? "create-ad-error-interestRate"
+                      : undefined
+                  }
                 />
                 <FieldError
-                  message={showValidation ? errors.interestRate : undefined}
+                  field="interestRate"
+                  message={visibleError("interestRate")}
                 />
               </label>
               <label className="create-ad-field">
@@ -457,18 +555,25 @@ export default function CreateAdPage({
                 <input
                   className="input"
                   type="number"
-                  min="1"
-                  max="120"
+                  min="3"
+                  max="60"
                   step="1"
+                  data-validation-field="tenureMonths"
                   value={draft.tenureMonths}
                   onChange={(event) =>
                     updateDraft("tenureMonths", event.target.value)
                   }
                   placeholder="12"
                   aria-invalid={inputError("tenureMonths")}
+                  aria-describedby={
+                    inputError("tenureMonths")
+                      ? "create-ad-error-tenureMonths"
+                      : undefined
+                  }
                 />
                 <FieldError
-                  message={showValidation ? errors.tenureMonths : undefined}
+                  field="tenureMonths"
+                  message={visibleError("tenureMonths")}
                 />
               </label>
             </div>
@@ -492,6 +597,7 @@ export default function CreateAdPage({
                 <select
                   className="input"
                   value={draft.processingTime}
+                  data-validation-field="processingTime"
                   onChange={(event) =>
                     updateDraft("processingTime", event.target.value)
                   }
@@ -518,10 +624,17 @@ export default function CreateAdPage({
                   rows={3}
                   placeholder="List the documents and eligibility checks borrowers should prepare."
                   maxLength={350}
+                  data-validation-field="requirements"
                   aria-invalid={inputError("requirements")}
+                  aria-describedby={
+                    inputError("requirements")
+                      ? "create-ad-error-requirements"
+                      : undefined
+                  }
                 />
                 <FieldError
-                  message={showValidation ? errors.requirements : undefined}
+                  field="requirements"
+                  message={visibleError("requirements")}
                 />
               </label>
               <label className="create-ad-field create-ad-field--full">
@@ -535,10 +648,17 @@ export default function CreateAdPage({
                   rows={4}
                   placeholder="Explain the offer in plain language without promising approval."
                   maxLength={500}
+                  data-validation-field="supportNote"
                   aria-invalid={inputError("supportNote")}
+                  aria-describedby={
+                    inputError("supportNote")
+                      ? "create-ad-error-supportNote"
+                      : undefined
+                  }
                 />
                 <FieldError
-                  message={showValidation ? errors.supportNote : undefined}
+                  field="supportNote"
+                  message={visibleError("supportNote")}
                 />
               </label>
             </div>

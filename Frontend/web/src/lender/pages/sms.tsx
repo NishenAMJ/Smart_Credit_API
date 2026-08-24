@@ -26,6 +26,28 @@ type SmsPageProps = {
 };
 
 const MAX_MESSAGE_LENGTH = 480;
+const ALLOWED_TEMPLATE_VARIABLES = new Set([
+  "borrowerName",
+  "amount",
+  "paymentDate",
+  "remainingBalance",
+]);
+
+function getTemplateError(value: string): string | null {
+  const normalized = value.trim();
+  if (!normalized) return "Payment message is required.";
+  if (normalized.length > MAX_MESSAGE_LENGTH)
+    return "Payment message cannot exceed 480 characters.";
+  const variables = [...normalized.matchAll(/{{\s*([^{}]+?)\s*}}/g)].map(
+    (match) => match[1],
+  );
+  const unsupported = variables.find(
+    (variable) => !ALLOWED_TEMPLATE_VARIABLES.has(variable),
+  );
+  return unsupported
+    ? `Unsupported template variable: {{${unsupported}}}.`
+    : null;
+}
 
 export default function SmsPage({ session }: SmsPageProps) {
   const [settings, setSettings] = useState<SmsSettings | null>(null);
@@ -120,11 +142,21 @@ export default function SmsPage({ session }: SmsPageProps) {
     settings?.enabled &&
     settings.configured &&
     selectedBorrowers.length > 0 &&
+    selectedBorrowers.length <= 50 &&
     message.trim() &&
+    message.trim().length <= MAX_MESSAGE_LENGTH &&
     !isSending,
   );
 
   const addBorrower = (borrower: SmsBorrower) => {
+    if (selectedBorrowers.length >= 50) {
+      setError("You can send one message to at most 50 borrowers.");
+      return;
+    }
+    if (!borrower.phone?.trim()) {
+      setError(`${borrower.fullName} does not have a usable phone number.`);
+      return;
+    }
     setSelectedBorrowers((current) =>
       current.some((item) => item.borrowerId === borrower.borrowerId)
         ? current
@@ -156,6 +188,14 @@ export default function SmsPage({ session }: SmsPageProps) {
   };
 
   const handleSend = async () => {
+    if (!message.trim()) {
+      setError("Message is required.");
+      return;
+    }
+    if (message.trim().length > MAX_MESSAGE_LENGTH) {
+      setError("Message cannot exceed 480 characters.");
+      return;
+    }
     if (!canSend) return;
     try {
       setIsSending(true);
@@ -186,7 +226,12 @@ export default function SmsPage({ session }: SmsPageProps) {
   };
 
   const savePaymentMessage = async (enabled: boolean) => {
-    if (!settings || !paymentMessage.trim()) return;
+    if (!settings) return;
+    const templateError = getTemplateError(paymentMessage);
+    if (templateError) {
+      setError(templateError);
+      return;
+    }
     try {
       setIsSavingPaymentMessage(true);
       setPaymentMessageSaved(false);
@@ -278,6 +323,7 @@ export default function SmsPage({ session }: SmsPageProps) {
               <Search size={18} aria-hidden="true" />
               <input
                 type="search"
+                maxLength={100}
                 value={search}
                 placeholder="Search borrowers"
                 onChange={(event) => setSearch(event.target.value)}
@@ -369,6 +415,9 @@ export default function SmsPage({ session }: SmsPageProps) {
                 rows={9}
                 placeholder="Type the SMS message..."
                 onChange={(event) => setMessage(event.target.value)}
+                aria-invalid={Boolean(
+                  message && message.trim().length > MAX_MESSAGE_LENGTH,
+                )}
               />
               <small>
                 {message.length}/{MAX_MESSAGE_LENGTH} characters · {smsSegments}{" "}
@@ -449,6 +498,7 @@ export default function SmsPage({ session }: SmsPageProps) {
                   setPaymentMessage(event.target.value);
                   setPaymentMessageSaved(false);
                 }}
+                aria-invalid={Boolean(getTemplateError(paymentMessage))}
               />
               <small>
                 {paymentMessage.length}/{MAX_MESSAGE_LENGTH} characters
@@ -463,6 +513,18 @@ export default function SmsPage({ session }: SmsPageProps) {
                 <code>{"{{paymentDate}}"}</code>
                 <code>{"{{remainingBalance}}"}</code>
               </div>
+              <p>
+                Preview:{" "}
+                {paymentMessage
+                  .replace(/{{\s*borrowerName\s*}}/g, "Nadeesha Perera")
+                  .replace(/{{\s*amount\s*}}/g, "LKR 25,000.00")
+                  .replace(
+                    /{{\s*paymentDate\s*}}/g,
+                    new Date().toISOString().slice(0, 10),
+                  )
+                  .replace(/{{\s*remainingBalance\s*}}/g, "LKR 75,000.00") ||
+                  "Your rendered message will appear here."}
+              </p>
             </div>
 
             <div className="sms-payment-automation__actions">

@@ -35,6 +35,7 @@ import {
   type PendingRequestsResponse,
 } from "../lib/pending-requests-api";
 import type { LenderSession } from "../lib/lender-session";
+import { fileError, requiredText } from "../../lib/validation";
 
 type ActiveAdsRequestsPageProps = {
   session: LenderSession;
@@ -173,8 +174,7 @@ function AdvertisementCard({
               className="button button-secondary"
               onClick={onBoost}
               disabled={
-                ad.isBoosted ||
-                ad.boostStatus === "pending_verification"
+                ad.isBoosted || ad.boostStatus === "pending_verification"
               }
             >
               <Rocket size={16} />
@@ -184,7 +184,7 @@ function AdvertisementCard({
                   ? "Awaiting verification"
                   : ad.boostStatus === "payment_pending"
                     ? "Continue boost"
-                  : "Boost"}
+                    : "Boost"}
             </button>
           </>
         ) : (
@@ -443,12 +443,19 @@ function BoostAdDialog({
 
   async function submit() {
     if (!selectedPlan) return;
-    if (
-      paymentMethod === "bank_transfer" &&
-      (!receipt || !bankReference.trim())
-    ) {
-      setError("Select a receipt and enter the bank reference.");
-      return;
+    if (paymentMethod === "bank_transfer") {
+      const referenceError = requiredText(bankReference, "Bank reference", {
+        max: 120,
+      });
+      const receiptError = fileError(receipt, "Payment receipt", {
+        required: true,
+      });
+      if (referenceError || receiptError) {
+        setError(
+          referenceError ?? receiptError ?? "Check the payment details.",
+        );
+        return;
+      }
     }
     try {
       setBusy(true);
@@ -458,7 +465,11 @@ function BoostAdDialog({
         boost = { boostId: pendingBoostId };
       } else {
         setSubmissionStage("creating");
-        boost = await createAdBoost({ listingId: ad.id, planId, paymentMethod });
+        boost = await createAdBoost({
+          listingId: ad.id,
+          planId,
+          paymentMethod,
+        });
       }
       if (paymentMethod === "card") {
         if (!("checkout" in boost) || !boost.checkout?.paymentPageUrl)
@@ -685,6 +696,8 @@ function BoostAdDialog({
                         </span>
                         <input
                           className="input"
+                          maxLength={120}
+                          aria-invalid={Boolean(error && !bankReference.trim())}
                           value={bankReference}
                           placeholder="Enter transaction reference"
                           onChange={(event) =>
@@ -700,9 +713,22 @@ function BoostAdDialog({
                           className="input boost-dialog__file-input"
                           type="file"
                           accept="image/jpeg,image/png,image/webp,application/pdf"
-                          onChange={(event) =>
-                            setReceipt(event.target.files?.[0] ?? null)
-                          }
+                          onChange={(event) => {
+                            const nextFile = event.target.files?.[0] ?? null;
+                            const message = fileError(
+                              nextFile,
+                              "Payment receipt",
+                              { required: true },
+                            );
+                            if (message) {
+                              setReceipt(null);
+                              setError(message);
+                              event.target.value = "";
+                            } else {
+                              setReceipt(nextFile);
+                              setError(null);
+                            }
+                          }}
                         />
                         <small>
                           {receipt ? receipt.name : "JPG, PNG, WEBP or PDF"}
