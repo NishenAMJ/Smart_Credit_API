@@ -12,6 +12,7 @@ const SEVERITY_META: Record<AuditSeverity, { color: string; bg: string; icon: Re
   critical: { color: "#B91C1C", bg: "#FEE2E2", icon: ShieldAlert },
 };
 
+// ADMIN: View audit logs - frontend
 export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [dateFrom, setDateFrom] = useState("");

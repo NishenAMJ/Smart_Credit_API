@@ -166,6 +166,7 @@ function normalizeComparableName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// ADMIN: Review KYC - frontend
 export default function KYCApprovals() {
   const [records, setRecords] = useState<KycRow[]>([]);
   const [search, setSearch] = useState("");

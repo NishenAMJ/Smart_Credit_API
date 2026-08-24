@@ -72,6 +72,7 @@ export class ReportsService {
     };
   }
 
+  // ADMIN: View analytics - service
   async getUsersReport() {
     try {
       return await this.cached<UserReport>('users', async () => {
@@ -348,6 +349,7 @@ export class ReportsService {
     }
   }
 
+  // ADMIN: View dashboard - service
   async getDashboardAnalytics() {
     try {
       return await this.cached<DashboardAnalytics>('dashboard', async () => {

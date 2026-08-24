@@ -117,6 +117,7 @@ export class AdminAdApprovalService {
     return (await query.count().get()).data().count;
   }
 
+  // ADMIN: Moderate advertisements - service
   async getAds(
     limit?: string,
     cursor?: string,
@@ -189,6 +190,7 @@ export class AdminAdApprovalService {
     return { success: true, ad: this.mapAd(doc.id, doc.data() ?? {}) };
   }
 
+  // ADMIN: Approve advertisement - service
   async approveAd(adId: string, adminId: string) {
     const docRef = this.db.collection(this.collection).doc(adId);
     const docSnap = await docRef.get();
@@ -233,6 +235,7 @@ export class AdminAdApprovalService {
     return { success: true, status: 'active' };
   }
 
+  // ADMIN: Reject advertisement - service
   async rejectAd(adId: string, adminId: string, reason: string) {
     if (!reason?.trim())
       throw new BadRequestException('Rejection reason is required');

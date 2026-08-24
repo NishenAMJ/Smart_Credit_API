@@ -10,6 +10,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  // ADMIN: View analytics - controller
   @Get('reports/users')
   async getUsersReport() {
     return this.reportsService.getUsersReport();
@@ -30,6 +31,7 @@ export class ReportsController {
     return this.reportsService.getRevenueReport();
   }
 
+  // ADMIN: View dashboard - controller
   @Get('analytics/dashboard')
   async getDashboardAnalytics() {
     return this.reportsService.getDashboardAnalytics();

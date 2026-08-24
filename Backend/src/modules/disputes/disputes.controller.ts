@@ -40,6 +40,7 @@ export class DisputesController {
     return this.disputesService.getStats();
   }
 
+  // ADMIN: Manage disputes - controller
   @Get()
   getAllDisputes(
     @Query('limit') limit?: string,
@@ -136,6 +137,7 @@ export class DisputesController {
     );
   }
 
+  // ADMIN: Resolve dispute - controller
   @Post(':disputeId/resolve-canonical')
   resolveCanonical(
     @Req() req: AuthenticatedRequest,
@@ -159,6 +161,7 @@ export class DisputesController {
     );
   }
 
+  // ADMIN: Escalate dispute - controller
   @Post(':disputeId/escalate')
   escalateDispute(
     @Req() req: AuthenticatedRequest,
@@ -173,6 +176,7 @@ export class DisputesController {
     );
   }
 
+  // ADMIN: Close dispute - controller
   @Post(':disputeId/close')
   close(
     @Req() req: AuthenticatedRequest,

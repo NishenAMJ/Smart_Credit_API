@@ -24,6 +24,7 @@ import {
 } from "../../lib/api";
 
 // Renders the admin analytics dashboard with reports and trend charts.
+// ADMIN: View analytics - frontend
 export default function Analytics() {
   const navigate = useNavigate();
   const [usersReport, setUsersReport] = useState<

@@ -52,6 +52,7 @@ type TransactionSummaryCard = {
 };
 
 // Renders the admin transactions ledger with search, filters, and pagination.
+// ADMIN: View transactions - frontend
 export default function Transactions() {
   const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
   const [loading, setLoading] = useState(true);

@@ -11,6 +11,7 @@ import './Notifications.css';
 
 const filters = ['all', 'unread', 'read'] as const;
 
+// ADMIN: View notifications - frontend
 export default function Notifications() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<(typeof filters)[number]>('all');

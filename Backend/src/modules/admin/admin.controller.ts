@@ -26,13 +26,13 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
-  // Returns user counts for the admin dashboard.
+  // ADMIN: View user statistics - controller
   @Get('users/stats')
   async getUserStats() {
     return this.adminService.getUserStats();
   }
 
-  // Returns users that match the search, role, and status filters.
+  // ADMIN: Manage users - controller
   @Get('users')
   async getAllUsers(
     @Query() query: QueryUsersDto,
@@ -42,13 +42,13 @@ export class AdminController {
     return this.adminService.getAllUsers(query, limit, cursor);
   }
 
-  // Returns a single user record by id.
+  // ADMIN: View user details - controller
   @Get('users/:userId')
   async getUserById(@Param('userId') userId: string) {
     return this.adminService.getUserById(userId);
   }
 
-  // Suspends a user account and stores the reason.
+  // ADMIN: Suspend user - controller
   @Post('users/suspend')
   @HttpCode(HttpStatus.OK)
   async suspendUser(
@@ -58,7 +58,7 @@ export class AdminController {
     return this.adminService.suspendUser(dto.userId, dto.reason, req.user.sub);
   }
 
-  // Re-activates a suspended user account.
+  // ADMIN: Activate user - controller
   @Post('users/activate')
   @HttpCode(HttpStatus.OK)
   async activateUser(

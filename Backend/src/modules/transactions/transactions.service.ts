@@ -22,6 +22,7 @@ export class TransactionsService {
   constructor(private readonly firebaseService: FirebaseService) {}
 
   // Fetch a page of transactions for the admin table.
+  // ADMIN: View transactions - service
   async getTransactions(
     limit = 25,
     cursor?: string,

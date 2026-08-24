@@ -596,6 +596,7 @@ export function submitKyc(accessToken: string, payload: SubmitKycPayload) {
 }
 
 // Keeps dashboard pages independent from raw fetch configuration.
+// ADMIN: View dashboard - API
 export function getDashboardAnalytics() {
   return apiRequest<DashboardAnalyticsResponse>("/admin/analytics/dashboard", {
     auth: true,
@@ -609,6 +610,7 @@ export type UserQueryParams = {
 };
 
 // Encapsulates user filters so pages do not have to assemble query strings manually.
+// ADMIN: Manage users - API
 export function getUsers(params?: UserQueryParams & CursorQueryParams) {
   const searchParams = new URLSearchParams();
 
@@ -631,13 +633,14 @@ export function getUsers(params?: UserQueryParams & CursorQueryParams) {
 }
 
 // Separates aggregate dashboard data from the full user list request.
+// ADMIN: View user statistics - API
 export function getUserStats() {
   return apiRequest<UserStatsResponse>("/admin/users/stats", {
     auth: true,
   });
 }
 
-// Keeps the user moderation request shape in one place for reuse.
+// ADMIN: Suspend user - API
 export function suspendUser(userId: string, reason?: string) {
   return apiRequest("/admin/users/suspend", {
     method: "POST",
@@ -646,7 +649,7 @@ export function suspendUser(userId: string, reason?: string) {
   });
 }
 
-// Keeps reactivation logic out of page components.
+// ADMIN: Activate user - API
 export function activateUser(userId: string) {
   return apiRequest("/admin/users/activate", {
     method: "POST",
@@ -656,6 +659,7 @@ export function activateUser(userId: string) {
 }
 
 // Gives the KYC page a single typed entry point for review data.
+// ADMIN: Review KYC - API
 export function getPendingKyc(params?: CursorQueryParams) {
   const searchParams = new URLSearchParams();
   if (typeof params?.limit === "number")
@@ -671,6 +675,7 @@ export function getPendingKyc(params?: CursorQueryParams) {
 }
 
 // Uses a shared default note so approval messages stay consistent.
+// ADMIN: Approve KYC - API
 export function approveKyc(
   documentId: string,
   notes = DEFAULT_KYC_APPROVAL_NOTE,
@@ -683,6 +688,7 @@ export function approveKyc(
 }
 
 // Uses a shared default reason so rejection messages stay consistent.
+// ADMIN: Reject KYC - API
 export function rejectKyc(
   documentId: string,
   reason = DEFAULT_KYC_REJECTION_REASON,
@@ -704,6 +710,7 @@ export function getKycDocumentAccess(documentId: string) {
 }
 
 // Keeps report-fetching logic consistent across reporting pages.
+// ADMIN: View analytics - API
 export function getUsersReport() {
   return apiRequest<UsersReportResponse>("/admin/reports/users", {
     auth: true,
@@ -724,6 +731,7 @@ export function getTransactionsReport() {
   });
 }
 
+// ADMIN: View transactions - API
 export function getTransactions(limit = 25, cursor?: string) {
   const searchParams = new URLSearchParams();
   searchParams.set("limit", String(limit));
@@ -787,6 +795,7 @@ export function changeAdminPassword(
 }
 
 // Gives the ads page a typed moderation data source.
+// ADMIN: Moderate advertisements - API
 export function getAds(
   params?: CursorQueryParams & { status?: AdStatus | "all"; search?: string },
 ) {
@@ -813,6 +822,7 @@ export function getAdStats() {
 }
 
 // Uses a shared approval note so moderation actions are predictable.
+// ADMIN: Approve advertisement - API
 export function approveAd(adId: string, notes = DEFAULT_AD_APPROVAL_NOTE) {
   return apiRequest(`/admin/ads/${adId}/approve`, {
     method: "POST",
@@ -822,6 +832,7 @@ export function approveAd(adId: string, notes = DEFAULT_AD_APPROVAL_NOTE) {
 }
 
 // Uses a shared rejection reason so moderation actions are predictable.
+// ADMIN: Reject advertisement - API
 export function rejectAd(adId: string, reason = DEFAULT_AD_REJECTION_REASON) {
   return apiRequest(`/admin/ads/${adId}/reject`, {
     method: "POST",
@@ -831,6 +842,7 @@ export function rejectAd(adId: string, reason = DEFAULT_AD_REJECTION_REASON) {
 }
 
 // Keeps audit pages isolated from raw request details.
+// ADMIN: View audit logs - API
 export function getAuditLogs(params?: CursorQueryParams) {
   const searchParams = new URLSearchParams();
   if (typeof params?.limit === "number")
@@ -845,6 +857,7 @@ export function getAuditLogs(params?: CursorQueryParams) {
   );
 }
 
+// ADMIN: Manage disputes - API
 export function getDisputes(
   params?: CursorQueryParams & {
     status?: DisputeStatus;
@@ -950,6 +963,7 @@ export type AdminAdBoost = {
   };
 };
 
+// ADMIN: Verify ad boost payments - API
 export function getAdBoosts(status = "all") {
   return apiRequest<AdminAdBoost[]>(
     `/admin/ad-boosts?status=${encodeURIComponent(status)}`,

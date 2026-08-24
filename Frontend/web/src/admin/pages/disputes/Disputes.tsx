@@ -202,6 +202,7 @@ function SummaryIcon({ tone }: { tone: DisputeSummaryCard["tone"] }) {
 }
 
 // Renders the admin dispute review queue and resolution workflow.
+// ADMIN: Manage disputes - frontend
 export default function Disputes() {
   const [disputes, setDisputes] = useState<DisputeRow[]>([]);
   const [selectedDispute, setSelectedDispute] = useState<DisputeRow | null>(

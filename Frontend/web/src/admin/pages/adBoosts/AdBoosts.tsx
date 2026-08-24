@@ -5,6 +5,7 @@ import { decideAdBoostPayment, getAdBoostReceiptAccess, getAdBoosts, type AdminA
 const FILTERS = ["pending_verification", "approved", "rejected", "all"] as const;
 const PAGE_SIZE = 10;
 
+// ADMIN: Verify ad boost payments - frontend
 export default function AdBoosts() {
   const [items, setItems] = useState<AdminAdBoost[]>([]);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("pending_verification");

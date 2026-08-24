@@ -18,6 +18,7 @@ import {
 } from "../../lib/api";
 
 // Renders the admin dashboard overview, charts, and summary cards.
+// ADMIN: View dashboard - frontend
 export default function Dashboard() {
   const [dashboard, setDashboard] = useState<
     DashboardAnalyticsResponse["data"] | null

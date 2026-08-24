@@ -55,6 +55,7 @@ export class AdminAuditService {
   }
 
   // Reads the immutable audit collection with bounded cursor pagination.
+  // ADMIN: View audit logs - service
   async getAuditLogs(limit?: string, cursor?: string) {
     try {
       const db = this.firebaseService.db;

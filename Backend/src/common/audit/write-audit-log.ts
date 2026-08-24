@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 
+// ADMIN: Write audit log - database
 export async function writeAuditLog(
   db: FirebaseFirestore.Firestore,
   input: {

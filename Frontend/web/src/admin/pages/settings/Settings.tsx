@@ -149,6 +149,7 @@ function Section({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 // Renders the admin settings page with profile, security, notification, and platform controls.
+// ADMIN: Manage settings - frontend
 export default function Settings() {
   const [activeTab, setTab] = useState<SettingsTab>("profile");
   const [toast, setToast] = useState(false);

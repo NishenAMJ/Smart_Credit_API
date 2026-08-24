@@ -30,6 +30,7 @@ function ProtectedAdminLayout() {
   return <AdminLayout />;
 }
 
+// ADMIN: Protected routes - frontend
 export default function AdminRoutes() {
   return (
     <Routes>
