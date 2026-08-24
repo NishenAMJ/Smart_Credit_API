@@ -21,12 +21,19 @@ import LegalAgreementScreen from "../screens/shared/LegalAgreementScreen";
 import AiAssistantScreen from "../screens/shared/AiAssistantScreen";
 import DisputesScreen from "../screens/shared/DisputesScreen";
 import KycResubmissionScreen from "../screens/borrower/KycResubmissionScreen";
+import { COLORS } from "../constants/colors";
 
 const Stack = createNativeStackNavigator();
 
 export default function BorrowerStackNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: COLORS.background },
+        animation: "slide_from_right",
+      }}
+    >
       <Stack.Screen name="BorrowerTabs" component={BorrowerTabNavigator} />
       <Stack.Screen name="MyLoans" component={MyLoansScreen} />
       <Stack.Screen name="LoanDetails" component={LoanDetailsScreen} />

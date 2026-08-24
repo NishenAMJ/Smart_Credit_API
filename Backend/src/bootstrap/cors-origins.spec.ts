@@ -33,5 +33,9 @@ describe('CORS origin allowlist', () => {
     process.env.CORS_ORIGINS = '';
 
     expect(isCorsOriginAllowed('http://localhost:5173')).toBe(true);
+    expect(isCorsOriginAllowed('http://localhost:5174')).toBe(true);
+    expect(isCorsOriginAllowed('http://127.0.0.1:4173')).toBe(true);
+    expect(isCorsOriginAllowed('https://localhost:5173')).toBe(true);
+    expect(isCorsOriginAllowed('http://untrusted.example:5173')).toBe(false);
   });
 });

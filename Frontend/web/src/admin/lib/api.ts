@@ -74,10 +74,17 @@ async function apiRequest<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error(
+      "Unable to connect to the server. Please check that the backend is running and try again.",
+    );
+  }
 
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;

@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  RefreshControl,
   Modal,
   Pressable,
   View,
@@ -28,6 +27,8 @@ import EmptyState from "../../components/common/EmptyState";
 import Loader from "../../components/common/Loader";
 import PaymentCard from "../../components/borrower/PaymentCard";
 import SidebarMenu from "../../components/common/SidebarMenu";
+import BorrowerRefreshControl from "../../components/borrower/BorrowerRefreshControl";
+import BorrowerPageHeader from "../../components/borrower/BorrowerPageHeader";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 import { TYPOGRAPHY } from "../../constants/typography";
@@ -543,30 +544,17 @@ export default function PaymentsScreen({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => setSidebarVisible(true)}>
-            <Feather
-              name="menu"
-              size={24}
-              color={COLORS.surface || "#FFFFFF"}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Payments</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.navigate("Notifications")}
-          >
-            <Feather
-              name="bell"
-              size={20}
-              color={COLORS.surface || "#FFFFFF"}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <BorrowerPageHeader
+        title="Payments"
+        onMenu={() => setSidebarVisible(true)}
+        actions={[
+          {
+            icon: "bell",
+            label: "Open notifications",
+            onPress: () => navigation.navigate("Notifications"),
+          },
+        ]}
+      />
 
       <View style={styles.tabContainer}>
         <TouchableOpacity
@@ -674,10 +662,9 @@ export default function PaymentsScreen({
         contentContainerStyle={styles.paymentList}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
+          <BorrowerRefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={COLORS.primary}
           />
         }
         ListEmptyComponent={
@@ -760,7 +747,7 @@ export default function PaymentsScreen({
                 <QRCode
                   value={qrToken}
                   size={200}
-                  backgroundColor="#F3F4F6"
+                  backgroundColor={COLORS.border}
                   color={COLORS.primary}
                 />
               </View>
@@ -1075,7 +1062,7 @@ const styles = StyleSheet.create({
   qrPlaceholderBox: {
     width: "100%",
     aspectRatio: 1,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: COLORS.border,
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
