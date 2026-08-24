@@ -16,12 +16,15 @@ import { LenderSmsService } from './lender-sms.service';
 import { PaymentReceivedSmsService } from './payment-received-sms.service';
 import type {
   LenderSmsSettings,
-  SendSmsInput,
   SendSmsResponse,
   SmsBorrowerSearchResponse,
   PaymentReceivedSmsSettings,
-  UpdatePaymentReceivedSmsInput,
 } from './lender-sms.types';
+import {
+  SendLenderSmsDto,
+  UpdatePaymentReceivedSmsDto,
+  UpdateSmsEnabledDto,
+} from './lender-sms.dto';
 
 @Controller('lender/sms')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -42,7 +45,7 @@ export class LenderSmsController {
   @Patch('settings')
   updateSettings(
     @Req() request: AuthenticatedRequest,
-    @Body() body: { enabled?: boolean },
+    @Body() body: UpdateSmsEnabledDto,
   ): Promise<LenderSmsSettings> {
     return this.smsService.setEnabled(request.user.sub, body?.enabled);
   }
@@ -50,7 +53,7 @@ export class LenderSmsController {
   @Patch('payment-received')
   updatePaymentReceivedSettings(
     @Req() request: AuthenticatedRequest,
-    @Body() body: UpdatePaymentReceivedSmsInput,
+    @Body() body: UpdatePaymentReceivedSmsDto,
   ): Promise<PaymentReceivedSmsSettings> {
     return this.paymentReceivedSmsService.updateSettings(
       request.user.sub,
@@ -74,7 +77,7 @@ export class LenderSmsController {
   @Post('send')
   send(
     @Req() request: AuthenticatedRequest,
-    @Body() body: SendSmsInput,
+    @Body() body: SendLenderSmsDto,
   ): Promise<SendSmsResponse> {
     return this.smsService.send(request.user.sub, body);
   }

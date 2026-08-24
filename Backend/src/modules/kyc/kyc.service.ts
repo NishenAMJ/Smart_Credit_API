@@ -491,19 +491,21 @@ export class KycService {
           .set({ kycVerified: false, updatedAt: now }, { merge: true });
       }
       this.emitAdminChange(userId, 'resubmitted');
-      await this.roleNotifications?.createAdmin({
-        eventType: 'kyc_resubmitted',
-        eventId: userId,
-        category: 'kyc',
-        title: 'KYC resubmission ready for review',
-        message: 'A user resubmitted identity documents for admin review.',
-        severity: 'warning',
-        entityType: 'user',
-        entityId: userId,
-        actionLabel: 'Review KYC',
-        actionTarget: '/admin/kyc',
-        metadata: { status: 'pending' },
-      }).catch(() => undefined);
+      await this.roleNotifications
+        ?.createAdmin({
+          eventType: 'kyc_resubmitted',
+          eventId: userId,
+          category: 'kyc',
+          title: 'KYC resubmission ready for review',
+          message: 'A user resubmitted identity documents for admin review.',
+          severity: 'warning',
+          entityType: 'user',
+          entityId: userId,
+          actionLabel: 'Review KYC',
+          actionTarget: '/admin/kyc',
+          metadata: { status: 'pending' },
+        })
+        .catch(() => undefined);
 
       return {
         success: true,
@@ -551,6 +553,14 @@ export class KycService {
         throw new BadRequestException(
           'A borrower or lender role is required to create a KYC profile.',
         );
+      }
+      if (dto.expiryDate) {
+        const expiryDate = new Date(`${dto.expiryDate}T23:59:59.999Z`);
+        if (Number.isNaN(expiryDate.getTime()) || expiryDate < new Date()) {
+          throw new BadRequestException(
+            'The identity document expiry date must be valid and cannot be in the past.',
+          );
+        }
       }
       const fullName = existingUser?.fullName ?? dto.fullName?.trim();
       const identityFullName = dto.fullName?.trim() ?? fullName;
@@ -685,19 +695,21 @@ export class KycService {
         { merge: true },
       );
       this.emitAdminChange(userId, 'submitted');
-      await this.roleNotifications?.createAdmin({
-        eventType: 'kyc_submitted',
-        eventId: userId,
-        category: 'kyc',
-        title: 'New KYC submission',
-        message: 'A user submitted identity documents for admin review.',
-        severity: 'info',
-        entityType: 'user',
-        entityId: userId,
-        actionLabel: 'Review KYC',
-        actionTarget: '/admin/kyc',
-        metadata: { status: 'pending' },
-      }).catch(() => undefined);
+      await this.roleNotifications
+        ?.createAdmin({
+          eventType: 'kyc_submitted',
+          eventId: userId,
+          category: 'kyc',
+          title: 'New KYC submission',
+          message: 'A user submitted identity documents for admin review.',
+          severity: 'info',
+          entityType: 'user',
+          entityId: userId,
+          actionLabel: 'Review KYC',
+          actionTarget: '/admin/kyc',
+          metadata: { status: 'pending' },
+        })
+        .catch(() => undefined);
 
       const currentSubmission = await this.getMySubmission(userId);
 
@@ -1205,12 +1217,16 @@ export class KycService {
           transaction.delete(
             this.db
               .collection('borrowerNotifications')
-              .doc(`borrower__${document.userId}__profile-kyc-${document.userId}`),
+              .doc(
+                `borrower__${document.userId}__profile-kyc-${document.userId}`,
+              ),
           );
           transaction.delete(
             this.db
               .collection('borrowerNotifications')
-              .doc(`borrower__${document.userId}__kyc-rejected-${document.userId}`),
+              .doc(
+                `borrower__${document.userId}__kyc-rejected-${document.userId}`,
+              ),
           );
         }
         if (isLender) {
@@ -1239,7 +1255,9 @@ export class KycService {
           transaction.delete(
             this.db
               .collection('notifications')
-              .doc(`lender__${document.userId}__kyc-rejected-${document.userId}`),
+              .doc(
+                `lender__${document.userId}__kyc-rejected-${document.userId}`,
+              ),
           );
         }
         return {
@@ -1413,7 +1431,9 @@ export class KycService {
           transaction.delete(
             this.db
               .collection('borrowerNotifications')
-              .doc(`borrower__${document.userId}__profile-kyc-${document.userId}`),
+              .doc(
+                `borrower__${document.userId}__profile-kyc-${document.userId}`,
+              ),
           );
         }
         if (isLender) {

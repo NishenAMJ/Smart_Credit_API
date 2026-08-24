@@ -20,9 +20,11 @@ import { PaymentsResponse } from './payments.types';
 import type {
   LoanLedgerDetailsResponse,
   PaymentActivityFilter,
-  RecordInstallmentPaymentInput,
-  ReceiptVerificationDecisionInput,
 } from './payments.types';
+import {
+  ReceiptVerificationDecisionDto,
+  RecordInstallmentPaymentDto,
+} from './payments.dto';
 import { InstallmentPaymentService } from './installment-payment.service';
 import { PaymentLedgerDetailsService } from './payment-ledger-details.service';
 import { PaymentsService } from './payments.service';
@@ -50,7 +52,7 @@ export class PaymentsController {
   decideReceiptSubmission(
     @Req() req: AuthenticatedRequest,
     @Param('transactionId') transactionId: string,
-    @Body() body: ReceiptVerificationDecisionInput,
+    @Body() body: ReceiptVerificationDecisionDto,
   ) {
     return this.receiptVerificationService.decide(
       req.user.sub,
@@ -140,7 +142,7 @@ export class PaymentsController {
     @Req() req: AuthenticatedRequest,
     @Param('loanId') loanId: string,
     @Param('installmentId') installmentId: string,
-    @Body() body: RecordInstallmentPaymentInput,
+    @Body() body: RecordInstallmentPaymentDto,
   ): Promise<LoanLedgerDetailsResponse> {
     if (
       !body ||

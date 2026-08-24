@@ -15,6 +15,7 @@ import {
   IsString,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 
 export class CreateDisputeDto implements CreateDisputeInput {
@@ -36,16 +37,19 @@ export class CreateDisputeDto implements CreateDisputeInput {
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(3)
   @MaxLength(160)
   subject!: string;
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(10)
   @MaxLength(4000)
   description!: string;
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(3)
   @MaxLength(1000)
   desiredOutcome!: string;
 
@@ -80,6 +84,7 @@ export class AddDisputeCommentDto {
 export class ReopenDisputeDto {
   @IsString()
   @IsNotEmpty()
+  @MinLength(5)
   @MaxLength(1000)
   reason!: string;
 }

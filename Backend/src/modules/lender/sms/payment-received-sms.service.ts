@@ -65,6 +65,23 @@ export class PaymentReceivedSmsService implements PaymentReceivedNotifier {
         `The payment received message cannot exceed ${MAX_TEMPLATE_LENGTH} characters.`,
       );
     }
+    const allowedVariables = new Set([
+      'borrowerName',
+      'amount',
+      'paymentDate',
+      'remainingBalance',
+    ]);
+    const variables = Array.from(template.matchAll(/{{\s*([^{}]+?)\s*}}/g)).map(
+      (match) => match[1],
+    );
+    const unsupportedVariable = variables.find(
+      (variable) => !allowedVariables.has(variable),
+    );
+    if (unsupportedVariable) {
+      throw new BadRequestException(
+        `Unsupported payment message variable: {{${unsupportedVariable}}}.`,
+      );
+    }
 
     const now = Timestamp.now();
     const settings = {

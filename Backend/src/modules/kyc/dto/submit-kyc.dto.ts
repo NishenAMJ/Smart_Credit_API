@@ -4,6 +4,8 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  MaxLength,
+  MinLength,
 } from 'class-validator';
 
 export class SubmitKycDto {
@@ -14,14 +16,18 @@ export class SubmitKycDto {
 
   @IsOptional()
   @IsString()
+  @MinLength(3)
+  @MaxLength(120)
   fullName?: string;
 
   @IsOptional()
   @IsEmail()
+  @MaxLength(254)
   email?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(20)
   phoneNumber?: string;
 
   @IsOptional()
@@ -30,14 +36,17 @@ export class SubmitKycDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   documentType?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   documentNumber?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   issuingCountry?: string;
 
   @IsOptional()

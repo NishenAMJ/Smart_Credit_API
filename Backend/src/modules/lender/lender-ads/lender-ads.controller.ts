@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -20,28 +19,9 @@ import {
   LenderAdResponse,
   LenderAdsListResponse,
 } from './lender-ads.types';
+import { CreateLenderAdDto, UpdateLenderAdDto } from './lender-ads.dto';
 import { LenderAdsService } from './lender-ads.service';
 import { LenderAdAnalyticsService } from './lender-ad-analytics.service';
-
-type CreateLenderAdBody = {
-  headline?: string;
-  minAmount?: number | string;
-  maxAmount?: number | string;
-  interestRate?: number | string;
-  minTenureMonths?: number | string;
-  tenureMonths?: number | string;
-  borrowerFocus?: string;
-  processingTime?: string;
-  responseTimeHours?: number | string;
-  repaymentStyle?: string;
-  requirements?: string;
-  supportNote?: string;
-  preferredPurposes?: string[];
-};
-
-type UpdateLenderAdBody = Partial<CreateLenderAdBody> & {
-  status?: string;
-};
 
 @Controller('lender-ads')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -55,12 +35,9 @@ export class LenderAdsController {
   @Post()
   createAd(
     @Req() request: AuthenticatedRequest,
-    @Body() body: CreateLenderAdBody,
+    @Body() body: CreateLenderAdDto,
   ): Promise<LenderAdResponse> {
-    return this.lenderAdsService.createAd(
-      request.user.sub,
-      this.toCreateInput(body),
-    );
+    return this.lenderAdsService.createAd(request.user.sub, body);
   }
 
   @Get()
@@ -91,105 +68,9 @@ export class LenderAdsController {
   updateAd(
     @Req() request: AuthenticatedRequest,
     @Param('adId') adId: string,
-    @Body() body: UpdateLenderAdBody,
+    @Body() body: UpdateLenderAdDto,
   ): Promise<LenderAdResponse> {
-    return this.lenderAdsService.updateAd(
-      request.user.sub,
-      adId,
-      this.toUpdateInput(body),
-    );
-  }
-
-  private toUpdateInput(body: UpdateLenderAdBody) {
-    return {
-      headline: typeof body.headline === 'string' ? body.headline : undefined,
-      minAmount: this.toOptionalBodyNumber(body.minAmount, 'minAmount'),
-      maxAmount: this.toOptionalBodyNumber(body.maxAmount, 'maxAmount'),
-      interestRate: this.toOptionalBodyNumber(
-        body.interestRate,
-        'interestRate',
-      ),
-      minTenureMonths: this.toOptionalBodyNumber(
-        body.minTenureMonths,
-        'minTenureMonths',
-      ),
-      tenureMonths: this.toOptionalBodyNumber(
-        body.tenureMonths,
-        'tenureMonths',
-      ),
-      borrowerFocus:
-        typeof body.borrowerFocus === 'string' ? body.borrowerFocus : undefined,
-      processingTime:
-        typeof body.processingTime === 'string'
-          ? body.processingTime
-          : undefined,
-      responseTimeHours: this.toOptionalBodyNumber(
-        body.responseTimeHours,
-        'responseTimeHours',
-      ),
-      preferredPurposes: Array.isArray(body.preferredPurposes)
-        ? body.preferredPurposes.filter(
-            (purpose): purpose is string => typeof purpose === 'string',
-          )
-        : undefined,
-      repaymentStyle:
-        typeof body.repaymentStyle === 'string'
-          ? body.repaymentStyle
-          : undefined,
-      requirements:
-        typeof body.requirements === 'string' ? body.requirements : undefined,
-      supportNote:
-        typeof body.supportNote === 'string' ? body.supportNote : undefined,
-      status: typeof body.status === 'string' ? body.status : undefined,
-    };
-  }
-
-  private toCreateInput(body: CreateLenderAdBody): CreateLenderAdInput {
-    return {
-      headline: typeof body.headline === 'string' ? body.headline : '',
-      minAmount: this.toNumber(body.minAmount, 'minAmount'),
-      maxAmount: this.toNumber(body.maxAmount, 'maxAmount'),
-      interestRate: this.toNumber(body.interestRate, 'interestRate'),
-      minTenureMonths: this.toOptionalBodyNumber(
-        body.minTenureMonths,
-        'minTenureMonths',
-      ),
-      tenureMonths: this.toNumber(body.tenureMonths, 'tenureMonths'),
-      borrowerFocus:
-        typeof body.borrowerFocus === 'string' ? body.borrowerFocus : '',
-      processingTime:
-        typeof body.processingTime === 'string' ? body.processingTime : '',
-      responseTimeHours: this.toOptionalBodyNumber(
-        body.responseTimeHours,
-        'responseTimeHours',
-      ),
-      preferredPurposes: Array.isArray(body.preferredPurposes)
-        ? body.preferredPurposes.filter(
-            (purpose): purpose is string => typeof purpose === 'string',
-          )
-        : undefined,
-      repaymentStyle:
-        typeof body.repaymentStyle === 'string' ? body.repaymentStyle : '',
-      requirements:
-        typeof body.requirements === 'string' ? body.requirements : '',
-      supportNote: typeof body.supportNote === 'string' ? body.supportNote : '',
-    };
-  }
-
-  private toNumber(value: unknown, fieldName: string): number {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = Number(value);
-
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
-    }
-
-    throw new BadRequestException(`${fieldName} must be a valid number.`);
+    return this.lenderAdsService.updateAd(request.user.sub, adId, body);
   }
 
   private toOptionalNumber(value: string | undefined): number | null {
@@ -199,12 +80,5 @@ export class LenderAdsController {
 
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  private toOptionalBodyNumber(
-    value: number | string | undefined,
-    fieldName: string,
-  ): number | undefined {
-    return value === undefined ? undefined : this.toNumber(value, fieldName);
   }
 }

@@ -13,22 +13,8 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { resolveAuthenticatedLenderId } from '../lender-request.utils';
 import { LenderProfileService } from './lender-profile.service';
-import {
-  LenderProfileResponse,
-  UpdateLenderProfileInput,
-} from './lender-profile.types';
-
-type UpdateLenderProfileBody = {
-  fullName?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  district?: string;
-  businessName?: string;
-  responseTimeHours?: number | string;
-  preferredRegions?: string[] | string;
-};
+import { LenderProfileResponse } from './lender-profile.types';
+import { UpdateLenderProfileDto } from './lender-profile.dto';
 
 @Controller('lender-profile')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -50,52 +36,18 @@ export class LenderProfileController {
   updateProfile(
     @Req() request: AuthenticatedRequest,
     @Param('lenderId') lenderId: string,
-    @Body() body: UpdateLenderProfileBody,
+    @Body() body: UpdateLenderProfileDto,
   ): Promise<LenderProfileResponse> {
     return this.lenderProfileService.updateProfile(
       resolveAuthenticatedLenderId(request.user.sub, lenderId),
-      this.toUpdateInput(body),
-    );
-  }
-
-  private toUpdateInput(
-    body: UpdateLenderProfileBody,
-  ): UpdateLenderProfileInput {
-    return {
-      fullName: typeof body.fullName === 'string' ? body.fullName : undefined,
-      email: typeof body.email === 'string' ? body.email : undefined,
-      phone: typeof body.phone === 'string' ? body.phone : undefined,
-      address: typeof body.address === 'string' ? body.address : undefined,
-      city: typeof body.city === 'string' ? body.city : undefined,
-      district: typeof body.district === 'string' ? body.district : undefined,
-      businessName:
-        typeof body.businessName === 'string' ? body.businessName : undefined,
-      responseTimeHours: this.toOptionalNumber(body.responseTimeHours),
-      preferredRegions: Array.isArray(body.preferredRegions)
-        ? body.preferredRegions.filter(
-            (value): value is string => typeof value === 'string',
-          )
-        : typeof body.preferredRegions === 'string'
-          ? body.preferredRegions
-              .split(',')
-              .map((value) => value.trim())
-              .filter((value) => value.length > 0)
+      {
+        ...body,
+        preferredRegions: body.preferredRegions
+          ? Array.from(
+              new Set(body.preferredRegions.map((value) => value.trim())),
+            ).filter(Boolean)
           : undefined,
-    };
-  }
-
-  private toOptionalNumber(value: unknown): number | undefined {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = Number(value);
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
-    }
-
-    return undefined;
+      },
+    );
   }
 }

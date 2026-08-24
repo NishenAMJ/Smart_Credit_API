@@ -1,14 +1,22 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 import { USER_ROLES } from '../auth.types';
 
 export class LoginDto {
   @IsString()
   @IsNotEmpty({ message: 'Email or phone is required.' })
+  @MaxLength(254)
   identifier!: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Password is required.' })
+  @MaxLength(128)
   password!: string;
 
   @IsOptional()

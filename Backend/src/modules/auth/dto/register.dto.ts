@@ -43,10 +43,13 @@ export class RegistrationAddressDto {
 export class RegisterDto {
   @IsString()
   @IsNotEmpty({ message: 'Full name is required.' })
+  @MinLength(3)
+  @MaxLength(120)
   fullName!: string;
 
   @IsEmail({}, { message: 'Please provide a valid email address.' })
   @IsNotEmpty({ message: 'Email is required.' })
+  @MaxLength(254)
   email!: string;
 
   @IsString()
@@ -65,6 +68,7 @@ export class RegisterDto {
   @MinLength(8, {
     message: 'Password must be at least 8 characters long.',
   })
+  @MaxLength(128)
   password!: string;
 
   @IsString()

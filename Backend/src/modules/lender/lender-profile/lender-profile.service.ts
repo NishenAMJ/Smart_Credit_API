@@ -119,6 +119,7 @@ export class LenderProfileService {
 
     if (
       input.businessName !== undefined &&
+      input.businessName.trim().length > 0 &&
       input.businessName.trim().length < 3
     ) {
       throw new BadRequestException(
@@ -126,10 +127,18 @@ export class LenderProfileService {
       );
     }
 
-    if (input.city !== undefined && input.city.trim().length < 2) {
+    if (
+      input.city !== undefined &&
+      input.city.trim().length > 0 &&
+      input.city.trim().length < 2
+    ) {
       throw new BadRequestException('city must be at least 2 characters.');
     }
-    if (input.district !== undefined && input.district.trim().length < 2) {
+    if (
+      input.district !== undefined &&
+      input.district.trim().length > 0 &&
+      input.district.trim().length < 2
+    ) {
       throw new BadRequestException('district must be at least 2 characters.');
     }
 

@@ -1,11 +1,20 @@
-import { Body, Controller, Get, Header, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { AdBoostsService } from './ad-boosts.service';
-import type { AdBoostPaymentMethod } from './ad-boosts.types';
+import { CreateAdBoostDto, SubmitAdBoostReceiptDto } from './ad-boosts.dto';
 
 @Controller('lender-ad-boosts')
 export class AdBoostsController {
@@ -14,7 +23,9 @@ export class AdBoostsController {
   @Get('plans')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('lender')
-  getPlans() { return this.service.getPlans(); }
+  getPlans() {
+    return this.service.getPlans();
+  }
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -28,7 +39,7 @@ export class AdBoostsController {
   @Roles('lender')
   create(
     @Req() request: AuthenticatedRequest & Request,
-    @Body() body: { listingId: string; planId: string; paymentMethod: AdBoostPaymentMethod },
+    @Body() body: CreateAdBoostDto,
   ) {
     return this.service.createBoost(request.user.sub, {
       ...body,
@@ -42,7 +53,7 @@ export class AdBoostsController {
   submitReceipt(
     @Req() request: AuthenticatedRequest,
     @Param('boostId') boostId: string,
-    @Body() body: { receiptDocumentId: string; bankReference: string },
+    @Body() body: SubmitAdBoostReceiptDto,
   ) {
     return this.service.submitBankReceipt(request.user.sub, boostId, body);
   }
@@ -65,9 +76,12 @@ export class AdBoostsController {
   }
 
   private requestBaseUrl(request: Request) {
-    const protocol = request.get('x-forwarded-proto')?.split(',')[0]?.trim() || request.protocol;
-    const host = request.get('x-forwarded-host')?.split(',')[0]?.trim() || request.get('host');
+    const protocol =
+      request.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+      request.protocol;
+    const host =
+      request.get('x-forwarded-host')?.split(',')[0]?.trim() ||
+      request.get('host');
     return `${protocol}://${host}`;
   }
 }
-

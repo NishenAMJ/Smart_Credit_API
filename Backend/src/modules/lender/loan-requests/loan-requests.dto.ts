@@ -8,6 +8,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export type LoanRequestDecisionResponse = {
   requestId: string;
@@ -27,19 +28,22 @@ export class LoanRequestDecisionDto {
   note?: string;
 
   @IsInt()
+  @Type(() => Number)
   @Min(1)
   @IsOptional()
   approvedPrincipalMinor?: number;
 
   @IsNumber()
-  @Min(0)
+  @Type(() => Number)
+  @Min(0.01)
   @Max(100)
   @IsOptional()
   annualInterestRate?: number;
 
   @IsInt()
-  @Min(1)
-  @Max(120)
+  @Type(() => Number)
+  @Min(3)
+  @Max(60)
   @IsOptional()
   approvedTenureMonths?: number;
 }

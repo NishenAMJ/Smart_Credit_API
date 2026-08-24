@@ -1,5 +1,15 @@
 import type { UserRole } from '../../auth/auth.types';
 import type { LoanAgreementStatus } from '../legal.types';
+import {
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class LegalDocumentPartyDto {
   userId!: string;
@@ -66,15 +76,34 @@ export class LegalDocumentDto {
 }
 
 export class AcceptLegalDocumentDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(160)
   signedName!: string;
+
+  @IsBoolean()
   consentAccepted!: boolean;
+
+  @IsInt()
+  @Min(1)
   agreementVersion!: number;
+
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/i)
   termsHash!: string;
+
+  @IsOptional()
+  @IsBoolean()
   fundsReceivedConfirmed?: boolean;
 }
 
 export class ConfirmAgreementDisbursementDto {
+  @IsBoolean()
   confirmationAccepted!: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
   externalReference?: string;
 }
 
