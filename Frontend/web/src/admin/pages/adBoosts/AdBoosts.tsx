@@ -21,6 +21,13 @@ export default function AdBoosts() {
   const [selected, setSelected] = useState<AdminAdBoost | null>(null);
   const [decision, setDecision] = useState<{ item: AdminAdBoost; approved: boolean } | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [receiptPreview, setReceiptPreview] = useState<{
+    url: string;
+    reference: string;
+    fileName: string;
+    mimeType: string;
+  } | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -59,9 +66,20 @@ export default function AdBoosts() {
   async function viewReceipt(item: AdminAdBoost) {
     if (!item.receiptDocumentId) return;
     try {
+      setReceiptLoading(true);
+      setError("");
       const access = await getAdBoostReceiptAccess(item.receiptDocumentId);
-      window.open(access.accessUrl, "_blank", "noopener,noreferrer");
-    } catch (failure) { setError(failure instanceof Error ? failure.message : "Failed to open receipt."); }
+      setReceiptPreview({
+        url: access.accessUrl,
+        reference: shortReference(item.boostId),
+        fileName: access.fileName,
+        mimeType: access.mimeType,
+      });
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Failed to open receipt.");
+    } finally {
+      setReceiptLoading(false);
+    }
   }
 
   async function submitDecision() {
@@ -131,7 +149,9 @@ export default function AdBoosts() {
       <div style={S.actions}><button className="btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage((value) => value - 1)}><ChevronLeft size={16} /> Previous</button>
         <span>Page {page} of {pages}</span><button className="btn-secondary btn-sm" disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>Next <ChevronRight size={16} /></button></div></div></div>
     {selected && <Details item={selected} onClose={() => setSelected(null)} onReceipt={() => void viewReceipt(selected)}
-      onApprove={() => setDecision({ item: selected, approved: true })} onReject={() => setDecision({ item: selected, approved: false })} busy={busyId === selected.boostId} />}
+      onApprove={() => setDecision({ item: selected, approved: true })} onReject={() => setDecision({ item: selected, approved: false })}
+      busy={busyId === selected.boostId} receiptLoading={receiptLoading} />}
+    {receiptPreview && <ReceiptPreview preview={receiptPreview} onClose={() => setReceiptPreview(null)} />}
     {decision && <DecisionDialog decision={decision} reason={rejectionReason} setReason={setRejectionReason}
       busy={busyId === decision.item.boostId} onCancel={() => { setDecision(null); setRejectionReason(""); }} onConfirm={() => void submitDecision()} />}
   </div>;
@@ -141,8 +161,8 @@ function Summary({ label: text, value }: { label: string; value: string }) {
   return <div className="card"><p style={S.muted}>{text}</p><p style={S.statValue}>{value}</p></div>;
 }
 
-function Details({ item, onClose, onReceipt, onApprove, onReject, busy }: {
-  item: AdminAdBoost; onClose: () => void; onReceipt: () => void; onApprove: () => void; onReject: () => void; busy: boolean;
+function Details({ item, onClose, onReceipt, onApprove, onReject, busy, receiptLoading }: {
+  item: AdminAdBoost; onClose: () => void; onReceipt: () => void; onApprove: () => void; onReject: () => void; busy: boolean; receiptLoading: boolean;
 }) {
   const rows = [["Reference", shortReference(item.boostId)], ["Full boost ID", item.boostId], ["Lender", item.lenderName ?? item.lenderId],
     ["Advertisement", item.listingTitle ?? item.listingId], ["Advertisement ID", item.listingId], ["Plan", label(item.plan.name)],
@@ -155,10 +175,50 @@ function Details({ item, onClose, onReceipt, onApprove, onReject, busy }: {
       <button className="btn-secondary btn-sm" onClick={onClose}><X size={18} /></button></div>
     <div style={S.details}>{rows.map(([name, value]) => <div key={name} style={S.detail}><span style={S.detailLabel}>{name}</span><strong>{value}</strong></div>)}</div>
     {item.rejectionReason && <div style={S.rejectionBox}><strong>Rejection reason</strong><div>{item.rejectionReason}</div></div>}
-    <div style={S.modalActions}>{item.receiptDocumentId && <button className="btn-secondary btn-sm" onClick={onReceipt}><Eye size={15} /> View Receipt</button>}
+    <div style={S.modalActions}>{item.receiptDocumentId && <button className="btn-secondary btn-sm" disabled={receiptLoading} onClick={onReceipt}><Eye size={15} /> {receiptLoading ? "Loading Receipt..." : "View Receipt"}</button>}
       {item.status === "pending_verification" && <><button className="btn-primary btn-sm" disabled={busy} onClick={onApprove}><Check size={15} /> Approve</button>
         <button className="btn-secondary btn-sm" disabled={busy} onClick={onReject}><X size={15} /> Reject</button></>}</div>
   </div></div>;
+}
+
+function ReceiptPreview({ preview, onClose }: {
+  preview: { url: string; reference: string; fileName: string; mimeType: string };
+  onClose: () => void;
+}) {
+  const [mediaError, setMediaError] = useState(false);
+  const isPdf = preview.mimeType.toLowerCase().includes("pdf") || preview.fileName.toLowerCase().endsWith(".pdf");
+  return <div style={{ ...S.overlay, zIndex: 1200 }} onClick={onClose}>
+    <div style={S.receiptModal} role="dialog" aria-modal="true" aria-label="Payment receipt preview" onClick={(event) => event.stopPropagation()}>
+      <div style={S.receiptHeader}>
+        <div>
+          <p style={S.receiptEyebrow}>Payment evidence</p>
+          <h2 style={S.modalTitle}>Bank Transfer Receipt</h2>
+          <p style={S.muted}>{preview.reference} · {preview.fileName}</p>
+        </div>
+        <button className="btn-secondary btn-sm" onClick={onClose} aria-label="Close receipt preview"><X size={18} /></button>
+      </div>
+      <div style={S.receiptCanvas}>
+        {mediaError ? <div style={S.receiptError}>
+          <strong>Receipt preview unavailable</strong>
+          <span>The file could not be loaded from secure storage. Try refreshing the page and opening it again.</span>
+        </div> : isPdf ? <iframe
+          src={preview.url}
+          title={`Payment receipt for ${preview.reference}`}
+          style={S.receiptFrame}
+          onError={() => setMediaError(true)}
+        /> : <img
+          src={preview.url}
+          alt={`Payment receipt for ${preview.reference}`}
+          style={S.receiptImage}
+          onError={() => setMediaError(true)}
+        />}
+      </div>
+      <div style={S.receiptFooter}>
+        <span style={S.receiptHint}>Review the account, amount, date, and reference before making a decision.</span>
+        <button className="btn-primary btn-sm" onClick={onClose}>Done</button>
+      </div>
+    </div>
+  </div>;
 }
 
 function DecisionDialog({ decision, reason, setReason, busy, onCancel, onConfirm }: {
@@ -197,4 +257,13 @@ const S: Record<string, React.CSSProperties> = {
   details: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 16 }, detail: { display: "flex", flexDirection: "column", gap: 5, padding: 12, borderRadius: 10, background: "#F9FAFB", overflowWrap: "anywhere" },
   detailLabel: { fontSize: 11, fontWeight: 600, textTransform: "uppercase", color: "#6B7280" }, rejectionBox: { marginTop: 14, padding: 12, borderRadius: 10, color: "#991B1B", background: "#FEF2F2" },
   modalActions: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }, confirmText: { margin: "12px 0 18px", color: "#4B5563", lineHeight: 1.5 },
+  receiptModal: { width: "min(900px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 18, background: "#FFFFFF", boxShadow: "0 30px 80px rgba(15,23,42,.35)" },
+  receiptHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, padding: "20px 22px", borderBottom: "1px solid #E5E7EB" },
+  receiptEyebrow: { margin: "0 0 5px", color: "#2563EB", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" },
+  receiptCanvas: { minHeight: 300, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "auto", padding: 20, background: "#F1F5F9" },
+  receiptImage: { display: "block", maxWidth: "100%", maxHeight: "65vh", objectFit: "contain", borderRadius: 10, background: "#FFFFFF", boxShadow: "0 8px 28px rgba(15,23,42,.14)" },
+  receiptFrame: { width: "100%", height: "65vh", border: 0, borderRadius: 10, background: "#FFFFFF", boxShadow: "0 8px 28px rgba(15,23,42,.14)" },
+  receiptError: { maxWidth: 440, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: 28, border: "1px solid #FECACA", borderRadius: 12, color: "#991B1B", background: "#FEF2F2", textAlign: "center", lineHeight: 1.5 },
+  receiptFooter: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 18, padding: "14px 22px", borderTop: "1px solid #E5E7EB", background: "#FFFFFF" },
+  receiptHint: { color: "#64748B", fontSize: 12, lineHeight: 1.45 },
 };
