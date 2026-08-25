@@ -45,3 +45,23 @@ describe('RegisterDto Sri Lankan phone validation', () => {
     },
   );
 });
+
+describe('RegisterDto email validation', () => {
+  it.each([
+    'nimalgmail.com',
+    '@gmail.com',
+    'nimal@gmail',
+    'nimal gamage@gmail.com',
+    'nimal@gmail..com',
+    'nimal..gamage@gmail.com',
+    'nimal@gmail-.com',
+  ])('rejects the malformed email %s', async (email) => {
+    const dto = plainToInstance(RegisterDto, {
+      ...validRegistration,
+      email,
+    });
+    const errors = await validate(dto);
+
+    expect(errors.some((error) => error.property === 'email')).toBe(true);
+  });
+});

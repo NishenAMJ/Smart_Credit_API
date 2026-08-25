@@ -45,8 +45,12 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'Full name is required.' })
   fullName!: string;
 
-  @IsEmail({}, { message: 'Please provide a valid email address.' })
+  @IsEmail(
+    { allow_utf8_local_part: false, require_tld: true },
+    { message: 'Please provide a valid email address.' },
+  )
   @IsNotEmpty({ message: 'Email is required.' })
+  @MaxLength(254, { message: 'Email address is too long.' })
   email!: string;
 
   @IsString()

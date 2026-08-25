@@ -54,6 +54,45 @@ function compactPhoneNumber(value: string) {
   return value.replace(/[\s()-]/g, "");
 }
 
+function getEmailValidationError(value: string) {
+  const email = value.trim();
+
+  if (!email) return "Email is required.";
+  if (email.length > 254) return "Email address is too long.";
+
+  const parts = email.split("@");
+  if (parts.length !== 2) return "Enter a valid email address.";
+
+  const [localPart, domain] = parts;
+  if (
+    !localPart ||
+    localPart.length > 64 ||
+    localPart.startsWith(".") ||
+    localPart.endsWith(".") ||
+    localPart.includes("..") ||
+    !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(localPart)
+  ) {
+    return "Enter a valid email address.";
+  }
+
+  const domainLabels = domain.split(".");
+  if (
+    domain.length > 253 ||
+    domainLabels.length < 2 ||
+    domainLabels.some(
+      (label) =>
+        !label ||
+        label.length > 63 ||
+        !/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+    ) ||
+    !/^[A-Za-z]{2,63}$/.test(domainLabels.at(-1) ?? "")
+  ) {
+    return "Enter a valid email address.";
+  }
+
+  return "";
+}
+
 const initialKycForm: SubmitKycPayload = {
   documentType: "national_id",
   documentNumber: "",
@@ -246,11 +285,8 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
       nextErrors.fullName = "Full name is required.";
     }
 
-    if (!registerForm.email.trim()) {
-      nextErrors.email = "Email is required.";
-    } else if (!/^\S+@\S+\.\S+$/.test(registerForm.email.trim())) {
-      nextErrors.email = "Enter a valid email address.";
-    }
+    const emailError = getEmailValidationError(registerForm.email);
+    if (emailError) nextErrors.email = emailError;
 
     if (!registerForm.phone.trim()) {
       nextErrors.phone = "Phone is required.";
@@ -882,6 +918,20 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                               email: event.target.value,
                             }))
                           }
+                          onBlur={() => {
+                            const emailError = getEmailValidationError(
+                              registerForm.email,
+                            );
+                            setFieldErrors((current) => {
+                              if (emailError) {
+                                return { ...current, email: emailError };
+                              }
+
+                              const { email: _email, ...remainingErrors } =
+                                current;
+                              return remainingErrors;
+                            });
+                          }}
                           placeholder={`${registerRoleLabel}@example.com`}
                           disabled={loading}
                         />
