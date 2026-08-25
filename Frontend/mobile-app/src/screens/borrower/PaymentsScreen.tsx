@@ -36,6 +36,7 @@ import { BORDER_RADIUS } from "../../constants/borderRadius";
 import type { BorrowerNavigation } from "../../types/navigation";
 import type { BorrowerRepayment } from "../../types/borrower";
 import type { RouteProp } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { isPaidPayment } from "../../utils/paymentCardUtils";
 //import TransactionDetailsScreen from "../../screens/borrower/TransactionDetailsScreen";
 
@@ -177,7 +178,7 @@ export default function PaymentsScreen({
     { label: "QR Payment", iconSet: "material", icon: "qrcode-scan" },
   ];
 
-  const fetchPayments = async () => {
+  const fetchPayments = useCallback(async () => {
     try {
       setError(null);
       const [paymentsData, transactionsData, dashboardData] = await Promise.all(
@@ -212,11 +213,13 @@ export default function PaymentsScreen({
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    void fetchPayments();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchPayments();
+    }, [fetchPayments]),
+  );
 
   useEffect(() => {
     if (route?.params?.tab) {
@@ -227,7 +230,7 @@ export default function PaymentsScreen({
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     void fetchPayments();
-  }, []);
+  }, [fetchPayments]);
 
   const filteredPayments = useMemo(() => {
     if (activeTab === "Upcoming") {
@@ -640,11 +643,17 @@ export default function PaymentsScreen({
       )}
 
       {activeTab === "Upcoming" &&
-        payments.some((p) =>
-          ["pending", "pending_verification"].includes(
-            String(p.status ?? "").toLowerCase(),
-          ),
-        ) && (
+        payments.some((p) => {
+          const status = String(p.status ?? "").toLowerCase();
+          const verificationStatus = String(
+            p.verificationStatus ?? "",
+          ).toLowerCase();
+
+          return (
+            status === "pending_verification" ||
+            verificationStatus === "pending_verification"
+          );
+        }) && (
           <View style={styles.pendingBanner}>
             <Feather name="clock" size={16} color="#B45309" />
             <Text style={styles.pendingBannerText}>
