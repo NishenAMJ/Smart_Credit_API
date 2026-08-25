@@ -47,6 +47,13 @@ const ROLE_DETAILS: Record<
 
 const STORAGE_KEY = "smart-credit-shared-auth-session";
 
+// Accepts Sri Lankan mobile numbers in local and international formats.
+const SRI_LANKAN_MOBILE_PATTERN = /^(?:\+94|94|0)?7[01245678]\d{7}$/;
+
+function compactPhoneNumber(value: string) {
+  return value.replace(/[\s()-]/g, "");
+}
+
 const initialKycForm: SubmitKycPayload = {
   documentType: "national_id",
   documentNumber: "",
@@ -247,6 +254,13 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
 
     if (!registerForm.phone.trim()) {
       nextErrors.phone = "Phone is required.";
+    } else if (
+      !SRI_LANKAN_MOBILE_PATTERN.test(
+        compactPhoneNumber(registerForm.phone.trim()),
+      )
+    ) {
+      nextErrors.phone =
+        "Enter a valid Sri Lankan mobile number (for example, 0771234567).";
     }
 
     if (!registerForm.address.line1.trim()) {
@@ -835,6 +849,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                         <label className="shared-auth-field">
                           <span>Phone</span>
                           <input
+                            type="tel"
+                            inputMode="tel"
+                            autoComplete="tel"
                             value={registerForm.phone}
                             onChange={(event) =>
                               setRegisterForm((current) => ({
@@ -843,6 +860,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                               }))
                             }
                             placeholder="+94 77 123 4567"
+                            maxLength={16}
                             disabled={loading}
                           />
                           {fieldErrors.phone ? (

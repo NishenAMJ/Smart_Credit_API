@@ -571,8 +571,10 @@ export class AuthService {
       }
     }
 
-    if (!/^\+\d{9,15}$/.test(normalized)) {
-      throw new BadRequestException('Please provide a valid phone number.');
+    if (!/^\+947[01245678]\d{7}$/.test(normalized)) {
+      throw new BadRequestException(
+        'Please provide a valid Sri Lankan mobile number.',
+      );
     }
 
     return normalized;
