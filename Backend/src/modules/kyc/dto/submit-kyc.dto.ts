@@ -6,7 +6,9 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  Matches,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class SubmitKycDto {
   @IsOptional()
@@ -28,6 +30,12 @@ export class SubmitKycDto {
   @IsOptional()
   @IsString()
   @MaxLength(20)
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.replace(/[\s()-]/g, '') : value,
+  )
+  @Matches(/^(?:\+94|94|0)?7[01245678]\d{7}$/, {
+    message: 'Please provide a valid Sri Lankan mobile number.',
+  })
   phoneNumber?: string;
 
   @IsOptional()

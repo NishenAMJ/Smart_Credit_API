@@ -9,7 +9,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 import { PUBLIC_USER_ROLES } from '../auth.types';
 
@@ -47,15 +47,21 @@ export class RegisterDto {
   @MaxLength(120)
   fullName!: string;
 
-  @IsEmail({}, { message: 'Please provide a valid email address.' })
+  @IsEmail(
+    { allow_utf8_local_part: false, require_tld: true },
+    { message: 'Please provide a valid email address.' },
+  )
   @IsNotEmpty({ message: 'Email is required.' })
-  @MaxLength(254)
+  @MaxLength(254, { message: 'Email address is too long.' })
   email!: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Phone is required.' })
-  @Matches(/^[0-9+\-\s()]{9,20}$/, {
-    message: 'Please provide a valid phone number.',
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.replace(/[\s()-]/g, '') : value,
+  )
+  @Matches(/^(?:\+94|94|0)?7[01245678]\d{7}$/, {
+    message: 'Please provide a valid Sri Lankan mobile number.',
   })
   phone!: string;
 

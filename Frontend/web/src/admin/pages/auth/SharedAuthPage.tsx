@@ -19,12 +19,10 @@ import {
 } from "../../lib/auth";
 import {
   dateError,
-  emailError,
   fileError,
   focusFirstInvalidField,
   getApiFieldErrors,
   normalizePhone,
-  phoneError,
   requiredText,
 } from "../../../lib/validation";
 import "./shared-auth.css";
@@ -56,6 +54,52 @@ const ROLE_DETAILS: Record<
 };
 
 const STORAGE_KEY = "smart-credit-shared-auth-session";
+
+// Accepts Sri Lankan mobile numbers in local and international formats.
+const SRI_LANKAN_MOBILE_PATTERN = /^(?:\+94|94|0)?7[01245678]\d{7}$/;
+
+function compactPhoneNumber(value: string) {
+  return value.replace(/[\s()-]/g, "");
+}
+
+function getEmailValidationError(value: string) {
+  const email = value.trim();
+
+  if (!email) return "Email is required.";
+  if (email.length > 254) return "Email address is too long.";
+
+  const parts = email.split("@");
+  if (parts.length !== 2) return "Enter a valid email address.";
+
+  const [localPart, domain] = parts;
+  if (
+    !localPart ||
+    localPart.length > 64 ||
+    localPart.startsWith(".") ||
+    localPart.endsWith(".") ||
+    localPart.includes("..") ||
+    !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(localPart)
+  ) {
+    return "Enter a valid email address.";
+  }
+
+  const domainLabels = domain.split(".");
+  if (
+    domain.length > 253 ||
+    domainLabels.length < 2 ||
+    domainLabels.some(
+      (label) =>
+        !label ||
+        label.length > 63 ||
+        !/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+    ) ||
+    !/^[A-Za-z]{2,63}$/.test(domainLabels.at(-1) ?? "")
+  ) {
+    return "Enter a valid email address.";
+  }
+
+  return "";
+}
 
 const initialKycForm: SubmitKycPayload = {
   documentType: "national_id",
@@ -247,8 +291,14 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
     nextErrors.fullName =
       requiredText(registerForm.fullName, "Full name", { min: 3, max: 120 }) ??
       "";
-    nextErrors.email = emailError(registerForm.email) ?? "";
-    nextErrors.phone = phoneError(registerForm.phone) ?? "";
+    nextErrors.email = getEmailValidationError(registerForm.email);
+    nextErrors.phone = !registerForm.phone.trim()
+      ? "Phone is required."
+      : SRI_LANKAN_MOBILE_PATTERN.test(
+            compactPhoneNumber(registerForm.phone.trim()),
+          )
+        ? ""
+        : "Enter a valid Sri Lankan mobile number (for example, 0771234567).";
     nextErrors.addressLine1 =
       requiredText(registerForm.address.line1, "Street address", {
         max: 160,
@@ -955,6 +1005,9 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                           <input
                             data-validation-field="phone"
                             aria-invalid={Boolean(fieldErrors.phone)}
+                            type="tel"
+                            inputMode="tel"
+                            autoComplete="tel"
                             value={registerForm.phone}
                             onChange={(event) =>
                               setRegisterForm((current) => ({
@@ -963,6 +1016,7 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                               }))
                             }
                             placeholder="+94 77 123 4567"
+                            maxLength={16}
                             disabled={loading}
                           />
                           {fieldErrors.phone ? (
@@ -986,6 +1040,20 @@ export default function SharedAuthPage({ initialMode }: SharedAuthPageProps) {
                               email: event.target.value,
                             }))
                           }
+                          onBlur={() => {
+                            const emailError = getEmailValidationError(
+                              registerForm.email,
+                            );
+                            setFieldErrors((current) => {
+                              if (emailError) {
+                                return { ...current, email: emailError };
+                              }
+
+                              const { email: _email, ...remainingErrors } =
+                                current;
+                              return remainingErrors;
+                            });
+                          }}
                           placeholder={`${registerRoleLabel}@example.com`}
                           disabled={loading}
                         />
